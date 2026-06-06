@@ -350,6 +350,126 @@ export const updateMeta = mutation({
   },
 });
 
+export type SpawnV2PostsArgs = {
+  ideaId: Id<"capturedIdeas">;
+  brandId: BrandId;
+  channelIds: ChannelId[];
+  scheduledDate?: string;
+  scheduledTime?: string;
+  timezone?: string;
+};
+
+export async function spawnV2PostsHandler(ctx: MutationCtx, args: SpawnV2PostsArgs) {
+  const userId = await requireUserId(ctx);
+  const idea = await requireOwnedIdea(ctx, args.ideaId, userId);
+  await requireBrandAccess(ctx, userId, args.brandId);
+
+  const uniqueChannelIds = Array.from(new Set(args.channelIds));
+  if (uniqueChannelIds.length === 0) {
+    throw new Error("Select at least one target platform");
+  }
+
+  const entries = await ctx.db
+    .query("capturedIdeaEntries")
+    .withIndex("by_idea", (q) => q.eq("ideaId", args.ideaId))
+    .collect();
+  if (entries.length === 0) {
+    throw new Error("Idea has no entries");
+  }
+
+  const now = Date.now();
+  const created: { postId: Id<"v2Posts">; intentId: Id<"v2PublishingIntents"> }[] = [];
+
+  for (const channelId of uniqueChannelIds) {
+    const channel = await ctx.db
+      .query("v2Channels")
+      .withIndex("by_brand_and_channel", (q) =>
+        q.eq("brandId", args.brandId).eq("channelId", channelId)
+      )
+      .first();
+    if (!channel) {
+      throw new Error(`Channel ${channelId} is not available for ${args.brandId}`);
+    }
+
+    const title = titleForChannel(idea, channelId);
+    const content = contentForChannel(idea, entries, channelId);
+    const fingerprint = contentFingerprint(title, content);
+    const timezone = args.timezone ?? "America/Los_Angeles";
+    const postId = await ctx.db.insert("v2Posts", {
+      userId,
+      brandId: args.brandId,
+      channelId,
+      platformId: channel.platformId,
+      title,
+      content,
+      status: args.scheduledDate ? "scheduled" : "draft",
+      approvalState: "unapproved",
+      scheduledDate: args.scheduledDate,
+      scheduledTime: args.scheduledTime,
+      timezone,
+      sourceIdeaId: String(args.ideaId),
+      contentFingerprint: fingerprint,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const intentId = await ctx.db.insert("v2PublishingIntents", {
+      postId,
+      userId,
+      brandId: args.brandId,
+      channelId,
+      platformId: channel.platformId,
+      scheduledDate: args.scheduledDate,
+      scheduledTime: args.scheduledTime,
+      timezone,
+      approvalState: "unapproved",
+      sourceIdeaId: String(args.ideaId),
+      contentFingerprint: fingerprint,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("v2ProviderStates", {
+      postId,
+      intentId,
+      providerId: providerForChannel(channelId),
+      status: "not-submitted",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("capturedIdeaV2PostLinks", {
+      ideaId: args.ideaId,
+      postId,
+      userId,
+      brandId: args.brandId,
+      channelId,
+      createdAt: now,
+    });
+
+    await ctx.db.insert("v2AuditEvents", {
+      userId,
+      brandId: args.brandId,
+      postId,
+      intentId,
+      action: "idea.spawn_v2_post",
+      summary: `Spawned ${channelId} draft from source Idea.`,
+      metadata: { ideaId: String(args.ideaId) },
+      createdAt: now,
+    });
+
+    created.push({ postId, intentId });
+  }
+
+  await ctx.db.patch(args.ideaId, {
+    brandId: args.brandId,
+    status: "used" satisfies IdeaStatus,
+    updatedAt: now,
+  });
+
+  return created;
+}
+
 export const spawnV2Posts = mutation({
   args: {
     ideaId: v.id("capturedIdeas"),
@@ -359,116 +479,7 @@ export const spawnV2Posts = mutation({
     scheduledTime: v.optional(v.string()),
     timezone: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx);
-    const idea = await requireOwnedIdea(ctx, args.ideaId, userId);
-    await requireBrandAccess(ctx, userId, args.brandId);
-
-    const uniqueChannelIds = Array.from(new Set(args.channelIds));
-    if (uniqueChannelIds.length === 0) {
-      throw new Error("Select at least one target platform");
-    }
-
-    const entries = await ctx.db
-      .query("capturedIdeaEntries")
-      .withIndex("by_idea", (q) => q.eq("ideaId", args.ideaId))
-      .collect();
-    if (entries.length === 0) {
-      throw new Error("Idea has no entries");
-    }
-
-    const now = Date.now();
-    const created: { postId: Id<"v2Posts">; intentId: Id<"v2PublishingIntents"> }[] = [];
-
-    for (const channelId of uniqueChannelIds) {
-      const channel = await ctx.db
-        .query("v2Channels")
-        .withIndex("by_brand_and_channel", (q) =>
-          q.eq("brandId", args.brandId).eq("channelId", channelId)
-        )
-        .first();
-      if (!channel) {
-        throw new Error(`Channel ${channelId} is not available for ${args.brandId}`);
-      }
-
-      const title = titleForChannel(idea, channelId);
-      const content = contentForChannel(idea, entries, channelId);
-      const fingerprint = contentFingerprint(title, content);
-      const timezone = args.timezone ?? "America/Los_Angeles";
-      const postId = await ctx.db.insert("v2Posts", {
-        userId,
-        brandId: args.brandId,
-        channelId,
-        platformId: channel.platformId,
-        title,
-        content,
-        status: args.scheduledDate ? "scheduled" : "draft",
-        approvalState: "unapproved",
-        scheduledDate: args.scheduledDate,
-        scheduledTime: args.scheduledTime,
-        timezone,
-        sourceIdeaId: String(args.ideaId),
-        contentFingerprint: fingerprint,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      const intentId = await ctx.db.insert("v2PublishingIntents", {
-        postId,
-        userId,
-        brandId: args.brandId,
-        channelId,
-        platformId: channel.platformId,
-        scheduledDate: args.scheduledDate,
-        scheduledTime: args.scheduledTime,
-        timezone,
-        approvalState: "unapproved",
-        sourceIdeaId: String(args.ideaId),
-        contentFingerprint: fingerprint,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      await ctx.db.insert("v2ProviderStates", {
-        postId,
-        intentId,
-        providerId: providerForChannel(channelId),
-        status: "not-submitted",
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      await ctx.db.insert("capturedIdeaV2PostLinks", {
-        ideaId: args.ideaId,
-        postId,
-        userId,
-        brandId: args.brandId,
-        channelId,
-        createdAt: now,
-      });
-
-      await ctx.db.insert("v2AuditEvents", {
-        userId,
-        brandId: args.brandId,
-        postId,
-        intentId,
-        action: "idea.spawn_v2_post",
-        summary: `Spawned ${channelId} draft from source Idea.`,
-        metadata: { ideaId: String(args.ideaId) },
-        createdAt: now,
-      });
-
-      created.push({ postId, intentId });
-    }
-
-    await ctx.db.patch(args.ideaId, {
-      brandId: args.brandId,
-      status: "used" satisfies IdeaStatus,
-      updatedAt: now,
-    });
-
-    return created;
-  },
+  handler: spawnV2PostsHandler,
 });
 
 export const archive = mutation({

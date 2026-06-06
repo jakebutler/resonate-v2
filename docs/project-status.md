@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 11:11:01 PDT
+Last updated: 06/06/2026 11:15:34 PDT
 
 ## State
 
@@ -16,29 +16,20 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- bc970e2 Merge PR #22: [B.1] Foundation cleanups
+- f695277 Merge main into b2b-ideas-merge (B.2.C + B.2.D landed).
 
 ## Recent Commits
 
-- bc970e2 Merge PR #22: [B.1] Foundation cleanups
-- 695e5e1 Refresh handoff docs after B.1 foundation cleanups.
-- 8d709ba [B.1] Foundation cleanups: single /v2 surface, ADR 0004, checklist re-key
-- b710714 Merge PR #20: Build Resonate v2 MVP foundation
-- 37fa2f5 Document Vercel v2 deployment
+- f695277 Merge main into b2b-ideas-merge (B.2.C + B.2.D landed).
+- 92a20da Merge pull request #25 from jakebutler/b2d-reschedule-pr-policy
+- 6f2a046 Merge pull request #24 from jakebutler/b2c-cross-brand-auth
+- 77d5421 [B.2.D] Reschedule-after-PR-creation policy.
+- e21291a [B.2.C] Add cross-brand authorization tests for v2Publishing.
 
 ## Local Working Tree
 
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
-- M  convex/__tests__/ideasApi.test.ts
-- M  convex/_generated/api.d.ts
-- M  convex/_generated/api.js
-- M  convex/_generated/dataModel.d.ts
-- M  convex/_generated/server.d.ts
-- M  convex/_generated/server.js
-- A  convex/githubPrSync.ts
-- M  convex/v2Publishing.ts
-- M  lib/__tests__/github.test.ts
-- M  lib/github.ts
+- M  vitest.config.ts
+- ?? scripts/patch-panel.py
 
 ## Next Agent Pickup
 
@@ -47,4 +38,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- b2d-reschedule-pr-policy
+- b2b-ideas-merge

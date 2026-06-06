@@ -9,7 +9,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/setup.ts'],
     include: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
-    exclude: ['node_modules', '.next', '.worktrees/**', 'convex/_generated/**', 'coverage/**', 'e2e/**'],
+    exclude: ['node_modules', '.next', '.worktrees/**', 'convex/_generated/**', 'coverage/**', 'e2e/**', '**/__tests__/helpers/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
