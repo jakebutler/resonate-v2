@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 10:57:55 PDT
+Last updated: 06/06/2026 10:57:58 PDT
 
 ## State
 
@@ -12,37 +12,34 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Updated repository documentation and handoff records.
 - Touched the captured ideas experience.
 
 ## Last Completed Task
 
-- 9474827 Merge legacy workflow ideas into capturedIdeas migration candidates.
+- 596ddad Document workflow idea merge rules and extend v1 export fixture.
 
 ## Recent Commits
 
+- 596ddad Document workflow idea merge rules and extend v1 export fixture.
 - 9474827 Merge legacy workflow ideas into capturedIdeas migration candidates.
 - bc970e2 Merge PR #22: [B.1] Foundation cleanups
 - 695e5e1 Refresh handoff docs after B.1 foundation cleanups.
 - 8d709ba [B.1] Foundation cleanups: single /v2 surface, ADR 0004, checklist re-key
-- b710714 Merge PR #20: Build Resonate v2 MVP foundation
 
 ## Local Working Tree
 
 -  M app/__tests__/page.test.tsx
 -  M components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex/__tests__/helpers/mockMutationCtx.ts
 -  M convex/__tests__/ideasApi.test.ts
+- A  convex/__tests__/spawnV2Posts.test.ts
 -  M convex/_generated/api.d.ts
--  M convex/ideas.ts
+- M  convex/ideas.ts
 -  M convex/schema.ts
 -  M convex/v2Publishing.ts
-- M  docs/migration-dry-run.md
 -  M lib/__tests__/github.test.ts
 -  M lib/github.ts
-- M  tests/fixtures/resonate-v1-export.sample.json
 - ?? components/EditorPageRouter.tsx
-- ?? convex/__tests__/helpers/
-- ?? convex/__tests__/spawnV2Posts.test.ts
 - ?? convex/__tests__/v2Publishing.test.ts
 - ?? convex/githubPrSync.ts
 
