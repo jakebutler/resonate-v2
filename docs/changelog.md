@@ -1976,3 +1976,27 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - b2b-ideas-merge
+
+## 06/06/2026 11:23:04 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	.gitignore
+- M	docs/migration-dry-run.md
+- A	docs/migration-real-export-summary.md
+- A	scripts/convert-convex-export-to-v1-json.mjs
+
+### Working Tree Snapshot
+
+- M  .gitignore
+- M  docs/migration-dry-run.md
+- A  docs/migration-real-export-summary.md
+- A  scripts/convert-convex-export-to-v1-json.mjs
+
+### Branch
+
+- b3-real-migration-dry-run
