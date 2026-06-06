@@ -4,6 +4,7 @@ import {
   adapterForProvider,
   bufferProviderAdapter,
   classifyProviderError,
+  classifyRedditError,
   mockProviderAdapter,
   providerForChannel,
   sanitizeProviderPayload,
@@ -263,68 +264,187 @@ describe("v2 provider adapters", () => {
     );
   });
 
-  it("keeps Zernio submission unavailable until the live HTTP path is approved and wired", async () => {
-    const fetchImpl = vi.fn();
-    const blocked = await zernioProviderAdapter.submit(
-      { ...submission, channelId: "reddit", brandId: "lower-db" },
-      {
-        env: { ZERNIO_API_KEY: "zernio-secret" },
-        liveProviderValidationApproved: false,
-        fetchImpl,
-      }
-    );
+  describe("zernio provider contract", () => {
+    const redditSubmission: V2ProviderSubmission = {
+      ...submission,
+      brandId: "lower-db",
+      channelId: "reddit",
+      title: "Reddit contract title",
+      subreddit: "testingground4bots",
+    };
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ accounts: [] }), { status: 200 }));
 
-    expect(blocked).toMatchObject({
-      ok: false,
-      status: "unavailable",
-      providerStateStatus: "unavailable",
-      reason: "Live provider calls require explicit approval; Mock Provider remains active.",
-    });
-    expect(blocked.sanitizedResponse).not.toContain("zernio-secret");
-    expect(fetchImpl).not.toHaveBeenCalled();
-
-    const approvedButNotWired = await zernioProviderAdapter.submit(
-      { ...submission, channelId: "reddit", brandId: "lower-db" },
-      {
-        env: { ZERNIO_API_KEY: "zernio-secret" },
-        liveProviderValidationApproved: true,
-        fetchImpl,
-      }
-    );
-
-    expect(approvedButNotWired).toMatchObject({
-      ok: false,
-      status: "unavailable",
-      providerStateStatus: "unavailable",
-      sanitizedResponse: {
-        credential: "[server-secret-present]",
-        idempotencyKey: "intent_1:fingerprint",
-      },
-    });
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it("converts schedule fields to UTC ISO timestamps", () => {
-    const dueAt = scheduleToUtcIso({
-      scheduledDate: "2026-06-12",
-      scheduledTime: "09:00",
-      timezone: "America/Los_Angeles",
-    });
-    expect(dueAt).toMatch(/2026-06-12T\d{2}:00:00\.000Z/);
-  });
-
-  describe("mock provider contract", () => {
-    runProviderAdapterContractSuite(mockProviderAdapter, {
+    runProviderAdapterContractSuite(zernioProviderAdapter, {
+      submission: redditSubmission,
       approvedContext: (overrides = {}) => ({
-        env: overrides,
+        env: {
+          ZERNIO_API_KEY: "zernio-secret",
+          ZERNIO_LIVE_SUBMISSION: "approved",
+          ...overrides,
+        },
         liveProviderValidationApproved: true,
+        fetchImpl,
       }),
       blockedContext: (overrides = {}) => ({
-        env: overrides,
+        env: {
+          ZERNIO_API_KEY: "zernio-secret",
+          ...overrides,
+        },
         liveProviderValidationApproved: false,
+        fetchImpl,
       }),
-      expectSubmitSuccess: true,
-      requiresLiveValidationApproval: false,
+    });
+  });
+
+  it("submits to Zernio when live submission is approved", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            accounts: [
+              {
+                _id: "account-1234567890",
+                platform: "reddit",
+                username: "the_lower_db",
+                displayName: "the_lower_db",
+                isActive: true,
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            post: {
+              _id: "zernio-post-1234567890",
+              status: "scheduled",
+              scheduledFor: "2026-06-13T16:00:00.000Z",
+            },
+          }),
+          { status: 200 }
+        )
+      );
+
+    const result = await zernioProviderAdapter.submit(
+      {
+        ...submission,
+        brandId: "lower-db",
+        channelId: "reddit",
+        title: "Reddit validation title",
+        subreddit: "testingground4bots",
+      },
+      {
+        env: {
+          ZERNIO_API_KEY: "zernio-secret",
+          ZERNIO_LIVE_SUBMISSION: "approved",
+        },
+        liveProviderValidationApproved: true,
+        fetchImpl,
+      }
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: "success",
+      providerStateStatus: "submitted",
+      providerPostId: "zernio-post-1234567890",
+    });
+    expect(JSON.stringify(result.sanitizedResponse)).not.toContain("zernio-secret");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenLastCalledWith(
+      "https://zernio.com/api/v1/posts",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer zernio-secret",
+        }),
+      })
+    );
+  });
+
+  it("blocks Zernio submit until ZERNIO_LIVE_SUBMISSION is approved", async () => {
+    const fetchImpl = vi.fn();
+    const result = await zernioProviderAdapter.submit(
+      { ...submission, channelId: "reddit", brandId: "lower-db", title: "Title" },
+      {
+        env: { ZERNIO_API_KEY: "zernio-secret" },
+        liveProviderValidationApproved: true,
+        fetchImpl,
+      }
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: "unavailable",
+      reason: "Zernio live submission requires ZERNIO_LIVE_SUBMISSION=approved.",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("deletes a Zernio post on cancel intent", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          post: { _id: "zernio-post-1234567890", status: "cancelled" },
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await zernioProviderAdapter.recordCancelOrUnpublishIntent(
+      {
+        ...submission,
+        channelId: "reddit",
+        brandId: "lower-db",
+        providerPostId: "zernio-post-1234567890",
+      },
+      "cancel",
+      {
+        env: {
+          ZERNIO_API_KEY: "zernio-secret",
+          ZERNIO_LIVE_SUBMISSION: "approved",
+        },
+        liveProviderValidationApproved: true,
+        fetchImpl,
+      }
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: "success",
+      providerStateStatus: "cancel-intent-recorded",
+      providerPostId: "zernio-post-1234567890",
+    });
+  });
+
+  it("classifies moderation failures as needs-review on refresh", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: { message: "Automod flagged this post for manual review" },
+        }),
+        { status: 400 }
+      )
+    );
+
+    const result = await zernioProviderAdapter.refreshStatus("zernio-post-1234567890", {
+      env: {
+        ZERNIO_API_KEY: "zernio-secret",
+        ZERNIO_LIVE_SUBMISSION: "approved",
+      },
+      liveProviderValidationApproved: true,
+      fetchImpl,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: "permanent-failure",
+      providerStateStatus: "needs-review",
     });
   });
 

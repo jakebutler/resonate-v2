@@ -17,6 +17,7 @@ export type V2ProviderSubmission = {
   timezone: string;
   idempotencyKey: string;
   providerPostId?: string;
+  subreddit?: string;
 };
 
 export type V2ProviderIntentType = "cancel" | "unpublish";
@@ -117,6 +118,44 @@ export function classifyProviderError(input: {
   }
   if (/unknown|ambiguous|accepted but/.test(message)) return "ambiguous";
   return "permanent-failure";
+}
+
+export function classifyRedditError(input: {
+  status?: number;
+  code?: string;
+  message?: string;
+}): {
+  attemptStatus: V2ProviderAttemptStatus;
+  providerStateStatus: V2ProviderStateStatus;
+} {
+  const message = input.message?.toLowerCase() ?? "";
+  const code = input.code?.toLowerCase() ?? "";
+
+  if (
+    /suspend|suspended|ban(?:ned)?|account.+disabled|account.+unavailable/.test(message) ||
+    /suspend|banned/.test(code)
+  ) {
+    return { attemptStatus: "unavailable", providerStateStatus: "unavailable" };
+  }
+  if (/removed|deleted by|post removed|not found|missing post/.test(message) || code === "removed") {
+    return { attemptStatus: "ambiguous", providerStateStatus: "needs-review" };
+  }
+  if (
+    /moderat|automod|manual review|pending approval|subreddit rules|flair required|approval required|mod queue/.test(
+      message
+    ) ||
+    /moderation|mod_queue/.test(code)
+  ) {
+    return { attemptStatus: "permanent-failure", providerStateStatus: "needs-review" };
+  }
+  if (input.status === 429 || /rate limit|too many requests|slow down/.test(message)) {
+    return { attemptStatus: "retryable-failure", providerStateStatus: "failed" };
+  }
+
+  return {
+    attemptStatus: classifyProviderError(input),
+    providerStateStatus: "failed",
+  };
 }
 
 function unavailable(providerId: V2ProviderId, reason: string): V2ProviderResult {
@@ -677,6 +716,183 @@ async function validateZernioConnection(
   };
 }
 
+const ZERNIO_REDDIT_USERNAME_BY_BRAND: Partial<Record<V2BrandId, string>> = {
+  "lower-db": "the_lower_db",
+};
+
+export const ZERNIO_VALIDATION_SUBREDDIT = "testingground4bots";
+
+function isZernioLiveSubmissionApproved(context: V2ProviderAdapterContext): boolean {
+  return context.env.ZERNIO_LIVE_SUBMISSION === "approved";
+}
+
+function needsZernioLiveSubmissionApproval(providerId: V2ProviderId): V2ProviderResult {
+  return unavailable(
+    providerId,
+    "Zernio live submission requires ZERNIO_LIVE_SUBMISSION=approved."
+  );
+}
+
+function normalizeSubreddit(value: string): string {
+  return value.trim().replace(/^r\//i, "");
+}
+
+function resolveSubmissionSubreddit(
+  submission: V2ProviderSubmission,
+  context: V2ProviderAdapterContext
+): string {
+  const fromSubmission = submission.subreddit?.trim();
+  if (fromSubmission) return normalizeSubreddit(fromSubmission);
+  const fromEnv = context.env.ZERNIO_VALIDATION_SUBREDDIT?.trim();
+  if (fromEnv) return normalizeSubreddit(fromEnv);
+  return ZERNIO_VALIDATION_SUBREDDIT;
+}
+
+function createZernioClient(context: V2ProviderAdapterContext) {
+  const fetchImpl = fetchForContext(context);
+  const apiKey = credential(context, "ZERNIO_API_KEY");
+  return {
+    apiKey,
+    async request(path: string, init?: RequestInit) {
+      const response = await fetchImpl(`https://zernio.com/api/v1${path}`, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          ...(init?.headers ?? {}),
+        },
+      });
+      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      return { response, data };
+    },
+  };
+}
+
+function zernioErrorMessage(data: Record<string, unknown>, fallback: string): string {
+  if (typeof data.error === "string") return data.error;
+  if (data.error && typeof data.error === "object" && !Array.isArray(data.error)) {
+    const nested = data.error as Record<string, unknown>;
+    if (typeof nested.message === "string") return nested.message;
+  }
+  if (typeof data.message === "string") return data.message;
+  return fallback;
+}
+
+function mapZernioPostStatus(status: unknown): V2ProviderStateStatus {
+  const normalized = String(status ?? "").toLowerCase();
+  if (normalized === "published" || normalized === "posted" || normalized === "live") {
+    return "published";
+  }
+  if (normalized === "failed" || normalized === "error") return "failed";
+  if (
+    normalized === "needs_moderation" ||
+    normalized === "pending_moderation" ||
+    normalized === "mod_queue" ||
+    normalized === "needs_approval"
+  ) {
+    return "needs-review";
+  }
+  if (normalized === "removed") return "needs-review";
+  if (normalized === "cancelled" || normalized === "canceled") return "cancel-intent-recorded";
+  if (
+    normalized === "scheduled" ||
+    normalized === "pending" ||
+    normalized === "queued" ||
+    normalized === "draft"
+  ) {
+    return "submitted";
+  }
+  return "needs-review";
+}
+
+function sanitizeZernioPost(post: Record<string, unknown>) {
+  return {
+    id: redactProviderId(post._id ?? post.id),
+    status: post.status,
+    scheduledFor: post.scheduledFor,
+    publishedAt: post.publishedAt,
+    platforms: Array.isArray(post.platforms)
+      ? post.platforms.map((platform) =>
+          platform && typeof platform === "object" && !Array.isArray(platform)
+            ? {
+                platform: (platform as Record<string, unknown>).platform,
+                status: (platform as Record<string, unknown>).status,
+                accountId: redactProviderId((platform as Record<string, unknown>).accountId),
+              }
+            : platform
+        )
+      : post.platforms,
+  };
+}
+
+async function listZernioRedditAccounts(context: V2ProviderAdapterContext) {
+  const client = createZernioClient(context);
+  const accountsResult = await client.request("/accounts?platform=reddit");
+  if (!accountsResult.response.ok) {
+    return {
+      ok: false as const,
+      reason: "Zernio account lookup failed.",
+      sanitizedResponse: sanitizeProviderPayload({
+        status: accountsResult.response.status,
+        error: accountsResult.data.error,
+      }),
+    };
+  }
+
+  const accounts = Array.isArray(accountsResult.data.accounts)
+    ? (accountsResult.data.accounts as Array<Record<string, unknown>>)
+    : [];
+  return { ok: true as const, accounts };
+}
+
+async function resolveZernioRedditAccountId(
+  brandId: V2BrandId,
+  context: V2ProviderAdapterContext
+): Promise<
+  | { ok: true; accountId: string; username: string }
+  | { ok: false; reason: string; sanitizedResponse: Record<string, unknown> }
+> {
+  const expectedUsername = ZERNIO_REDDIT_USERNAME_BY_BRAND[brandId];
+  if (!expectedUsername) {
+    return {
+      ok: false,
+      reason: `No Zernio Reddit account mapping exists for brand ${brandId}.`,
+      sanitizedResponse: { brandId, mapped: false },
+    };
+  }
+
+  const accountsResult = await listZernioRedditAccounts(context);
+  if (!accountsResult.ok) {
+    return {
+      ok: false,
+      reason: accountsResult.reason,
+      sanitizedResponse: accountsResult.sanitizedResponse,
+    };
+  }
+
+  const account = accountsResult.accounts.find(
+    (item) => String(item.username ?? "").toLowerCase() === expectedUsername.toLowerCase()
+  );
+  const accountId = account?._id ?? account?.id;
+  if (!account || !accountId) {
+    return {
+      ok: false,
+      reason: `Zernio Reddit account ${expectedUsername} was not found.`,
+      sanitizedResponse: {
+        brandId,
+        expectedUsername,
+        redditAccounts: accountsResult.accounts.map(sanitizeZernioAccount),
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    accountId: String(accountId),
+    username: expectedUsername,
+  };
+}
+
 function baseSocialAdapter(input: {
   providerId: "buffer" | "zernio";
   requiredEnvVar: "BUFFER_API_KEY" | "ZERNIO_API_KEY";
@@ -1093,12 +1309,277 @@ export const bufferProviderAdapter: V2ProviderAdapter = {
   },
 };
 
-export const zernioProviderAdapter = baseSocialAdapter({
+export const zernioProviderAdapter: V2ProviderAdapter = {
   providerId: "zernio",
   requiredEnvVar: "ZERNIO_API_KEY",
-  accountLabel: "Zernio Reddit channel",
-  validateLiveConnection: validateZernioConnection,
-});
+  validateConnection: validateZernioConnection,
+  async submit(submission, context) {
+    const providerId = "zernio" as const;
+    const missingCredential = validateCredential(providerId, "ZERNIO_API_KEY", context);
+    if (missingCredential) {
+      return unavailable(providerId, missingCredential.reason ?? "Missing credential.");
+    }
+    if (!context.liveProviderValidationApproved) return needsApproval(providerId);
+    if (!isZernioLiveSubmissionApproved(context)) return needsZernioLiveSubmissionApproval(providerId);
+    if (submission.channelId !== "reddit") {
+      return unavailable(providerId, "Zernio adapter only supports Reddit submissions.");
+    }
+    if (!submission.scheduledDate?.trim()) {
+      return {
+        ok: false,
+        status: "permanent-failure",
+        providerStateStatus: "failed",
+        reason: "Scheduled date is required for Zernio submission.",
+        sanitizedResponse: { providerId, idempotencyKey: submission.idempotencyKey },
+      };
+    }
+    if (!submission.content.trim()) {
+      return {
+        ok: false,
+        status: "permanent-failure",
+        providerStateStatus: "failed",
+        reason: "Post content is required for Zernio submission.",
+        sanitizedResponse: { providerId, idempotencyKey: submission.idempotencyKey },
+      };
+    }
+    if (!submission.title.trim()) {
+      return {
+        ok: false,
+        status: "permanent-failure",
+        providerStateStatus: "failed",
+        reason: "Post title is required for Reddit submission.",
+        sanitizedResponse: { providerId, idempotencyKey: submission.idempotencyKey },
+      };
+    }
+
+    const account = await resolveZernioRedditAccountId(submission.brandId, context);
+    if (!account.ok) {
+      return {
+        ok: false,
+        status: "permanent-failure",
+        providerStateStatus: "failed",
+        reason: account.reason,
+        sanitizedResponse: {
+          providerId,
+          idempotencyKey: submission.idempotencyKey,
+          ...account.sanitizedResponse,
+        },
+      };
+    }
+
+    const scheduledFor = scheduleToUtcIso({
+      scheduledDate: submission.scheduledDate,
+      scheduledTime: submission.scheduledTime,
+      timezone: submission.timezone,
+    });
+    const subreddit = resolveSubmissionSubreddit(submission, context);
+    const client = createZernioClient(context);
+    const createResult = await client.request("/posts", {
+      method: "POST",
+      body: JSON.stringify({
+        content: submission.content.trim(),
+        title: submission.title.trim(),
+        scheduledFor,
+        timezone: submission.timezone,
+        platforms: [
+          {
+            platform: "reddit",
+            accountId: account.accountId,
+            platformSpecificData: {
+              subreddit,
+              title: submission.title.trim(),
+            },
+          },
+        ],
+      }),
+    });
+
+    const post =
+      createResult.data.post &&
+      typeof createResult.data.post === "object" &&
+      !Array.isArray(createResult.data.post)
+        ? (createResult.data.post as Record<string, unknown>)
+        : createResult.data;
+    const providerPostId = post?._id ?? post?.id ? String(post._id ?? post.id) : undefined;
+
+    if (!createResult.response.ok || !providerPostId) {
+      const reason = zernioErrorMessage(createResult.data, "Zernio create post failed.");
+      const classified = classifyRedditError({
+        status: createResult.response.status,
+        code: typeof createResult.data.code === "string" ? createResult.data.code : undefined,
+        message: reason,
+      });
+      return {
+        ok: false,
+        status: classified.attemptStatus,
+        providerStateStatus: classified.providerStateStatus,
+        reason,
+        sanitizedResponse: sanitizeProviderPayload({
+          providerId,
+          idempotencyKey: submission.idempotencyKey,
+          username: account.username,
+          subreddit,
+          scheduledFor,
+          status: createResult.response.status,
+          error: createResult.data.error,
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      status: "success",
+      providerStateStatus: mapZernioPostStatus(post.status),
+      providerPostId,
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId,
+        idempotencyKey: submission.idempotencyKey,
+        username: account.username,
+        subreddit,
+        scheduledFor,
+        providerPostId: redactProviderId(providerPostId),
+        status: post.status,
+        credential: "[server-secret-present]",
+      }),
+    };
+  },
+  async recordCancelOrUnpublishIntent(submission, intentType, context) {
+    const providerId = "zernio" as const;
+    const missingCredential = validateCredential(providerId, "ZERNIO_API_KEY", context);
+    if (missingCredential) {
+      return unavailable(providerId, missingCredential.reason ?? "Missing credential.");
+    }
+    if (!context.liveProviderValidationApproved) return needsApproval(providerId);
+    if (!isZernioLiveSubmissionApproved(context)) return needsZernioLiveSubmissionApproval(providerId);
+    if (!submission.providerPostId?.trim()) {
+      return {
+        ok: false,
+        status: "permanent-failure",
+        providerStateStatus: "cancel-intent-recorded",
+        reason: "Zernio cancel requires providerPostId from a prior submission.",
+        sanitizedResponse: {
+          providerId,
+          intentType,
+          idempotencyKey: submission.idempotencyKey,
+        },
+      };
+    }
+
+    const client = createZernioClient(context);
+    const deleteResult = await client.request(`/posts/${submission.providerPostId}`, {
+      method: "DELETE",
+    });
+    const deletedId =
+      deleteResult.data.post &&
+      typeof deleteResult.data.post === "object" &&
+      !Array.isArray(deleteResult.data.post)
+        ? String(
+            (deleteResult.data.post as Record<string, unknown>)._id ??
+              (deleteResult.data.post as Record<string, unknown>).id ??
+              submission.providerPostId
+          )
+        : deleteResult.data.id
+          ? String(deleteResult.data.id)
+          : deleteResult.response.ok
+            ? submission.providerPostId
+            : undefined;
+
+    if (!deleteResult.response.ok || !deletedId) {
+      const reason = zernioErrorMessage(deleteResult.data, "Zernio delete post failed.");
+      const classified = classifyRedditError({
+        status: deleteResult.response.status,
+        code: typeof deleteResult.data.code === "string" ? deleteResult.data.code : undefined,
+        message: reason,
+      });
+      return {
+        ok: false,
+        status: classified.attemptStatus,
+        providerStateStatus: "cancel-intent-recorded",
+        reason,
+        sanitizedResponse: sanitizeProviderPayload({
+          providerId,
+          intentType,
+          idempotencyKey: submission.idempotencyKey,
+          providerPostId: redactProviderId(submission.providerPostId),
+          status: deleteResult.response.status,
+          error: deleteResult.data.error,
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      status: "success",
+      providerStateStatus: "cancel-intent-recorded",
+      providerPostId: deletedId,
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId,
+        intentType,
+        idempotencyKey: submission.idempotencyKey,
+        providerPostId: redactProviderId(deletedId),
+        credential: "[server-secret-present]",
+      }),
+    };
+  },
+  async refreshStatus(providerPostId, context) {
+    const providerId = "zernio" as const;
+    const missingCredential = validateCredential(providerId, "ZERNIO_API_KEY", context);
+    if (missingCredential) {
+      return unavailable(providerId, missingCredential.reason ?? "Missing credential.");
+    }
+    if (!context.liveProviderValidationApproved) return needsApproval(providerId);
+    if (!isZernioLiveSubmissionApproved(context)) return needsZernioLiveSubmissionApproval(providerId);
+    if (!providerPostId.trim()) {
+      return unavailable(providerId, "providerPostId is required for Zernio status refresh.");
+    }
+
+    const client = createZernioClient(context);
+    const postResult = await client.request(`/posts/${providerPostId}`);
+    const post =
+      postResult.data.post &&
+      typeof postResult.data.post === "object" &&
+      !Array.isArray(postResult.data.post)
+        ? (postResult.data.post as Record<string, unknown>)
+        : postResult.data._id || postResult.data.id
+          ? (postResult.data as Record<string, unknown>)
+          : null;
+
+    if (!postResult.response.ok || !post) {
+      const reason = zernioErrorMessage(postResult.data, "Zernio post lookup failed.");
+      const classified = classifyRedditError({
+        status: postResult.response.status,
+        code: typeof postResult.data.code === "string" ? postResult.data.code : undefined,
+        message: reason,
+      });
+      return {
+        ok: false,
+        status: classified.attemptStatus,
+        providerStateStatus: classified.providerStateStatus,
+        reason,
+        sanitizedResponse: sanitizeProviderPayload({
+          providerId,
+          providerPostId: redactProviderId(providerPostId),
+          status: postResult.response.status,
+          error: postResult.data.error,
+        }),
+      };
+    }
+
+    const resolvedId = post._id ?? post.id ?? providerPostId;
+    return {
+      ok: true,
+      status: "success",
+      providerStateStatus: mapZernioPostStatus(post.status),
+      providerPostId: String(resolvedId),
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId,
+        providerPostId: redactProviderId(resolvedId),
+        post: sanitizeZernioPost(post),
+        credential: "[server-secret-present]",
+      }),
+    };
+  },
+};
 
 export function adapterForProvider(providerId: V2ProviderId): V2ProviderAdapter {
   if (providerId === "mock") return mockProviderAdapter;

@@ -120,6 +120,26 @@ Sanitized result:
 
 Conclusion: Zernio authentication is valid and the lower dB Reddit account is connected, active, and healthy.
 
+### B.5 live submission cycle (2026-06-06)
+
+Gated by `ZERNIO_LIVE_SUBMISSION=approved`. Validation script: `scripts/zernio-live-validation.mjs`.
+
+Sanitized result:
+
+```json
+{
+  "ok": true,
+  "account": "the_lower_db",
+  "subreddit": "testingground4bots",
+  "scheduledFor": "2026-06-07T18:48:00.000Z",
+  "providerPostId": "6a24...dac3",
+  "refreshedStatus": "scheduled",
+  "cancelled": true
+}
+```
+
+Conclusion: Zernio can schedule a Reddit post to `r/testingground4bots` for `the_lower_db`, refresh status, and cancel the scheduled post without publishing immediately.
+
 ## Corvo Blog GitHub PR
 
 Validation route:
