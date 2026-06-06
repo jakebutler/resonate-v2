@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 11:47:45 PDT
+Last updated: 06/06/2026 12:26:41 PDT
 
 ## State
 
@@ -16,26 +16,21 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- fe0d9f3 [B.3] Real v1 migration dry-run summary and export helper (#27)
+- 81e9656 [B.6] Add cutover-readiness smoke script and report. (#29)
 
 ## Recent Commits
 
+- 81e9656 [B.6] Add cutover-readiness smoke script and report. (#29)
+- 7e4a154 docs: record C.2 authenticated smoke blocked on delta URL (#31)
+- 1a65b5d [B.5] Zernio live submission (gated, validated) (#30)
+- 93485e3 [B.4] Buffer live submission (gated, validated) (#28)
 - fe0d9f3 [B.3] Real v1 migration dry-run summary and export helper (#27)
-- 1fedbcd Merge pull request #26 from jakebutler/b2a-single-composer
-- 7fe5fd8 Merge main into b2a-single-composer and unify v2Publishing tests.
-- 1e91428 Merge pull request #23 from jakebutler/b2b-ideas-merge
-- 775c2d3 Exclude convex test helpers from Vitest discovery.
 
 ## Local Working Tree
 
 - M  docs/cutover-checklist.md
-- A  docs/smoke-runs/2026-06-06-cutover-readiness.md
--  M lib/__tests__/v2ProviderAdapters.test.ts
-- A  scripts/cutover-smoke.mjs
-- ?? .github/workflows/zernio-live-validation.yml
-- ?? docs/zernio-api-notes.md
-- ?? lib/__tests__/providerAdapterContract.ts
-- ?? scripts/zernio-live-validation.mjs
+- M  docs/smoke-runs/2026-06-06-authenticated-smoke.md
+- A  docs/smoke-runs/2026-06-06-production-readiness.md
 
 ## Next Agent Pickup
 
@@ -44,4 +39,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- b6-cutover-smoke
+- cutover-c3-final-review
