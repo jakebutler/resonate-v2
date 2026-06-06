@@ -1,4 +1,4 @@
-import { FullScreenEditor } from "@/components/FullScreenEditor/FullScreenEditor";
+import { EditorPageRouter } from "@/components/EditorPageRouter";
 
 interface EditorPageProps {
   params: Promise<{ id: string }>;
@@ -10,10 +10,5 @@ export default async function EditorPage({ params, searchParams }: EditorPagePro
   const { date: dateRaw } = await searchParams;
   const date = Array.isArray(dateRaw) ? dateRaw[0] : dateRaw;
 
-  return (
-    <FullScreenEditor
-      postId={id}
-      initialDate={date}
-    />
-  );
+  return <EditorPageRouter postId={id} initialDate={date} />;
 }

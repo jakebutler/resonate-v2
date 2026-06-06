@@ -1953,3 +1953,33 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - b2a-single-composer
+
+## 06/06/2026 11:10:01 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	app/editor/[id]/page.tsx
+- M	app/v2/page.tsx
+- A	components/EditorPageRouter.tsx
+- M	components/PersistedPublishingPanel.tsx
+
+### Working Tree Snapshot
+
+- M  app/editor/[id]/page.tsx
+- M  app/v2/page.tsx
+- A  components/EditorPageRouter.tsx
+- M  components/PersistedPublishingPanel.tsx
+-  M components/__tests__/PersistedPublishingPanel.test.tsx
+-  M convex/_generated/api.d.ts
+- ?? _b2a_stash/
+- ?? scripts/_persisted_composer_snippet.tsx
+- ?? scripts/_platform_pane_snippet.tsx
+- ?? scripts/patch-panel.py
+
+### Branch
+
+- b2a-single-composer

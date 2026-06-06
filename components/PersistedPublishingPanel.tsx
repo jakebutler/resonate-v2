@@ -28,7 +28,10 @@ import {
   V2_STATUS_LABELS,
   type V2BrandId,
   type V2ChannelId,
+  type V2CorvoBlogPlatformSettings,
+  type V2LinkedInPlatformSettings,
   type V2PostStatus,
+  type V2RedditPlatformSettings,
 } from "@/lib/v2";
 
 type CalendarView = "month" | "week";
@@ -49,6 +52,10 @@ type PersistedCalendarItem = {
     sourceResearchBriefId?: string;
     prUrl?: string;
     branchName?: string;
+    platformSettings?:
+      | V2LinkedInPlatformSettings
+      | V2RedditPlatformSettings
+      | V2CorvoBlogPlatformSettings;
   };
   intent?: {
     _id?: Id<"v2PublishingIntents">;
@@ -246,7 +253,107 @@ function toggleSet<T extends string>(current: T[], value: T) {
     : [...current, value];
 }
 
-export function PersistedPublishingPanel() {
+function linkedInSettingsFromPost(
+  settings?: V2LinkedInPlatformSettings
+): V2LinkedInPlatformSettings {
+  return {
+    cta: settings?.cta ?? "",
+    hashtags: settings?.hashtags ?? [],
+    linkPreview: settings?.linkPreview ?? true,
+  };
+}
+
+function redditSettingsFromPost(settings?: V2RedditPlatformSettings): V2RedditPlatformSettings {
+  return {
+    subreddit: settings?.subreddit ?? "",
+    flair: settings?.flair ?? "",
+    nsfw: settings?.nsfw ?? false,
+    spoiler: settings?.spoiler ?? false,
+    sensitivity: settings?.sensitivity ?? "",
+  };
+}
+
+function corvoBlogSettingsFromPost(
+  settings?: V2CorvoBlogPlatformSettings
+): V2CorvoBlogPlatformSettings {
+  return {
+    canonicalUrl: settings?.canonicalUrl ?? "",
+    ogImage: settings?.ogImage ?? "",
+    statusFlag: settings?.statusFlag ?? "",
+    categoryOverride: settings?.categoryOverride ?? "",
+  };
+}
+
+function normalizeHashtagsInput(value: string) {
+  return value
+    .split(/[,\s]+/)
+    .map((tag) => tag.trim().replace(/^#/, ""))
+    .filter(Boolean);
+}
+
+function serializePlatformSettings(
+  channelId: V2ChannelId,
+  values: {
+    linkedIn: V2LinkedInPlatformSettings;
+    reddit: V2RedditPlatformSettings;
+    corvoBlog: V2CorvoBlogPlatformSettings;
+  }
+) {
+  if (channelId === "linkedin") {
+    return {
+      cta: values.linkedIn.cta?.trim() || undefined,
+      hashtags: values.linkedIn.hashtags?.length ? values.linkedIn.hashtags : undefined,
+      linkPreview: values.linkedIn.linkPreview,
+    } satisfies V2LinkedInPlatformSettings;
+  }
+  if (channelId === "reddit") {
+    return {
+      subreddit: values.reddit.subreddit?.trim() || undefined,
+      flair: values.reddit.flair?.trim() || undefined,
+      nsfw: values.reddit.nsfw || undefined,
+      spoiler: values.reddit.spoiler || undefined,
+      sensitivity: values.reddit.sensitivity?.trim() || undefined,
+    } satisfies V2RedditPlatformSettings;
+  }
+  if (channelId === "corvo-blog") {
+    return {
+      canonicalUrl: values.corvoBlog.canonicalUrl?.trim() || undefined,
+      ogImage: values.corvoBlog.ogImage?.trim() || undefined,
+      statusFlag: values.corvoBlog.statusFlag?.trim() || undefined,
+      categoryOverride: values.corvoBlog.categoryOverride?.trim() || undefined,
+    } satisfies V2CorvoBlogPlatformSettings;
+  }
+  return undefined;
+}
+
+function platformSettingsChanged(
+  channelId: V2ChannelId,
+  previous:
+    | V2LinkedInPlatformSettings
+    | V2RedditPlatformSettings
+    | V2CorvoBlogPlatformSettings
+    | undefined,
+  next:
+    | V2LinkedInPlatformSettings
+    | V2RedditPlatformSettings
+    | V2CorvoBlogPlatformSettings
+    | undefined
+) {
+  const previousSerialized = serializePlatformSettings(channelId, {
+    linkedIn: linkedInSettingsFromPost(
+      channelId === "linkedin" ? (previous as V2LinkedInPlatformSettings) : undefined
+    ),
+    reddit: redditSettingsFromPost(
+      channelId === "reddit" ? (previous as V2RedditPlatformSettings) : undefined
+    ),
+    corvoBlog: corvoBlogSettingsFromPost(
+      channelId === "corvo-blog" ? (previous as V2CorvoBlogPlatformSettings) : undefined
+    ),
+  });
+  return JSON.stringify(previousSerialized) !== JSON.stringify(next);
+}
+
+export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: string } = {}) {
   const [brandFilters, setBrandFilters] = useState<V2BrandId[]>(["corvo"]);
   const [platformFilters, setPlatformFilters] = useState<V2ChannelId[]>([
     "linkedin",
@@ -261,7 +368,9 @@ export function PersistedPublishingPanel() {
   ]);
   const [calendarView, setCalendarView] = useState<CalendarView>("month");
   const [calendarAnchor, setCalendarAnchor] = useState<string | null>(null);
-  const [selectedPostId, setSelectedPostId] = useState<Id<"v2Posts"> | null>(null);
+  const [manualSelectedPostId, setManualSelectedPostId] = useState<
+    Id<"v2Posts"> | null | undefined
+  >(undefined);
   const [message, setMessage] = useState<string | null>(null);
 
   const brands = useQuery(api.v2Publishing.listBrands);
@@ -275,6 +384,7 @@ export function PersistedPublishingPanel() {
   const setApproval = useMutation(api.v2Publishing.setApproval);
   const reschedule = useMutation(api.v2Publishing.reschedule);
   const updateContent = useMutation(api.v2Publishing.updateContent);
+  const updatePlatformSettings = useMutation(api.v2Publishing.updatePlatformSettings);
   const submitMockProvider = useMutation(api.v2Publishing.submitMockProvider);
   const recordProviderIntent = useMutation(api.v2Publishing.recordProviderIntent);
   const recordGithubPr = useMutation(api.v2Publishing.recordGithubPr);
@@ -339,6 +449,12 @@ export function PersistedPublishingPanel() {
     ).length;
     return { submitted, needsReview, notSubmitted };
   }, [visibleItems]);
+  const autoSelectedPostId = useMemo(() => {
+    if (!initialPostId || loading) return null;
+    return visibleItems.find((item) => item.post._id === initialPostId)?.post._id ?? null;
+  }, [initialPostId, loading, visibleItems]);
+  const selectedPostId =
+    manualSelectedPostId === undefined ? autoSelectedPostId : manualSelectedPostId;
   const selectedItem = useMemo(
     () => visibleItems.find((item) => item.post._id === selectedPostId) ?? null,
     [selectedPostId, visibleItems]
@@ -391,6 +507,10 @@ export function PersistedPublishingPanel() {
       scheduledDate: string;
       scheduledTime: string;
       timezone: string;
+      platformSettings?:
+        | V2LinkedInPlatformSettings
+        | V2RedditPlatformSettings
+        | V2CorvoBlogPlatformSettings;
     }
   ) {
     const titleChanged = values.title.trim() !== item.post.title;
@@ -399,12 +519,25 @@ export function PersistedPublishingPanel() {
       values.scheduledDate !== (item.intent?.scheduledDate ?? item.post.scheduledDate ?? "") ||
       values.scheduledTime !== (item.intent?.scheduledTime ?? item.post.scheduledTime ?? "") ||
       values.timezone !== (item.intent?.timezone ?? item.post.timezone ?? "America/Los_Angeles");
+    const settingsChanged =
+      values.platformSettings !== undefined &&
+      platformSettingsChanged(
+        item.post.channelId,
+        item.post.platformSettings,
+        values.platformSettings
+      );
 
     if (titleChanged || contentChanged) {
       await updateContent({
         postId: item.post._id,
         title: values.title.trim(),
         content: values.content,
+      });
+    }
+    if (settingsChanged && values.platformSettings) {
+      await updatePlatformSettings({
+        postId: item.post._id,
+        platformSettings: values.platformSettings,
       });
     }
     if (scheduleChanged) {
@@ -416,8 +549,12 @@ export function PersistedPublishingPanel() {
       });
     }
 
-    if (titleChanged || contentChanged) {
-      setMessage("Saved composer content changes and cleared approval for re-review.");
+    if (titleChanged || contentChanged || settingsChanged) {
+      setMessage(
+        settingsChanged && !titleChanged && !contentChanged
+          ? "Saved platform settings and cleared approval for re-review."
+          : "Saved composer changes and cleared approval for re-review."
+      );
     } else if (scheduleChanged) {
       setMessage("Saved date/time changes without changing approval.");
     } else {
@@ -718,7 +855,7 @@ export function PersistedPublishingPanel() {
                             <CalendarItemChip
                               item={item}
                               key={item.post._id}
-                              onSelect={() => setSelectedPostId(item.post._id)}
+                              onSelect={() => setManualSelectedPostId(item.post._id)}
                             />
                           ))}
                           {dayItems.length > 3 && (
@@ -746,7 +883,7 @@ export function PersistedPublishingPanel() {
                           key={item.post._id}
                           onApprove={handleApprove}
                           onCreatePr={() => handleCreatePr(item)}
-                          onInspect={() => setSelectedPostId(item.post._id)}
+                          onInspect={() => setManualSelectedPostId(item.post._id)}
                           onProviderIntent={handleProviderIntent}
                           onReschedule={handleReschedule}
                           onRetry={handleRetry}
@@ -764,7 +901,7 @@ export function PersistedPublishingPanel() {
           <PublishingDetailDrawer
             item={selectedItem}
             onApprove={handleApprove}
-            onClose={() => setSelectedPostId(null)}
+            onClose={() => setManualSelectedPostId(null)}
             onCreatePr={() => handleCreatePr(selectedItem)}
             onProviderIntent={handleProviderIntent}
             onReschedule={handleReschedule}
@@ -964,6 +1101,10 @@ function PublishingDetailDrawer(props: {
     scheduledDate: string;
     scheduledTime: string;
     timezone: string;
+    platformSettings?:
+      | V2LinkedInPlatformSettings
+      | V2RedditPlatformSettings
+      | V2CorvoBlogPlatformSettings;
   }) => void;
   onSubmit: (postId: Id<"v2Posts">) => void;
 }) {
@@ -1171,6 +1312,10 @@ function PersistedPostComposer(props: {
     scheduledDate: string;
     scheduledTime: string;
     timezone: string;
+    platformSettings?:
+      | V2LinkedInPlatformSettings
+      | V2RedditPlatformSettings
+      | V2CorvoBlogPlatformSettings;
   }) => void;
 }) {
   const { item } = props;
@@ -1187,14 +1332,46 @@ function PersistedPostComposer(props: {
   const [timezone, setTimezone] = useState(
     intent?.timezone ?? post.timezone ?? "America/Los_Angeles"
   );
+  const [linkedInSettings, setLinkedInSettings] = useState<V2LinkedInPlatformSettings>(() =>
+    linkedInSettingsFromPost(
+      post.channelId === "linkedin"
+        ? (post.platformSettings as V2LinkedInPlatformSettings | undefined)
+        : undefined
+    )
+  );
+  const [redditSettings, setRedditSettings] = useState<V2RedditPlatformSettings>(() =>
+    redditSettingsFromPost(
+      post.channelId === "reddit"
+        ? (post.platformSettings as V2RedditPlatformSettings | undefined)
+        : undefined
+    )
+  );
+  const [corvoBlogSettings, setCorvoBlogSettings] = useState<V2CorvoBlogPlatformSettings>(() =>
+    corvoBlogSettingsFromPost(
+      post.channelId === "corvo-blog"
+        ? (post.platformSettings as V2CorvoBlogPlatformSettings | undefined)
+        : undefined
+    )
+  );
 
   const contentChanged = title.trim() !== post.title || content !== post.content;
   const scheduleChanged =
     scheduledDate !== (intent?.scheduledDate ?? post.scheduledDate ?? "") ||
     scheduledTime !== (intent?.scheduledTime ?? post.scheduledTime ?? "") ||
     timezone !== (intent?.timezone ?? post.timezone ?? "America/Los_Angeles");
+  const nextPlatformSettings = serializePlatformSettings(post.channelId, {
+    linkedIn: linkedInSettings,
+    reddit: redditSettings,
+    corvoBlog: corvoBlogSettings,
+  });
+  const settingsChanged = platformSettingsChanged(
+    post.channelId,
+    post.platformSettings,
+    nextPlatformSettings
+  );
   const linkedInOverLimit = post.channelId === "linkedin" && content.length > 3000;
-  const canSave = (contentChanged || scheduleChanged) && title.trim().length > 0;
+  const canSave =
+    (contentChanged || scheduleChanged || settingsChanged) && title.trim().length > 0;
 
   return (
     <section className="mt-5 rounded-lg border border-black/10 p-4">
@@ -1202,8 +1379,8 @@ function PersistedPostComposer(props: {
         <div>
           <h4 className="text-sm font-semibold">Single Composer</h4>
           <p className="mt-1 text-xs text-gray-500">
-            One persisted editor for social and Corvo Blog posts. Content edits require
-            re-approval; date-only schedule edits keep the current approval state.
+            One persisted editor for social and Corvo Blog posts. Content and platform setting
+            edits require re-approval; date-only schedule edits keep the current approval state.
           </p>
         </div>
         <div className="flex flex-wrap gap-1">
@@ -1259,32 +1436,23 @@ function PersistedPostComposer(props: {
               value={timezone}
             />
           </label>
-          <div className="rounded-md border border-black/10 bg-black/[0.02] p-3 text-xs text-gray-600">
-            <p className="font-semibold text-gray-700">Platform settings</p>
-            {post.channelId === "linkedin" && (
-              <p className={linkedInOverLimit ? "mt-1 text-red-600" : "mt-1"}>
-                LinkedIn character count: {content.length} / 3000
-              </p>
-            )}
-            {post.channelId === "reddit" && (
-              <p className="mt-1">Reddit account routes through Zernio after live approval.</p>
-            )}
-            {post.channelId === "corvo-blog" && (
-              <p className="mt-1">
-                Blog media metadata is required before the live GitHub PR validation gate.
-              </p>
-            )}
-            {!["linkedin", "reddit", "corvo-blog"].includes(post.channelId) && (
-              <p className="mt-1">Planning channel. Provider routing may be unavailable.</p>
-            )}
-          </div>
+          <PlatformSettingsPane
+            channelId={post.channelId}
+            contentLength={content.length}
+            corvoBlog={corvoBlogSettings}
+            linkedIn={linkedInSettings}
+            onCorvoBlogChange={setCorvoBlogSettings}
+            onLinkedInChange={setLinkedInSettings}
+            onRedditChange={setRedditSettings}
+            reddit={redditSettings}
+          />
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-gray-500">
-          {contentChanged
-            ? "Content changed: saving will clear approval."
+          {contentChanged || settingsChanged
+            ? "Content or platform settings changed: saving will clear approval."
             : scheduleChanged
               ? "Schedule-only change: approval is preserved."
               : "No unsaved composer changes."}
@@ -1299,6 +1467,7 @@ function PersistedPostComposer(props: {
               scheduledDate,
               scheduledTime,
               timezone,
+              platformSettings: settingsChanged ? nextPlatformSettings : undefined,
             })
           }
           type="button"
@@ -1310,6 +1479,178 @@ function PersistedPostComposer(props: {
     </section>
   );
 }
+
+function PlatformSettingsPane(props: {
+  channelId: V2ChannelId;
+  contentLength: number;
+  linkedIn: V2LinkedInPlatformSettings;
+  reddit: V2RedditPlatformSettings;
+  corvoBlog: V2CorvoBlogPlatformSettings;
+  onLinkedInChange: (value: V2LinkedInPlatformSettings) => void;
+  onRedditChange: (value: V2RedditPlatformSettings) => void;
+  onCorvoBlogChange: (value: V2CorvoBlogPlatformSettings) => void;
+}) {
+  const { channelId } = props;
+
+  return (
+    <div className="rounded-md border border-black/10 bg-black/[0.02] p-3 text-xs text-gray-600">
+      <p className="font-semibold text-gray-700">Platform settings</p>
+      {channelId === "linkedin" && (
+        <div className="mt-2 space-y-2">
+          <p className={props.contentLength > 3000 ? "text-red-600" : undefined}>
+            LinkedIn character count: {props.contentLength} / 3000
+          </p>
+          <label className="block">
+            Call to action
+            <input
+              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+              onChange={(event) =>
+                props.onLinkedInChange({ ...props.linkedIn, cta: event.target.value })
+              }
+              value={props.linkedIn.cta ?? ""}
+            />
+          </label>
+          <label className="block">
+            Hashtags
+            <input
+              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+              onChange={(event) =>
+                props.onLinkedInChange({
+                  ...props.linkedIn,
+                  hashtags: normalizeHashtagsInput(event.target.value),
+                })
+              }
+              placeholder="#corvo, growth"
+              value={(props.linkedIn.hashtags ?? []).map((tag) => `#${tag}`).join(" ")}
+            />
+          </label>
+          <label className="inline-flex items-center gap-2">
+            <input
+              checked={props.linkedIn.linkPreview ?? true}
+              onChange={(event) =>
+                props.onLinkedInChange({
+                  ...props.linkedIn,
+                  linkPreview: event.target.checked,
+                })
+              }
+              type="checkbox"
+            />
+            Enable link preview
+          </label>
+        </div>
+      )}
+      {channelId === "reddit" && (
+        <div className="mt-2 space-y-2">
+          <label className="block">
+            Subreddit
+            <input
+              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+              onChange={(event) =>
+                props.onRedditChange({ ...props.reddit, subreddit: event.target.value })
+              }
+              placeholder="r/startups"
+              value={props.reddit.subreddit ?? ""}
+            />
+          </label>
+          <label className="block">
+            Flair
+            <input
+              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+              onChange={(event) =>
+                props.onRedditChange({ ...props.reddit, flair: event.target.value })
+              }
+              value={props.reddit.flair ?? ""}
+            />
+          </label>
+          <label className="block">
+            Sensitivity
+            <input
+              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+              onChange={(event) =>
+                props.onRedditChange({ ...props.reddit, sensitivity: event.target.value })
+              }
+              value={props.reddit.sensitivity ?? ""}
+            />
+          </label>
+          <label className="inline-flex items-center gap-2">
+            <input
+              checked={props.reddit.nsfw ?? false}
+              onChange={(event) =>
+                props.onRedditChange({ ...props.reddit, nsfw: event.target.checked })
+              }
+              type="checkbox"
+            />
+            NSFW
+          </label>
+          <label className="inline-flex items-center gap-2">
+            <input
+              checked={props.reddit.spoiler ?? false}
+              onChange={(event) =>
+                props.onRedditChange({ ...props.reddit, spoiler: event.target.checked })
+              }
+              type="checkbox"
+            />
+            Spoiler
+          </label>
+        </div>
+      )}
+      {channelId === "corvo-blog" && (
+        <div className="mt-2 space-y-2">
+          <label className="block">
+            Canonical URL override
+            <input
+              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+              onChange={(event) =>
+                props.onCorvoBlogChange({
+                  ...props.corvoBlog,
+                  canonicalUrl: event.target.value,
+                })
+              }
+              value={props.corvoBlog.canonicalUrl ?? ""}
+            />
+          </label>
+          <label className="block">
+            OG image URL
+            <input
+              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+              onChange={(event) =>
+                props.onCorvoBlogChange({ ...props.corvoBlog, ogImage: event.target.value })
+              }
+              value={props.corvoBlog.ogImage ?? ""}
+            />
+          </label>
+          <label className="block">
+            Status flag override
+            <input
+              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+              onChange={(event) =>
+                props.onCorvoBlogChange({ ...props.corvoBlog, statusFlag: event.target.value })
+              }
+              value={props.corvoBlog.statusFlag ?? ""}
+            />
+          </label>
+          <label className="block">
+            Category override
+            <input
+              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+              onChange={(event) =>
+                props.onCorvoBlogChange({
+                  ...props.corvoBlog,
+                  categoryOverride: event.target.value,
+                })
+              }
+              value={props.corvoBlog.categoryOverride ?? ""}
+            />
+          </label>
+        </div>
+      )}
+      {!["linkedin", "reddit", "corvo-blog"].includes(channelId) && (
+        <p className="mt-2">Planning channel. Provider routing may be unavailable.</p>
+      )}
+    </div>
+  );
+}
+
 
 function FilterGroup<T extends string>(props: {
   label: string;
