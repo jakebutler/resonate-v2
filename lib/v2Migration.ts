@@ -124,7 +124,8 @@ export type V2MigrationIdeaCandidate = {
   status: "inbox" | "reviewing" | "ready" | "used" | "archived";
   entryCount: number;
   linkedLegacyPostIds: string[];
-  sourceLegacyTable: "capturedIdeas" | "ideas";
+  sourceLegacyWorkflowIdeaId?: string;
+  sourceLegacyTable: "capturedIdeas";
 };
 
 export type V2MigrationDryRunPlan = {
@@ -261,9 +262,15 @@ export function buildV2MigrationDryRunPlan(
       return [];
     }
   });
-  const v2WorkflowIdeaCandidates = workflowIdeas.flatMap((idea) => {
+  const v2MergedWorkflowIdeaCandidates = workflowIdeas.flatMap((idea) => {
     try {
-      return [mapWorkflowIdea(idea, workflowDrafts.filter((draft) => draft.ideaId === idea._id), defaultBrandId)];
+      return [
+        mergeWorkflowIdeaIntoCapturedCandidate(
+          idea,
+          workflowDrafts.filter((draft) => draft.ideaId === idea._id),
+          defaultBrandId
+        ),
+      ];
     } catch (error) {
       warnings.push(
         `Skipped workflow idea ${idea._id ?? "(missing id)"}: ${
@@ -274,13 +281,16 @@ export function buildV2MigrationDryRunPlan(
       return [];
     }
   });
-  const allIdeaCandidates = [...v2IdeaCandidates, ...v2WorkflowIdeaCandidates];
+  const allIdeaCandidates = [...v2IdeaCandidates, ...v2MergedWorkflowIdeaCandidates];
   const ambiguous = v2PostCandidates
     .filter((post) => post.providerState === "ambiguous")
     .map((post) => `posts:${post.legacyPostId ?? "(missing id)"}`);
   const imported = [
     ...v2PostCandidates.map((post) => `posts:${post.legacyPostId ?? "(missing id)"}`),
-    ...allIdeaCandidates.map((idea) => `${idea.sourceLegacyTable}:${idea.legacyIdeaId ?? "(missing id)"}`),
+    ...allIdeaCandidates.map(
+      (idea) =>
+        `capturedIdeas:${idea.sourceLegacyWorkflowIdeaId ?? idea.legacyIdeaId ?? "(missing id)"}`
+    ),
   ];
 
   return {
@@ -403,7 +413,7 @@ function mapCapturedIdea(
   };
 }
 
-function mapWorkflowIdea(
+function mergeWorkflowIdeaIntoCapturedCandidate(
   idea: LegacyWorkflowIdeaExport,
   drafts: LegacyWorkflowDraftExport[],
   brandId: V2BrandId
@@ -426,7 +436,8 @@ function mapWorkflowIdea(
     status: mapWorkflowIdeaStatus(idea.status),
     entryCount: 1,
     linkedLegacyPostIds: drafts.map((draft) => draft.postId).filter(Boolean) as string[],
-    sourceLegacyTable: "ideas",
+    sourceLegacyWorkflowIdeaId: idea._id,
+    sourceLegacyTable: "capturedIdeas",
   };
 }
 

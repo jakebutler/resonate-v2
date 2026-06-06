@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 10:47:01 PDT
+Last updated: 06/06/2026 10:57:50 PDT
 
 ## State
 
@@ -8,34 +8,52 @@ Resonate is a working content operations app with active surfaces for calendar p
 
 ## Current Task
 
-Execute Phase B of roadmap #21: B.1 foundation cleanups committed; opening PR next.
+Maintain the living documentation and preserve a handoff-quality snapshot of the repo state.
 
 ## Session Focus
 
-- Split `/v2` calendar/composer from `/v2/research` AI surface per ADR 0004.
-- Re-key cutover checklist to resonate-v2 issue numbers.
+- Updated repository documentation and handoff records.
+- Touched the captured ideas experience.
 
 ## Last Completed Task
 
-- 8d709ba [B.1] Foundation cleanups: single /v2 surface, ADR 0004, checklist re-key
+- bc970e2 Merge PR #22: [B.1] Foundation cleanups
 
 ## Recent Commits
 
+- bc970e2 Merge PR #22: [B.1] Foundation cleanups
+- 695e5e1 Refresh handoff docs after B.1 foundation cleanups.
 - 8d709ba [B.1] Foundation cleanups: single /v2 surface, ADR 0004, checklist re-key
 - b710714 Merge PR #20: Build Resonate v2 MVP foundation
 - 37fa2f5 Document Vercel v2 deployment
-- c844a63 Refresh status after CI bypass fix
-- 46e5b71 Fix E2E auth bypass build
 
 ## Local Working Tree
 
-- (clean)
+-  M app/__tests__/page.test.tsx
+-  M components/__tests__/PersistedPublishingPanel.test.tsx
+-  M convex/__tests__/ideasApi.test.ts
+-  M convex/_generated/api.d.ts
+-  M convex/ideas.ts
+-  M convex/schema.ts
+-  M convex/v2Publishing.ts
+-  M docs/migration-dry-run.md
+-  M lib/__tests__/github.test.ts
+- M  lib/__tests__/v2Migration.test.ts
+-  M lib/github.ts
+- M  lib/v2Migration.ts
+-  M tests/fixtures/resonate-v1-export.sample.json
+- ?? components/EditorPageRouter.tsx
+- ?? convex/__tests__/helpers/
+- ?? convex/__tests__/spawnV2Posts.test.ts
+- ?? convex/__tests__/v2Publishing.test.ts
+- ?? convex/githubPrSync.ts
 
 ## Next Agent Pickup
 
 - Start by checking the living docs against the current code before making assumptions.
 - If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
+- Do not conflate the captured ideas inbox with the separate workflow idea system.
 
 ## Branch
 
-- b1-foundation-cleanups
+- b2b-ideas-merge
