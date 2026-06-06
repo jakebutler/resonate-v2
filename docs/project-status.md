@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 12:02:44 PDT
+Last updated: 06/06/2026 12:06:57 PDT
 
 ## State
 
@@ -16,12 +16,12 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 8e70e80 fix(test): move provider adapter contract helper out of vitest include
+- 4d91691 Wire Zernio live Reddit submission behind ZERNIO_LIVE_SUBMISSION gate.
 
 ## Recent Commits
 
-- 8e70e80 fix(test): move provider adapter contract helper out of vitest include
-- 00d7ee6 [B.4] Buffer live submission adapter and validation
+- 4d91691 Wire Zernio live Reddit submission behind ZERNIO_LIVE_SUBMISSION gate.
+- 93485e3 [B.4] Buffer live submission (gated, validated) (#28)
 - fe0d9f3 [B.3] Real v1 migration dry-run summary and export helper (#27)
 - 1fedbcd Merge pull request #26 from jakebutler/b2a-single-composer
 - 7fe5fd8 Merge main into b2a-single-composer and unify v2Publishing tests.
@@ -37,4 +37,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- b4-buffer-live-submission
+- b5-zernio-live-submission
