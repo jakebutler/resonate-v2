@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 02:26:17 PDT
+Last updated: 06/06/2026 10:47:01 PDT
 
 ## State
 
@@ -16,20 +16,24 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- c844a63 Refresh status after CI bypass fix
+- b710714 Merge PR #20: Build Resonate v2 MVP foundation
 
 ## Recent Commits
 
+- b710714 Merge PR #20: Build Resonate v2 MVP foundation
+- 37fa2f5 Document Vercel v2 deployment
 - c844a63 Refresh status after CI bypass fix
 - 46e5b71 Fix E2E auth bypass build
 - 72bbb9e Build Resonate v2 MVP foundation
-- 08eaa05 Initialize local env hygiene
-- 17818db Initial commit
 
 ## Local Working Tree
 
--  M docs/mvp-implementation-map.md
--  M docs/ops-runbook.md
+- M  app/v2/page.tsx
+- A  app/v2/research/page.tsx
+- M  docs/adr/0002-provider-routing-and-approval.md
+- A  docs/adr/0004-single-composer.md
+- M  docs/cutover-checklist.md
+- M  docs/mvp-implementation-map.md
 
 ## Next Agent Pickup
 
@@ -38,4 +42,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- codex/resonate-v2-mvp-foundation
+- b1-foundation-cleanups

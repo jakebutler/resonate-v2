@@ -11,15 +11,15 @@ Status: **DRAFT — In Validation**
 |---|---|---|---|
 | Ideas capture | ✅ Full (Convex-backed) | ✅ Full (localStorage tracer + persisted handoff paths) | Captured ideas remain local; accepted drafts persist into v2 tables |
 | Idea-to-draft generation | ✅ AI-assisted (Corvo blog only) | ✅ Multi-channel (7 channels), Pioneer-backed | V2 adds LinkedIn, YouTube, X, Instagram, TikTok, Reddit |
-| Multi-channel variant review | ❌ Not present | ✅ Accept/Reject per variant | #49 |
-| Inbox / draft management | ✅ Basic (Postiz calendar) | ✅ Cross-brand view, status filter | #51 |
+| Multi-channel variant review | ❌ Not present | ✅ Accept/Reject per variant | v2 #8 |
+| Inbox / draft management | ✅ Basic (Postiz calendar) | ✅ Cross-brand view, status filter | v2 #6 |
 | Scheduling handoff | ✅ Postiz scheduler | ✅ Schedule date per draft, manual handoff | Human approval required; no auto-publish |
-| Corvo Blog PR publishing | ✅ /api/publish GitHub PR | ✅ Preserved in V2 | PR-created status visible in draft list |
+| Corvo Blog PR publishing | ✅ /api/publish GitHub PR | ✅ Preserved in V2 | v2 #15; PR-created status visible in draft list |
 | YouTube validation | ✅ via Postiz | ✅ /api/v2/validate-youtube | Validates chapter markers, description, hashtags |
-| Voice packs | ✅ Basic per brand | ✅ Per-brand default voice packs (all 4 brands) | V2 adds markdown body, persona fields |
-| Research pipeline | ❌ Not present | ✅ Source discovery, evidence labeling, claim map | #52, #53 — FreshProof brand spike |
-| Editorial outline | ❌ Not present | ✅ Claim-grounded outline generation | #54 |
-| Long-form draft with citations | ❌ Not present | ✅ Footnoted markdown output | #54 |
+| Voice packs | ✅ Basic per brand | ✅ Per-brand default voice packs (all 4 brands) | v2 #4; V2 adds markdown body, persona fields |
+| Research pipeline | ❌ Not present | ✅ Source discovery, evidence labeling, claim map | v2 #9 — FreshProof brand spike |
+| Editorial outline | ❌ Not present | ✅ Claim-grounded outline generation | v2 #9 |
+| Long-form draft with citations | ❌ Not present | ✅ Footnoted markdown output | v2 #9 |
 | Workflow board | ✅ (Convex-backed) | ✅ Preserved (lib/workflowBoard.ts) | Minor scope, not blocking cutover |
 | AI assistant | ✅ Chat UI (legacy) | ❌ Not in V2 scope for MVP | Deprioritized; not blocking |
 | Settings | ✅ Postiz UI | ✅ Brand/channel config in V2 sidebar | V2 does not replicate all Postiz settings |
@@ -86,18 +86,29 @@ During the transition period (now through cutover decision):
 
 ## 5. Cutover Blockers
 
-All blockers must be closed before deprecating the legacy Postiz-based UI.
+All blockers must be closed before deprecating the legacy Postiz-based UI. Tracked against issues in `jakebutler/resonate-v2`; see umbrella roadmap #21.
 
 | Blocker | Issue | Status |
 |---|---|---|
-| Multi-platform variant generation | #49 | ✅ Closed — PR #64 |
-| Inbox and draft management | #51 | ✅ Closed — PR #65 |
-| Research pipeline spike | #52 | ✅ Closed — PR #66 |
-| Claim map generation | #53 | ✅ Closed — PR #67 |
-| Editorial outline + long-form draft | #54 | ✅ Closed — PR #68 |
-| Cutover checklist (this doc) | #55 | 🟡 In progress |
-| E2E hardening | #56 | 🟡 In progress |
-| Production validation at resonate.corvolabs.com | — | ⬜ Pending all PRs merged |
+| Bootstrap Postiz spine | #2 | ✅ Closed — PR #20 |
+| Glossary + ADRs | #3 | 🟡 In progress — B.1 |
+| Brands/Channels + auth boundaries | #4 | 🟡 In progress — B.2.C |
+| Publishing Intent / Provider State / Publish Attempts | #5 | ✅ Closed — PR #20 |
+| Ideas v2 (capture, threading, dedup, spawn) | #6 | 🟡 In progress — B.2.B |
+| Single composer + per-platform settings | #7 | 🟡 In progress — B.2.A |
+| AI Idea-to-draft flow | #8 | 🟡 In progress — pending C.2 |
+| Research-to-draft flow | #9 | 🟡 In progress — pending C.2 |
+| Calendar week/month + filters | #10 | 🟡 In progress — pending C.2 |
+| Calendar item actions + audit trail | #11 | 🟡 In progress — pending C.2 |
+| Mock Provider + adapter contract | #12 | ✅ Closed — PR #20 |
+| Buffer LinkedIn live submission | #13 | 🟡 In progress — B.4 |
+| Zernio Reddit live submission | #14 | 🟡 In progress — B.5 |
+| Corvo Blog PR channel + reschedule policy | #15 | 🟡 In progress — B.2.D |
+| v1 → v2 migration | #16 | 🟡 In progress — B.3 |
+| CI gates + coverage policy | #17 | ✅ Closed — PR #20 |
+| Side-by-side deployment + cutover doc | #18 | 🟡 In progress — pending C.2 |
+| Side-by-side smoke + go/no-go | #19 | 🟡 In progress — B.6 + C |
+| Production validation at resonate.corvolabs.com | C.3 | ⬜ Pending B.6 + C.2 |
 
 ---
 
@@ -143,17 +154,20 @@ If V2 is not ready for full cutover:
 
 ## 8. Go/No-Go Recommendation
 
-**Recommendation: GO for V2 soft-launch once #55 and #56 close.**
+**Recommendation: GO for V2 cutover once Phase B (#13, #14, #15, #16) closes and Phase C smoke (#19) passes.**
 
 Rationale:
-- All MVP workflows are implemented and verified in mock mode.
-- HITL constraints (no auto-publish, human source/claim acceptance) are enforced in architecture.
-- Rollback is zero-risk (additive routes, localStorage only).
-- Remaining gaps (bulk scheduling, analytics, AI assistant) are acceptable for the MVP scope defined in #38.
+- All MVP workflows are implemented and verified in mock mode (#7, #8, #9, #10, #11).
+- HITL constraints (no auto-publish, human source/claim acceptance) are enforced in architecture (ADR 0002).
+- Provider adapter contract + Mock Provider gate live submission (#12 closed).
+- Rollback is zero-risk: v2 lives on a separate Vercel project (`resonate-v2-delta.vercel.app`) and additive `/api/v2/*` routes do not affect legacy.
 
-**Hard prerequisites before deprecating legacy Postiz UI:**
-- [ ] All PRs (#64–#68, #55, #56) merged to main
-- [ ] Vercel auto-deploy confirmed at resonate.corvolabs.com
-- [ ] PIONEER_API_KEY set in Vercel production environment
-- [ ] MVP demo run in production (not just mock mode)
-- [ ] Legacy and v2 Convex data exported and archived
+**Hard prerequisites before deprecating legacy v1 at `resonate.corvolabs.com`:**
+- [ ] #13 Buffer live submission validated (B.4)
+- [ ] #14 Zernio live submission validated (B.5)
+- [ ] #15 Corvo Blog PR reschedule-after-create policy implemented (B.2.D)
+- [ ] #16 Real v1 export dry-run reviewed (B.3)
+- [ ] Vercel env vars set in `resonate-v2` project (A.2 — done)
+- [ ] Authenticated MVP demo run on `resonate-v2-delta.vercel.app` (C.2)
+- [ ] Legacy v1 Convex data exported and archived (C.3)
+- [ ] DNS for `resonate.corvolabs.com` repointed to v2 Vercel project (C.3)

@@ -1891,3 +1891,31 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/resonate-v2-mvp-foundation
+
+## 06/06/2026 10:47:01 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	app/v2/page.tsx
+- A	app/v2/research/page.tsx
+- M	docs/adr/0002-provider-routing-and-approval.md
+- A	docs/adr/0004-single-composer.md
+- M	docs/cutover-checklist.md
+- M	docs/mvp-implementation-map.md
+
+### Working Tree Snapshot
+
+- M  app/v2/page.tsx
+- A  app/v2/research/page.tsx
+- M  docs/adr/0002-provider-routing-and-approval.md
+- A  docs/adr/0004-single-composer.md
+- M  docs/cutover-checklist.md
+- M  docs/mvp-implementation-map.md
+
+### Branch
+
+- b1-foundation-cleanups
