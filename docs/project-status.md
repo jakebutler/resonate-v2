@@ -8,32 +8,28 @@ Resonate is a working content operations app with active surfaces for calendar p
 
 ## Current Task
 
-Maintain the living documentation and preserve a handoff-quality snapshot of the repo state.
+Execute Phase B of roadmap #21: B.1 foundation cleanups committed; opening PR next.
 
 ## Session Focus
 
-- Updated repository documentation and handoff records.
+- Split `/v2` calendar/composer from `/v2/research` AI surface per ADR 0004.
+- Re-key cutover checklist to resonate-v2 issue numbers.
 
 ## Last Completed Task
 
-- b710714 Merge PR #20: Build Resonate v2 MVP foundation
+- 8d709ba [B.1] Foundation cleanups: single /v2 surface, ADR 0004, checklist re-key
 
 ## Recent Commits
 
+- 8d709ba [B.1] Foundation cleanups: single /v2 surface, ADR 0004, checklist re-key
 - b710714 Merge PR #20: Build Resonate v2 MVP foundation
 - 37fa2f5 Document Vercel v2 deployment
 - c844a63 Refresh status after CI bypass fix
 - 46e5b71 Fix E2E auth bypass build
-- 72bbb9e Build Resonate v2 MVP foundation
 
 ## Local Working Tree
 
-- M  app/v2/page.tsx
-- A  app/v2/research/page.tsx
-- M  docs/adr/0002-provider-routing-and-approval.md
-- A  docs/adr/0004-single-composer.md
-- M  docs/cutover-checklist.md
-- M  docs/mvp-implementation-map.md
+- (clean)
 
 ## Next Agent Pickup
 
