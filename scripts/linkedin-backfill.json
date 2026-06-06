@@ -1,0 +1,37 @@
+[
+  {
+    "type": "linkedin",
+    "content": "Another great post from Corvo Labs founder Jake Butler. He's digging into LLMs + context again, with some great practical examples for builders. \n\nRead the full post at https://lnkd.in/g858K9qk",
+    "externalUrl": "https://www.linkedin.com/posts/corvo-labs-us_another-great-post-from-corvo-labs-founder-activity-7436941663371104256-Xw5i",
+    "publishedDate": "2026-03-10",
+    "title": "Another great post from Corvo Labs founder Jake Butler."
+  },
+  {
+    "type": "linkedin",
+    "content": "There's been a lot of discussion lately about RAG (retrieval augmented generation) not being the best solution for coding agents where things are more well-defined in code, and traditional search options being more effective.\n\nWe had a similar mis-application of RAG in one of our apps, but we found a better solution, along with many more learnings about context, alignment, and prompting.\n\nYou can read the full details in our post: https://lnkd.in/eA5_gTsb.",
+    "externalUrl": "https://www.linkedin.com/posts/corvo-labs-us_from-4-minutes-to-4-seconds-how-we-rebuilt-activity-7432891266465423361-Np61",
+    "publishedDate": "2026-02-26",
+    "title": "There's been a lot of discussion lately about RAG (retrieval augmented generation) not being the best solution for coding agents where things are more well-defined in code, and traditional search options being more effective."
+  },
+  {
+    "type": "linkedin",
+    "content": "Corvo Labs' founder, Jake Butler, is starting work on an in-depth article series focusing on behavior change design in healthcare. \n\nWhat topics do you want covered? What specific questions do you want answered?",
+    "externalUrl": "https://www.linkedin.com/posts/corvo-labs-us_corvo-labs-founder-jake-butler-is-starting-activity-7430374198184751104-V--_",
+    "publishedDate": "2026-02-19",
+    "title": "Corvo Labs' founder, Jake Butler, is starting work on an in-depth article series focusing on behavior change design in healthcare."
+  },
+  {
+    "type": "linkedin",
+    "content": "Many teams drown in feedback they can't act on fast enough.\n\nAt the OpenAI Codex hackathon, I built Miralo, a system that generates working prototypes during user interviews. You get feedback, the system builds a variation, and you show it back to the user minutes later, while you're still on the call.\n\nKey concepts from this project:\n\n- Anticipatory scaffolding: The system analyzes your codebase before the interview and prepares likely prototype paths, trading upfront investment for real-time speed\n- Hypothesis-driven interviews: Good discovery isn't freeform. Miralo makes the process explicit and ties interview prep directly to what gets built\n- Compressing the feedback loop: Imagine consolidating low-risk user requests, auto-generating prototypes, and validating them before your team writes production code\n\nThe demo was rough but functional. The principles behind it are solid.\n\nCheck out the blog where I dig in deeper on the technical approach, what I'd do differently, and where this could go: https://lnkd.in/g_vQbw5t\n\nWhat feedback loops are you trying to compress in your own work?",
+    "externalUrl": "https://www.linkedin.com/posts/corvo-labs-us_when-user-feedback-meets-real-time-prototyping-activity-7427129083995619329-YzUJ",
+    "publishedDate": "2026-02-10",
+    "title": "Many teams drown in feedback they can't act on fast enough."
+  },
+  {
+    "type": "linkedin",
+    "content": "I put some fingers to keys to share about why I started Corvo Labs, and the work I'm doing. As I worked through all of these ideas, and have spent the last year or so developing and evolving Corvo Labs, it all gelled together into this...\n\nHelping teams get clarity from uncertainty, and move forward with confidence.\n\nYou can learn more at https://lnkd.in/gqwuTmND, or just ask in a comment.",
+    "externalUrl": "https://www.linkedin.com/posts/corvo-labs-us_why-corvo-labs-our-founding-story-activity-7426096941660315648-PmU3",
+    "publishedDate": "2026-02-08",
+    "title": "I put some fingers to keys to share about why I started Corvo Labs, and the work I'm doing."
+  }
+]

@@ -1,0 +1,8 @@
+# Optional local overrides for `.githooks/pre-commit`.
+#
+# Copy this file to `.githooks/pre-commit.local` to customize hook behavior
+# without modifying the tracked shared hook.
+#
+# Examples:
+# export RESONATE_DOCS_HOOK_SKIP=1
+# export RESONATE_DOCS_HOOK_STRICT=1
