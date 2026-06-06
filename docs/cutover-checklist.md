@@ -1,6 +1,6 @@
 # Resonate → V2 Cutover Checklist
 
-Last updated: 2026-06-05
+Last updated: 2026-06-06
 Status: **DRAFT — In Validation**
 
 ---
@@ -88,6 +88,8 @@ During the transition period (now through cutover decision):
 
 All blockers must be closed before deprecating the legacy Postiz-based UI. Tracked against issues in `jakebutler/resonate-v2`; see umbrella roadmap #21.
 
+Latest automated gate: [`docs/smoke-runs/2026-06-06-cutover-readiness.md`](smoke-runs/2026-06-06-cutover-readiness.md) (B.6 — 6/6 checks pass, 7/11 #19 ACs automated-pass, 4 need C.2).
+
 | Blocker | Issue | Status |
 |---|---|---|
 | Bootstrap Postiz spine | #2 | ✅ Closed — PR #20 |
@@ -96,19 +98,19 @@ All blockers must be closed before deprecating the legacy Postiz-based UI. Track
 | Publishing Intent / Provider State / Publish Attempts | #5 | ✅ Closed — PR #20 |
 | Ideas v2 (capture, threading, dedup, spawn) | #6 | 🟡 In progress — B.2.B |
 | Single composer + per-platform settings | #7 | 🟡 In progress — B.2.A |
-| AI Idea-to-draft flow | #8 | 🟡 In progress — pending C.2 |
-| Research-to-draft flow | #9 | 🟡 In progress — pending C.2 |
-| Calendar week/month + filters | #10 | 🟡 In progress — pending C.2 |
-| Calendar item actions + audit trail | #11 | 🟡 In progress — pending C.2 |
+| AI Idea-to-draft flow | #8 | 🟡 Pending C.2 authenticated smoke |
+| Research-to-draft flow | #9 | 🟡 Pending C.2 authenticated smoke |
+| Calendar week/month + filters | #10 | 🟡 Pending C.2 authenticated smoke |
+| Calendar item actions + audit trail | #11 | 🟡 Pending C.2 authenticated smoke |
 | Mock Provider + adapter contract | #12 | ✅ Closed — PR #20 |
-| Buffer LinkedIn live submission | #13 | 🟡 In progress — B.4 |
-| Zernio Reddit live submission | #14 | 🟡 In progress — B.5 |
+| Buffer LinkedIn live submission | #13 | 🟡 B.4 in progress; B.6 read-only validation ✅ (2026-06-06) |
+| Zernio Reddit live submission | #14 | 🟡 B.5 in progress; B.6 read-only validation ✅ (2026-06-06) |
 | Corvo Blog PR channel + reschedule policy | #15 | 🟡 In progress — B.2.D |
-| v1 → v2 migration | #16 | 🟡 In progress — B.3 |
-| CI gates + coverage policy | #17 | ✅ Closed — PR #20 |
-| Side-by-side deployment + cutover doc | #18 | 🟡 In progress — pending C.2 |
-| Side-by-side smoke + go/no-go | #19 | 🟡 In progress — B.6 + C |
-| Production validation at resonate.corvolabs.com | C.3 | ⬜ Pending B.6 + C.2 |
+| v1 → v2 migration | #16 | 🟡 B.3 in progress; B.6 sample dry-run ✅ (0 failed) |
+| CI gates + coverage policy | #17 | ✅ B.6 `test:ci` pass (2026-06-06) |
+| Side-by-side deployment + cutover doc | #18 | 🟡 B.6 HTTP smoke ✅ (`/` + `/v2` → Clerk); C.2 pending |
+| Side-by-side smoke + go/no-go | #19 | 🟡 B.6 automated gate ✅; 4 ACs → C.2 (#19.1–19.3, 19.8) |
+| Production validation at resonate.corvolabs.com | C.3 | ⬜ Pending C.2 + C.3 decision |
 
 ---
 

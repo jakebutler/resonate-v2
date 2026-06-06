@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 12:06:57 PDT
+Last updated: 06/06/2026 11:47:45 PDT
 
 ## State
 
@@ -12,23 +12,30 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- 4d91691 Wire Zernio live Reddit submission behind ZERNIO_LIVE_SUBMISSION gate.
+- fe0d9f3 [B.3] Real v1 migration dry-run summary and export helper (#27)
 
 ## Recent Commits
 
-- 4d91691 Wire Zernio live Reddit submission behind ZERNIO_LIVE_SUBMISSION gate.
-- 93485e3 [B.4] Buffer live submission (gated, validated) (#28)
 - fe0d9f3 [B.3] Real v1 migration dry-run summary and export helper (#27)
 - 1fedbcd Merge pull request #26 from jakebutler/b2a-single-composer
 - 7fe5fd8 Merge main into b2a-single-composer and unify v2Publishing tests.
+- 1e91428 Merge pull request #23 from jakebutler/b2b-ideas-merge
+- 775c2d3 Exclude convex test helpers from Vitest discovery.
 
 ## Local Working Tree
 
-- D  lib/__tests__/providerAdapterContract.ts
+- M  docs/cutover-checklist.md
+- A  docs/smoke-runs/2026-06-06-cutover-readiness.md
+-  M lib/__tests__/v2ProviderAdapters.test.ts
+- A  scripts/cutover-smoke.mjs
+- ?? .github/workflows/zernio-live-validation.yml
+- ?? docs/zernio-api-notes.md
+- ?? lib/__tests__/providerAdapterContract.ts
+- ?? scripts/zernio-live-validation.mjs
 
 ## Next Agent Pickup
 
@@ -37,4 +44,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- b5-zernio-live-submission
+- b6-cutover-smoke

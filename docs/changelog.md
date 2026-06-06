@@ -2001,7 +2001,7 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 - b3-real-migration-dry-run
 
-## 06/06/2026 11:45:56 PDT
+## 06/06/2026 11:47:45 PDT
 
 ### Summary
 
@@ -2009,81 +2009,21 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 ### Staged Changes
 
-- A	.github/workflows/buffer-live-validation.yml
-- A	docs/buffer-api-notes.md
-- M	docs/live-provider-validation.md
-- A	lib/__tests__/providerAdapterContract.ts
-- M	lib/__tests__/v2ProviderAdapters.test.ts
-- M	lib/v2ProviderAdapters.ts
-- A	scripts/buffer-live-validation.mjs
+- M	docs/cutover-checklist.md
+- A	docs/smoke-runs/2026-06-06-cutover-readiness.md
+- A	scripts/cutover-smoke.mjs
 
 ### Working Tree Snapshot
 
-- A  .github/workflows/buffer-live-validation.yml
-- A  docs/buffer-api-notes.md
-- M  docs/live-provider-validation.md
-- A  lib/__tests__/providerAdapterContract.ts
-- M  lib/__tests__/v2ProviderAdapters.test.ts
-- M  lib/v2ProviderAdapters.ts
-- A  scripts/buffer-live-validation.mjs
+- M  docs/cutover-checklist.md
+- A  docs/smoke-runs/2026-06-06-cutover-readiness.md
+-  M lib/__tests__/v2ProviderAdapters.test.ts
+- A  scripts/cutover-smoke.mjs
+- ?? .github/workflows/zernio-live-validation.yml
+- ?? docs/zernio-api-notes.md
+- ?? lib/__tests__/providerAdapterContract.ts
+- ?? scripts/zernio-live-validation.mjs
 
 ### Branch
 
-- b4-buffer-live-submission
-
-## 06/06/2026 11:51:21 PDT
-
-### Summary
-
-- Refreshed documentation for the current repository state.
-
-### Staged Changes
-
-- A	lib/__tests__/helpers/providerAdapterContract.ts
-- M	lib/__tests__/v2ProviderAdapters.test.ts
-
-### Working Tree Snapshot
-
-- A  lib/__tests__/helpers/providerAdapterContract.ts
--  D lib/__tests__/providerAdapterContract.ts
-- M  lib/__tests__/v2ProviderAdapters.test.ts
-
-### Branch
-
-- b4-buffer-live-submission
-
-## 06/06/2026 12:02:44 PDT
-
-### Summary
-
-- Refreshed documentation for the current repository state.
-
-### Staged Changes
-
-- D	lib/__tests__/providerAdapterContract.ts
-
-### Working Tree Snapshot
-
-- D  lib/__tests__/providerAdapterContract.ts
-
-### Branch
-
-- b4-buffer-live-submission
-
-## 06/06/2026 12:06:57 PDT
-
-### Summary
-
-- Refreshed documentation for the current repository state.
-
-### Staged Changes
-
-- D	lib/__tests__/providerAdapterContract.ts
-
-### Working Tree Snapshot
-
-- D  lib/__tests__/providerAdapterContract.ts
-
-### Branch
-
-- b5-zernio-live-submission
+- b6-cutover-smoke
