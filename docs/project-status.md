@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 10:47:01 PDT
+Last updated: 06/06/2026 11:11:01 PDT
 
 ## State
 
@@ -8,28 +8,37 @@ Resonate is a working content operations app with active surfaces for calendar p
 
 ## Current Task
 
-Execute Phase B of roadmap #21: B.1 foundation cleanups committed; opening PR next.
+Maintain the living documentation and preserve a handoff-quality snapshot of the repo state.
 
 ## Session Focus
 
-- Split `/v2` calendar/composer from `/v2/research` AI surface per ADR 0004.
-- Re-key cutover checklist to resonate-v2 issue numbers.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- 8d709ba [B.1] Foundation cleanups: single /v2 surface, ADR 0004, checklist re-key
+- bc970e2 Merge PR #22: [B.1] Foundation cleanups
 
 ## Recent Commits
 
+- bc970e2 Merge PR #22: [B.1] Foundation cleanups
+- 695e5e1 Refresh handoff docs after B.1 foundation cleanups.
 - 8d709ba [B.1] Foundation cleanups: single /v2 surface, ADR 0004, checklist re-key
 - b710714 Merge PR #20: Build Resonate v2 MVP foundation
 - 37fa2f5 Document Vercel v2 deployment
-- c844a63 Refresh status after CI bypass fix
-- 46e5b71 Fix E2E auth bypass build
 
 ## Local Working Tree
 
-- (clean)
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/ideasApi.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/_generated/api.js
+- M  convex/_generated/dataModel.d.ts
+- M  convex/_generated/server.d.ts
+- M  convex/_generated/server.js
+- A  convex/githubPrSync.ts
+- M  convex/v2Publishing.ts
+- M  lib/__tests__/github.test.ts
+- M  lib/github.ts
 
 ## Next Agent Pickup
 
@@ -38,4 +47,4 @@ Execute Phase B of roadmap #21: B.1 foundation cleanups committed; opening PR ne
 
 ## Branch
 
-- b1-foundation-cleanups
+- b2d-reschedule-pr-policy

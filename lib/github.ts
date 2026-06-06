@@ -591,3 +591,138 @@ export async function createBlogPostPR(params: {
     },
   };
 }
+
+function githubHeaders() {
+  return {
+    Authorization: `Bearer ${GITHUB_TOKEN}`,
+    "Content-Type": "application/json",
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+}
+
+function upsertQuotedYamlField(frontmatter: string, key: string, value: string): string {
+  const line = `${key}: "${escapeYamlString(value)}"`;
+  const pattern = new RegExp(`^${escapeRegExp(key)}:\\s*.*$`, "m");
+  if (pattern.test(frontmatter)) return frontmatter.replace(pattern, line);
+  return `${frontmatter.trimEnd()}\n${line}`;
+}
+
+function removeYamlField(frontmatter: string, key: string): string {
+  const pattern = new RegExp(`^${escapeRegExp(key)}:\\s*.*\\n?`, "m");
+  return frontmatter.replace(pattern, "").replace(/\n{3,}/g, "\n\n");
+}
+
+export function patchFrontmatterSchedule(
+  mdxContent: string,
+  params: { scheduledDate: string; scheduledTime?: string; timezone?: string }
+): string {
+  const match = mdxContent.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match) throw new Error("MDX file missing YAML frontmatter.");
+  let frontmatter = match[1];
+  const body = match[2];
+  frontmatter = upsertQuotedYamlField(frontmatter, "date", params.scheduledDate);
+  if (params.scheduledTime?.trim()) {
+    frontmatter = upsertQuotedYamlField(frontmatter, "scheduledTime", params.scheduledTime.trim());
+  } else {
+    frontmatter = removeYamlField(frontmatter, "scheduledTime");
+  }
+  if (params.timezone?.trim()) {
+    frontmatter = upsertQuotedYamlField(frontmatter, "timezone", params.timezone.trim());
+  } else {
+    frontmatter = removeYamlField(frontmatter, "timezone");
+  }
+  return `---\n${frontmatter.trimEnd()}\n---\n${body}`;
+}
+
+export type UpdatePrFrontmatterFailureReason =
+  | "pr-closed" | "pr-not-found" | "branch-missing" | "file-missing";
+
+export type UpdatePrFrontmatterResult =
+  | { ok: true; filePath: string }
+  | { ok: false; reason: UpdatePrFrontmatterFailureReason };
+
+function parsePullNumber(prUrl: string): number | null {
+  const match = prUrl.match(/\/pull\/(\d+)\/?$/);
+  if (!match) return null;
+  const number = Number.parseInt(match[1], 10);
+  return Number.isFinite(number) ? number : null;
+}
+
+async function findMdxFileOnBranch(
+  branchName: string,
+  headers: Record<string, string>
+): Promise<{ path: string; sha: string; content: string } | null> {
+  const listingRes = await fetch(
+    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CONTENT_PATH}?ref=${encodeURIComponent(branchName)}`,
+    { headers }
+  );
+  if (!listingRes.ok) return null;
+  const listing = (await listingRes.json()) as Array<{ name?: string; path?: string; type?: string }>;
+  const mdxEntry = listing.find((e) => e.type === "file" && e.name?.endsWith(".mdx") && e.path);
+  if (!mdxEntry?.path) return null;
+  const fileRes = await fetch(
+    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${mdxEntry.path}?ref=${encodeURIComponent(branchName)}`,
+    { headers }
+  );
+  if (!fileRes.ok) return null;
+  const fileData = (await fileRes.json()) as { sha?: string; content?: string; encoding?: string };
+  if (!fileData.sha || !fileData.content || fileData.encoding !== "base64") return null;
+  return {
+    path: mdxEntry.path,
+    sha: fileData.sha,
+    content: Buffer.from(fileData.content, "base64").toString("utf-8"),
+  };
+}
+
+export async function updatePrFrontmatter(params: {
+  branchName: string;
+  prUrl: string;
+  scheduledDate: string;
+  scheduledTime?: string;
+  timezone?: string;
+}): Promise<UpdatePrFrontmatterResult> {
+  if (!GITHUB_TOKEN) throw new Error("Missing required environment variable: GITHUB_TOKEN");
+  const headers = githubHeaders();
+  const pullNumber = parsePullNumber(params.prUrl);
+  if (pullNumber === null) return { ok: false, reason: "pr-not-found" };
+  const prRes = await fetch(
+    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/pulls/${pullNumber}`,
+    { headers }
+  );
+  if (prRes.status === 404) return { ok: false, reason: "pr-not-found" };
+  if (!prRes.ok) throw new Error(`GitHub PR fetch failed: ${prRes.status}`);
+  const prData = (await prRes.json()) as { state?: string };
+  if (prData.state === "closed") return { ok: false, reason: "pr-closed" };
+  const branchRes = await fetch(
+    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/ref/heads/${encodeURIComponent(params.branchName)}`,
+    { headers }
+  );
+  if (branchRes.status === 404) return { ok: false, reason: "branch-missing" };
+  if (!branchRes.ok) throw new Error(`GitHub branch fetch failed: ${branchRes.status}`);
+  const mdxFile = await findMdxFileOnBranch(params.branchName, headers);
+  if (!mdxFile) return { ok: false, reason: "file-missing" };
+  const updatedContent = patchFrontmatterSchedule(mdxFile.content, {
+    scheduledDate: params.scheduledDate,
+    scheduledTime: params.scheduledTime,
+    timezone: params.timezone,
+  });
+  const commitRes = await fetch(
+    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${mdxFile.path}`,
+    {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        message: `chore: reschedule blog post to ${params.scheduledDate}`,
+        content: Buffer.from(updatedContent).toString("base64"),
+        branch: params.branchName,
+        sha: mdxFile.sha,
+      }),
+    }
+  );
+  if (!commitRes.ok) {
+    const err = await commitRes.json();
+    throw new Error(`GitHub update file failed: ${JSON.stringify(err)}`);
+  }
+  return { ok: true, filePath: mdxFile.path };
+}
