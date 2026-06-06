@@ -1919,3 +1919,41 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - b1-foundation-cleanups
+
+## 06/06/2026 11:11:01 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	convex/__tests__/ideasApi.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/_generated/api.js
+- M	convex/_generated/dataModel.d.ts
+- M	convex/_generated/server.d.ts
+- M	convex/_generated/server.js
+- A	convex/githubPrSync.ts
+- M	convex/v2Publishing.ts
+- M	lib/__tests__/github.test.ts
+- M	lib/github.ts
+
+### Working Tree Snapshot
+
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/ideasApi.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/_generated/api.js
+- M  convex/_generated/dataModel.d.ts
+- M  convex/_generated/server.d.ts
+- M  convex/_generated/server.js
+- A  convex/githubPrSync.ts
+- M  convex/v2Publishing.ts
+- M  lib/__tests__/github.test.ts
+- M  lib/github.ts
+
+### Branch
+
+- b2d-reschedule-pr-policy

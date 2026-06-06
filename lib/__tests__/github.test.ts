@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vite
 type GithubModule = typeof import("@/lib/github");
 
 let createBlogPostPR: GithubModule["createBlogPostPR"];
+let updatePrFrontmatter: GithubModule["updatePrFrontmatter"];
+let patchFrontmatterSchedule: GithubModule["patchFrontmatterSchedule"];
 let normalizeMdxBody: GithubModule["normalizeMdxBody"];
 let validateMdxPost: GithubModule["validateMdxPost"];
 let BlogPostContractError: GithubModule["BlogPostContractError"];
@@ -18,6 +20,8 @@ beforeAll(async () => {
   vi.resetModules();
   const mod = await import("@/lib/github");
   createBlogPostPR = mod.createBlogPostPR;
+  updatePrFrontmatter = mod.updatePrFrontmatter;
+  patchFrontmatterSchedule = mod.patchFrontmatterSchedule;
   normalizeMdxBody = mod.normalizeMdxBody;
   validateMdxPost = mod.validateMdxPost;
   BlogPostContractError = mod.BlogPostContractError;
@@ -587,5 +591,51 @@ describe("createBlogPostPR", () => {
       scheduledDate: "2026-03-04",
     });
     expect(payload.sha).toBe("existing-file-sha");
+  });
+});
+
+describe("patchFrontmatterSchedule", () => {
+  it("updates schedule fields while preserving the MDX body", () => {
+    const sample = `---\ndate: "2026-03-04"\nscheduledTime: "09:00"\n---\n\nBody.\n`;
+    const updated = patchFrontmatterSchedule(sample, {
+      scheduledDate: "2026-06-20",
+      scheduledTime: "14:45",
+      timezone: "America/New_York",
+    });
+    expect(updated).toContain('date: "2026-06-20"');
+    expect(updated).toContain('scheduledTime: "14:45"');
+    expect(updated).toContain("Body.");
+  });
+});
+
+describe("updatePrFrontmatter", () => {
+  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("commits updated schedule frontmatter when the PR branch is open", async () => {
+    const sampleMdx = `---\ndate: "2026-03-04"\n---\n\nIntro.\n`;
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ state: "open" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ object: { sha: "branch-sha" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ name: "post.mdx", path: "corvo-labs-enhanced/content/blog/post.mdx", type: "file" }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sha: "file-sha", encoding: "base64", content: Buffer.from(sampleMdx).toString("base64") }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
+    const result = await updatePrFrontmatter({ branchName: "resonate/blog-post-test", prUrl: "https://github.com/test-owner/test-repo/pull/42", scheduledDate: "2026-06-20" });
+    expect(result.ok).toBe(true);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(5);
+  });
+
+  it("returns pr-closed when the pull request is no longer open", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ state: "closed" }), { status: 200 }));
+    const result = await updatePrFrontmatter({ branchName: "resonate/blog-post-test", prUrl: "https://github.com/test-owner/test-repo/pull/42", scheduledDate: "2026-06-20" });
+    expect(result).toEqual({ ok: false, reason: "pr-closed" });
+  });
+
+  it("returns branch-missing when the PR branch ref is gone", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ state: "open" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }));
+    const result = await updatePrFrontmatter({ branchName: "resonate/blog-post-missing", prUrl: "https://github.com/test-owner/test-repo/pull/42", scheduledDate: "2026-06-20" });
+    expect(result).toEqual({ ok: false, reason: "branch-missing" });
   });
 });
