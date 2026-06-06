@@ -1,7 +1,7 @@
 # Resonate → V2 Cutover Checklist
 
 Last updated: 2026-06-06
-Status: **DRAFT — In Validation**
+Status: **CUTOVER COMPLETE — C.3 user sign-off pending**
 
 ---
 
@@ -88,29 +88,29 @@ During the transition period (now through cutover decision):
 
 All blockers must be closed before deprecating the legacy Postiz-based UI. Tracked against issues in `jakebutler/resonate-v2`; see umbrella roadmap #21.
 
-Latest automated gate: [`docs/smoke-runs/2026-06-06-cutover-readiness.md`](smoke-runs/2026-06-06-cutover-readiness.md) (B.6 — 6/6 checks pass, 7/11 #19 ACs automated-pass, 4 need C.2).
+Latest gates: [`2026-06-06-cutover-readiness.md`](smoke-runs/2026-06-06-cutover-readiness.md) (automated PASS), [`2026-06-06-authenticated-smoke.md`](smoke-runs/2026-06-06-authenticated-smoke.md) (C.2 7/7 PASS on `resonate.corvolabs.com`).
 
 | Blocker | Issue | Status |
 |---|---|---|
 | Bootstrap Postiz spine | #2 | ✅ Closed — PR #20 |
-| Glossary + ADRs | #3 | 🟡 In progress — B.1 |
-| Brands/Channels + auth boundaries | #4 | 🟡 In progress — B.2.C |
+| Glossary + ADRs | #3 | ✅ Closed — B.1 (#22) |
+| Brands/Channels + auth boundaries | #4 | ✅ Closed — B.2.C (#24) |
 | Publishing Intent / Provider State / Publish Attempts | #5 | ✅ Closed — PR #20 |
-| Ideas v2 (capture, threading, dedup, spawn) | #6 | 🟡 In progress — B.2.B |
-| Single composer + per-platform settings | #7 | 🟡 In progress — B.2.A |
-| AI Idea-to-draft flow | #8 | 🟡 Pending C.2 authenticated smoke |
-| Research-to-draft flow | #9 | 🟡 Pending C.2 authenticated smoke |
-| Calendar week/month + filters | #10 | 🟡 Pending C.2 authenticated smoke |
-| Calendar item actions + audit trail | #11 | 🟡 Pending C.2 authenticated smoke |
+| Ideas v2 (capture, threading, dedup, spawn) | #6 | ✅ Closed — B.2.B (#23) |
+| Single composer + per-platform settings | #7 | ✅ Closed — B.2.A (#26) |
+| AI Idea-to-draft flow | #8 | ✅ C.2 pass — `/v2/research` |
+| Research-to-draft flow | #9 | ✅ C.2 pass — research pipeline UI |
+| Calendar week/month + filters | #10 | ✅ C.2 pass — PersistedPublishingPanel |
+| Calendar item actions + audit trail | #11 | ✅ C.2 pass — audit events verified |
 | Mock Provider + adapter contract | #12 | ✅ Closed — PR #20 |
-| Buffer LinkedIn live submission | #13 | 🟡 B.4 in progress; B.6 read-only validation ✅ (2026-06-06) |
-| Zernio Reddit live submission | #14 | 🟡 B.5 in progress; B.6 read-only validation ✅ (2026-06-06) |
-| Corvo Blog PR channel + reschedule policy | #15 | 🟡 In progress — B.2.D |
-| v1 → v2 migration | #16 | 🟡 B.3 in progress; B.6 sample dry-run ✅ (0 failed) |
-| CI gates + coverage policy | #17 | ✅ B.6 `test:ci` pass (2026-06-06) |
-| Side-by-side deployment + cutover doc | #18 | 🟡 B.6 HTTP smoke ✅ (`/` + `/v2` → Clerk); C.2 pending |
-| Side-by-side smoke + go/no-go | #19 | 🟡 B.6 automated gate ✅; 4 ACs → C.2 (#19.1–19.3, 19.8) |
-| Production validation at resonate.corvolabs.com | C.3 | ⬜ Pending C.2 + C.3 decision |
+| Buffer LinkedIn live submission | #13 | ✅ Closed — PR #28 |
+| Zernio Reddit live submission | #14 | ✅ Closed — PR #30 |
+| Corvo Blog PR channel + reschedule policy | #15 | ✅ Closed — B.2.D (#25) |
+| v1 → v2 migration | #16 | ✅ Closed — B.3 (#27) |
+| CI gates + coverage policy | #17 | ✅ Closed — PR #20 / B.6 |
+| Side-by-side deployment + cutover doc | #18 | ✅ Domain cutover 2026-06-06 |
+| Side-by-side smoke + go/no-go | #19 | ✅ B.6 + C.2 complete |
+| Production validation at resonate.corvolabs.com | C.3 | 🟡 User final review — `2026-06-06-production-readiness.md` §5 |
 
 ---
 
@@ -156,7 +156,7 @@ If V2 is not ready for full cutover:
 
 ## 8. Go/No-Go Recommendation
 
-**Recommendation: GO for V2 cutover once Phase B (#13, #14, #15, #16) closes and Phase C smoke (#19) passes.**
+**Recommendation: GO for V2 cutover — Phase B closed, C.2 smoke passed on `resonate.corvolabs.com` (2026-06-06). Awaiting C.3 user sign-off.**
 
 Rationale:
 - All MVP workflows are implemented and verified in mock mode (#7, #8, #9, #10, #11).
@@ -165,11 +165,11 @@ Rationale:
 - Rollback is zero-risk: v2 lives on a separate Vercel project (`resonate-v2-delta.vercel.app`) and additive `/api/v2/*` routes do not affect legacy.
 
 **Hard prerequisites before deprecating legacy v1 at `resonate.corvolabs.com`:**
-- [ ] #13 Buffer live submission validated (B.4)
-- [ ] #14 Zernio live submission validated (B.5)
-- [ ] #15 Corvo Blog PR reschedule-after-create policy implemented (B.2.D)
-- [ ] #16 Real v1 export dry-run reviewed (B.3)
-- [ ] Vercel env vars set in `resonate-v2` project (A.2 — done)
-- [ ] Authenticated MVP demo run on `resonate-v2-delta.vercel.app` (C.2)
-- [ ] Legacy v1 Convex data exported and archived (C.3)
-- [ ] DNS for `resonate.corvolabs.com` repointed to v2 Vercel project (C.3)
+- [x] #13 Buffer live submission validated (B.4 — PR #28; read-only + gated submit)
+- [x] #14 Zernio live submission validated (B.5 — PR #30)
+- [x] #15 Corvo Blog PR reschedule-after-create policy implemented (B.2.D)
+- [x] #16 Real v1 export dry-run reviewed (B.3)
+- [x] Vercel env vars set in `resonate-v2` project (re-seeded 2026-06-06)
+- [x] Authenticated MVP demo run on `resonate.corvolabs.com` (C.2 — 7/7)
+- [ ] Legacy v1 Convex data exported and archived (C.3 — user)
+- [x] DNS for `resonate.corvolabs.com` repointed to v2 Vercel project (alias cutover 2026-06-06)
