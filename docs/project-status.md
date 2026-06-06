@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 11:15:34 PDT
+Last updated: 06/06/2026 11:23:04 PDT
 
 ## State
 
@@ -12,24 +12,26 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- f695277 Merge main into b2b-ideas-merge (B.2.C + B.2.D landed).
+- 1fedbcd Merge pull request #26 from jakebutler/b2a-single-composer
 
 ## Recent Commits
 
+- 1fedbcd Merge pull request #26 from jakebutler/b2a-single-composer
+- 7fe5fd8 Merge main into b2a-single-composer and unify v2Publishing tests.
+- 1e91428 Merge pull request #23 from jakebutler/b2b-ideas-merge
+- 775c2d3 Exclude convex test helpers from Vitest discovery.
 - f695277 Merge main into b2b-ideas-merge (B.2.C + B.2.D landed).
-- 92a20da Merge pull request #25 from jakebutler/b2d-reschedule-pr-policy
-- 6f2a046 Merge pull request #24 from jakebutler/b2c-cross-brand-auth
-- 77d5421 [B.2.D] Reschedule-after-PR-creation policy.
-- e21291a [B.2.C] Add cross-brand authorization tests for v2Publishing.
 
 ## Local Working Tree
 
-- M  vitest.config.ts
-- ?? scripts/patch-panel.py
+- M  .gitignore
+- M  docs/migration-dry-run.md
+- A  docs/migration-real-export-summary.md
+- A  scripts/convert-convex-export-to-v1-json.mjs
 
 ## Next Agent Pickup
 
@@ -38,4 +40,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- b2b-ideas-merge
+- b3-real-migration-dry-run

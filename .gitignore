@@ -22,6 +22,9 @@
 # production
 /build
 
+# migration dry-runs (may contain full v1 post bodies)
+/docs/archive/*.json
+
 # misc
 .DS_Store
 .cache/

@@ -6,6 +6,23 @@ This is the issue #16 migration path for MVP validation. It archives raw v1 reco
 
 ## Inputs
 
+### Production export (B.3)
+
+From the v1 checkout with production Convex credentials available in the environment:
+
+```bash
+cd /path/to/resonate
+npx convex export --path /tmp/resonate-v1-backup-YYYY-MM-DD.zip
+
+node /path/to/resonate-v2/scripts/convert-convex-export-to-v1-json.mjs \
+  --zip /tmp/resonate-v1-backup-YYYY-MM-DD.zip \
+  --out /tmp/resonate-v1-export.json
+```
+
+Credentials: pull production env from the Vercel `resonate` project (`CONVEX_DEPLOY_KEY`). Do not commit exports or raw post bodies. Summaries belong in `docs/migration-real-export-summary.md`.
+
+### Expected JSON shape
+
 Export v1 Convex tables into one JSON object:
 
 ```json
