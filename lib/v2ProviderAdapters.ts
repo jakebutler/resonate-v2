@@ -16,6 +16,7 @@ export type V2ProviderSubmission = {
   scheduledTime?: string;
   timezone: string;
   idempotencyKey: string;
+  providerPostId?: string;
 };
 
 export type V2ProviderIntentType = "cancel" | "unpublish";
@@ -185,6 +186,239 @@ function sanitizeBufferChannel(channel: Record<string, unknown>) {
     displayName: channel.displayName,
     service: channel.service,
     isQueuePaused: channel.isQueuePaused,
+  };
+}
+
+const BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND: Partial<Record<V2BrandId, string>> = {
+  corvo: "corvo-labs-us",
+  "lower-db": "the-lower-db",
+};
+
+export function scheduleToUtcIso(input: {
+  scheduledDate: string;
+  scheduledTime?: string;
+  timezone: string;
+}): string {
+  const [year, month, day] = input.scheduledDate.split("-").map(Number);
+  const [hour, minute] = (input.scheduledTime ?? "09:00").split(":").map(Number);
+  const readZoned = (ms: number) => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: input.timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(ms));
+    const pick = (type: string) =>
+      Number(parts.find((part) => part.type === type)?.value ?? "0");
+    return {
+      year: pick("year"),
+      month: pick("month"),
+      day: pick("day"),
+      hour: pick("hour"),
+      minute: pick("minute"),
+    };
+  };
+
+  let ms = Date.UTC(year, month - 1, day, hour, minute, 0);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const zoned = readZoned(ms);
+    const desired = Date.UTC(year, month - 1, day, hour, minute, 0);
+    const actual = Date.UTC(zoned.year, zoned.month - 1, zoned.day, zoned.hour, zoned.minute, 0);
+    ms += desired - actual;
+  }
+  return new Date(ms).toISOString();
+}
+
+function isBufferLiveSubmissionApproved(context: V2ProviderAdapterContext): boolean {
+  return context.env.BUFFER_LIVE_SUBMISSION === "approved";
+}
+
+function needsLiveSubmissionApproval(providerId: V2ProviderId): V2ProviderResult {
+  return unavailable(
+    providerId,
+    "Buffer live submission requires BUFFER_LIVE_SUBMISSION=approved."
+  );
+}
+
+function createBufferGraphqlClient(context: V2ProviderAdapterContext) {
+  const fetchImpl = fetchForContext(context);
+  const apiKey = credential(context, "BUFFER_API_KEY");
+  return {
+    apiKey,
+    async graphql(query: string, variables?: Record<string, unknown>) {
+      const response = await fetchImpl("https://api.buffer.com", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ query, variables }),
+      });
+      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      return { response, data };
+    },
+  };
+}
+
+function bufferGraphqlErrors(data: Record<string, unknown>) {
+  return Array.isArray(data.errors) ? (data.errors as Array<Record<string, unknown>>) : [];
+}
+
+function bufferMutationPayload(
+  data: Record<string, unknown>,
+  mutationName: string
+): Record<string, unknown> | null {
+  const payload =
+    data.data &&
+    typeof data.data === "object" &&
+    !Array.isArray(data.data) &&
+    (data.data as Record<string, unknown>)[mutationName] &&
+    typeof (data.data as Record<string, unknown>)[mutationName] === "object"
+      ? ((data.data as Record<string, unknown>)[mutationName] as Record<string, unknown>)
+      : null;
+  return payload;
+}
+
+function mapBufferPostStatus(status: unknown): V2ProviderStateStatus {
+  const normalized = String(status ?? "").toLowerCase();
+  if (normalized === "sent") return "published";
+  if (normalized === "error") return "failed";
+  if (normalized === "needs_approval") return "needs-review";
+  if (normalized === "scheduled" || normalized === "sending" || normalized === "draft") {
+    return "submitted";
+  }
+  return "needs-review";
+}
+
+async function listBufferLinkedInChannels(context: V2ProviderAdapterContext) {
+  const client = createBufferGraphqlClient(context);
+  const accountResult = await client.graphql(`query BufferAccount {
+    account {
+      organizations { id name }
+    }
+  }`);
+  const accountErrors = bufferGraphqlErrors(accountResult.data);
+  if (!accountResult.response.ok || accountErrors.length) {
+    return {
+      ok: false as const,
+      reason: "Buffer account lookup failed.",
+      sanitizedResponse: sanitizeProviderPayload({
+        status: accountResult.response.status,
+        errors: accountErrors,
+      }),
+    };
+  }
+
+  const account =
+    accountResult.data.data &&
+    typeof accountResult.data.data === "object" &&
+    !Array.isArray(accountResult.data.data) &&
+    (accountResult.data.data as Record<string, unknown>).account &&
+    typeof (accountResult.data.data as Record<string, unknown>).account === "object"
+      ? ((accountResult.data.data as Record<string, unknown>).account as Record<string, unknown>)
+      : {};
+  const organizations = Array.isArray(account.organizations)
+    ? (account.organizations as Array<Record<string, unknown>>)
+    : [];
+
+  const channelResults = await Promise.all(
+    organizations.map(async (organization) => {
+      const channelsResult = await client.graphql(
+        `query BufferChannels($organizationId: OrganizationId!) {
+          channels(input: { organizationId: $organizationId }) {
+            id
+            name
+            displayName
+            service
+            isQueuePaused
+          }
+        }`,
+        { organizationId: organization.id }
+      );
+      const channelErrors = bufferGraphqlErrors(channelsResult.data);
+      return {
+        ok: channelsResult.response.ok && !channelErrors.length,
+        status: channelsResult.response.status,
+        errors: channelErrors,
+        channels:
+          channelsResult.data.data &&
+          typeof channelsResult.data.data === "object" &&
+          !Array.isArray(channelsResult.data.data) &&
+          Array.isArray((channelsResult.data.data as Record<string, unknown>).channels)
+            ? ((channelsResult.data.data as Record<string, unknown>).channels as Array<
+                Record<string, unknown>
+              >)
+            : [],
+      };
+    })
+  );
+
+  const failedChannelQuery = channelResults.find((result) => !result.ok);
+  if (failedChannelQuery) {
+    return {
+      ok: false as const,
+      reason: "Buffer channel lookup failed.",
+      sanitizedResponse: sanitizeProviderPayload({
+        status: failedChannelQuery.status,
+        errors: failedChannelQuery.errors,
+      }),
+    };
+  }
+
+  const channels = channelResults.flatMap((result) => result.channels);
+  const linkedinChannels = channels.filter((channel) =>
+    String(channel.service ?? "").toLowerCase().includes("linkedin")
+  );
+  return { ok: true as const, linkedinChannels };
+}
+
+async function resolveBufferLinkedInChannelId(
+  brandId: V2BrandId,
+  context: V2ProviderAdapterContext
+): Promise<
+  | { ok: true; channelId: string; channelName: string }
+  | { ok: false; reason: string; sanitizedResponse: Record<string, unknown> }
+> {
+  const expectedName = BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND[brandId];
+  if (!expectedName) {
+    return {
+      ok: false,
+      reason: `No Buffer LinkedIn channel mapping exists for brand ${brandId}.`,
+      sanitizedResponse: { brandId, mapped: false },
+    };
+  }
+
+  const channelsResult = await listBufferLinkedInChannels(context);
+  if (!channelsResult.ok) {
+    return {
+      ok: false,
+      reason: channelsResult.reason,
+      sanitizedResponse: channelsResult.sanitizedResponse,
+    };
+  }
+
+  const channel = channelsResult.linkedinChannels.find(
+    (item) => String(item.name ?? "") === expectedName
+  );
+  if (!channel?.id) {
+    return {
+      ok: false,
+      reason: `Buffer LinkedIn channel ${expectedName} was not found.`,
+      sanitizedResponse: {
+        brandId,
+        expectedChannelName: expectedName,
+        linkedinChannels: channelsResult.linkedinChannels.map(sanitizeBufferChannel),
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    channelId: String(channel.id),
+    channelName: expectedName,
   };
 }
 
@@ -588,12 +822,276 @@ export const mockProviderAdapter: V2ProviderAdapter = {
   },
 };
 
-export const bufferProviderAdapter = baseSocialAdapter({
+export const bufferProviderAdapter: V2ProviderAdapter = {
   providerId: "buffer",
   requiredEnvVar: "BUFFER_API_KEY",
-  accountLabel: "Buffer LinkedIn channel",
-  validateLiveConnection: validateBufferConnection,
-});
+  validateConnection: validateBufferConnection,
+  async submit(submission, context) {
+    const providerId = "buffer" as const;
+    const missingCredential = validateCredential(providerId, "BUFFER_API_KEY", context);
+    if (missingCredential) {
+      return unavailable(providerId, missingCredential.reason ?? "Missing credential.");
+    }
+    if (!context.liveProviderValidationApproved) return needsApproval(providerId);
+    if (!isBufferLiveSubmissionApproved(context)) return needsLiveSubmissionApproval(providerId);
+    if (submission.channelId !== "linkedin") {
+      return unavailable(providerId, "Buffer adapter only supports LinkedIn submissions.");
+    }
+    if (!submission.scheduledDate?.trim()) {
+      return {
+        ok: false,
+        status: "permanent-failure",
+        providerStateStatus: "failed",
+        reason: "Scheduled date is required for Buffer submission.",
+        sanitizedResponse: { providerId, idempotencyKey: submission.idempotencyKey },
+      };
+    }
+    if (!submission.content.trim()) {
+      return {
+        ok: false,
+        status: "permanent-failure",
+        providerStateStatus: "failed",
+        reason: "Post content is required for Buffer submission.",
+        sanitizedResponse: { providerId, idempotencyKey: submission.idempotencyKey },
+      };
+    }
+
+    const channel = await resolveBufferLinkedInChannelId(submission.brandId, context);
+    if (!channel.ok) {
+      return {
+        ok: false,
+        status: "permanent-failure",
+        providerStateStatus: "failed",
+        reason: channel.reason,
+        sanitizedResponse: {
+          providerId,
+          idempotencyKey: submission.idempotencyKey,
+          ...channel.sanitizedResponse,
+        },
+      };
+    }
+
+    const dueAt = scheduleToUtcIso({
+      scheduledDate: submission.scheduledDate,
+      scheduledTime: submission.scheduledTime,
+      timezone: submission.timezone,
+    });
+    const client = createBufferGraphqlClient(context);
+    const createResult = await client.graphql(
+      `mutation BufferCreatePost($input: CreatePostInput!) {
+        createPost(input: $input) {
+          ... on PostActionSuccess {
+            post { id status dueAt shareMode }
+          }
+          ... on MutationError {
+            message
+          }
+        }
+      }`,
+      {
+        input: {
+          channelId: channel.channelId,
+          text: submission.content.trim(),
+          schedulingType: "automatic",
+          mode: "customScheduled",
+          dueAt,
+          source: "resonate-v2",
+        },
+      }
+    );
+    const errors = bufferGraphqlErrors(createResult.data);
+    const payload = bufferMutationPayload(createResult.data, "createPost");
+    const mutationError =
+      payload && typeof payload.message === "string" ? payload.message : undefined;
+    const post =
+      payload?.post && typeof payload.post === "object" && !Array.isArray(payload.post)
+        ? (payload.post as Record<string, unknown>)
+        : null;
+    const providerPostId = post?.id ? String(post.id) : undefined;
+
+    if (!createResult.response.ok || errors.length || mutationError || !providerPostId || !post) {
+      const reason = mutationError ?? errors[0]?.message ?? "Buffer createPost failed.";
+      return {
+        ok: false,
+        status: classifyProviderError({
+          status: createResult.response.status,
+          message: String(reason),
+        }),
+        providerStateStatus: "failed",
+        reason: String(reason),
+        sanitizedResponse: sanitizeProviderPayload({
+          providerId,
+          idempotencyKey: submission.idempotencyKey,
+          channelName: channel.channelName,
+          dueAt,
+          status: createResult.response.status,
+          errors,
+          mutationError,
+        }),
+      };
+    }
+
+    const createdPost = post;
+    return {
+      ok: true,
+      status: "success",
+      providerStateStatus: mapBufferPostStatus(createdPost.status),
+      providerPostId,
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId,
+        idempotencyKey: submission.idempotencyKey,
+        channelName: channel.channelName,
+        dueAt,
+        providerPostId: redactProviderId(providerPostId),
+        status: createdPost.status,
+        shareMode: createdPost.shareMode,
+        credential: "[server-secret-present]",
+      }),
+    };
+  },
+  async recordCancelOrUnpublishIntent(submission, intentType, context) {
+    const providerId = "buffer" as const;
+    const missingCredential = validateCredential(providerId, "BUFFER_API_KEY", context);
+    if (missingCredential) {
+      return unavailable(providerId, missingCredential.reason ?? "Missing credential.");
+    }
+    if (!context.liveProviderValidationApproved) return needsApproval(providerId);
+    if (!isBufferLiveSubmissionApproved(context)) return needsLiveSubmissionApproval(providerId);
+    if (!submission.providerPostId?.trim()) {
+      return {
+        ok: false,
+        status: "permanent-failure",
+        providerStateStatus: "cancel-intent-recorded",
+        reason: "Buffer cancel requires providerPostId from a prior submission.",
+        sanitizedResponse: {
+          providerId,
+          intentType,
+          idempotencyKey: submission.idempotencyKey,
+        },
+      };
+    }
+
+    const client = createBufferGraphqlClient(context);
+    const deleteResult = await client.graphql(
+      `mutation BufferDeletePost($id: PostId!) {
+        deletePost(input: { id: $id }) {
+          ... on DeletePostSuccess { id }
+          ... on MutationError { message }
+        }
+      }`,
+      { id: submission.providerPostId }
+    );
+    const errors = bufferGraphqlErrors(deleteResult.data);
+    const payload = bufferMutationPayload(deleteResult.data, "deletePost");
+    const mutationError =
+      payload && typeof payload.message === "string" ? payload.message : undefined;
+    const deletedId = payload?.id ? String(payload.id) : undefined;
+
+    if (!deleteResult.response.ok || errors.length || mutationError || !deletedId) {
+      const reason = mutationError ?? errors[0]?.message ?? "Buffer deletePost failed.";
+      return {
+        ok: false,
+        status: classifyProviderError({
+          status: deleteResult.response.status,
+          message: String(reason),
+        }),
+        providerStateStatus: "cancel-intent-recorded",
+        reason: String(reason),
+        sanitizedResponse: sanitizeProviderPayload({
+          providerId,
+          intentType,
+          idempotencyKey: submission.idempotencyKey,
+          providerPostId: redactProviderId(submission.providerPostId),
+          status: deleteResult.response.status,
+          errors,
+          mutationError,
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      status: "success",
+      providerStateStatus: "cancel-intent-recorded",
+      providerPostId: deletedId,
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId,
+        intentType,
+        idempotencyKey: submission.idempotencyKey,
+        providerPostId: redactProviderId(deletedId),
+        credential: "[server-secret-present]",
+      }),
+    };
+  },
+  async refreshStatus(providerPostId, context) {
+    const providerId = "buffer" as const;
+    const missingCredential = validateCredential(providerId, "BUFFER_API_KEY", context);
+    if (missingCredential) {
+      return unavailable(providerId, missingCredential.reason ?? "Missing credential.");
+    }
+    if (!context.liveProviderValidationApproved) return needsApproval(providerId);
+    if (!isBufferLiveSubmissionApproved(context)) return needsLiveSubmissionApproval(providerId);
+    if (!providerPostId.trim()) {
+      return unavailable(providerId, "providerPostId is required for Buffer status refresh.");
+    }
+
+    const client = createBufferGraphqlClient(context);
+    const postResult = await client.graphql(
+      `query BufferPost($id: PostId!) {
+        post(input: { id: $id }) {
+          id
+          status
+          dueAt
+          shareMode
+        }
+      }`,
+      { id: providerPostId }
+    );
+    const errors = bufferGraphqlErrors(postResult.data);
+    const post =
+      postResult.data.data &&
+      typeof postResult.data.data === "object" &&
+      !Array.isArray(postResult.data.data) &&
+      (postResult.data.data as Record<string, unknown>).post &&
+      typeof (postResult.data.data as Record<string, unknown>).post === "object"
+        ? ((postResult.data.data as Record<string, unknown>).post as Record<string, unknown>)
+        : null;
+
+    if (!postResult.response.ok || errors.length || !post?.id) {
+      const reason = errors[0]?.message ?? "Buffer post lookup failed.";
+      return {
+        ok: false,
+        status: classifyProviderError({
+          status: postResult.response.status,
+          message: String(reason),
+        }),
+        providerStateStatus: "unavailable",
+        reason: String(reason),
+        sanitizedResponse: sanitizeProviderPayload({
+          providerId,
+          providerPostId: redactProviderId(providerPostId),
+          status: postResult.response.status,
+          errors,
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      status: "success",
+      providerStateStatus: mapBufferPostStatus(post.status),
+      providerPostId: String(post.id),
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId,
+        providerPostId: redactProviderId(post.id),
+        status: post.status,
+        dueAt: post.dueAt,
+        shareMode: post.shareMode,
+        credential: "[server-secret-present]",
+      }),
+    };
+  },
+};
 
 export const zernioProviderAdapter = baseSocialAdapter({
   providerId: "zernio",

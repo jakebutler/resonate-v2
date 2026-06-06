@@ -1,0 +1,43 @@
+name: Buffer Live Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      live_submission:
+        description: Set to approved to run the live Buffer queue cycle
+        required: true
+        default: blocked
+        type: choice
+        options:
+          - blocked
+          - approved
+
+jobs:
+  buffer-live-validation:
+    name: Buffer live submission validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Run Buffer contract tests
+        run: npm test -- lib/__tests__/v2ProviderAdapters.test.ts
+
+      - name: Run live Buffer schedule/cancel cycle
+        if: inputs.live_submission == 'approved'
+        run: npx --yes tsx scripts/buffer-live-validation.mjs
+        env:
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          BUFFER_LIVE_SUBMISSION: approved
+
+      - name: Skip live cycle when submission gate is off
+        if: inputs.live_submission != 'approved'
+        run: echo "Re-run workflow with live_submission=approved to execute the live queue cycle."

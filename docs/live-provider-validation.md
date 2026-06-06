@@ -160,3 +160,39 @@ Verified with `gh pr view` and `gh pr diff`:
 - PR body records schedule trigger and human-review intent.
 
 Conclusion: The Corvo Blog route can authenticate with GitHub, write MDX into the real blog repo, and create a reviewable PR without auto-publishing.
+
+## Buffer LinkedIn live submission (B.4)
+
+Date: 2026-06-06
+
+Gate: `BUFFER_LIVE_SUBMISSION=approved` (server env) plus `liveProviderValidationApproved: true` at runtime.
+
+Validation command:
+
+```bash
+BUFFER_LIVE_SUBMISSION=approved npx tsx scripts/buffer-live-validation.mjs
+```
+
+Cycle:
+
+1. Read-only `validateConnection` against Corvo Labs LinkedIn (`corvo-labs-us`).
+2. `createPost` with `mode: customScheduled` ~24 hours out.
+3. `post` query refresh (`status: scheduled`).
+4. `deletePost` cancel before publish.
+
+Sanitized result:
+
+```json
+{
+  "ok": true,
+  "channel": "corvo-labs-us",
+  "dueAt": "2026-06-07T18:45:00.000Z",
+  "providerPostId": "6a24...fe5f",
+  "refreshedStatus": "scheduled",
+  "cancelled": true
+}
+```
+
+Conclusion: Buffer live schedule → refresh → cancel works for Corvo Labs LinkedIn when the submission gate is explicitly approved.
+
+Note: `resonate-v2` Vercel production currently has a placeholder `BUFFER_API_KEY` (length 2). Copy the production-scope key into the v2 Vercel project before relying on deployed live submission.
