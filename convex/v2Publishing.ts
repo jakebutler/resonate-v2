@@ -1,6 +1,13 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
+import {
+  internalMutation,
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
 
 type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
 type ChannelId =
@@ -513,11 +520,12 @@ export const reschedule = mutation({
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
     const now = Date.now();
+    const timezone = args.timezone ?? post.timezone;
 
     await ctx.db.patch(args.postId, {
       scheduledDate: args.scheduledDate,
       scheduledTime: args.scheduledTime,
-      timezone: args.timezone ?? post.timezone,
+      timezone,
       status: post.approvalState === "approved" ? "scheduled" : post.status,
       updatedAt: now,
     });
@@ -534,6 +542,127 @@ export const reschedule = mutation({
       intentId: intent._id,
       action: "post.reschedule",
       summary: "Date-only schedule change preserved approval state.",
+    });
+
+    if (post.prUrl && post.branchName) {
+      const providerState = await ctx.db
+        .query("v2ProviderStates")
+        .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
+        .first();
+      if (providerState?.providerId === "github-pr") {
+        await ctx.scheduler.runAfter(0, internal.githubPrSync.syncFrontmatterAfterReschedule, {
+          postId: args.postId,
+          userId,
+          brandId: post.brandId,
+          intentId: intent._id,
+          branchName: post.branchName,
+          prUrl: post.prUrl,
+          scheduledDate: args.scheduledDate,
+          scheduledTime: args.scheduledTime,
+          timezone,
+        });
+      }
+    }
+  },
+});
+
+export const recordGithubPrFrontmatterSynced = internalMutation({
+  args: {
+    postId: v.id("v2Posts"),
+    userId: v.string(),
+    brandId: brandIdValidator,
+    intentId: v.id("v2PublishingIntents"),
+    filePath: v.string(),
+    scheduledDate: v.string(),
+    scheduledTime: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const providerState = await ctx.db
+      .query("v2ProviderStates")
+      .withIndex("by_intent", (q) => q.eq("intentId", args.intentId))
+      .first();
+    const summary = `GitHub PR frontmatter synced for ${args.scheduledDate}.`;
+
+    if (providerState) {
+      await ctx.db.patch(providerState._id, {
+        lastResponseSummary: summary,
+        updatedAt: now,
+      });
+    }
+
+    await audit(ctx, {
+      userId: args.userId,
+      brandId: args.brandId,
+      postId: args.postId,
+      intentId: args.intentId,
+      action: "provider.github_pr_reschedule_sync",
+      summary,
+      metadata: {
+        filePath: args.filePath,
+        scheduledDate: args.scheduledDate,
+        scheduledTime: args.scheduledTime,
+        timezone: args.timezone,
+      },
+    });
+  },
+});
+
+export const markGithubPrRescheduleNeedsReview = internalMutation({
+  args: {
+    postId: v.id("v2Posts"),
+    userId: v.string(),
+    brandId: brandIdValidator,
+    intentId: v.id("v2PublishingIntents"),
+    reason: v.string(),
+    prUrl: v.string(),
+    branchName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const summary = `Reschedule could not update GitHub PR frontmatter (${args.reason}); marked Needs Review.`;
+    const providerState = await ctx.db
+      .query("v2ProviderStates")
+      .withIndex("by_intent", (q) => q.eq("intentId", args.intentId))
+      .first();
+
+    if (providerState) {
+      await ctx.db.patch(providerState._id, {
+        status: "needs-review",
+        lastResponseSummary: summary,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("v2ProviderStates", {
+        postId: args.postId,
+        intentId: args.intentId,
+        providerId: "github-pr",
+        status: "needs-review",
+        prUrl: args.prUrl,
+        lastResponseSummary: summary,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    await ctx.db.patch(args.postId, {
+      status: "needs-review",
+      updatedAt: now,
+    });
+
+    await audit(ctx, {
+      userId: args.userId,
+      brandId: args.brandId,
+      postId: args.postId,
+      intentId: args.intentId,
+      action: "provider.github_pr_reschedule_needs_review",
+      summary,
+      metadata: {
+        reason: args.reason,
+        prUrl: args.prUrl,
+        branchName: args.branchName,
+      },
     });
   },
 });

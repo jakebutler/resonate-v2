@@ -1920,107 +1920,40 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 - b1-foundation-cleanups
 
-## 06/06/2026 10:57:50 PDT
+## 06/06/2026 11:11:01 PDT
 
 ### Summary
 
-- Updated repository documentation and handoff records.
-- Touched the captured ideas experience.
+- Refreshed documentation for the current repository state.
 
 ### Staged Changes
 
-- M	lib/__tests__/v2Migration.test.ts
-- M	lib/v2Migration.ts
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	convex/__tests__/ideasApi.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/_generated/api.js
+- M	convex/_generated/dataModel.d.ts
+- M	convex/_generated/server.d.ts
+- M	convex/_generated/server.js
+- A	convex/githubPrSync.ts
+- M	convex/v2Publishing.ts
+- M	lib/__tests__/github.test.ts
+- M	lib/github.ts
 
 ### Working Tree Snapshot
 
--  M app/__tests__/page.test.tsx
--  M components/__tests__/PersistedPublishingPanel.test.tsx
--  M convex/__tests__/ideasApi.test.ts
--  M convex/_generated/api.d.ts
--  M convex/ideas.ts
--  M convex/schema.ts
--  M convex/v2Publishing.ts
--  M docs/migration-dry-run.md
--  M lib/__tests__/github.test.ts
-- M  lib/__tests__/v2Migration.test.ts
--  M lib/github.ts
-- M  lib/v2Migration.ts
--  M tests/fixtures/resonate-v1-export.sample.json
-- ?? components/EditorPageRouter.tsx
-- ?? convex/__tests__/helpers/
-- ?? convex/__tests__/spawnV2Posts.test.ts
-- ?? convex/__tests__/v2Publishing.test.ts
-- ?? convex/githubPrSync.ts
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/ideasApi.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/_generated/api.js
+- M  convex/_generated/dataModel.d.ts
+- M  convex/_generated/server.d.ts
+- M  convex/_generated/server.js
+- A  convex/githubPrSync.ts
+- M  convex/v2Publishing.ts
+- M  lib/__tests__/github.test.ts
+- M  lib/github.ts
 
 ### Branch
 
-- b2b-ideas-merge
-
-## 06/06/2026 10:57:55 PDT
-
-### Summary
-
-- Updated repository documentation and handoff records.
-- Touched the captured ideas experience.
-
-### Staged Changes
-
-- M	docs/migration-dry-run.md
-- M	tests/fixtures/resonate-v1-export.sample.json
-
-### Working Tree Snapshot
-
--  M app/__tests__/page.test.tsx
--  M components/__tests__/PersistedPublishingPanel.test.tsx
--  M convex/__tests__/ideasApi.test.ts
--  M convex/_generated/api.d.ts
--  M convex/ideas.ts
--  M convex/schema.ts
--  M convex/v2Publishing.ts
-- M  docs/migration-dry-run.md
--  M lib/__tests__/github.test.ts
--  M lib/github.ts
-- M  tests/fixtures/resonate-v1-export.sample.json
-- ?? components/EditorPageRouter.tsx
-- ?? convex/__tests__/helpers/
-- ?? convex/__tests__/spawnV2Posts.test.ts
-- ?? convex/__tests__/v2Publishing.test.ts
-- ?? convex/githubPrSync.ts
-
-### Branch
-
-- b2b-ideas-merge
-
-## 06/06/2026 10:57:58 PDT
-
-### Summary
-
-- Touched the captured ideas experience.
-
-### Staged Changes
-
-- A	convex/__tests__/helpers/mockMutationCtx.ts
-- A	convex/__tests__/spawnV2Posts.test.ts
-- M	convex/ideas.ts
-
-### Working Tree Snapshot
-
--  M app/__tests__/page.test.tsx
--  M components/__tests__/PersistedPublishingPanel.test.tsx
-- A  convex/__tests__/helpers/mockMutationCtx.ts
--  M convex/__tests__/ideasApi.test.ts
-- A  convex/__tests__/spawnV2Posts.test.ts
--  M convex/_generated/api.d.ts
-- M  convex/ideas.ts
--  M convex/schema.ts
--  M convex/v2Publishing.ts
--  M lib/__tests__/github.test.ts
--  M lib/github.ts
-- ?? components/EditorPageRouter.tsx
-- ?? convex/__tests__/v2Publishing.test.ts
-- ?? convex/githubPrSync.ts
-
-### Branch
-
-- b2b-ideas-merge
+- b2d-reschedule-pr-policy

@@ -19,6 +19,7 @@ describe("generated ideas API", () => {
     );
 
     expect(generated).toContain('import type * as v2Publishing from "../v2Publishing.js";');
+    expect(generated).toContain('import type * as githubPrSync from "../githubPrSync.js";');
   });
 
   it("includes v2 research functions in the generated API surface", () => {
@@ -47,5 +48,12 @@ describe("generated ideas API", () => {
     expect(publishing).toContain("async function accessibleBrandIds");
     expect(publishing.match(/accessibleBrandIds\(ctx, userId\)/g)?.length).toBeGreaterThanOrEqual(2);
     expect(publishing.match(/accessibleBrands\.has\(post\.brandId\)/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("schedules GitHub PR frontmatter sync after reschedule when a PR exists", () => {
+    const publishing = readFileSync(join(process.cwd(), "convex/v2Publishing.ts"), "utf8");
+    expect(publishing).toContain("internal.githubPrSync.syncFrontmatterAfterReschedule");
+    expect(publishing).toContain('providerState?.providerId === "github-pr"');
+    expect(publishing).toContain("markGithubPrRescheduleNeedsReview");
   });
 });

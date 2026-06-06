@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 10:57:58 PDT
+Last updated: 06/06/2026 11:11:01 PDT
 
 ## State
 
@@ -12,43 +12,39 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Touched the captured ideas experience.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- 596ddad Document workflow idea merge rules and extend v1 export fixture.
+- bc970e2 Merge PR #22: [B.1] Foundation cleanups
 
 ## Recent Commits
 
-- 596ddad Document workflow idea merge rules and extend v1 export fixture.
-- 9474827 Merge legacy workflow ideas into capturedIdeas migration candidates.
 - bc970e2 Merge PR #22: [B.1] Foundation cleanups
 - 695e5e1 Refresh handoff docs after B.1 foundation cleanups.
 - 8d709ba [B.1] Foundation cleanups: single /v2 surface, ADR 0004, checklist re-key
+- b710714 Merge PR #20: Build Resonate v2 MVP foundation
+- 37fa2f5 Document Vercel v2 deployment
 
 ## Local Working Tree
 
--  M app/__tests__/page.test.tsx
--  M components/__tests__/PersistedPublishingPanel.test.tsx
-- A  convex/__tests__/helpers/mockMutationCtx.ts
--  M convex/__tests__/ideasApi.test.ts
-- A  convex/__tests__/spawnV2Posts.test.ts
--  M convex/_generated/api.d.ts
-- M  convex/ideas.ts
--  M convex/schema.ts
--  M convex/v2Publishing.ts
--  M lib/__tests__/github.test.ts
--  M lib/github.ts
-- ?? components/EditorPageRouter.tsx
-- ?? convex/__tests__/v2Publishing.test.ts
-- ?? convex/githubPrSync.ts
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/ideasApi.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/_generated/api.js
+- M  convex/_generated/dataModel.d.ts
+- M  convex/_generated/server.d.ts
+- M  convex/_generated/server.js
+- A  convex/githubPrSync.ts
+- M  convex/v2Publishing.ts
+- M  lib/__tests__/github.test.ts
+- M  lib/github.ts
 
 ## Next Agent Pickup
 
 - Start by checking the living docs against the current code before making assumptions.
 - If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
-- Do not conflate the captured ideas inbox with the separate workflow idea system.
 
 ## Branch
 
-- b2b-ideas-merge
+- b2d-reschedule-pr-policy
