@@ -18,7 +18,7 @@ Provider routing for MVP validation:
 
 - LinkedIn routes through Buffer.
 - Reddit routes through Zernio.
-- Corvo Blog routes through GitHub PR creation against `jakebutler/corvolabs-dot-com`.
+- Corvo Blog routes through GitHub PR creation against `jakebutler/corvo-labs-dot-com`.
 - Other target platforms can exist for planning/filtering, but unroutable Channels cannot submit.
 
 ## Approval Rules
