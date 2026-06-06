@@ -3,18 +3,37 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { useQuery } from "convex/react"
 import Dashboard from "@/app/page"
+import EditorPage from "@/app/editor/[id]/page"
+import V2Page from "@/app/v2/page"
+import { EditorPageRouter } from "@/components/EditorPageRouter"
 
 const mockPush = vi.fn()
+const mockReplace = vi.fn()
 
 vi.mock("convex/react", () => ({ useQuery: vi.fn(), useMutation: vi.fn() }))
 vi.mock("@/convex/_generated/api", () => ({
-  api: { posts: { list: "posts:list" } }
+  api: {
+    posts: { list: "posts:list" },
+    v2Publishing: { getPostById: "v2Publishing:getPostById" },
+  },
 }))
+
+vi.mock("@/components/FullScreenEditor/FullScreenEditor", () => ({
+  FullScreenEditor: ({ postId }: { postId: string }) => (
+    <div data-testid="fullscreen-editor">{postId}</div>
+  ),
+}))
+vi.mock("@/components/PersistedPublishingPanel", () => ({
+  PersistedPublishingPanel: ({ initialPostId }: { initialPostId?: string }) => (
+    <div data-testid="persisted-panel">{initialPostId ?? "none"}</div>
+  ),
+}))
+
 vi.mock("@clerk/nextjs", () => ({
   UserButton: () => <div data-testid="user-button" />,
 }))
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }))
 vi.mock("@/components/Calendar/Calendar", () => ({
   Calendar: ({
@@ -157,5 +176,48 @@ describe("Dashboard", () => {
   it('renders an Ideas navigation link', () => {
     render(<Dashboard />)
     expect(screen.getByRole('link', { name: 'Ideas' })).toBeInTheDocument()
+  })
+})
+
+describe("EditorPageRouter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(useQuery).mockReturnValue(undefined as never)
+  })
+
+  it("shows a loading state while resolving the post", () => {
+    render(<EditorPageRouter postId="post_1" />)
+    expect(screen.getByText("Loading editor…")).toBeInTheDocument()
+  })
+
+  it("redirects v2 posts to the v2 composer", () => {
+    vi.mocked(useQuery).mockReturnValue({ _id: "post_1" } as never)
+    render(<EditorPageRouter postId="post_1" />)
+    expect(mockReplace).toHaveBeenCalledWith("/v2?postId=post_1")
+    expect(screen.getByText("Opening v2 composer…")).toBeInTheDocument()
+  })
+
+  it("renders the legacy fullscreen editor for non-v2 posts", () => {
+    vi.mocked(useQuery).mockReturnValue(null as never)
+    render(<EditorPageRouter postId="legacy-1" />)
+    expect(screen.getByTestId("fullscreen-editor")).toHaveTextContent("legacy-1")
+  })
+})
+
+describe("V2 page", () => {
+  it("passes postId search params into the publishing panel", async () => {
+    const page = await V2Page({ searchParams: Promise.resolve({ postId: "post_9" }) })
+    render(page)
+    expect(screen.getByTestId("persisted-panel")).toHaveTextContent("post_9")
+  })
+
+  it("uses the editor page router for /editor/[id]", async () => {
+    vi.mocked(useQuery).mockReturnValue(undefined as never)
+    const page = await EditorPage({
+      params: Promise.resolve({ id: "post_1" }),
+      searchParams: Promise.resolve({ date: "2026-06-12" }),
+    })
+    render(page)
+    expect(screen.getByText("Loading editor…")).toBeInTheDocument()
   })
 })

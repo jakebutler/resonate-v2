@@ -18,6 +18,7 @@ vi.mock("@/convex/_generated/api", () => ({
       setApproval: "v2Publishing:setApproval",
       reschedule: "v2Publishing:reschedule",
       updateContent: "v2Publishing:updateContent",
+      updatePlatformSettings: "v2Publishing:updatePlatformSettings",
       submitMockProvider: "v2Publishing:submitMockProvider",
       recordProviderIntent: "v2Publishing:recordProviderIntent",
       recordGithubPr: "v2Publishing:recordGithubPr",
@@ -33,6 +34,7 @@ const createPostWithIntentMock = vi.fn().mockResolvedValue({
 const setApprovalMock = vi.fn().mockResolvedValue(undefined);
 const rescheduleMock = vi.fn().mockResolvedValue(undefined);
 const updateContentMock = vi.fn().mockResolvedValue(undefined);
+const updatePlatformSettingsMock = vi.fn().mockResolvedValue(undefined);
 const submitMockProviderMock = vi.fn().mockResolvedValue({
   submitted: true,
   attemptId: "attempt_1",
@@ -205,6 +207,8 @@ describe("PersistedPublishingPanel", () => {
           return rescheduleMock;
         case "v2Publishing:updateContent":
           return updateContentMock;
+        case "v2Publishing:updatePlatformSettings":
+          return updatePlatformSettingsMock;
         case "v2Publishing:submitMockProvider":
           return submitMockProviderMock;
         case "v2Publishing:recordProviderIntent":
@@ -475,7 +479,7 @@ describe("PersistedPublishingPanel", () => {
     fireEvent.change(within(detail).getByLabelText("Content"), {
       target: { value: "Updated Reddit post body that needs review again." },
     });
-    expect(within(detail).getByText("Content changed: saving will clear approval.")).toBeInTheDocument();
+    expect(within(detail).getByText("Content or platform settings changed: saving will clear approval.")).toBeInTheDocument();
 
     fireEvent.click(within(detail).getByRole("button", { name: "Save Composer Changes" }));
 
@@ -488,7 +492,7 @@ describe("PersistedPublishingPanel", () => {
     );
     expect(rescheduleMock).not.toHaveBeenCalled();
     expect(
-      await screen.findByText("Saved composer content changes and cleared approval for re-review.")
+      await screen.findByText("Saved composer changes and cleared approval for re-review.")
     ).toBeInTheDocument();
   });
 
@@ -519,4 +523,48 @@ describe("PersistedPublishingPanel", () => {
     expect(updateContentMock).not.toHaveBeenCalled();
     expect(await screen.findByText("Saved date/time changes without changing approval.")).toBeInTheDocument();
   });
+
+  it("saves LinkedIn platform settings and clears approval through Convex", async () => {
+    const linkedInWithSettings = {
+      ...unapprovedItem,
+      post: {
+        ...unapprovedItem.post,
+        platformSettings: { cta: "Learn more", hashtags: ["corvo"], linkPreview: true },
+      },
+    };
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "v2Publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "v2Publishing:listCalendarItems") return [linkedInWithSettings];
+      return undefined;
+    });
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Details Scheduled LinkedIn validation item" })
+    );
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Call to action"), {
+      target: { value: "Book a demo" },
+    });
+    fireEvent.click(within(detail).getByRole("button", { name: "Save Composer Changes" }));
+    await waitFor(() =>
+      expect(updatePlatformSettingsMock).toHaveBeenCalledWith({
+        postId: "post_1",
+        platformSettings: {
+          cta: "Book a demo",
+          hashtags: ["corvo"],
+          linkPreview: true,
+        },
+      })
+    );
+    expect(
+      await screen.findByText("Saved platform settings and cleared approval for re-review.")
+    ).toBeInTheDocument();
+  });
+
+  it("selects a post when initialPostId matches a visible calendar item", () => {
+    render(<PersistedPublishingPanel initialPostId="post_2" />);
+    const detail = screen.getByLabelText("Publishing item detail");
+    expect(within(detail).getByRole("heading", { level: 3, name: "Approved Reddit validation item" })).toBeInTheDocument();
+  });
+
 });
