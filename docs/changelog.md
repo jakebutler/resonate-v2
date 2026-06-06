@@ -1956,3 +1956,38 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - b2b-ideas-merge
+
+## 06/06/2026 10:57:55 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched the captured ideas experience.
+
+### Staged Changes
+
+- M	docs/migration-dry-run.md
+- M	tests/fixtures/resonate-v1-export.sample.json
+
+### Working Tree Snapshot
+
+-  M app/__tests__/page.test.tsx
+-  M components/__tests__/PersistedPublishingPanel.test.tsx
+-  M convex/__tests__/ideasApi.test.ts
+-  M convex/_generated/api.d.ts
+-  M convex/ideas.ts
+-  M convex/schema.ts
+-  M convex/v2Publishing.ts
+- M  docs/migration-dry-run.md
+-  M lib/__tests__/github.test.ts
+-  M lib/github.ts
+- M  tests/fixtures/resonate-v1-export.sample.json
+- ?? components/EditorPageRouter.tsx
+- ?? convex/__tests__/helpers/
+- ?? convex/__tests__/spawnV2Posts.test.ts
+- ?? convex/__tests__/v2Publishing.test.ts
+- ?? convex/githubPrSync.ts
+
+### Branch
+
+- b2b-ideas-merge

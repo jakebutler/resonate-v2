@@ -69,6 +69,12 @@
           "addedBy": "user"
         }
       ]
+    },
+    {
+      "_id": "workflow_only_2",
+      "title": "Workflow-only backlog item",
+      "text": "An editorial workflow idea with no capturedIdeas counterpart.",
+      "status": "backlog"
     }
   ],
   "workflowDrafts": [
