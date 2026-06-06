@@ -1920,7 +1920,7 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 - b1-foundation-cleanups
 
-## 06/06/2026 11:09:56 PDT
+## 06/06/2026 11:11:01 PDT
 
 ### Summary
 
@@ -1928,79 +1928,51 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 ### Staged Changes
 
-- A	convex/__tests__/v2Publishing.test.ts
-- M	convex/schema.ts
-- M	convex/v2Publishing.ts
-- M	lib/v2.ts
-
-### Working Tree Snapshot
-
--  M app/editor/[id]/page.tsx
--  M app/v2/page.tsx
--  M components/PersistedPublishingPanel.tsx
--  M components/__tests__/PersistedPublishingPanel.test.tsx
-- A  convex/__tests__/v2Publishing.test.ts
--  M convex/_generated/api.d.ts
-- M  convex/schema.ts
-- M  convex/v2Publishing.ts
-- M  lib/v2.ts
-- ?? _b2a_stash/
-- ?? components/EditorPageRouter.tsx
-- ?? scripts/_persisted_composer_snippet.tsx
-- ?? scripts/_platform_pane_snippet.tsx
-- ?? scripts/patch-panel.py
-
-### Branch
-
-- b2a-single-composer
-
-## 06/06/2026 11:10:01 PDT
-
-### Summary
-
-- Refreshed documentation for the current repository state.
-
-### Staged Changes
-
-- M	app/editor/[id]/page.tsx
-- M	app/v2/page.tsx
-- A	components/EditorPageRouter.tsx
-- M	components/PersistedPublishingPanel.tsx
-
-### Working Tree Snapshot
-
-- M  app/editor/[id]/page.tsx
-- M  app/v2/page.tsx
-- A  components/EditorPageRouter.tsx
-- M  components/PersistedPublishingPanel.tsx
--  M components/__tests__/PersistedPublishingPanel.test.tsx
--  M convex/_generated/api.d.ts
-- ?? _b2a_stash/
-- ?? scripts/_persisted_composer_snippet.tsx
-- ?? scripts/_platform_pane_snippet.tsx
-- ?? scripts/patch-panel.py
-
-### Branch
-
-- b2a-single-composer
-
-## 06/06/2026 11:12:31 PDT
-
-### Summary
-
-- Refreshed documentation for the current repository state.
-
-### Staged Changes
-
-- M	app/__tests__/page.test.tsx
 - M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	convex/__tests__/ideasApi.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/_generated/api.js
+- M	convex/_generated/dataModel.d.ts
+- M	convex/_generated/server.d.ts
+- M	convex/_generated/server.js
+- A	convex/githubPrSync.ts
+- M	convex/v2Publishing.ts
+- M	lib/__tests__/github.test.ts
+- M	lib/github.ts
 
 ### Working Tree Snapshot
 
-- M  app/__tests__/page.test.tsx
 - M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/ideasApi.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/_generated/api.js
+- M  convex/_generated/dataModel.d.ts
+- M  convex/_generated/server.d.ts
+- M  convex/_generated/server.js
+- A  convex/githubPrSync.ts
+- M  convex/v2Publishing.ts
+- M  lib/__tests__/github.test.ts
+- M  lib/github.ts
+
+### Branch
+
+- b2d-reschedule-pr-policy
+
+## 06/06/2026 11:15:34 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	vitest.config.ts
+
+### Working Tree Snapshot
+
+- M  vitest.config.ts
 - ?? scripts/patch-panel.py
 
 ### Branch
 
-- b2a-single-composer
+- b2b-ideas-merge

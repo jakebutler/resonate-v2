@@ -40,7 +40,7 @@ Verified against `/Volumes/rexy/GitHub/resonate/convex/schema.ts` on 2026-06-06.
 | `capturedIdeas` | `/ideas` source-backed or freeform idea headers with status, tags, source URL/title/domain, latest preview | Import as v2 idea candidates |
 | `capturedIdeaEntries` | Threaded additive notes for captured ideas | Join into v2 idea text in creation order |
 | `capturedIdeaPostLinks` | Links from captured ideas to spawned legacy `posts` | Preserve as `sourceLegacyCapturedIdeaId` on post candidates and `linkedLegacyPostIds` on idea candidates |
-| `ideas` | Workflow-board ideas used for editorial progression, research fields, references, and gate metadata | Import as v2 idea candidates with workflow status mapping |
+| `ideas` | Workflow-board ideas used for editorial progression, research fields, references, and gate metadata | Merge into v2 capturedIdeas candidates with `sourceLegacyWorkflowIdeaId` lineage |
 | `workflowDrafts` | Workflow stage rows linking workflow `ideas` to shared `posts` | Preserve workflow idea/post linkage on post and idea candidates |
 | `settings` | Legacy blog/LinkedIn frequency toggles | Archive for audit; not imported into v2 publishing records |
 
@@ -68,7 +68,7 @@ The report contains:
 - `summary`: counts for raw records, archived rows, v2 candidates, and warnings.
 - `archive`: the raw v1 rows copied unchanged for audit/recovery.
 - `v2Candidates.posts`: proposed v2 post records with Brand, Channel, status, schedule, approval state, external URL, and PR URL.
-- `v2Candidates.ideas`: proposed v2 idea records derived from captured ideas and entries.
+- `v2Candidates.ideas`: proposed v2 capturedIdeas records derived from captured ideas, entries, and merged workflow ideas.
 - `records.imported`: dry-run candidate IDs that would be imported if approved.
 - `records.skipped`: rows excluded from candidates with warnings.
 - `records.ambiguous`: rows that can be imported but require review, such as published posts without a public URL or PR/provider trace.
@@ -102,10 +102,11 @@ Captured ideas:
 
 Workflow ideas and drafts:
 
-- Workflow `ideas` become v2 idea candidates.
+- Workflow `ideas` merge into v2 capturedIdeas candidates; they are not imported as a separate v2 idea type.
+- Merged workflow candidates always use `sourceLegacyTable: "capturedIdeas"` and set `sourceLegacyWorkflowIdeaId` to the legacy workflow row id.
 - `status: "research"` maps to `ready`; `status: "idea"` maps to `reviewing`; `status: "backlog"` maps to `inbox`; `status: "archived"` maps to `archived`.
 - `references[0].url` becomes the candidate `sourceUrl` when present.
-- Workflow drafts preserve the legacy idea/post relationship instead of becoming separate v2 documents.
+- Workflow drafts preserve the legacy idea/post relationship on post candidates via `sourceLegacyWorkflowIdeaId` and `sourceLegacyWorkflowDraftId` instead of becoming separate v2 documents.
 
 ## Safety
 

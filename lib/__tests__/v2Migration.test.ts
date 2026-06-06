@@ -148,7 +148,8 @@ describe("v2 migration dry-run planner", () => {
     });
     expect(plan.v2Candidates.ideas[1]).toMatchObject({
       legacyIdeaId: "workflow_idea_1",
-      sourceLegacyTable: "ideas",
+      sourceLegacyTable: "capturedIdeas",
+      sourceLegacyWorkflowIdeaId: "workflow_idea_1",
       status: "ready",
       sourceUrl: "https://example.com/workflow-source",
       linkedLegacyPostIds: ["post_blog_1"],
@@ -195,5 +196,31 @@ describe("v2 migration dry-run planner", () => {
       "capturedIdeas:empty_idea",
       "ideas:empty_workflow_idea",
     ]);
+  });
+
+  it("merges workflow-only ideas into capturedIdeas candidates", () => {
+    const plan = buildV2MigrationDryRunPlan({
+      ideas: [
+        {
+          _id: "workflow_only_1",
+          title: "Editorial backlog item",
+          text: "A workflow-only idea with no capturedIdeas row.",
+          status: "backlog",
+        },
+      ],
+    });
+
+    expect(plan.v2Candidates.ideas).toHaveLength(1);
+    expect(plan.v2Candidates.ideas[0]).toMatchObject({
+      legacyIdeaId: "workflow_only_1",
+      sourceLegacyTable: "capturedIdeas",
+      sourceLegacyWorkflowIdeaId: "workflow_only_1",
+      title: "Editorial backlog item",
+      text: "A workflow-only idea with no capturedIdeas row.",
+      status: "inbox",
+      entryCount: 1,
+      linkedLegacyPostIds: [],
+    });
+    expect(plan.records.imported).toEqual(["capturedIdeas:workflow_only_1"]);
   });
 });

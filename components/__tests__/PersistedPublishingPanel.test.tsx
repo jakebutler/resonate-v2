@@ -178,9 +178,29 @@ const blogItem = {
   ],
 };
 
+const blogItemWithPr = {
+  ...blogItem,
+  post: {
+    ...blogItem.post,
+    _id: "post_5",
+    title: "Approved Corvo Blog PR item with PR",
+    status: "pr-created",
+    prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/53",
+    branchName: "resonate/blog-post-2026-06-12-approved-corvo-blog-pr-item",
+  },
+  intent: { ...blogItem.intent, _id: "intent_5" },
+  providerState: {
+    providerId: "github-pr",
+    status: "submitted",
+    prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/53",
+  },
+  auditEvents: blogItem.auditEvents,
+};
+
 describe("PersistedPublishingPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn());
     vi.mocked(useQuery).mockImplementation((reference) => {
       if (reference === "v2Publishing:listBrands") {
         return [
@@ -522,6 +542,46 @@ describe("PersistedPublishingPanel", () => {
     );
     expect(updateContentMock).not.toHaveBeenCalled();
     expect(await screen.findByText("Saved date/time changes without changing approval.")).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not call GitHub when rescheduling a blog post without a PR URL", async () => {
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Date"), { target: { value: "2026-06-21" } });
+    fireEvent.click(within(detail).getByRole("button", { name: "Save Composer Changes" }));
+    await waitFor(() =>
+      expect(rescheduleMock).toHaveBeenCalledWith(
+        expect.objectContaining({ postId: "post_4", scheduledDate: "2026-06-21" })
+      )
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("reschedules blog posts with an open PR through Convex without client GitHub calls", async () => {
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "v2Publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "v2Publishing:listCalendarItems") return [blogItemWithPr];
+      return undefined;
+    });
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Details Approved Corvo Blog PR item with PR" })
+    );
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Date"), { target: { value: "2026-06-22" } });
+    fireEvent.change(within(detail).getByLabelText("Time"), { target: { value: "11:00" } });
+    fireEvent.click(within(detail).getByRole("button", { name: "Save Composer Changes" }));
+    await waitFor(() =>
+      expect(rescheduleMock).toHaveBeenCalledWith({
+        postId: "post_5",
+        scheduledDate: "2026-06-22",
+        scheduledTime: "11:00",
+        timezone: "America/Los_Angeles",
+      })
+    );
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("saves LinkedIn platform settings and clears approval through Convex", async () => {
