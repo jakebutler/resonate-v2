@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runProviderAdapterContractSuite } from "@/lib/__tests__/providerAdapterContract";
+import { runProviderAdapterContractSuite } from "@/lib/__tests__/helpers/providerAdapterContract";
 import {
   adapterForProvider,
   bufferProviderAdapter,
