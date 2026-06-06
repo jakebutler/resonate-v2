@@ -1919,3 +1919,37 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - b1-foundation-cleanups
+
+## 06/06/2026 11:09:56 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	convex/__tests__/v2Publishing.test.ts
+- M	convex/schema.ts
+- M	convex/v2Publishing.ts
+- M	lib/v2.ts
+
+### Working Tree Snapshot
+
+-  M app/editor/[id]/page.tsx
+-  M app/v2/page.tsx
+-  M components/PersistedPublishingPanel.tsx
+-  M components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex/__tests__/v2Publishing.test.ts
+-  M convex/_generated/api.d.ts
+- M  convex/schema.ts
+- M  convex/v2Publishing.ts
+- M  lib/v2.ts
+- ?? _b2a_stash/
+- ?? components/EditorPageRouter.tsx
+- ?? scripts/_persisted_composer_snippet.tsx
+- ?? scripts/_platform_pane_snippet.tsx
+- ?? scripts/patch-panel.py
+
+### Branch
+
+- b2a-single-composer

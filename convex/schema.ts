@@ -96,6 +96,33 @@ const v2ClaimMapStatus = v.union(
   v.literal("reviewed")
 );
 
+const v2LinkedInPlatformSettings = v.object({
+  cta: v.optional(v.string()),
+  hashtags: v.optional(v.array(v.string())),
+  linkPreview: v.optional(v.boolean()),
+});
+
+const v2RedditPlatformSettings = v.object({
+  subreddit: v.optional(v.string()),
+  flair: v.optional(v.string()),
+  nsfw: v.optional(v.boolean()),
+  spoiler: v.optional(v.boolean()),
+  sensitivity: v.optional(v.string()),
+});
+
+const v2CorvoBlogPlatformSettings = v.object({
+  canonicalUrl: v.optional(v.string()),
+  ogImage: v.optional(v.string()),
+  statusFlag: v.optional(v.string()),
+  categoryOverride: v.optional(v.string()),
+});
+
+const v2PlatformSettings = v.union(
+  v2LinkedInPlatformSettings,
+  v2RedditPlatformSettings,
+  v2CorvoBlogPlatformSettings
+);
+
 export default defineSchema({
   v2Brands: defineTable({
     brandId: v2BrandId,
@@ -147,6 +174,7 @@ export default defineSchema({
     prUrl: v.optional(v.string()),
     branchName: v.optional(v.string()),
     contentFingerprint: v.string(),
+    platformSettings: v.optional(v2PlatformSettings),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

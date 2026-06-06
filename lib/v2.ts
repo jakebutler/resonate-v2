@@ -17,6 +17,11 @@ export type V2ProviderId = "mock" | "buffer" | "zernio" | "github-pr" | "postiz-
 
 export type V2ApprovalState = "unapproved" | "approved" | "changes-requested";
 
+export type V2LinkedInPlatformSettings = { cta?: string; hashtags?: string[]; linkPreview?: boolean; };
+export type V2RedditPlatformSettings = { subreddit?: string; flair?: string; nsfw?: boolean; spoiler?: boolean; sensitivity?: string; };
+export type V2CorvoBlogPlatformSettings = { canonicalUrl?: string; ogImage?: string; statusFlag?: string; categoryOverride?: string; };
+export type V2PlatformSettings = V2LinkedInPlatformSettings | V2RedditPlatformSettings | V2CorvoBlogPlatformSettings;
+
 export type V2PostStatus =
   | "draft"
   | "approved"
@@ -80,6 +85,7 @@ export type V2Post = {
   publishAttempts?: V2PublishAttempt[];
   prUrl?: string;
   branchName?: string;
+  platformSettings?: V2PlatformSettings;
   createdAt: string;
   updatedAt: string;
 };
