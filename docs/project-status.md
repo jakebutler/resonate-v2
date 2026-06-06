@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 11:23:04 PDT
+Last updated: 06/06/2026 12:17:25 PDT
 
 ## State
 
@@ -16,22 +16,20 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 1fedbcd Merge pull request #26 from jakebutler/b2a-single-composer
+- 8bf41a6 revert: keep production-readiness commit scoped to smoke doc
 
 ## Recent Commits
 
+- 8bf41a6 revert: keep production-readiness commit scoped to smoke doc
+- 10c5d25 docs: record production readiness state for C.3 review
+- fe0d9f3 [B.3] Real v1 migration dry-run summary and export helper (#27)
 - 1fedbcd Merge pull request #26 from jakebutler/b2a-single-composer
 - 7fe5fd8 Merge main into b2a-single-composer and unify v2Publishing tests.
-- 1e91428 Merge pull request #23 from jakebutler/b2b-ideas-merge
-- 775c2d3 Exclude convex test helpers from Vitest discovery.
-- f695277 Merge main into b2b-ideas-merge (B.2.C + B.2.D landed).
 
 ## Local Working Tree
 
-- M  .gitignore
-- M  docs/migration-dry-run.md
-- A  docs/migration-real-export-summary.md
-- A  scripts/convert-convex-export-to-v1-json.mjs
+- A  docs/smoke-runs/2026-06-06-authenticated-smoke.md
+- M  docs/smoke-runs/2026-06-06-production-readiness.md
 
 ## Next Agent Pickup
 
@@ -40,4 +38,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- b3-real-migration-dry-run
+- production-readiness-notes

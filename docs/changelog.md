@@ -2000,3 +2000,23 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - b3-real-migration-dry-run
+
+## 06/06/2026 12:17:25 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	docs/smoke-runs/2026-06-06-authenticated-smoke.md
+- M	docs/smoke-runs/2026-06-06-production-readiness.md
+
+### Working Tree Snapshot
+
+- A  docs/smoke-runs/2026-06-06-authenticated-smoke.md
+- M  docs/smoke-runs/2026-06-06-production-readiness.md
+
+### Branch
+
+- production-readiness-notes
