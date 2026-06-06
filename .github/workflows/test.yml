@@ -1,0 +1,181 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Lint, Tests, Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run Vitest with coverage
+        run: npm run test:ci
+        env:
+          # These are intentionally fake placeholder values used only for unit tests.
+          # All external calls (GitHub, Cortex) are mocked via vi.mock() in test files.
+          # Real secrets are never used in unit tests.
+          GITHUB_TOKEN: test_token
+          BLOG_REPO_OWNER: test-owner
+          BLOG_REPO_NAME: test-repo
+          BLOG_CONTENT_PATH: content/posts
+          CORTEX_API_KEY: test_key
+          CORTEX_BASE_URL: https://cortex.test
+          NEXT_PUBLIC_CONVEX_URL: https://convex.test
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA==
+          CLERK_SECRET_KEY: sk_test_ci_placeholder
+          CLERK_JWT_ISSUER_DOMAIN: https://clerk.test
+          PIONEER_API_KEY: test_key
+          PIONEER_DRAFT_MODEL: test-model
+
+      - name: Build Next.js
+        run: npm run build
+        env:
+          NEXT_PUBLIC_CONVEX_URL: https://convex.test
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA==
+          CLERK_SECRET_KEY: sk_test_ci_placeholder
+          CLERK_JWT_ISSUER_DOMAIN: https://clerk.test
+          NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
+          NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
+          NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: /
+          NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: /setup
+          CORTEX_API_KEY: test_key
+          CORTEX_BASE_URL: https://cortex.test
+          GITHUB_TOKEN: test_token
+          BLOG_REPO_OWNER: test-owner
+          BLOG_REPO_NAME: test-repo
+          BLOG_CONTENT_PATH: content/posts
+          PIONEER_API_KEY: test_key
+          PIONEER_DRAFT_MODEL: test-model
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+
+  deploy-convex-prod:
+    name: Deploy Convex Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: convex-prod-deploy
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect Convex backend changes
+        id: changes
+        run: |
+          before="${{ github.event.before }}"
+
+          if [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            before="$(git rev-list --max-count=1 HEAD^ 2>/dev/null || true)"
+          fi
+
+          if [ -z "$before" ]; then
+            echo "convex_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --name-only "$before" "${{ github.sha }}" -- convex/ | grep -q .; then
+            echo "convex_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "convex_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v5
+        if: steps.changes.outputs.convex_changed == 'true'
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Validate Convex deploy configuration
+        if: steps.changes.outputs.convex_changed == 'true'
+        env:
+          CLERK_JWT_ISSUER_DOMAIN: ${{ secrets.CLERK_JWT_ISSUER_DOMAIN }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          test -n "$CLERK_JWT_ISSUER_DOMAIN"
+          test -n "$CONVEX_DEPLOY_KEY"
+
+      - name: Install dependencies
+        if: steps.changes.outputs.convex_changed == 'true'
+        run: npm ci
+
+      - name: Deploy Convex production
+        if: steps.changes.outputs.convex_changed == 'true'
+        env:
+          CLERK_JWT_ISSUER_DOMAIN: ${{ secrets.CLERK_JWT_ISSUER_DOMAIN }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: npx convex deploy
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'pull_request'
+    env:
+      # Current Playwright coverage only exercises unauthenticated smoke paths,
+      # so placeholder values are sufficient to boot the production app in CI.
+      NEXT_PUBLIC_CONVEX_URL: https://convex.test
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA==
+      CLERK_SECRET_KEY: sk_test_ci_placeholder
+      CLERK_JWT_ISSUER_DOMAIN: https://clerk.test
+      CORTEX_API_KEY: test_key
+      GITHUB_TOKEN: test_token
+      BLOG_REPO_OWNER: test-owner
+      BLOG_REPO_NAME: test-repo
+      BLOG_CONTENT_PATH: content/posts
+      E2E_BYPASS_AUTH: "1"
+      NEXT_PUBLIC_E2E_BYPASS_AUTH: "1"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Next.js
+        run: npm run build
+
+      - name: Run Playwright E2E
+        run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

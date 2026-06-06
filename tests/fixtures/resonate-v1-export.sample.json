@@ -1,0 +1,90 @@
+{
+  "posts": [
+    {
+      "_id": "post_blog_1",
+      "type": "blog",
+      "title": "Migration Notes",
+      "content": "A published blog post.",
+      "status": "published",
+      "scheduledDate": "2026-03-04",
+      "externalUrl": "https://www.corvolabs.com/blog/migration-notes",
+      "githubPrUrl": "https://github.com/jakebutler/corvolabs-dot-com/pull/10"
+    },
+    {
+      "_id": "post_linkedin_1",
+      "type": "linkedin",
+      "content": "Scheduled LinkedIn copy.",
+      "status": "scheduled",
+      "scheduledDate": "2026-03-05",
+      "scheduledTime": "09:00"
+    },
+    {
+      "_id": "post_ambiguous_1",
+      "type": "linkedin",
+      "content": "Published without an external URL.",
+      "status": "published"
+    }
+  ],
+  "capturedIdeas": [
+    {
+      "_id": "idea_1",
+      "status": "ready",
+      "tags": ["migration", "v2"],
+      "sourceUrl": "https://example.com/source",
+      "sourceTitle": "Source Article",
+      "latestEntryPreview": "Fallback preview"
+    }
+  ],
+  "capturedIdeaEntries": [
+    {
+      "_id": "entry_1",
+      "ideaId": "idea_1",
+      "content": "First note.",
+      "createdAt": 1
+    },
+    {
+      "_id": "entry_2",
+      "ideaId": "idea_1",
+      "content": "Second note.",
+      "createdAt": 2
+    }
+  ],
+  "capturedIdeaPostLinks": [
+    {
+      "_id": "idea_link_1",
+      "ideaId": "idea_1",
+      "postId": "post_linkedin_1"
+    }
+  ],
+  "ideas": [
+    {
+      "_id": "workflow_idea_1",
+      "title": "Workflow idea",
+      "text": "Move this workflow idea into the v2 idea model.",
+      "status": "research",
+      "references": [
+        {
+          "url": "https://example.com/workflow-source",
+          "title": "Workflow source",
+          "addedBy": "user"
+        }
+      ]
+    }
+  ],
+  "workflowDrafts": [
+    {
+      "_id": "draft_1",
+      "ideaId": "workflow_idea_1",
+      "postId": "post_blog_1",
+      "stage": "copyedit"
+    }
+  ],
+  "settings": [
+    {
+      "blogEnabled": true,
+      "blogFrequency": "weekly",
+      "linkedinEnabled": true,
+      "linkedinFrequency": "weekly"
+    }
+  ]
+}

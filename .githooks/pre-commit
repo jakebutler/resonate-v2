@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+local_hook_path="$repo_root/.githooks/pre-commit.local"
+
+if [[ -f "$local_hook_path" ]]; then
+  # shellcheck disable=SC1090
+  source "$local_hook_path"
+fi
+
+if [[ "${RESONATE_DOCS_HOOK_SKIP:-0}" == "1" || "${RESONATE_DOCS_HOOK_ACTIVE:-0}" == "1" ]]; then
+  exit 0
+fi
+
+cd "$repo_root"
+
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  exit 0
+fi
+
+if ! RESONATE_DOCS_CONTEXT=hook node scripts/update-docs.mjs --mode=baseline; then
+  if [[ "${RESONATE_DOCS_HOOK_STRICT:-0}" == "1" ]]; then
+    exit 1
+  fi
+
+  printf 'Documentation refresh failed; continuing commit without blocking.\n' >&2
+  exit 0
+fi
+
+git add docs/spec.md docs/changelog.md docs/project-status.md
