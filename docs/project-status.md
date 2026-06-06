@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 02:11:23 PDT
+Last updated: 06/06/2026 02:26:17 PDT
 
 ## State
 
@@ -12,14 +12,15 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Documentation refresh only.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- 46e5b71 Fix E2E auth bypass build
+- c844a63 Refresh status after CI bypass fix
 
 ## Recent Commits
 
+- c844a63 Refresh status after CI bypass fix
 - 46e5b71 Fix E2E auth bypass build
 - 72bbb9e Build Resonate v2 MVP foundation
 - 08eaa05 Initialize local env hygiene
@@ -27,7 +28,8 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Local Working Tree
 
-- Working tree is clean.
+-  M docs/mvp-implementation-map.md
+-  M docs/ops-runbook.md
 
 ## Next Agent Pickup
 

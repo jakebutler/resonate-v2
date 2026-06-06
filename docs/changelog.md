@@ -1872,3 +1872,22 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/resonate-v2-mvp-foundation
+
+## 06/06/2026 02:26:17 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- No staged changes were present when the docs refresh ran.
+
+### Working Tree Snapshot
+
+-  M docs/mvp-implementation-map.md
+-  M docs/ops-runbook.md
+
+### Branch
+
+- codex/resonate-v2-mvp-foundation

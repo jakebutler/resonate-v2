@@ -46,7 +46,14 @@ Pushes to `main` trigger automatic deployment to `resonate.corvolabs.com` via Ve
 No manual deploy step required.
 
 ### Side-by-side v2 validation project
-Before cutover, v2 may also run as a separate Vercel project deployed from this repository while v1 remains attached to the existing production project. Keep v2 preview/production environment variables in Vercel secret scope, run the post-deploy smoke below with real auth, and only repoint `resonate.corvolabs.com` to the v2 repo/project after the cutover checklist passes.
+Before cutover, v2 may also run as a separate Vercel project deployed from this repository while v1 remains attached to the existing production project. The first side-by-side project is `resonate-v2`, connected to `jakebutler/resonate-v2`, with production alias `https://resonate-v2-delta.vercel.app`.
+
+Keep v2 preview/production environment variables in Vercel secret scope, run the post-deploy smoke below with real auth, and only repoint `resonate.corvolabs.com` to the v2 repo/project after the cutover checklist passes.
+
+Project setup notes:
+- Use the Next.js framework preset. If the project is created empty, Vercel may default to an `Other` preset and serve only `public/`, which makes app routes return 404 even after a successful `next build`.
+- SSO deployment protection was disabled for the `resonate-v2` project so the side-by-side URL can be opened directly. Re-enable or add an explicit custom-domain policy if public access needs to be restricted.
+- `PIONEER_API_KEY`, `PIONEER_DRAFT_MODEL`, Z.ai keys, and `V2_OPS_SECRET` were not present in local/v1 secret scope during first seeding. Add them before validating real Pioneer/Z.ai output or the ops validation endpoint in Vercel.
 
 ### Manual deploy trigger
 ```bash

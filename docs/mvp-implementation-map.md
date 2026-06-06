@@ -39,7 +39,7 @@ The v2 work layers a Postiz-compatible publishing spine on top instead of treati
 | #15 Corvo Blog PR | `/api/publish`, `lib/github.ts`, `github-pr` route, scheduled frontmatter/PR-body metadata, persisted PR URL/branch/provider state via `recordGithubPr`; live proof created PR #53 in `jakebutler/corvo-labs-dot-com` | Persist a PR creation from the authenticated v2 UI/Convex preview and define merge/close policy |
 | #16 Migration | `lib/v2Migration.ts`, `scripts/v2-migration-dry-run.mjs`, `docs/migration-dry-run.md`, sample export fixture, v1 schema inventory from `/Volumes/rexy/GitHub/resonate/convex/schema.ts` | Run against real v1 Convex export before cutover |
 | #17 CI/tests | `.github/workflows/test.yml` runs lint, typecheck, coverage, build, PR E2E, and gated Convex deploy | Confirm GitHub Actions green after push |
-| #18 Deployment/cutover | `docs/adr/0003-deployment-runtime.md`, Vercel/Convex validation lane, future Postiz service lane | Production preview smoke with real auth |
+| #18 Deployment/cutover | `docs/adr/0003-deployment-runtime.md`, Vercel/Convex validation lane, future Postiz service lane; side-by-side Vercel project `resonate-v2` is deployed at `https://resonate-v2-delta.vercel.app` | Authenticated browser smoke and cutover checklist against v1/v2 |
 | #19 Smoke checklist | `docs/cutover-checklist.md` | Run side-by-side smoke after UI persistence |
 
 ## Verified In This Pass
@@ -71,6 +71,8 @@ The v2 work layers a Postiz-compatible publishing spine on top instead of treati
 - Approved live Buffer validation: authenticated against `https://api.buffer.com`, found active LinkedIn channels for Corvo Labs and the lower dB.
 - Approved live Zernio validation: authenticated against `https://zernio.com/api/v1`, found active and healthy Reddit account `the_lower_db`.
 - Approved live Corvo Blog validation: created and verified https://github.com/jakebutler/corvo-labs-dot-com/pull/53 through `/api/publish`.
+- Created Vercel project `resonate-v2`, connected it to `jakebutler/resonate-v2`, seeded available preview/production env vars, set the framework preset to Next.js, disabled SSO deployment protection for that project only, and deployed production alias `https://resonate-v2-delta.vercel.app`.
+- HTTP smoke for `https://resonate-v2-delta.vercel.app/` and `/v2`: unauthenticated requests return Clerk 307 redirects to `/sign-in`; the followed sign-in route returns 200.
 - `npm run typecheck`
 - `npm run lint`
 - `npm run build`
@@ -80,6 +82,7 @@ The v2 work layers a Postiz-compatible publishing spine on top instead of treati
 ## Known Gaps
 
 - Live read-only provider validation has been approved and completed for Buffer and Zernio. Live social submission through those providers remains intentionally unwired until request payloads, cancellation/unpublish behavior, idempotency, and status refresh semantics are implemented and tested.
+- The side-by-side Vercel project is live, but authenticated browser smoke still needs a real Clerk session and the cutover checklist. `PIONEER_API_KEY`, `PIONEER_DRAFT_MODEL`, Z.ai keys, and `V2_OPS_SECRET` were not present in local/v1 secret scope when the v2 project was seeded; Pioneer-dependent routes will use deterministic fallback there until those are added.
 - Local browser smoke with `E2E_BYPASS_AUTH=1` now skips Clerk provider hydration even when `.env.local` contains production-domain Clerk keys. Persisted Convex calendar data may still stay in loading/setup state without a Convex identity or seeded local deployment; use focused component tests or a properly authenticated preview for full persisted-data smoke.
 - Ideas now have a v2 path from brand-assigned capture to linked LinkedIn, Reddit, and Corvo Blog draft creation. The legacy v1 draft buttons remain available for parity; the remaining #6 decision is how to handle the older workflow `ideas` table during migration/cutover.
 - Idea-to-draft generation now has a deterministic clarifying-question preflight for thin Ideas and channel-specific missing context. Answers are sent to the server-side draft route and folded into local fallback/Pioneer prompts; accepted variants still create scheduled-but-unapproved persisted publishing intents.
