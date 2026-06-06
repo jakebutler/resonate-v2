@@ -27,7 +27,8 @@ type Filter = "all" | "blog" | "linkedin";
 type View = "calendar" | "library" | "workflow";
 type TimePeriod = "all" | "this-month" | "last-3-months" | "this-year";
 
-const bypassAuthForE2E = process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1";
+const bypassAuthForE2E =
+  process.env.E2E_BYPASS_AUTH === "1" || process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1";
 
 function HeaderUserControl() {
   if (bypassAuthForE2E) {

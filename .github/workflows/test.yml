@@ -152,6 +152,7 @@ jobs:
       BLOG_REPO_NAME: test-repo
       BLOG_CONTENT_PATH: content/posts
       E2E_BYPASS_AUTH: "1"
+      NEXT_PUBLIC_E2E_BYPASS_AUTH: "1"
 
     steps:
       - uses: actions/checkout@v5
