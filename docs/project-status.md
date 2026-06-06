@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/06/2026 12:26:41 PDT
+Last updated: 06/06/2026 12:29:26 PDT
 
 ## State
 
@@ -16,21 +16,19 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 81e9656 [B.6] Add cutover-readiness smoke script and report. (#29)
+- ff16b53 Merge pull request #33 from jakebutler/cutover-c3-final-review
 
 ## Recent Commits
 
+- ff16b53 Merge pull request #33 from jakebutler/cutover-c3-final-review
+- 89cdfe0 docs: C.2 cutover complete + C.3 final review package (2026-06-06)
 - 81e9656 [B.6] Add cutover-readiness smoke script and report. (#29)
 - 7e4a154 docs: record C.2 authenticated smoke blocked on delta URL (#31)
 - 1a65b5d [B.5] Zernio live submission (gated, validated) (#30)
-- 93485e3 [B.4] Buffer live submission (gated, validated) (#28)
-- fe0d9f3 [B.3] Real v1 migration dry-run summary and export helper (#27)
 
 ## Local Working Tree
 
-- M  docs/cutover-checklist.md
-- M  docs/smoke-runs/2026-06-06-authenticated-smoke.md
-- A  docs/smoke-runs/2026-06-06-production-readiness.md
+- M  docs/smoke-runs/2026-06-06-cutover-readiness.md
 
 ## Next Agent Pickup
 
@@ -39,4 +37,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- cutover-c3-final-review
+- main
