@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { runProviderAdapterContractSuite } from "@/lib/__tests__/helpers/providerAdapterContract";
 import {
   adapterForProvider,
   bufferProviderAdapter,
@@ -6,6 +7,7 @@ import {
   mockProviderAdapter,
   providerForChannel,
   sanitizeProviderPayload,
+  scheduleToUtcIso,
   zernioProviderAdapter,
   type V2ProviderSubmission,
 } from "@/lib/v2ProviderAdapters";
@@ -300,6 +302,174 @@ describe("v2 provider adapters", () => {
       },
     });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("converts schedule fields to UTC ISO timestamps", () => {
+    const dueAt = scheduleToUtcIso({
+      scheduledDate: "2026-06-12",
+      scheduledTime: "09:00",
+      timezone: "America/Los_Angeles",
+    });
+    expect(dueAt).toMatch(/2026-06-12T\d{2}:00:00\.000Z/);
+  });
+
+  describe("mock provider contract", () => {
+    runProviderAdapterContractSuite(mockProviderAdapter, {
+      approvedContext: (overrides = {}) => ({
+        env: overrides,
+        liveProviderValidationApproved: true,
+      }),
+      blockedContext: (overrides = {}) => ({
+        env: overrides,
+        liveProviderValidationApproved: false,
+      }),
+      expectSubmitSuccess: true,
+      requiresLiveValidationApproval: false,
+    });
+  });
+
+  describe("buffer provider contract", () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ data: {} }), { status: 200 }));
+    runProviderAdapterContractSuite(bufferProviderAdapter, {
+      approvedContext: (overrides = {}) => ({
+        env: {
+          BUFFER_API_KEY: "buffer-secret",
+          BUFFER_LIVE_SUBMISSION: "approved",
+          ...overrides,
+        },
+        liveProviderValidationApproved: true,
+        fetchImpl,
+      }),
+      blockedContext: (overrides = {}) => ({
+        env: {
+          BUFFER_API_KEY: "buffer-secret",
+          ...overrides,
+        },
+        liveProviderValidationApproved: false,
+        fetchImpl,
+      }),
+    });
+  });
+
+  it("submits to Buffer when live submission is approved", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              account: {
+                organizations: [{ id: "org-1", name: "Org" }],
+              },
+            },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              channels: [
+                {
+                  id: "channel-corvo",
+                  name: "corvo-labs-us",
+                  displayName: "Corvo Labs",
+                  service: "linkedin",
+                  isQueuePaused: false,
+                },
+              ],
+            },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              createPost: {
+                post: {
+                  id: "buffer-post-1234567890",
+                  status: "scheduled",
+                  dueAt: "2026-06-13T16:00:00.000Z",
+                  shareMode: "customScheduled",
+                },
+              },
+            },
+          }),
+          { status: 200 }
+        )
+      );
+
+    const result = await bufferProviderAdapter.submit(submission, {
+      env: {
+        BUFFER_API_KEY: "buffer-secret",
+        BUFFER_LIVE_SUBMISSION: "approved",
+      },
+      liveProviderValidationApproved: true,
+      fetchImpl,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: "success",
+      providerStateStatus: "submitted",
+      providerPostId: "buffer-post-1234567890",
+    });
+    expect(JSON.stringify(result.sanitizedResponse)).not.toContain("buffer-secret");
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("blocks Buffer submit until BUFFER_LIVE_SUBMISSION is approved", async () => {
+    const fetchImpl = vi.fn();
+    const result = await bufferProviderAdapter.submit(submission, {
+      env: { BUFFER_API_KEY: "buffer-secret" },
+      liveProviderValidationApproved: true,
+      fetchImpl,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: "unavailable",
+      reason: "Buffer live submission requires BUFFER_LIVE_SUBMISSION=approved.",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("deletes a Buffer post on cancel intent", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            deletePost: { id: "buffer-post-1234567890" },
+          },
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await bufferProviderAdapter.recordCancelOrUnpublishIntent(
+      { ...submission, providerPostId: "buffer-post-1234567890" },
+      "cancel",
+      {
+        env: {
+          BUFFER_API_KEY: "buffer-secret",
+          BUFFER_LIVE_SUBMISSION: "approved",
+        },
+        liveProviderValidationApproved: true,
+        fetchImpl,
+      }
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: "success",
+      providerStateStatus: "cancel-intent-recorded",
+      providerPostId: "buffer-post-1234567890",
+    });
   });
 
   it("keeps Mock Provider behavior available without credentials", async () => {
