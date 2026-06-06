@@ -62,6 +62,11 @@ const githubPrRecordValidator = v.object({
   sanitizedResponse: v.any(),
 });
 
+const linkedInPlatformSettingsValidator = v.object({ cta: v.optional(v.string()), hashtags: v.optional(v.array(v.string())), linkPreview: v.optional(v.boolean()) });
+const redditPlatformSettingsValidator = v.object({ subreddit: v.optional(v.string()), flair: v.optional(v.string()), nsfw: v.optional(v.boolean()), spoiler: v.optional(v.boolean()), sensitivity: v.optional(v.string()) });
+const corvoBlogPlatformSettingsValidator = v.object({ canonicalUrl: v.optional(v.string()), ogImage: v.optional(v.string()), statusFlag: v.optional(v.string()), categoryOverride: v.optional(v.string()) });
+const platformSettingsValidator = v.union(linkedInPlatformSettingsValidator, redditPlatformSettingsValidator, corvoBlogPlatformSettingsValidator);
+
 const brandSeed = [
   {
     brandId: "personal",
@@ -384,6 +389,16 @@ export const listCalendarItems = query({
   },
 });
 
+export const getPostById = query({
+  args: { postId: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const normalizedId = ctx.db.normalizeId("v2Posts", args.postId);
+    if (!normalizedId) return null;
+    try { return await getOwnedPost(ctx, userId, normalizedId); } catch { return null; }
+  },
+});
+
 export const createPostWithIntent = mutation({
   args: {
     brandId: brandIdValidator,
@@ -703,6 +718,20 @@ export const updateContent = mutation({
       action: "post.content_change",
       summary: "Content change cleared approval.",
     });
+  },
+});
+
+export const updatePlatformSettings = mutation({
+  args: { postId: v.id("v2Posts"), platformSettings: platformSettingsValidator },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const post = await getOwnedPost(ctx, userId, args.postId);
+    const intent = await latestIntent(ctx, args.postId);
+    if (!intent) throw new Error("Publishing intent not found");
+    const now = Date.now();
+    await ctx.db.patch(args.postId, { platformSettings: args.platformSettings, approvalState: "unapproved", status: "draft", updatedAt: now });
+    await ctx.db.patch(intent._id, { approvalState: "unapproved", updatedAt: now });
+    await audit(ctx, { userId, brandId: post.brandId, postId: args.postId, intentId: intent._id, action: "post.platform_settings_change", summary: "Platform settings change cleared approval.", metadata: { channelId: post.channelId } });
   },
 });
 

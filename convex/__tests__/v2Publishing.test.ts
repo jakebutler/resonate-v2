@@ -1,8 +1,14 @@
 import { convexTest } from "convex-test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { api } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
+
+const publishingPath = join(process.cwd(), "convex/v2Publishing.ts");
+const schemaPath = join(process.cwd(), "convex/schema.ts");
+const v2TypesPath = join(process.cwd(), "lib/v2.ts");
 
 const modules = import.meta.glob("../**/*.ts");
 const CORVO_ONLY_USER = { subject: "user-corvo-only", name: "Corvo User" };
@@ -106,6 +112,32 @@ async function insertLowerDbPost(
     return postId;
   });
 }
+
+describe("v2 publishing platform settings", () => {
+  it("exposes getPostById for editor routing", () => {
+    const publishing = readFileSync(publishingPath, "utf8");
+    expect(publishing).toContain("export const getPostById = query");
+    expect(publishing).toContain('args: { postId: v.string() }');
+  });
+
+  it("persists platform settings and clears approval", () => {
+    const publishing = readFileSync(publishingPath, "utf8");
+    expect(publishing).toContain("export const updatePlatformSettings = mutation");
+    expect(publishing).toContain("platformSettings: args.platformSettings");
+    expect(publishing).toContain('approvalState: "unapproved"');
+    expect(publishing).toContain("post.platform_settings_change");
+  });
+
+  it("stores typed platform settings on v2Posts", () => {
+    const schemaSource = readFileSync(schemaPath, "utf8");
+    const v2Types = readFileSync(v2TypesPath, "utf8");
+
+    expect(schemaSource).toContain("platformSettings: v.optional(v2PlatformSettings)");
+    expect(v2Types).toContain("export type V2LinkedInPlatformSettings");
+    expect(v2Types).toContain("export type V2RedditPlatformSettings");
+    expect(v2Types).toContain("export type V2CorvoBlogPlatformSettings");
+  });
+});
 
 describe("v2Publishing cross-brand authorization", () => {
   it("denies setApproval on a lower-db post for corvo-only members", async () => {

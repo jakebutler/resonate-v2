@@ -6,7 +6,15 @@ export const metadata = {
   description: "Postiz-based multi-brand content operations for Corvo Labs",
 };
 
-export default function V2Page() {
+type V2PageProps = {
+  searchParams: Promise<{ postId?: string | string[] }>;
+};
+
+export default async function V2Page({ searchParams }: V2PageProps) {
+  const resolvedSearchParams = await searchParams;
+  const postIdRaw = resolvedSearchParams.postId;
+  const initialPostId = Array.isArray(postIdRaw) ? postIdRaw[0] : postIdRaw;
+
   return (
     <>
       <nav
@@ -32,7 +40,7 @@ export default function V2Page() {
           </Link>
         </div>
       </nav>
-      <PersistedPublishingPanel />
+      <PersistedPublishingPanel initialPostId={initialPostId} />
     </>
   );
 }
