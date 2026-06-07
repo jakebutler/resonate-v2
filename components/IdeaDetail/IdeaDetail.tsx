@@ -36,7 +36,7 @@ interface IdeaDetailProps {
     }[];
     postLinks?: {
       link: {
-        _id: Id<"capturedIdeaPostLinks">;
+        _id: Id<"capturedIdeaV2PostLinks">;
         channelId: AnyChannelId;
         createdAt: number;
       };
