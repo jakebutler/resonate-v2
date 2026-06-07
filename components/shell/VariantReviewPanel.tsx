@@ -52,7 +52,7 @@ export function VariantReviewPanel({ postId }: VariantReviewPanelProps) {
         scheduledTime: "09:00",
         timezone: currentTimezone(),
       });
-      router.push(`/calendar?postId=${post._id}`);
+      router.push(`/?postId=${post._id}`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to accept variant.");
       setBusy(null);
@@ -65,7 +65,7 @@ export function VariantReviewPanel({ postId }: VariantReviewPanelProps) {
     setNotice(null);
     try {
       await rejectVariantPost({ postId: post._id as Id<"v2Posts"> });
-      router.push(`/calendar?postId=${post._id}`);
+      router.push(`/?postId=${post._id}`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to reject variant.");
       setBusy(null);
@@ -135,7 +135,7 @@ export function VariantReviewPanel({ postId }: VariantReviewPanelProps) {
               </div>
             ) : (
               <Button asChild variant="outline">
-                <Link href={`/calendar?postId=${post._id}`}>Open in calendar</Link>
+                <Link href={`/?postId=${post._id}`}>Open in calendar</Link>
               </Button>
             )}
           </div>

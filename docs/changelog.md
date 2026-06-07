@@ -2346,19 +2346,68 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 - main
 
-## 06/06/2026 23:54:06 PDT
+## 06/06/2026 (cutover)
 
 ### Summary
 
-- Refreshed documentation for the current repository state.
+- Moved `resonate.corvolabs.com` to the `resonate-v2` Vercel project.
+- Calendar is now `/` (removed `/calendar` route and `/v2` redirects).
+- Legacy v1 dashboard preserved at `/legacy`.
+- Updated smoke script and parity eval URLs for production paths.
+
+### Changed
+
+- `app/page.tsx` — publishing calendar home
+- `app/legacy/page.tsx` — former v1 dashboard
+- `next.config.ts` — removed transitional redirects
+- Shell/navigation links → `/` and `/research`
+- `scripts/cutover-smoke.mjs`, `docs/eval/reviewable-parity-script.md`
+
+### Branch
+
+- main
+
+## 06/07/2026 00:06:49 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched the captured ideas experience.
+- Touched the main dashboard surfaces.
 
 ### Staged Changes
 
-- M	components/IdeaDetail/IdeaDetail.tsx
+- M	app/__tests__/page.test.tsx
+- D	app/calendar/page.tsx
+- M	app/ideas/page.tsx
+- A	app/legacy/page.tsx
+- M	app/page.tsx
+- M	components/EditorPageRouter.tsx
+- M	components/ResearchApp.tsx
+- M	components/shell/Shell.tsx
+- M	components/shell/VariantReviewPanel.tsx
+- M	docs/changelog.md
+- M	docs/eval/reviewable-parity-script.md
+- M	docs/project-status.md
+- M	next.config.ts
+- M	scripts/cutover-smoke.mjs
 
 ### Working Tree Snapshot
 
-- M  components/IdeaDetail/IdeaDetail.tsx
+- M  app/__tests__/page.test.tsx
+- D  app/calendar/page.tsx
+- M  app/ideas/page.tsx
+- A  app/legacy/page.tsx
+- M  app/page.tsx
+- M  components/EditorPageRouter.tsx
+- M  components/ResearchApp.tsx
+- M  components/shell/Shell.tsx
+- M  components/shell/VariantReviewPanel.tsx
+- M  docs/changelog.md
+- M  docs/eval/reviewable-parity-script.md
+- M  docs/project-status.md
+- M  next.config.ts
+- M  scripts/cutover-smoke.mjs
 
 ### Branch
 

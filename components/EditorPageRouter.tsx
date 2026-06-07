@@ -17,7 +17,7 @@ export function EditorPageRouter({ postId, initialDate }: EditorPageRouterProps)
 
   useEffect(() => {
     if (v2Post) {
-      router.replace(`/calendar?postId=${postId}`);
+      router.replace(`/?postId=${postId}`);
     }
   }, [postId, router, v2Post]);
 
@@ -32,7 +32,7 @@ export function EditorPageRouter({ postId, initialDate }: EditorPageRouterProps)
   if (v2Post) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-slate-600">
-        Opening v2 composer…
+        Opening composer…
       </div>
     );
   }

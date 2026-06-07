@@ -792,7 +792,7 @@ export function ResearchApp({
           description={
             <>
               Ideas and variants persist to Convex. Accepted variants hand off to the{" "}
-              <Link className={cn("font-medium underline", tokens.accent)} href="/calendar">
+              <Link className={cn("font-medium underline", tokens.accent)} href="/">
                 calendar
               </Link>
               .
@@ -1122,7 +1122,7 @@ export function ResearchApp({
                                 )}
                                 {variant.status === "accepted" && (
                                   <Button asChild size="sm" variant="outline">
-                                    <Link href={`/calendar?postId=${variant.postId}`}>
+                                    <Link href={`/?postId=${variant.postId}`}>
                                       Open in calendar
                                     </Link>
                                   </Button>

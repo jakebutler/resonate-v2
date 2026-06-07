@@ -29,7 +29,7 @@ export function Shell({ activeSurface, children }: ShellProps) {
           <span className={cn("font-semibold", tokens.accent)}>Resonate</span>
           <div className="flex flex-wrap items-center gap-3">
             <Link
-              href="/calendar"
+              href="/"
               aria-current={activeSurface === "calendar" ? "page" : undefined}
               className={navLinkClass(activeSurface === "calendar")}
             >
@@ -43,7 +43,7 @@ export function Shell({ activeSurface, children }: ShellProps) {
               Research
             </Link>
             <Link
-              href="/calendar#connections"
+              href="/#connections"
               aria-current={activeSurface === "connections" ? "page" : undefined}
               className={navLinkClass(activeSurface === "connections")}
             >

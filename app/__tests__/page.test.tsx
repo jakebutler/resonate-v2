@@ -2,9 +2,9 @@ import type { ReactNode } from "react"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { useQuery } from "convex/react"
-import Dashboard from "@/app/page"
+import Dashboard from "@/app/legacy/page"
 import EditorPage from "@/app/editor/[id]/page"
-import CalendarPage from "@/app/calendar/page"
+import HomePage from "@/app/page"
 import { EditorPageRouter } from "@/components/EditorPageRouter"
 
 const mockPush = vi.fn()
@@ -193,8 +193,8 @@ describe("EditorPageRouter", () => {
   it("redirects v2 posts to the v2 composer", () => {
     vi.mocked(useQuery).mockReturnValue({ _id: "post_1" } as never)
     render(<EditorPageRouter postId="post_1" />)
-    expect(mockReplace).toHaveBeenCalledWith("/calendar?postId=post_1")
-    expect(screen.getByText("Opening v2 composer…")).toBeInTheDocument()
+    expect(mockReplace).toHaveBeenCalledWith("/?postId=post_1")
+    expect(screen.getByText("Opening composer…")).toBeInTheDocument()
   })
 
   it("renders the legacy fullscreen editor for non-v2 posts", () => {
@@ -204,9 +204,9 @@ describe("EditorPageRouter", () => {
   })
 })
 
-describe("V2 page", () => {
+describe("Home page", () => {
   it("passes postId search params into the publishing panel", async () => {
-    const page = await CalendarPage({ searchParams: Promise.resolve({ postId: "post_9" }) })
+    const page = await HomePage({ searchParams: Promise.resolve({ postId: "post_9" }) })
     render(page)
     expect(screen.getByTestId("persisted-panel")).toHaveTextContent("post_9")
   })

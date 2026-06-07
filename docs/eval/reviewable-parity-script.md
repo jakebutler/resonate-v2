@@ -1,12 +1,12 @@
 # Reviewable parity evaluation script
 
-Run on `https://resonate.corvolabs.com/v2` signed in as the operator (`user_3ATLtcH9lcXKLMfIj9AxHXvpAR9`).
+Run on `https://resonate.corvolabs.com` signed in as the operator (`user_3ATLtcH9lcXKLMfIj9AxHXvpAR9`).
 
 Record pass/fail in `docs/eval/YYYY-MM-DD-parity-run.md`.
 
 ## 1. Persisted idea inbox
 
-1. Open `/v2/research` → **Ideas** tab.
+1. Open `/research` → **Ideas** tab.
 2. Confirm imported v1 ideas appear (10 expected from 2026-06-06 import).
 3. **Capture** tab → add a new idea → switch to **Ideas** → confirm it appears.
 4. Hard reload → idea still present.
@@ -17,19 +17,19 @@ Record pass/fail in `docs/eval/YYYY-MM-DD-parity-run.md`.
 
 1. Select an idea → generate LinkedIn + Corvo Blog variants.
 2. Hard reload → variants still listed with correct status.
-3. Click **Review** on a blog variant → `/v2/research/review/[postId]` full-height view.
+3. Click **Review** on a blog variant → `/research/review/[postId]` full-height view.
 
 **Pass:** Variants persist; review route usable for long content.
 
 ## 3. Accept LinkedIn variant → calendar
 
 1. Accept a LinkedIn variant from review page.
-2. Open `/v2` → item appears on calendar (no "accepted locally" message).
+2. Open `/` → item appears on calendar (no "accepted locally" message).
 3. Reload calendar → item persists.
 
 ## 4. Accept Corvo Blog variant → composer
 
-1. Accept a blog variant → open `/v2?postId=...`.
+1. Accept a blog variant → open `/?postId=...`.
 2. Composer shows title, body, blog metadata fields.
 
 ## 5. Blog authoring
@@ -51,7 +51,7 @@ Record pass/fail in `docs/eval/YYYY-MM-DD-parity-run.md`.
 
 ## 8. Social connections
 
-1. Open `/v2#connections` → **Refresh**.
+1. Open `/#connections` → **Refresh**.
 2. LinkedIn shows connected Buffer account name.
 3. Reddit shows connected Zernio account name.
 4. If failed, read diagnostics (approval flag, API keys configured).
@@ -64,7 +64,7 @@ Record pass/fail in `docs/eval/YYYY-MM-DD-parity-run.md`.
 
 ## 10. Full reload persistence
 
-1. Reload `/v2` and `/v2/research`.
+1. Reload `/` and `/research`.
 2. All remaining items present; zero data loss.
 
 ## 11. Plain language / no jargon

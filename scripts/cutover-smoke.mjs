@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
-const DEPLOYMENT_BASE = "https://resonate-v2-delta.vercel.app";
+const DEPLOYMENT_BASE = "https://resonate.corvolabs.com";
 const RUN_DATE = new Date().toISOString().slice(0, 10);
 const REPORT_PATH = path.join(REPO_ROOT, "docs/smoke-runs", `${RUN_DATE}-cutover-readiness.md`);
 const SAMPLE_FIXTURE = path.join(REPO_ROOT, "tests/fixtures/resonate-v1-export.sample.json");
@@ -419,7 +419,8 @@ async function main() {
   await runTestCi();
   const dryRunPlan = await runSampleMigrationDryRun();
   await httpPing("/", "/");
-  await httpPing("/calendar", "/calendar");
+  await httpPing("/", "/");
+  await httpPing("/research", "/research");
 
   const { bufferProviderAdapter, zernioProviderAdapter } = await import(
     "../lib/providerAdapters.ts"
