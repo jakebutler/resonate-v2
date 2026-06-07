@@ -4,6 +4,35 @@ Date: 2026-06-06
 
 This glossary keeps the MVP language stable while Resonate v2 is validated against Resonate v1 and future Postiz-backed runtime options.
 
+## Reviewable-Parity Rework (locked 2026-06-06)
+
+These decisions govern the rework that gets v2 into a state where it can be fairly evaluated
+against v1. They supersede earlier "cutover complete" framing.
+
+- **System of record.** Convex is the single source of truth for ideas, draft variants, and posts.
+  Browser `localStorage` is retired for anything but transient unsaved form input. See ADR 0005.
+- **Onboarding.** Brand/channel provisioning happens automatically for a signed-in user. The word
+  "seed"/"seed workspace" is internal only and must not appear in the UI. The end-user term for a
+  publishing workspace is **Brand**.
+- **UI language.** Internal domain terms ("Persisted MVP Spine", "Publishing Intent", "Provider
+  State", "Mock Provider") must not be surfaced as primary UI copy. The calendar surface is
+  labeled **"Publishing calendar."** Schedule/status use plain words. Simulation controls are
+  hidden behind a dev/test mode by default.
+- **Social posting vs. authentication.** For the review pass, social posting (LinkedIn via Buffer,
+  Reddit via Zernio) is **simulated**, but **authentication/connection to the real social accounts
+  must be validated** as part of this pass (read-only account/health checks against live Buffer
+  and Zernio). Corvo Blog publishing via GitHub PR remains real.
+- **Blog images.** Corvo Blog hero images support **both upload and URL** as authorable per-post
+  fields; no hardcoded placeholder image.
+- **Scope deferred to post-MVP.** The workflow/kanban board and voice packs are **out of scope**
+  for the reviewable-parity pass.
+- **Real data.** The user's actual v1 ideas are imported into v2 so evaluation uses real content,
+  not seeds.
+- **Definition of reviewable.** A written evaluation script runs end-to-end on
+  `resonate.corvolabs.com/v2` (capture idea → generate/edit draft → schedule → Blog PR real /
+  social validated+simulated → see on calendar → delete) with zero jargon, zero crashes, and full
+  persistence.
+
 ## Core Scope
 
 ### Resonate v1

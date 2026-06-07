@@ -726,3 +726,52 @@ export async function updatePrFrontmatter(params: {
   }
   return { ok: true, filePath: mdxFile.path };
 }
+
+export type BlogPrStatus = "open" | "merged" | "closed" | "draft";
+
+export async function fetchBlogPrStatus(prUrl: string): Promise<{
+  prNumber: number | null;
+  prStatus: BlogPrStatus;
+  prUrl: string;
+}> {
+  if (!GITHUB_TOKEN) throw new Error("Missing required environment variable: GITHUB_TOKEN");
+  const pullNumber = parsePullNumber(prUrl);
+  if (pullNumber === null) {
+    throw new Error("Could not parse PR number from URL.");
+  }
+
+  const headers = githubHeaders();
+  const prRes = await fetch(
+    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/pulls/${pullNumber}`,
+    { headers }
+  );
+  if (prRes.status === 404) {
+    throw new Error("Pull request not found.");
+  }
+  if (!prRes.ok) {
+    throw new Error(`GitHub PR fetch failed: ${prRes.status}`);
+  }
+
+  const prData = (await prRes.json()) as {
+    number?: number;
+    state?: string;
+    merged?: boolean;
+    draft?: boolean;
+    html_url?: string;
+  };
+
+  let prStatus: BlogPrStatus = "open";
+  if (prData.draft) {
+    prStatus = "draft";
+  } else if (prData.merged) {
+    prStatus = "merged";
+  } else if (prData.state === "closed") {
+    prStatus = "closed";
+  }
+
+  return {
+    prNumber: prData.number ?? pullNumber,
+    prStatus,
+    prUrl: prData.html_url ?? prUrl,
+  };
+}

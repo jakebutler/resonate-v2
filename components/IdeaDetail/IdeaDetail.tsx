@@ -8,8 +8,8 @@ import { normalizeIdeaSourceUrl, sanitizeIdeaTags } from "@/lib/ideas";
 import { Archive, Link2, ListTodo, Sparkles } from "lucide-react";
 
 type IdeaStatus = "inbox" | "reviewing" | "ready" | "used" | "archived";
-type V2BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
-type V2AnyChannelId =
+type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
+type AnyChannelId =
   | "linkedin"
   | "x"
   | "youtube"
@@ -17,13 +17,13 @@ type V2AnyChannelId =
   | "tiktok"
   | "reddit"
   | "corvo-blog";
-type V2SpawnChannelId = "linkedin" | "reddit" | "corvo-blog";
+type SpawnChannelId = "linkedin" | "reddit" | "corvo-blog";
 
 interface IdeaDetailProps {
   open: boolean;
   idea: {
     _id: Id<"capturedIdeas">;
-    brandId?: V2BrandId;
+    brandId?: BrandId;
     status: IdeaStatus;
     tags: string[];
     sourceUrl?: string;
@@ -34,10 +34,10 @@ interface IdeaDetailProps {
       content: string;
       createdAt: number;
     }[];
-    v2PostLinks?: {
+    postLinks?: {
       link: {
-        _id: Id<"capturedIdeaV2PostLinks">;
-        channelId: V2AnyChannelId;
+        _id: Id<"capturedIdeaPostLinks">;
+        channelId: AnyChannelId;
         createdAt: number;
       };
       post: {
@@ -61,7 +61,7 @@ interface IdeaDetailProps {
   onArchive?: () => Promise<void> | void;
   onCreateBlogPost: () => void;
   onCreateLinkedInPost: () => void;
-  onSpawnV2Posts?: (channelIds: V2SpawnChannelId[]) => Promise<void> | void;
+  onSpawnPosts?: (channelIds: SpawnChannelId[]) => Promise<void> | void;
 }
 
 function formatDate(timestamp: number) {
@@ -83,7 +83,7 @@ export function IdeaDetail({
   onArchive,
   onCreateBlogPost,
   onCreateLinkedInPost,
-  onSpawnV2Posts,
+  onSpawnPosts,
 }: IdeaDetailProps) {
   const [status, setStatus] = useState<IdeaStatus>("inbox");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -124,11 +124,11 @@ export function IdeaDetail({
     }
   };
 
-  const handleSpawnV2Posts = async (channelIds: V2SpawnChannelId[]) => {
-    if (!idea || !onSpawnV2Posts) return;
+  const handleSpawnPosts = async (channelIds: SpawnChannelId[]) => {
+    if (!idea || !onSpawnPosts) return;
     setSaving(true);
     try {
-      await onSpawnV2Posts(channelIds);
+      await onSpawnPosts(channelIds);
     } finally {
       setSaving(false);
     }
@@ -208,17 +208,17 @@ export function IdeaDetail({
             </div>
           </section>
 
-          {onSpawnV2Posts && (
+          {onSpawnPosts && (
             <section className="rounded-2xl border border-[#15616d]/15 bg-white p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[#001524]">
                 <Sparkles size={15} />
-                Spawn v2 drafts
+                Spawn drafts
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => void handleSpawnV2Posts(["linkedin"])}
+                  onClick={() => void handleSpawnPosts(["linkedin"])}
                   disabled={saving}
                 >
                   LinkedIn
@@ -226,7 +226,7 @@ export function IdeaDetail({
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => void handleSpawnV2Posts(["reddit"])}
+                  onClick={() => void handleSpawnPosts(["reddit"])}
                   disabled={saving}
                 >
                   Reddit
@@ -234,7 +234,7 @@ export function IdeaDetail({
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => void handleSpawnV2Posts(["corvo-blog"])}
+                  onClick={() => void handleSpawnPosts(["corvo-blog"])}
                   disabled={saving}
                 >
                   Corvo Blog
@@ -242,7 +242,7 @@ export function IdeaDetail({
                 <Button
                   type="button"
                   variant="primary"
-                  onClick={() => void handleSpawnV2Posts(["linkedin", "reddit", "corvo-blog"])}
+                  onClick={() => void handleSpawnPosts(["linkedin", "reddit", "corvo-blog"])}
                   disabled={saving}
                 >
                   All MVP posts
@@ -251,14 +251,14 @@ export function IdeaDetail({
             </section>
           )}
 
-          {idea.v2PostLinks && idea.v2PostLinks.length > 0 && (
+          {idea.postLinks && idea.postLinks.length > 0 && (
             <section>
               <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[#001524]">
                 <ListTodo size={15} />
-                Spawned v2 posts
+                Spawned posts
               </div>
               <div className="space-y-2">
-                {idea.v2PostLinks.map(({ link, post }) => (
+                {idea.postLinks.map(({ link, post }) => (
                   <div
                     key={link._id}
                     className="rounded-2xl border border-gray-100 bg-white p-4"

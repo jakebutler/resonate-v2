@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from "@testing-library/react"
 import { useQuery } from "convex/react"
 import Dashboard from "@/app/page"
 import EditorPage from "@/app/editor/[id]/page"
-import V2Page from "@/app/v2/page"
+import CalendarPage from "@/app/calendar/page"
 import { EditorPageRouter } from "@/components/EditorPageRouter"
 
 const mockPush = vi.fn()
@@ -14,7 +14,7 @@ vi.mock("convex/react", () => ({ useQuery: vi.fn(), useMutation: vi.fn() }))
 vi.mock("@/convex/_generated/api", () => ({
   api: {
     posts: { list: "posts:list" },
-    v2Publishing: { getPostById: "v2Publishing:getPostById" },
+    publishing: { getPostById: "publishing:getPostById" },
   },
 }))
 
@@ -193,7 +193,7 @@ describe("EditorPageRouter", () => {
   it("redirects v2 posts to the v2 composer", () => {
     vi.mocked(useQuery).mockReturnValue({ _id: "post_1" } as never)
     render(<EditorPageRouter postId="post_1" />)
-    expect(mockReplace).toHaveBeenCalledWith("/v2?postId=post_1")
+    expect(mockReplace).toHaveBeenCalledWith("/calendar?postId=post_1")
     expect(screen.getByText("Opening v2 composer…")).toBeInTheDocument()
   })
 
@@ -206,7 +206,7 @@ describe("EditorPageRouter", () => {
 
 describe("V2 page", () => {
   it("passes postId search params into the publishing panel", async () => {
-    const page = await V2Page({ searchParams: Promise.resolve({ postId: "post_9" }) })
+    const page = await CalendarPage({ searchParams: Promise.resolve({ postId: "post_9" }) })
     render(page)
     expect(screen.getByTestId("persisted-panel")).toHaveTextContent("post_9")
   })

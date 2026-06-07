@@ -13,11 +13,11 @@ type EditorPageRouterProps = {
 
 export function EditorPageRouter({ postId, initialDate }: EditorPageRouterProps) {
   const router = useRouter();
-  const v2Post = useQuery(api.v2Publishing.getPostById, { postId });
+  const v2Post = useQuery(api.publishing.getPostById, { postId });
 
   useEffect(() => {
     if (v2Post) {
-      router.replace(`/v2?postId=${postId}`);
+      router.replace(`/calendar?postId=${postId}`);
     }
   }, [postId, router, v2Post]);
 

@@ -26,7 +26,7 @@ export default function IdeasRoute() {
           </div>
           <div className="flex items-center gap-4">
             <Link
-              href="/v2"
+              href="/calendar"
               className="flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-[#001524]"
             >
               v2 workspace

@@ -52,11 +52,11 @@ function BypassDashboardShell() {
         </div>
         <div className="flex items-center gap-4">
           <Link
-            href="/v2"
+            href="/calendar"
             className="flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-[#001524]"
           >
             <Layers3 size={15} />
-            Open v2
+            Open workspace
           </Link>
           <HeaderUserControl />
         </div>
@@ -70,15 +70,15 @@ function BypassDashboardShell() {
         </h1>
         <p className="max-w-2xl text-base leading-7 text-gray-600">
           The production app keeps its Clerk and Convex-backed dashboard. This local E2E bypass
-          shell lets the side-by-side build prove that legacy Resonate and the new v2 surface both
+          shell lets the side-by-side build prove that legacy Resonate and the new workspace both
           remain reachable without requiring live auth credentials.
         </p>
         <div className="flex flex-wrap gap-3 pt-2">
           <Link
-            href="/v2"
+            href="/calendar"
             className="rounded-[18px] bg-[#001524] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#122b3b]"
           >
-            Open v2 workspace
+            Open workspace workspace
           </Link>
           <Link
             href="/ideas"

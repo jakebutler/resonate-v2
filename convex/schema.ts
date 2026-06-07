@@ -173,6 +173,30 @@ export default defineSchema({
     sourceResearchBriefId: v.optional(v.string()),
     prUrl: v.optional(v.string()),
     branchName: v.optional(v.string()),
+    blogExcerpt: v.optional(v.string()),
+    blogAuthor: v.optional(v.string()),
+    blogCategory: v.optional(v.string()),
+    blogTags: v.optional(v.array(v.string())),
+    blogSlug: v.optional(v.string()),
+    heroImageUrl: v.optional(v.string()),
+    heroImageStorageId: v.optional(v.id("_storage")),
+    blogPrNumber: v.optional(v.number()),
+    blogPrStatus: v.optional(
+      v.union(
+        v.literal("open"),
+        v.literal("merged"),
+        v.literal("closed"),
+        v.literal("draft")
+      )
+    ),
+    blogPrUpdatedAt: v.optional(v.number()),
+    variantReviewStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("accepted"),
+        v.literal("rejected")
+      )
+    ),
     contentFingerprint: v.string(),
     platformSettings: v.optional(v2PlatformSettings),
     createdAt: v.number(),
@@ -214,6 +238,7 @@ export default defineSchema({
     prUrl: v.optional(v.string()),
     lastAttemptId: v.optional(v.id("v2PublishAttempts")),
     lastResponseSummary: v.optional(v.string()),
+    simulated: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -453,6 +478,17 @@ export default defineSchema({
   })
     .index("by_idea", ["ideaId"])
     .index("by_post", ["postId"])
+    .index("by_user", ["userId"]),
+
+  v2MigrationRecords: defineTable({
+    userId: v.string(),
+    legacyTable: v.string(),
+    legacyId: v.string(),
+    targetTable: v.string(),
+    targetId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_legacy", ["legacyTable", "legacyId"])
     .index("by_user", ["userId"]),
 
   capturedIdeaV2PostLinks: defineTable({

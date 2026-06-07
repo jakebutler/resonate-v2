@@ -32,7 +32,7 @@ export const syncFrontmatterAfterReschedule = internalAction({
     });
 
     if (result.ok) {
-      await ctx.runMutation(internal.v2Publishing.recordGithubPrFrontmatterSynced, {
+      await ctx.runMutation(internal.publishing.recordGithubPrFrontmatterSynced, {
         postId: args.postId,
         userId: args.userId,
         brandId: args.brandId,
@@ -45,7 +45,7 @@ export const syncFrontmatterAfterReschedule = internalAction({
       return { synced: true as const };
     }
 
-    await ctx.runMutation(internal.v2Publishing.markGithubPrRescheduleNeedsReview, {
+    await ctx.runMutation(internal.publishing.markGithubPrRescheduleNeedsReview, {
       postId: args.postId,
       userId: args.userId,
       brandId: args.brandId,

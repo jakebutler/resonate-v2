@@ -1,10 +1,10 @@
 import { expect, it } from "vitest";
 import type {
-  V2ProviderAdapter,
-  V2ProviderSubmission,
-} from "@/lib/v2ProviderAdapters";
+  ProviderAdapter,
+  ProviderSubmission,
+} from "@/lib/providerAdapters";
 
-const baseSubmission: V2ProviderSubmission = {
+const baseSubmission: ProviderSubmission = {
   postId: "post_contract_1",
   brandId: "corvo",
   channelId: "linkedin",
@@ -17,7 +17,7 @@ const baseSubmission: V2ProviderSubmission = {
 };
 
 export type ProviderAdapterContractOptions = {
-  submission?: V2ProviderSubmission;
+  submission?: ProviderSubmission;
   approvedContext: (overrides?: Record<string, string | undefined>) => {
     env: Record<string, string | undefined>;
     liveProviderValidationApproved?: boolean;
@@ -33,7 +33,7 @@ export type ProviderAdapterContractOptions = {
 };
 
 export function runProviderAdapterContractSuite(
-  adapter: V2ProviderAdapter,
+  adapter: ProviderAdapter,
   options: ProviderAdapterContractOptions
 ) {
   const submission = options.submission ?? baseSubmission;

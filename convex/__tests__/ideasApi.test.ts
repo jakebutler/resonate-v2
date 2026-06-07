@@ -18,7 +18,7 @@ describe("generated ideas API", () => {
       "utf8"
     );
 
-    expect(generated).toContain('import type * as v2Publishing from "../v2Publishing.js";');
+    expect(generated).toContain('import type * as publishing from "../publishing.js";');
     expect(generated).toContain('import type * as githubPrSync from "../githubPrSync.js";');
   });
 
@@ -28,20 +28,21 @@ describe("generated ideas API", () => {
       "utf8"
     );
 
-    expect(generated).toContain('import type * as v2Research from "../v2Research.js";');
+    expect(generated).toContain('import type * as research from "../research.js";');
   });
 
   it("includes v2 idea spawning and link persistence in the generated surface", () => {
     const ideas = readFileSync(join(process.cwd(), "convex/ideas.ts"), "utf8");
     const schema = readFileSync(join(process.cwd(), "convex/schema.ts"), "utf8");
 
-    expect(ideas).toContain("spawnV2Posts");
+    expect(ideas).toContain("spawnPosts");
+    expect(schema).toContain("capturedIdeaPostLinks");
     expect(schema).toContain("capturedIdeaV2PostLinks");
   });
 
   it("keeps v2 post and calendar list queries scoped to current brand membership", () => {
     const publishing = readFileSync(
-      join(process.cwd(), "convex/v2Publishing.ts"),
+      join(process.cwd(), "convex/publishing.ts"),
       "utf8"
     );
 
@@ -51,7 +52,7 @@ describe("generated ideas API", () => {
   });
 
   it("schedules GitHub PR frontmatter sync after reschedule when a PR exists", () => {
-    const publishing = readFileSync(join(process.cwd(), "convex/v2Publishing.ts"), "utf8");
+    const publishing = readFileSync(join(process.cwd(), "convex/publishing.ts"), "utf8");
     expect(publishing).toContain("internal.githubPrSync.syncFrontmatterAfterReschedule");
     expect(publishing).toContain('providerState?.providerId === "github-pr"');
     expect(publishing).toContain("markGithubPrRescheduleNeedsReview");

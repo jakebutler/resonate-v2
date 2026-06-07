@@ -19,13 +19,13 @@ vi.mock("@/convex/_generated/api", () => ({
       appendEntry: "ideas:appendEntry",
       updateMeta: "ideas:updateMeta",
       archive: "ideas:archive",
-      spawnV2Posts: "ideas:spawnV2Posts",
+      spawnPosts: "ideas:spawnPosts",
     },
     posts: {
       createFromIdea: "posts:createFromIdea",
     },
-    v2Publishing: {
-      listBrands: "v2Publishing:listBrands",
+    publishing: {
+      listBrands: "publishing:listBrands",
     },
   },
 }));
@@ -43,7 +43,7 @@ const appendEntryMock = vi.fn().mockResolvedValue("entry_2");
 const updateMetaMock = vi.fn().mockResolvedValue(undefined);
 const archiveMock = vi.fn().mockResolvedValue(undefined);
 const createPostFromIdeaMock = vi.fn().mockResolvedValue("legacy_post_1");
-const spawnV2PostsMock = vi.fn().mockResolvedValue([
+const spawnPostsMock = vi.fn().mockResolvedValue([
   { postId: "v2_post_1", intentId: "intent_1" },
 ]);
 
@@ -70,8 +70,8 @@ const ideaDetail = {
       createdAt: 1812758400000,
     },
   ],
+  legacyPostLinks: [],
   postLinks: [],
-  v2PostLinks: [],
 };
 
 describe("IdeasPage v2 idea flow", () => {
@@ -85,7 +85,7 @@ describe("IdeasPage v2 idea flow", () => {
       if (reference === "ideas:list") return [ideaSummary];
       if (reference === "ideas:getById" && args !== "skip") return ideaDetail;
       if (reference === "ideas:findByNormalizedSourceUrl") return [];
-      if (reference === "v2Publishing:listBrands") {
+      if (reference === "publishing:listBrands") {
         return [
           { brandId: "personal", name: "Personal" },
           { brandId: "corvo", name: "Corvo Labs" },
@@ -105,8 +105,8 @@ describe("IdeasPage v2 idea flow", () => {
           return updateMetaMock;
         case "ideas:archive":
           return archiveMock;
-        case "ideas:spawnV2Posts":
-          return spawnV2PostsMock;
+        case "ideas:spawnPosts":
+          return spawnPostsMock;
         case "posts:createFromIdea":
           return createPostFromIdeaMock;
         default:
@@ -150,7 +150,7 @@ describe("IdeasPage v2 idea flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "All MVP posts" }));
 
     await waitFor(() => {
-      expect(spawnV2PostsMock).toHaveBeenCalledWith({
+      expect(spawnPostsMock).toHaveBeenCalledWith({
         ideaId: "idea_1",
         brandId: "corvo",
         channelIds: ["linkedin", "reddit", "corvo-blog"],

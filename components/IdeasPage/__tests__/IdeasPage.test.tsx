@@ -20,13 +20,13 @@ vi.mock("@/convex/_generated/api", () => ({
       appendEntry: "ideas:appendEntry",
       updateMeta: "ideas:updateMeta",
       archive: "ideas:archive",
-      spawnV2Posts: "ideas:spawnV2Posts",
+      spawnPosts: "ideas:spawnPosts",
     },
     posts: {
       createFromIdea: "posts:createFromIdea",
     },
-    v2Publishing: {
-      listBrands: "v2Publishing:listBrands",
+    publishing: {
+      listBrands: "publishing:listBrands",
     },
   },
 }));
@@ -53,7 +53,7 @@ describe("IdeasPage", () => {
       if (reference === "ideas:list") return [];
       if (reference === "ideas:getById") return undefined;
       if (reference === "ideas:findByNormalizedSourceUrl") return duplicateMatches;
-      if (reference === "v2Publishing:listBrands") {
+      if (reference === "publishing:listBrands") {
         return [
           { brandId: "personal", name: "Personal" },
           { brandId: "corvo", name: "Corvo Labs" },

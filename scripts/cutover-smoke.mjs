@@ -232,7 +232,7 @@ const ISSUE_19_ACS = [
     id: "19.4",
     text: "Smoke test covers rescheduling social and blog Posts.",
     automatedStatus: "automated-pass",
-    evidence: "Covered by test:ci (lib/__tests__/v2.test.ts, PersistedPublishingPanel reschedule tests, convex/v2Publishing reschedule).",
+    evidence: "Covered by test:ci (lib/__tests__/domain.test.ts, PersistedPublishingPanel reschedule tests, convex/publishing reschedule).",
   },
   {
     id: "19.5",
@@ -419,10 +419,10 @@ async function main() {
   await runTestCi();
   const dryRunPlan = await runSampleMigrationDryRun();
   await httpPing("/", "/");
-  await httpPing("/v2", "/v2");
+  await httpPing("/calendar", "/calendar");
 
   const { bufferProviderAdapter, zernioProviderAdapter } = await import(
-    "../lib/v2ProviderAdapters.ts"
+    "../lib/providerAdapters.ts"
   );
   await validateProvider("Buffer", bufferProviderAdapter, "BUFFER_API_KEY");
   await validateProvider("Zernio", zernioProviderAdapter, "ZERNIO_API_KEY");

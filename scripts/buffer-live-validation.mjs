@@ -51,7 +51,7 @@ async function main() {
   }
 
   const { bufferProviderAdapter, scheduleToUtcIso } = await import(
-    "../lib/v2ProviderAdapters.ts"
+    "../lib/providerAdapters.ts"
   );
 
   const context = {

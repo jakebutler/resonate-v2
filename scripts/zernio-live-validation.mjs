@@ -54,7 +54,7 @@ async function main() {
     zernioProviderAdapter,
     scheduleToUtcIso,
     ZERNIO_VALIDATION_SUBREDDIT,
-  } = await import("../lib/v2ProviderAdapters.ts");
+  } = await import("../lib/providerAdapters.ts");
 
   const context = {
     env: {

@@ -1,4 +1,4 @@
-import type { V2BrandId, V2ChannelId, V2PostStatus } from "@/lib/v2";
+import type { BrandId, ChannelId, PostStatus } from "@/lib/domain";
 
 type LegacyPostType = "blog" | "linkedin";
 type LegacyPostStatus = "draft" | "scheduled" | "published";
@@ -95,11 +95,11 @@ export type LegacyConvexExport = {
 
 export type V2MigrationPostCandidate = {
   legacyPostId?: string;
-  brandId: V2BrandId;
-  channelId: V2ChannelId;
+  brandId: BrandId;
+  channelId: ChannelId;
   title: string;
   content: string;
-  status: V2PostStatus;
+  status: PostStatus;
   approvalState: "unapproved" | "approved";
   scheduledDate?: string;
   scheduledTime?: string;
@@ -116,7 +116,7 @@ export type V2MigrationPostCandidate = {
 
 export type V2MigrationIdeaCandidate = {
   legacyIdeaId?: string;
-  brandId: V2BrandId;
+  brandId: BrandId;
   title?: string;
   text: string;
   tags: string[];
@@ -172,7 +172,7 @@ export type V2MigrationDryRunPlan = {
 
 export function buildV2MigrationDryRunPlan(
   input: LegacyConvexExport,
-  options: { defaultBrandId?: V2BrandId; timezone?: string; now?: string } = {}
+  options: { defaultBrandId?: BrandId; timezone?: string; now?: string } = {}
 ): V2MigrationDryRunPlan {
   const defaultBrandId = options.defaultBrandId ?? "corvo";
   const timezone = options.timezone ?? "America/Los_Angeles";
@@ -345,7 +345,7 @@ export function buildV2MigrationDryRunPlan(
 
 function mapLegacyPost(
   post: LegacyPostExport,
-  brandId: V2BrandId,
+  brandId: BrandId,
   timezone: string,
   links: {
     capturedLinks: LegacyCapturedIdeaPostLinkExport[];
@@ -359,7 +359,7 @@ function mapLegacyPost(
     throw new Error("missing content");
   }
 
-  const channelId: V2ChannelId = post.type === "blog" ? "corvo-blog" : "linkedin";
+  const channelId: ChannelId = post.type === "blog" ? "corvo-blog" : "linkedin";
   return {
     legacyPostId: post._id,
     brandId,
@@ -386,7 +386,7 @@ function mapCapturedIdea(
   idea: LegacyCapturedIdeaExport,
   entries: LegacyCapturedIdeaEntryExport[],
   postLinks: LegacyCapturedIdeaPostLinkExport[],
-  brandId: V2BrandId
+  brandId: BrandId
 ): V2MigrationIdeaCandidate {
   const text = entries
     .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
@@ -416,7 +416,7 @@ function mapCapturedIdea(
 function mergeWorkflowIdeaIntoCapturedCandidate(
   idea: LegacyWorkflowIdeaExport,
   drafts: LegacyWorkflowDraftExport[],
-  brandId: V2BrandId
+  brandId: BrandId
 ): V2MigrationIdeaCandidate {
   const body = [idea.text, idea.researchObjective, idea.researchNotes]
     .map((value) => value?.trim())
@@ -441,7 +441,7 @@ function mergeWorkflowIdeaIntoCapturedCandidate(
   };
 }
 
-function mapLegacyStatus(status: LegacyPostStatus): V2PostStatus {
+function mapLegacyStatus(status: LegacyPostStatus): PostStatus {
   if (status === "published") return "published";
   if (status === "scheduled") return "scheduled";
   return "draft";

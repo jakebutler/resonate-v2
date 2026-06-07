@@ -12,8 +12,8 @@ import { BlogPostEditor } from "@/components/BlogPostEditor/BlogPostEditor";
 import { LinkedInPostEditor } from "@/components/LinkedInPostEditor/LinkedInPostEditor";
 
 type IdeaStatus = "all" | "inbox" | "reviewing" | "ready" | "used" | "archived";
-type V2BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
-type V2ChannelId = "linkedin" | "reddit" | "corvo-blog";
+type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
+type ChannelId = "linkedin" | "reddit" | "corvo-blog";
 
 const STATUS_OPTIONS: IdeaStatus[] = [
   "all",
@@ -30,7 +30,7 @@ export function IdeasPage() {
   const [note, setNote] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [tagsInput, setTagsInput] = useState("");
-  const [brandId, setBrandId] = useState<V2BrandId>("corvo");
+  const [brandId, setBrandId] = useState<BrandId>("corvo");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedIdeaId, setSelectedIdeaId] = useState<Id<"capturedIdeas"> | null>(null);
@@ -57,7 +57,7 @@ export function IdeasPage() {
       : "skip"
   );
   const brands = useQuery(
-    api.v2Publishing.listBrands,
+    api.publishing.listBrands,
     isConvexAuthenticated ? {} : "skip"
   );
   const selectedIdea = useQuery(
@@ -75,7 +75,7 @@ export function IdeasPage() {
   const updateIdeaMeta = useMutation(api.ideas.updateMeta);
   const archiveIdea = useMutation(api.ideas.archive);
   const createPostFromIdea = useMutation(api.posts.createFromIdea);
-  const spawnV2Posts = useMutation(api.ideas.spawnV2Posts);
+  const spawnPosts = useMutation(api.ideas.spawnPosts);
 
   const resetComposer = () => {
     setNote("");
@@ -195,12 +195,12 @@ export function IdeasPage() {
     }
   };
 
-  const handleSpawnV2Posts = async (channelIds: V2ChannelId[]) => {
+  const handleSpawnPosts = async (channelIds: ChannelId[]) => {
     if (!selectedIdeaId) return;
 
-    await spawnV2Posts({
+    await spawnPosts({
       ideaId: selectedIdeaId,
-      brandId: (selectedIdea?.brandId ?? brandId) as V2BrandId,
+      brandId: (selectedIdea?.brandId ?? brandId) as BrandId,
       channelIds,
     });
   };
@@ -286,7 +286,7 @@ export function IdeasPage() {
               <select
                 id="idea-brand"
                 value={brandId}
-                onChange={(event) => setBrandId(event.target.value as V2BrandId)}
+                onChange={(event) => setBrandId(event.target.value as BrandId)}
                 className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-[#001524] outline-none transition focus:border-[#15616d] focus:ring-2 focus:ring-[#15616d]/20"
               >
                 {brandOptions.map((brand) => (
@@ -507,7 +507,7 @@ export function IdeasPage() {
         onArchive={handleArchiveIdea}
         onCreateBlogPost={() => void handleCreateDraft("blog")}
         onCreateLinkedInPost={() => void handleCreateDraft("linkedin")}
-        onSpawnV2Posts={(channelIds) => void handleSpawnV2Posts(channelIds)}
+        onSpawnPosts={(channelIds) => void handleSpawnPosts(channelIds)}
       />
 
       <BlogPostEditor

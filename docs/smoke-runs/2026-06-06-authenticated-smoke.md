@@ -41,7 +41,8 @@
 
 ## Known follow-ups (non-blocking for C.3)
 
-- **Calendar UI crash:** `/v2` intermittently throws a client-side exception ~4–6s after load when Convex queries resolve; auth + API paths work. Track as post-cutover polish.
+- **Calendar UI crash:** ✅ Addressed in `lib/calendarDates.ts` + `PublishingPanelErrorBoundary` (ISO date normalization, hashtag coercion). Deploy to production, then re-run steps 4–7 in the browser UI (not only Convex HTTP).
+- **Smoke URL for C.3:** Use **`https://resonate.corvolabs.com/v2`**, not `resonate-v2-delta.vercel.app` (Clerk origin mismatch on delta).
 - **Vercel project domain assignment:** Alias cutover complete; `resonate.corvolabs.com` still listed under `resonate` project in `vercel domains inspect` — remove from v1 project settings when convenient.
 - **Live Buffer/Zernio submission scripts:** `scripts/buffer-live-validation.mjs` / `scripts/zernio-live-validation.mjs` require `*_LIVE_SUBMISSION=approved` in env (gated by design).
 

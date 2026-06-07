@@ -169,28 +169,28 @@ export const getById = query({
       .query("capturedIdeaEntries")
       .withIndex("by_idea", (q) => q.eq("ideaId", args.id))
       .collect();
-    const postLinks = await ctx.db
+    const legacyPostLinks = await ctx.db
       .query("capturedIdeaPostLinks")
       .withIndex("by_idea", (q) => q.eq("ideaId", args.id))
       .collect();
-    const v2PostLinks = await ctx.db
+    const workspaceLinks = await ctx.db
       .query("capturedIdeaV2PostLinks")
       .withIndex("by_idea", (q) => q.eq("ideaId", args.id))
       .collect();
-    const v2Posts = await Promise.all(
-      v2PostLinks.map(async (link) => {
-        const post = await ctx.db.get(link.postId);
-        return post ? { link, post } : null;
-      })
-    );
+    const postLinks = (
+      await Promise.all(
+        workspaceLinks.map(async (link) => {
+          const post = await ctx.db.get(link.postId);
+          return post ? { link, post } : null;
+        })
+      )
+    ).filter((item): item is NonNullable<typeof item> => item !== null);
 
     return {
       ...idea,
       entries: entries.sort((a, b) => a.createdAt - b.createdAt),
+      legacyPostLinks,
       postLinks,
-      v2PostLinks: v2Posts.filter(
-        (item): item is NonNullable<typeof item> => item !== null
-      ),
     };
   },
 });
@@ -350,7 +350,7 @@ export const updateMeta = mutation({
   },
 });
 
-export type SpawnV2PostsArgs = {
+export type SpawnPostsArgs = {
   ideaId: Id<"capturedIdeas">;
   brandId: BrandId;
   channelIds: ChannelId[];
@@ -359,7 +359,7 @@ export type SpawnV2PostsArgs = {
   timezone?: string;
 };
 
-export async function spawnV2PostsHandler(ctx: MutationCtx, args: SpawnV2PostsArgs) {
+export async function spawnPostsHandler(ctx: MutationCtx, args: SpawnPostsArgs) {
   const userId = await requireUserId(ctx);
   const idea = await requireOwnedIdea(ctx, args.ideaId, userId);
   await requireBrandAccess(ctx, userId, args.brandId);
@@ -470,7 +470,7 @@ export async function spawnV2PostsHandler(ctx: MutationCtx, args: SpawnV2PostsAr
   return created;
 }
 
-export const spawnV2Posts = mutation({
+export const spawnPosts = mutation({
   args: {
     ideaId: v.id("capturedIdeas"),
     brandId: brandIdValidator,
@@ -479,7 +479,7 @@ export const spawnV2Posts = mutation({
     scheduledTime: v.optional(v.string()),
     timezone: v.optional(v.string()),
   },
-  handler: spawnV2PostsHandler,
+  handler: spawnPostsHandler,
 });
 
 export const archive = mutation({
@@ -505,11 +505,11 @@ export const remove = mutation({
       .query("capturedIdeaPostLinks")
       .withIndex("by_idea", (q) => q.eq("ideaId", args.id))
       .collect();
-    const v2Links = await ctx.db
+    const workspaceLinks = await ctx.db
       .query("capturedIdeaV2PostLinks")
       .withIndex("by_idea", (q) => q.eq("ideaId", args.id))
       .collect();
-    if (links.length > 0 || v2Links.length > 0) {
+    if (links.length > 0 || workspaceLinks.length > 0) {
       throw new Error("Ideas with linked posts must be archived instead of deleted");
     }
 

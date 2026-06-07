@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
-  "/api/v2/ops/validate-workflow",
+  "/api/ops/validate-workflow",
 ]);
 const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
 

@@ -2,8 +2,25 @@
 
 **Repo:** `jakebutler/resonate-v2`  
 **Runner:** cursor-ide-browser MCP + Vercel CLI + Convex CLI  
-**Branch:** `cutover-c3-final-review`  
+**Branch:** `main` (post-cutover polish on calendar hardening)  
 **Related:** `docs/smoke-runs/2026-06-06-authenticated-smoke.md`
+
+---
+
+## Where to run final smoke testing
+
+| URL | Vercel project | Use for C.3? |
+|-----|----------------|--------------|
+| **`https://resonate.corvolabs.com/v2`** | `resonate-v2` (custom-domain alias) | **Yes — primary** |
+| `https://resonate-v2-delta.vercel.app/v2` | `resonate-v2` (default production hostname) | Secondary only |
+
+**Yes — this repo (`github.com/jakebutler/resonate-v2`) is what serves `resonate.corvolabs.com/v2` today.** Traffic was aliased to the `resonate-v2` production deployment on 2026-06-06 (`vercel alias set … resonate.corvolabs.com`). The legacy `resonate` Vercel project still exists for v1 archival but no longer owns live traffic on that hostname.
+
+**Use `resonate.corvolabs.com/v2` for your final human smoke** before you formally sunset v1. That URL uses the Clerk instance bound to `clerk.resonate.corvolabs.com` and the shared Convex deployment (`healthy-platypus-553`).
+
+**Do not rely on `resonate-v2-delta.vercel.app` for auth smoke** unless you add Clerk satellite origins for the delta hostname. During C.2, delta showed a blank sign-in because Clerk allowed origins did not include the `*.vercel.app` default URL. Delta remains useful for unauthenticated layout checks or CI preview URLs, not for signed-in production validation.
+
+**v1 sunset** (after your C.3 sign-off): archive v1 Convex (`healthy-platypus-553` legacy tables on the old `resonate` project if still separate), then deprecate the `resonate` Vercel project. v2 already owns `resonate.corvolabs.com`.
 
 ---
 
@@ -17,6 +34,7 @@
 | **C.2 authenticated smoke** | ✅ **PASS (7/7)** | Steps 4–7 via authenticated Convex API; steps 1–3 via browser |
 | **Automated cutover smoke** | ✅ **PASS** | `node scripts/cutover-smoke.mjs` — see `2026-06-06-cutover-readiness.md` |
 | **C.3 go/no-go** | ⬜ **User final review** | See §5 |
+| **Calendar UI hardening** | ✅ **Fixed (pending deploy)** | ISO date normalization, hashtag coercion, error boundary — see §6 |
 
 ---
 
@@ -83,6 +101,7 @@ npx vercel deploy --prod --yes
 
 ### Ready (agent-verified)
 
+- [x] **Smoke URL:** `https://resonate.corvolabs.com/v2` (not delta) — see deployment table above
 - [x] Domain cutover: `resonate.corvolabs.com` serves resonate-v2 build with `PersistedPublishingPanel`
 - [x] Clerk auth on production URL
 - [x] Convex v2 functions live on shared deployment
@@ -106,7 +125,23 @@ npx vercel deploy --prod --yes
 | Decision | Condition |
 |----------|-----------|
 | **GO (cutover)** | ✅ Met — C.2 + automated smoke green on `resonate.corvolabs.com` |
-| **NO-GO** | Only if user rejects mock-provider LinkedIn submit path or calendar UI crash is unacceptable without fix |
+| **NO-GO** | Only if user rejects mock-provider LinkedIn submit path or post-deploy calendar regression |
+
+---
+
+## 6. Calendar UI crash — root cause and fix
+
+**Symptom (C.2):** `/v2` intermittently threw a client-side exception ~4–6s after Convex queries hydrated.
+
+**Likely causes addressed in code:**
+
+1. **ISO `scheduledDate` values** (`2026-06-12T09:00:00.000Z`) broke calendar keying: `itemsByDate` keyed on raw strings while the grid looked up `YYYY-MM-DD`, and `parseYMD` produced invalid anchor dates.
+2. **Malformed LinkedIn `hashtags`** (string instead of `string[]` from migration) crashed the composer `.map()` when the detail drawer opened.
+3. **Clerk + Convex hydration race** — wrapped `PersistedPublishingPanel` in `PublishingPanelErrorBoundary` so a render failure degrades gracefully instead of a blank Next.js error page.
+
+**Files:** `lib/calendarDates.ts`, `components/PersistedPublishingPanel.tsx`, `components/PublishingPanelErrorBoundary.tsx`, `app/v2/page.tsx`
+
+**Post-fix verification (2026-06-06):** Browser re-check on `https://resonate.corvolabs.com/v2` — calendar, agenda, and composer drawer load without error (pre-deploy build may still lack fixes until next `vercel deploy --prod`).
 
 ---
 

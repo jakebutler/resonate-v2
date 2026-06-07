@@ -1,49 +1,55 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
-  CalendarClock,
   CalendarDays,
   Ban,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Database,
+  Calendar,
   Eye,
+  ExternalLink,
   FileText,
   History,
   Save,
   RotateCcw,
   Send,
-  ShieldCheck,
+  Trash2,
   X,
 } from "lucide-react";
+import { SocialConnectionsPanel } from "@/components/SocialConnectionsPanel";
+import { FilterGroup, toggleFilterSet } from "@/components/shell/FilterGroup";
+import { MainCard } from "@/components/shell/MainCard";
+import { Notice } from "@/components/shell/Notice";
+import { PageHeader } from "@/components/shell/PageHeader";
+import { SidebarCard } from "@/components/shell/SidebarCard";
+import { WorkspaceLayout } from "@/components/shell/WorkspaceLayout";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { normalizeScheduledDate, parseScheduledDate } from "@/lib/calendarDates";
 import {
-  V2_BRANDS,
-  V2_CHANNEL_LABELS,
-  V2_STATUS_LABELS,
-  type V2BrandId,
-  type V2ChannelId,
-  type V2CorvoBlogPlatformSettings,
-  type V2LinkedInPlatformSettings,
-  type V2PostStatus,
-  type V2RedditPlatformSettings,
-} from "@/lib/v2";
+  BRANDS,
+  CHANNEL_LABELS,
+  STATUS_LABELS,
+  type BrandId,
+  type ChannelId,
+  type PostStatus,
+} from "@/lib/domain";
 
 type CalendarView = "month" | "week";
 type PersistedCalendarItem = {
   post: {
     _id: Id<"v2Posts">;
-    brandId: V2BrandId;
-    channelId: V2ChannelId;
+    brandId: BrandId;
+    channelId: ChannelId;
     platformId: string;
     title: string;
     content: string;
-    status: V2PostStatus;
+    status: PostStatus;
     approvalState: string;
     scheduledDate?: string;
     scheduledTime?: string;
@@ -52,10 +58,15 @@ type PersistedCalendarItem = {
     sourceResearchBriefId?: string;
     prUrl?: string;
     branchName?: string;
-    platformSettings?:
-      | V2LinkedInPlatformSettings
-      | V2RedditPlatformSettings
-      | V2CorvoBlogPlatformSettings;
+    blogExcerpt?: string;
+    blogAuthor?: string;
+    blogCategory?: string;
+    blogTags?: string[];
+    blogSlug?: string;
+    heroImageUrl?: string;
+    heroImageStorageId?: Id<"_storage">;
+    blogPrNumber?: number;
+    blogPrStatus?: "open" | "merged" | "closed" | "draft";
   };
   intent?: {
     _id?: Id<"v2PublishingIntents">;
@@ -71,6 +82,7 @@ type PersistedCalendarItem = {
     providerPostId?: string;
     prUrl?: string;
     lastResponseSummary?: string;
+    simulated?: boolean;
   } | null;
   attemptCount: number;
   lastAttempt?: {
@@ -93,12 +105,12 @@ type PersistedCalendarItem = {
   }>;
 };
 
-const brandOptions = V2_BRANDS.map((brand) => ({
+const brandOptions = BRANDS.map((brand) => ({
   id: brand.id,
   name: brand.name,
 }));
 
-const platformOptions: Array<{ id: V2ChannelId; label: string }> = [
+const platformOptions: Array<{ id: ChannelId; label: string }> = [
   { id: "linkedin", label: "LinkedIn" },
   { id: "reddit", label: "Reddit" },
   { id: "corvo-blog", label: "Corvo Blog" },
@@ -108,7 +120,7 @@ const platformOptions: Array<{ id: V2ChannelId; label: string }> = [
   { id: "tiktok", label: "TikTok" },
 ];
 
-const statusOptions: Array<{ id: V2PostStatus; label: string }> = [
+const statusOptions: Array<{ id: PostStatus; label: string }> = [
   { id: "draft", label: "Draft" },
   { id: "approved", label: "Approved" },
   { id: "scheduled", label: "Scheduled" },
@@ -120,7 +132,46 @@ const statusOptions: Array<{ id: V2PostStatus; label: string }> = [
   { id: "pr-created", label: "PR Created" },
 ];
 
-const CORVO_HERO_IMAGE = "/images/corvo-labs-stacked.svg";
+const BLOG_CATEGORIES = [
+  "strategy",
+  "product",
+  "engineering",
+  "culture",
+  "research",
+] as const;
+
+const DEFAULT_BLOG_AUTHOR = "Jake Butler";
+const DEFAULT_BLOG_CATEGORY = "strategy";
+
+function slugifyTitle(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function parseTagsInput(value: string) {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function blogPrReady(post: PersistedCalendarItem["post"]) {
+  return Boolean(
+    post.title.trim() &&
+      post.content.trim() &&
+      post.blogExcerpt?.trim() &&
+      post.blogAuthor?.trim() &&
+      post.blogCategory?.trim() &&
+      (post.heroImageUrl?.trim() || post.heroImageStorageId)
+  );
+}
+
+function prStatusLabel(status?: string) {
+  if (!status) return "Unknown";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
 
 function nextFridayDate() {
   const date = new Date();
@@ -136,11 +187,6 @@ function fallbackDisplayTimezone() {
   } catch {
     return "America/Los_Angeles";
   }
-}
-
-function parseYMD(date: string) {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(year, month - 1, day, 12);
 }
 
 function formatYMD(date: Date) {
@@ -175,11 +221,19 @@ function endOfMonth(date: Date) {
 }
 
 function itemScheduledDate(item: PersistedCalendarItem) {
-  return item.intent?.scheduledDate ?? item.post.scheduledDate;
+  return normalizeScheduledDate(item.intent?.scheduledDate ?? item.post.scheduledDate);
+}
+
+function channelLabel(channelId: string) {
+  return CHANNEL_LABELS[channelId as ChannelId] ?? channelId;
+}
+
+function statusLabel(status: string) {
+  return STATUS_LABELS[status as PostStatus] ?? status;
 }
 
 function formatDateLabel(date: string) {
-  return parseYMD(date).toLocaleDateString("en-US", {
+  return parseScheduledDate(date).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -247,120 +301,20 @@ function renderJson(value: unknown) {
   }
 }
 
-function toggleSet<T extends string>(current: T[], value: T) {
-  return current.includes(value)
-    ? current.filter((item) => item !== value)
-    : [...current, value];
-}
-
-function linkedInSettingsFromPost(
-  settings?: V2LinkedInPlatformSettings
-): V2LinkedInPlatformSettings {
-  return {
-    cta: settings?.cta ?? "",
-    hashtags: settings?.hashtags ?? [],
-    linkPreview: settings?.linkPreview ?? true,
-  };
-}
-
-function redditSettingsFromPost(settings?: V2RedditPlatformSettings): V2RedditPlatformSettings {
-  return {
-    subreddit: settings?.subreddit ?? "",
-    flair: settings?.flair ?? "",
-    nsfw: settings?.nsfw ?? false,
-    spoiler: settings?.spoiler ?? false,
-    sensitivity: settings?.sensitivity ?? "",
-  };
-}
-
-function corvoBlogSettingsFromPost(
-  settings?: V2CorvoBlogPlatformSettings
-): V2CorvoBlogPlatformSettings {
-  return {
-    canonicalUrl: settings?.canonicalUrl ?? "",
-    ogImage: settings?.ogImage ?? "",
-    statusFlag: settings?.statusFlag ?? "",
-    categoryOverride: settings?.categoryOverride ?? "",
-  };
-}
-
-function normalizeHashtagsInput(value: string) {
-  return value
-    .split(/[,\s]+/)
-    .map((tag) => tag.trim().replace(/^#/, ""))
-    .filter(Boolean);
-}
-
-function serializePlatformSettings(
-  channelId: V2ChannelId,
-  values: {
-    linkedIn: V2LinkedInPlatformSettings;
-    reddit: V2RedditPlatformSettings;
-    corvoBlog: V2CorvoBlogPlatformSettings;
-  }
-) {
-  if (channelId === "linkedin") {
-    return {
-      cta: values.linkedIn.cta?.trim() || undefined,
-      hashtags: values.linkedIn.hashtags?.length ? values.linkedIn.hashtags : undefined,
-      linkPreview: values.linkedIn.linkPreview,
-    } satisfies V2LinkedInPlatformSettings;
-  }
-  if (channelId === "reddit") {
-    return {
-      subreddit: values.reddit.subreddit?.trim() || undefined,
-      flair: values.reddit.flair?.trim() || undefined,
-      nsfw: values.reddit.nsfw || undefined,
-      spoiler: values.reddit.spoiler || undefined,
-      sensitivity: values.reddit.sensitivity?.trim() || undefined,
-    } satisfies V2RedditPlatformSettings;
-  }
-  if (channelId === "corvo-blog") {
-    return {
-      canonicalUrl: values.corvoBlog.canonicalUrl?.trim() || undefined,
-      ogImage: values.corvoBlog.ogImage?.trim() || undefined,
-      statusFlag: values.corvoBlog.statusFlag?.trim() || undefined,
-      categoryOverride: values.corvoBlog.categoryOverride?.trim() || undefined,
-    } satisfies V2CorvoBlogPlatformSettings;
-  }
-  return undefined;
-}
-
-function platformSettingsChanged(
-  channelId: V2ChannelId,
-  previous:
-    | V2LinkedInPlatformSettings
-    | V2RedditPlatformSettings
-    | V2CorvoBlogPlatformSettings
-    | undefined,
-  next:
-    | V2LinkedInPlatformSettings
-    | V2RedditPlatformSettings
-    | V2CorvoBlogPlatformSettings
-    | undefined
-) {
-  const previousSerialized = serializePlatformSettings(channelId, {
-    linkedIn: linkedInSettingsFromPost(
-      channelId === "linkedin" ? (previous as V2LinkedInPlatformSettings) : undefined
-    ),
-    reddit: redditSettingsFromPost(
-      channelId === "reddit" ? (previous as V2RedditPlatformSettings) : undefined
-    ),
-    corvoBlog: corvoBlogSettingsFromPost(
-      channelId === "corvo-blog" ? (previous as V2CorvoBlogPlatformSettings) : undefined
-    ),
-  });
-  return JSON.stringify(previousSerialized) !== JSON.stringify(next);
-}
-
-export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: string } = {}) {
-  const [brandFilters, setBrandFilters] = useState<V2BrandId[]>(["corvo"]);
-  const [platformFilters, setPlatformFilters] = useState<V2ChannelId[]>([
+export function PersistedPublishingPanel({
+  initialPostId,
+  devMode = false,
+}: {
+  initialPostId?: string;
+  devMode?: boolean;
+} = {}) {
+  const [brandFilters, setBrandFilters] = useState<BrandId[]>(["corvo"]);
+  const [platformFilters, setPlatformFilters] = useState<ChannelId[]>([
     "linkedin",
     "reddit",
     "corvo-blog",
   ]);
-  const [statusFilters, setStatusFilters] = useState<V2PostStatus[]>([
+  const [statusFilters, setStatusFilters] = useState<PostStatus[]>([
     "draft",
     "scheduled",
     "submitted",
@@ -373,37 +327,46 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
   >(undefined);
   const [message, setMessage] = useState<string | null>(null);
 
-  const brands = useQuery(api.v2Publishing.listBrands);
-  const items = useQuery(api.v2Publishing.listCalendarItems, {
+  const brands = useQuery(api.publishing.listBrands);
+  const items = useQuery(api.publishing.listCalendarItems, {
     brandIds: brandFilters,
     platformIds: platformFilters,
     statuses: statusFilters,
   }) as PersistedCalendarItem[] | undefined;
-  const seedWorkspace = useMutation(api.v2Publishing.seedMvpWorkspace);
-  const createPostWithIntent = useMutation(api.v2Publishing.createPostWithIntent);
-  const setApproval = useMutation(api.v2Publishing.setApproval);
-  const reschedule = useMutation(api.v2Publishing.reschedule);
-  const updateContent = useMutation(api.v2Publishing.updateContent);
-  const updatePlatformSettings = useMutation(api.v2Publishing.updatePlatformSettings);
-  const submitMockProvider = useMutation(api.v2Publishing.submitMockProvider);
-  const recordProviderIntent = useMutation(api.v2Publishing.recordProviderIntent);
-  const recordGithubPr = useMutation(api.v2Publishing.recordGithubPr);
+  const seedWorkspace = useMutation(api.publishing.seedMvpWorkspace);
+  const createPostWithIntent = useMutation(api.publishing.createPostWithIntent);
+  const setApproval = useMutation(api.publishing.setApproval);
+  const reschedule = useMutation(api.publishing.reschedule);
+  const updateContent = useMutation(api.publishing.updateContent);
+  const submitMockProvider = useMutation(api.publishing.submitMockProvider);
+  const recordProviderIntent = useMutation(api.publishing.recordProviderIntent);
+  const recordGithubPr = useMutation(api.publishing.recordGithubPr);
+  const updateBlogMetadata = useMutation(api.publishing.updateBlogMetadata);
+  const recordBlogPrStatus = useMutation(api.publishing.recordBlogPrStatus);
+  const deletePost = useMutation(api.publishing.deletePost);
 
-  const isSeeded = (brands?.length ?? 0) >= 4;
+  const isSeeded = (brands?.length ?? 0) > 0;
   const visibleItems = useMemo(() => items ?? [], [items]);
   const loading = brands === undefined || items === undefined;
+  const workspaceReady = isSeeded && !loading;
+
+  useEffect(() => {
+    if (brands === undefined || brands.length > 0) return;
+    void seedWorkspace({}).catch((error: unknown) => {
+      const message =
+        error instanceof Error ? error.message : "Workspace setup requires sign-in.";
+      setMessage(message);
+    });
+  }, [brands, seedWorkspace]);
   const firstScheduledDate = visibleItems
     .map((item) => itemScheduledDate(item))
     .find((date): date is string => Boolean(date));
-  const anchorDate = useMemo(
-    () =>
-      calendarAnchor
-        ? parseYMD(calendarAnchor)
-        : firstScheduledDate
-          ? parseYMD(firstScheduledDate)
-          : new Date(),
-    [calendarAnchor, firstScheduledDate]
-  );
+  const anchorDate = useMemo(() => {
+    const candidate = calendarAnchor ?? firstScheduledDate;
+    if (!candidate) return new Date();
+    const parsed = parseScheduledDate(candidate);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }, [calendarAnchor, firstScheduledDate]);
   const displayTimezone = fallbackDisplayTimezone();
   const visibleDates = useMemo(
     () => datesForView(calendarView, anchorDate),
@@ -462,41 +425,51 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
 
   async function handleSeed() {
     await seedWorkspace({});
-    setMessage("Seeded Personal, Corvo Labs, the lower dB, and FreshProof workspaces.");
+    setMessage("Repaired workspace brands and channels.");
   }
 
-  async function handleCreateSample(channelId: V2ChannelId) {
+  async function handleCreateBlankPost(channelId: ChannelId) {
     const title =
       channelId === "corvo-blog"
-        ? "MVP validation blog PR dry run"
-        : `MVP validation ${V2_CHANNEL_LABELS[channelId]} post`;
-    await createPostWithIntent({
-      brandId: channelId === "reddit" ? "freshproof" : "corvo",
-      channelId,
-      title,
-      content:
-        "Mock-provider validation item. This should remain visible on the calendar while unapproved, and it must not submit until approval is explicit.",
-      scheduledDate: nextFridayDate(),
-      scheduledTime: "09:00",
-      timezone: "America/Los_Angeles",
-      sourceIdeaId: "manual-mvp-validation",
-    });
-    setMessage(`Created a scheduled but unapproved ${V2_CHANNEL_LABELS[channelId]} item.`);
+        ? "Untitled blog post"
+        : `Untitled ${CHANNEL_LABELS[channelId]} post`;
+    try {
+      if (!workspaceReady) {
+        await seedWorkspace({});
+      }
+      await createPostWithIntent({
+        brandId: channelId === "reddit" ? "freshproof" : "corvo",
+        channelId,
+        title,
+        content: "",
+        scheduledDate: nextFridayDate(),
+        scheduledTime: "09:00",
+        timezone: "America/Los_Angeles",
+      });
+      setMessage(`Created a blank ${CHANNEL_LABELS[channelId]} draft on the calendar.`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Failed to create draft.";
+      setMessage(`Could not create ${CHANNEL_LABELS[channelId]} draft: ${detail}.`);
+    }
+  }
+
+  async function handleDelete(postId: Id<"v2Posts">, title: string) {
+    if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    try {
+      await deletePost({ postId });
+      if (selectedPostId === postId) {
+        setManualSelectedPostId(null);
+      }
+      setMessage(`Deleted "${title}".`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Failed to delete draft.";
+      setMessage(`Could not delete draft: ${detail}`);
+    }
   }
 
   async function handleApprove(postId: Id<"v2Posts">) {
     await setApproval({ postId, approvalState: "approved" });
     setMessage("Approved item. Date-only reschedules now preserve approval.");
-  }
-
-  async function handleReschedule(postId: Id<"v2Posts">) {
-    await reschedule({
-      postId,
-      scheduledDate: nextFridayDate(),
-      scheduledTime: "10:30",
-      timezone: "America/Los_Angeles",
-    });
-    setMessage("Rescheduled item without changing approval.");
   }
 
   async function handleSaveComposer(
@@ -507,10 +480,15 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
       scheduledDate: string;
       scheduledTime: string;
       timezone: string;
-      platformSettings?:
-        | V2LinkedInPlatformSettings
-        | V2RedditPlatformSettings
-        | V2CorvoBlogPlatformSettings;
+      blogMetadata?: {
+        blogExcerpt?: string;
+        blogAuthor?: string;
+        blogCategory?: string;
+        blogTags?: string[];
+        blogSlug?: string;
+        heroImageUrl?: string;
+        heroImageStorageId?: Id<"_storage">;
+      };
     }
   ) {
     const titleChanged = values.title.trim() !== item.post.title;
@@ -519,13 +497,18 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
       values.scheduledDate !== (item.intent?.scheduledDate ?? item.post.scheduledDate ?? "") ||
       values.scheduledTime !== (item.intent?.scheduledTime ?? item.post.scheduledTime ?? "") ||
       values.timezone !== (item.intent?.timezone ?? item.post.timezone ?? "America/Los_Angeles");
-    const settingsChanged =
-      values.platformSettings !== undefined &&
-      platformSettingsChanged(
-        item.post.channelId,
-        item.post.platformSettings,
-        values.platformSettings
-      );
+    const blogMetadata = values.blogMetadata;
+    const blogMetadataChanged =
+      item.post.channelId === "corvo-blog" &&
+      blogMetadata !== undefined &&
+      (blogMetadata.blogExcerpt !== (item.post.blogExcerpt ?? "") ||
+        blogMetadata.blogAuthor !== (item.post.blogAuthor ?? "") ||
+        blogMetadata.blogCategory !== (item.post.blogCategory ?? "") ||
+        JSON.stringify(blogMetadata.blogTags ?? []) !==
+          JSON.stringify(item.post.blogTags ?? []) ||
+        blogMetadata.blogSlug !== (item.post.blogSlug ?? "") ||
+        blogMetadata.heroImageUrl !== (item.post.heroImageUrl ?? "") ||
+        blogMetadata.heroImageStorageId !== item.post.heroImageStorageId);
 
     if (titleChanged || contentChanged) {
       await updateContent({
@@ -534,10 +517,10 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
         content: values.content,
       });
     }
-    if (settingsChanged && values.platformSettings) {
-      await updatePlatformSettings({
+    if (blogMetadataChanged && blogMetadata) {
+      await updateBlogMetadata({
         postId: item.post._id,
-        platformSettings: values.platformSettings,
+        metadata: blogMetadata,
       });
     }
     if (scheduleChanged) {
@@ -549,10 +532,10 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
       });
     }
 
-    if (titleChanged || contentChanged || settingsChanged) {
+    if (titleChanged || contentChanged || blogMetadataChanged) {
       setMessage(
-        settingsChanged && !titleChanged && !contentChanged
-          ? "Saved platform settings and cleared approval for re-review."
+        blogMetadataChanged && !titleChanged && !contentChanged
+          ? "Saved metadata changes and cleared approval for re-review."
           : "Saved composer changes and cleared approval for re-review."
       );
     } else if (scheduleChanged) {
@@ -566,8 +549,8 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
     const result = await submitMockProvider({ postId, mode: "success" });
     setMessage(
       result.submitted
-        ? "Mock Provider submitted the approved item."
-        : (result.reason ?? "Mock Provider submission was skipped.")
+        ? "Simulated submission recorded. No post was sent to the platform."
+        : (result.reason ?? "Simulated submission was skipped.")
     );
   }
 
@@ -575,8 +558,8 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
     const result = await submitMockProvider({ postId, mode: "success", retry: true });
     setMessage(
       result.submitted
-        ? "Mock Provider retry submitted after an explicit human action."
-        : (result.reason ?? "Mock Provider retry was skipped.")
+        ? "Simulated submission retry recorded."
+        : (result.reason ?? "Simulated submission retry was skipped.")
     );
   }
 
@@ -596,20 +579,32 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
 
   async function handleCreatePr(item: PersistedCalendarItem) {
     if (item.post.channelId !== "corvo-blog") {
-      setMessage("Create PR is only available for Corvo Blog publishing items.");
+      setMessage("Open PR is only available for Corvo Blog posts.");
       return;
     }
-    if (!item.post.content.trim()) {
-      setMessage("Create PR requires blog content and media metadata before handoff.");
+    if (item.post.approvalState !== "approved") {
+      setMessage("Approve the post before opening a pull request.");
+      return;
+    }
+    if (!blogPrReady(item.post)) {
+      setMessage(
+        "Fill in excerpt, author, category, content, and a hero image before opening a PR."
+      );
       return;
     }
     const existingPrUrl = item.post.prUrl ?? item.providerState?.prUrl;
     if (existingPrUrl) {
-      setMessage(`Corvo Blog PR already exists: ${existingPrUrl}`);
+      setMessage(`Pull request already exists: ${existingPrUrl}`);
       return;
     }
 
-    setMessage("Creating Corvo Blog PR...");
+    const heroSourceUrl = item.post.heroImageUrl?.trim();
+    if (!heroSourceUrl) {
+      setMessage("Hero image URL is required before opening a PR.");
+      return;
+    }
+
+    setMessage("Opening Corvo Blog pull request...");
     const response = await fetch("/api/publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -621,17 +616,16 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
         timezone: item.intent?.timezone ?? item.post.timezone ?? "America/Los_Angeles",
         scheduleTrigger: "pr-body",
         status: "draft",
-        excerpt:
-          "A Corvo Labs draft generated from the Postiz-compatible Resonate v2 workflow.",
-        author: "Jake Butler",
-        tags: ["Corvo Labs", "Resonate", "Publishing Workflow"],
-        category: "strategy",
+        excerpt: item.post.blogExcerpt,
+        author: item.post.blogAuthor,
+        tags: item.post.blogTags ?? [],
+        category: item.post.blogCategory,
         featured: false,
-        coverImageAlt: "Corvo Labs logo used as a placeholder blog hero.",
+        coverImageAlt: `Cover image for ${item.post.title}`,
         images: [
           {
-            sourceUrl: CORVO_HERO_IMAGE,
-            alt: "Corvo Labs logo used as a placeholder blog hero.",
+            sourceUrl: heroSourceUrl,
+            alt: `Cover image for ${item.post.title}`,
             isCover: true,
           },
         ],
@@ -643,18 +637,70 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
       return;
     }
 
+    const sanitized =
+      data.sanitizedResponse &&
+      typeof data.sanitizedResponse === "object" &&
+      !Array.isArray(data.sanitizedResponse)
+        ? (data.sanitizedResponse as Record<string, unknown>)
+        : {};
+    const prNumber =
+      typeof sanitized.number === "number"
+        ? sanitized.number
+        : typeof data.number === "number"
+          ? data.number
+          : undefined;
+    const prStatusRaw = typeof sanitized.state === "string" ? sanitized.state : "open";
+    const prStatus =
+      prStatusRaw === "merged" ||
+      prStatusRaw === "closed" ||
+      prStatusRaw === "draft" ||
+      prStatusRaw === "open"
+        ? prStatusRaw
+        : "open";
+
     await recordGithubPr({
       postId: item.post._id,
       result: {
         prUrl: data.prUrl,
         branchName: data.branchName,
+        prNumber,
+        prStatus,
         sanitizedResponse: data.sanitizedResponse ?? {
           prUrl: data.prUrl,
           branchName: data.branchName,
+          number: prNumber,
+          state: prStatus,
         },
       },
     });
-    setMessage(`Created Corvo Blog PR: ${data.prUrl}`);
+    setMessage(`Opened Corvo Blog PR: ${data.prUrl}`);
+  }
+
+  async function handleCheckPrStatus(item: PersistedCalendarItem) {
+    const prUrl = item.post.prUrl ?? item.providerState?.prUrl;
+    if (!prUrl) {
+      setMessage("No pull request URL to check.");
+      return;
+    }
+
+    setMessage("Checking pull request status...");
+    const response = await fetch("/api/blog-pr-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prUrl }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setMessage(data.error || "PR status check failed.");
+      return;
+    }
+
+    await recordBlogPrStatus({
+      postId: item.post._id,
+      prStatus: data.prStatus,
+      prNumber: data.prNumber ?? undefined,
+    });
+    setMessage(`PR status updated: ${prStatusLabel(data.prStatus)}.`);
   }
 
   function moveCalendar(direction: -1 | 1) {
@@ -666,84 +712,56 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
   }
 
   return (
-    <section className="border-b border-black/10 bg-[#edf3f1]">
-      <div className="mx-auto max-w-7xl px-6 py-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#15616d]">
-              <Database size={16} />
-              Persisted MVP spine
-            </div>
-            <h2 className="mt-1 text-xl font-semibold">
-              Publishing Intent, Provider State, and Mock Provider gates
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-gray-600">
-              Convex-backed calendar data with approval state, provider state, and
-              Mock Provider gates in one operational view.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="inline-flex items-center gap-2 rounded-md bg-[#15616d] px-3 py-2 text-sm font-semibold text-white hover:bg-[#104d56]"
-              onClick={handleSeed}
-              type="button"
-            >
-              <ShieldCheck size={16} />
-              {isSeeded ? "Reseed Workspace" : "Seed Workspace"}
-            </button>
-            <button
-              className="rounded-md border border-black/15 bg-white px-3 py-2 text-sm font-medium hover:bg-black/5"
-              onClick={() => handleCreateSample("linkedin")}
-              type="button"
-            >
-              + LinkedIn
-            </button>
-            <button
-              className="rounded-md border border-black/15 bg-white px-3 py-2 text-sm font-medium hover:bg-black/5"
-              onClick={() => handleCreateSample("reddit")}
-              type="button"
-            >
-              + Reddit
-            </button>
-            <button
-              className="rounded-md border border-black/15 bg-white px-3 py-2 text-sm font-medium hover:bg-black/5"
-              onClick={() => handleCreateSample("corvo-blog")}
-              type="button"
-            >
-              + Blog PR
-            </button>
-          </div>
-        </div>
-
-        {message && (
-          <div className="mt-4 rounded-md border border-[#15616d]/25 bg-white px-3 py-2 text-sm text-[#0f4c55]">
-            {message}
-          </div>
-        )}
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <div className="space-y-3 rounded-lg border border-black/10 bg-white p-4">
+    <WorkspaceLayout
+      banner={message ? <Notice>{message}</Notice> : null}
+      header={
+        <PageHeader
+          description="See scheduled posts across your brands, edit drafts, approve content, and open blog pull requests when ready."
+          footer={
+            devMode ? (
+              <button
+                className="mt-2 text-xs text-gray-400 underline hover:text-gray-600"
+                onClick={() => void handleSeed()}
+                type="button"
+              >
+                Repair workspace
+              </button>
+            ) : undefined
+          }
+          icon={<Calendar size={16} />}
+          label="Publishing calendar"
+          title="Plan, approve, and publish your content"
+        />
+      }
+      sidebar={
+        <>
+          <SidebarCard className="space-y-3">
             <FilterGroup
               label="Brands"
+              onChange={(id) => setBrandFilters(toggleFilterSet(brandFilters, id))}
               options={brandOptions}
               selected={brandFilters}
-              onToggle={(id) => setBrandFilters(toggleSet(brandFilters, id))}
             />
             <FilterGroup
               label="Platforms"
+              onChange={(id) => setPlatformFilters(toggleFilterSet(platformFilters, id))}
               options={platformOptions}
               selected={platformFilters}
-              onToggle={(id) => setPlatformFilters(toggleSet(platformFilters, id))}
             />
             <FilterGroup
               label="Status"
+              onChange={(id) => setStatusFilters(toggleFilterSet(statusFilters, id))}
               options={statusOptions}
               selected={statusFilters}
-              onToggle={(id) => setStatusFilters(toggleSet(statusFilters, id))}
             />
+          </SidebarCard>
+          <div id="connections">
+            <SocialConnectionsPanel />
           </div>
-
-          <div className="rounded-lg border border-black/10 bg-white">
+        </>
+      }
+    >
+      <MainCard>
             <div className="grid gap-3 border-b border-black/10 p-4 sm:grid-cols-3">
               <Metric label="Not submitted" value={providerSummary.notSubmitted} />
               <Metric label="Submitted" value={providerSummary.submitted} />
@@ -804,13 +822,45 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
             </div>
 
             {loading && (
-              <p className="p-4 text-sm text-gray-600">Loading persisted publishing items...</p>
+              <p className="p-4 text-sm text-gray-600">Loading your publishing calendar...</p>
             )}
 
             {!loading && visibleItems.length === 0 && (
-              <div className="p-4 text-sm text-gray-600">
-                No persisted items match these filters. Seed the workspace, then create
-                a LinkedIn, Reddit, or Blog PR validation item.
+              <div className="p-8 text-center">
+                <h3 className="text-lg font-semibold text-gray-900">Your calendar is empty</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">
+                  Brands organize content for Personal, Corvo Labs, the lower dB, and FreshProof.
+                  Start from research or create a post directly.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <Link
+                    className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
+                    href="/research"
+                  >
+                    Explore research &amp; ideas
+                  </Link>
+                  <button
+                    className="rounded-md border border-black/15 bg-white px-3 py-2 text-sm font-medium hover:bg-black/5"
+                    onClick={() => void handleCreateBlankPost("linkedin")}
+                    type="button"
+                  >
+                    + Create a LinkedIn post
+                  </button>
+                  <button
+                    className="rounded-md border border-black/15 bg-white px-3 py-2 text-sm font-medium hover:bg-black/5"
+                    onClick={() => void handleCreateBlankPost("reddit")}
+                    type="button"
+                  >
+                    + Create a Reddit post
+                  </button>
+                  <button
+                    className="rounded-md border border-black/15 bg-white px-3 py-2 text-sm font-medium hover:bg-black/5"
+                    onClick={() => void handleCreateBlankPost("corvo-blog")}
+                    type="button"
+                  >
+                    + Create a blog post
+                  </button>
+                </div>
               </div>
             )}
 
@@ -879,13 +929,15 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
                     <div className="mt-3 divide-y divide-black/10">
                       {rangeItems.map((item) => (
                         <AgendaItem
+                          devMode={devMode}
                           item={item}
                           key={item.post._id}
                           onApprove={handleApprove}
-                          onCreatePr={() => handleCreatePr(item)}
+                          onCheckPrStatus={() => void handleCheckPrStatus(item)}
+                          onCreatePr={() => void handleCreatePr(item)}
                           onInspect={() => setManualSelectedPostId(item.post._id)}
                           onProviderIntent={handleProviderIntent}
-                          onReschedule={handleReschedule}
+                          onDelete={handleDelete}
                           onRetry={handleRetry}
                           onSubmit={handleSubmit}
                         />
@@ -895,23 +947,23 @@ export function PersistedPublishingPanel({ initialPostId }: { initialPostId?: st
                 </div>
               </>
             )}
-          </div>
-        </div>
         {selectedItem && (
           <PublishingDetailDrawer
+            devMode={devMode}
             item={selectedItem}
             onApprove={handleApprove}
+            onCheckPrStatus={() => void handleCheckPrStatus(selectedItem)}
             onClose={() => setManualSelectedPostId(null)}
-            onCreatePr={() => handleCreatePr(selectedItem)}
+            onCreatePr={() => void handleCreatePr(selectedItem)}
             onProviderIntent={handleProviderIntent}
-            onReschedule={handleReschedule}
+            onDelete={handleDelete}
             onRetry={handleRetry}
             onSaveComposer={(values) => handleSaveComposer(selectedItem, values)}
             onSubmit={handleSubmit}
           />
         )}
-      </div>
-    </section>
+      </MainCard>
+    </WorkspaceLayout>
   );
 }
 
@@ -938,26 +990,36 @@ function CalendarItemChip({
         </span>
       </div>
       <div className="mt-1 flex flex-wrap gap-1">
-        <Badge>{V2_CHANNEL_LABELS[post.channelId]}</Badge>
+        <Badge>{channelLabel(post.channelId)}</Badge>
         <Badge>{post.approvalState}</Badge>
         <span className="rounded-full bg-[#ff7d00]/10 px-2 py-0.5 text-[10px] font-medium text-[#7a3b00]">
           {providerState?.status ?? "not-submitted"}
         </span>
+        {providerState?.simulated && (
+          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+            Simulated
+          </span>
+        )}
+        {post.blogPrStatus && (
+          <PrStatusBadge status={post.blogPrStatus} />
+        )}
       </div>
     </button>
   );
 }
 
 function AgendaItem(props: {
+  devMode: boolean;
   item: PersistedCalendarItem;
   onApprove: (postId: Id<"v2Posts">) => void;
+  onCheckPrStatus: () => void;
   onCreatePr: () => void;
+  onDelete: (postId: Id<"v2Posts">, title: string) => void;
   onInspect: () => void;
   onProviderIntent: (
     postId: Id<"v2Posts">,
     intentType: "cancel" | "unpublish"
   ) => void;
-  onReschedule: (postId: Id<"v2Posts">) => void;
   onRetry: (postId: Id<"v2Posts">) => void;
   onSubmit: (postId: Id<"v2Posts">) => void;
 }) {
@@ -977,6 +1039,8 @@ function AgendaItem(props: {
     !intent?.scheduledDate ||
     providerState?.status === "submitted" ||
     providerIntentRecorded;
+  const openPrDisabled =
+    !approved || !blogPrReady(post) || Boolean(existingPrUrl);
 
   return (
     <article className="py-4">
@@ -984,8 +1048,10 @@ function AgendaItem(props: {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{post.title}</h3>
-            <Badge>{V2_CHANNEL_LABELS[post.channelId]}</Badge>
-            <Badge>{V2_STATUS_LABELS[post.status]}</Badge>
+            <Badge>{channelLabel(post.channelId)}</Badge>
+            <Badge>{statusLabel(post.status)}</Badge>
+            {providerState?.simulated && <Badge>Simulated</Badge>}
+            {post.blogPrStatus && <PrStatusBadge status={post.blogPrStatus} />}
           </div>
           <p className="mt-2 max-w-3xl text-sm text-gray-600">{post.content}</p>
         </div>
@@ -1009,56 +1075,90 @@ function AgendaItem(props: {
             <CheckCircle2 size={14} />
             Approve
           </button>
-          <button
-            className="inline-flex items-center gap-1 rounded-md border border-black/15 px-2.5 py-1.5 text-xs font-medium hover:bg-black/5"
-            onClick={() => props.onReschedule(post._id)}
-            type="button"
-          >
-            <CalendarClock size={14} />
-            Reschedule
-          </button>
-          <button
-            className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
-            disabled={submitDisabled}
-            onClick={() => props.onSubmit(post._id)}
-            title={
-              !approved ? "Approval is required before Mock Provider submission." : undefined
-            }
-            type="button"
-          >
-            <Send size={14} />
-            Mock Submit
-          </button>
-          <button
-            className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-2.5 py-1.5 text-xs font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
-            disabled={providerIntentRecorded}
-            onClick={() => props.onProviderIntent(post._id, providerIntentType)}
-            type="button"
-          >
-            <Ban size={14} />
-            {providerIntentType === "unpublish" ? "Unpublish Intent" : "Cancel Intent"}
-          </button>
-          {post.channelId === "corvo-blog" && (
+          {props.devMode && (
             <button
-              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
-              disabled={Boolean(existingPrUrl)}
-              onClick={props.onCreatePr}
+              className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
+              disabled={submitDisabled}
+              onClick={() => props.onSubmit(post._id)}
+              title={!approved ? "Approval is required before simulating submission." : undefined}
               type="button"
             >
-              <FileText size={14} />
-              {existingPrUrl ? "PR Created" : "Create PR"}
+              <Send size={14} />
+              Simulate submission
             </button>
           )}
-          {retryableAttempt && (
+          {props.devMode && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-2.5 py-1.5 text-xs font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
+              disabled={providerIntentRecorded}
+              onClick={() => props.onProviderIntent(post._id, providerIntentType)}
+              type="button"
+            >
+              <Ban size={14} />
+              {providerIntentType === "unpublish" ? "Unpublish Intent" : "Cancel Intent"}
+            </button>
+          )}
+          {post.channelId === "corvo-blog" && (
+            <>
+              <button
+                className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+                disabled={openPrDisabled}
+                onClick={props.onCreatePr}
+                title={
+                  !approved
+                    ? "Approve the post before opening a PR."
+                    : !blogPrReady(post)
+                      ? "Complete blog metadata before opening a PR."
+                      : existingPrUrl
+                        ? "Pull request already exists."
+                        : undefined
+                }
+                type="button"
+              >
+                <FileText size={14} />
+                {existingPrUrl ? "PR opened" : "Open PR"}
+              </button>
+              {existingPrUrl && (
+                <>
+                  <a
+                    className="inline-flex items-center gap-1 rounded-md border border-black/15 px-2.5 py-1.5 text-xs font-medium hover:bg-black/5"
+                    href={existingPrUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <ExternalLink size={14} />
+                    View PR
+                  </a>
+                  <button
+                    className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10"
+                    onClick={props.onCheckPrStatus}
+                    type="button"
+                  >
+                    Check PR status
+                  </button>
+                </>
+              )}
+            </>
+          )}
+          {props.devMode && retryableAttempt && (
             <button
               className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10"
               onClick={() => props.onRetry(post._id)}
               type="button"
             >
               <RotateCcw size={14} />
-              Retry Mock
+              Retry simulation
             </button>
           )}
+          <button
+            aria-label={`Delete ${post.title}`}
+            className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+            onClick={() => props.onDelete(post._id, post.title)}
+            type="button"
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
         </div>
       </div>
       <dl className="mt-3 grid gap-2 text-xs text-gray-600 sm:grid-cols-4">
@@ -1069,13 +1169,14 @@ function AgendaItem(props: {
         />
         <KeyValue label="Approval" value={post.approvalState} />
         <KeyValue
-          label="Provider"
-          value={`${providerState?.providerId ?? "none"} / ${
-            providerState?.status ?? "not-submitted"
-          }`}
+          label="Submission status"
+          value={providerState?.status ?? "not-submitted"}
         />
+        {existingPrUrl && (
+          <KeyValue label="Pull request" value={existingPrUrl} />
+        )}
       </dl>
-      {item.attemptCount > 0 && (
+      {props.devMode && item.attemptCount > 0 && (
         <p className="mt-2 text-xs text-gray-500">
           Attempts: {item.attemptCount}; last result: {item.lastAttempt?.status ?? "unknown"}
         </p>
@@ -1085,15 +1186,17 @@ function AgendaItem(props: {
 }
 
 function PublishingDetailDrawer(props: {
+  devMode: boolean;
   item: PersistedCalendarItem;
   onApprove: (postId: Id<"v2Posts">) => void;
+  onCheckPrStatus: () => void;
   onClose: () => void;
   onCreatePr: () => void;
+  onDelete: (postId: Id<"v2Posts">, title: string) => void;
   onProviderIntent: (
     postId: Id<"v2Posts">,
     intentType: "cancel" | "unpublish"
   ) => void;
-  onReschedule: (postId: Id<"v2Posts">) => void;
   onRetry: (postId: Id<"v2Posts">) => void;
   onSaveComposer: (values: {
     title: string;
@@ -1101,10 +1204,15 @@ function PublishingDetailDrawer(props: {
     scheduledDate: string;
     scheduledTime: string;
     timezone: string;
-    platformSettings?:
-      | V2LinkedInPlatformSettings
-      | V2RedditPlatformSettings
-      | V2CorvoBlogPlatformSettings;
+    blogMetadata?: {
+      blogExcerpt?: string;
+      blogAuthor?: string;
+      blogCategory?: string;
+      blogTags?: string[];
+      blogSlug?: string;
+      heroImageUrl?: string;
+      heroImageStorageId?: Id<"_storage">;
+    };
   }) => void;
   onSubmit: (postId: Id<"v2Posts">) => void;
 }) {
@@ -1124,6 +1232,8 @@ function PublishingDetailDrawer(props: {
     !intent?.scheduledDate ||
     providerState?.status === "submitted" ||
     providerIntentRecorded;
+  const openPrDisabled =
+    !approved || !blogPrReady(post) || Boolean(existingPrUrl);
 
   return (
     <aside
@@ -1133,9 +1243,11 @@ function PublishingDetailDrawer(props: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{V2_CHANNEL_LABELS[post.channelId]}</Badge>
-            <Badge>{V2_STATUS_LABELS[post.status]}</Badge>
+            <Badge>{channelLabel(post.channelId)}</Badge>
+            <Badge>{statusLabel(post.status)}</Badge>
             <Badge>{post.approvalState}</Badge>
+            {providerState?.simulated && <Badge>Simulated</Badge>}
+            {post.blogPrStatus && <PrStatusBadge status={post.blogPrStatus} />}
           </div>
           <h3 className="mt-2 text-lg font-semibold">{post.title}</h3>
           <p className="mt-1 max-w-4xl text-sm text-gray-600">{post.content}</p>
@@ -1152,26 +1264,39 @@ function PublishingDetailDrawer(props: {
 
       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <KeyValue label="Brand" value={post.brandId} />
-        <KeyValue label="Platform" value={V2_CHANNEL_LABELS[post.channelId]} />
+        <KeyValue label="Platform" value={channelLabel(post.channelId)} />
         <KeyValue
           label="Schedule"
           value={formatDateTime(intent?.scheduledDate, intent?.scheduledTime, intent?.timezone)}
         />
         <KeyValue
-          label="Provider"
-          value={`${providerState?.providerId ?? "none"} / ${
-            providerState?.status ?? "not-submitted"
-          }`}
+          label="Submission status"
+          value={providerState?.status ?? "not-submitted"}
         />
-        <KeyValue label="Publishing intent" value={String(intent?._id ?? "missing")} />
-        <KeyValue label="Provider post" value={providerState?.providerPostId ?? "not created"} />
-        <KeyValue label="PR URL" value={existingPrUrl ?? "not created"} />
-        <KeyValue label="Branch" value={post.branchName ?? "not created"} />
-        <KeyValue label="Source Idea" value={post.sourceIdeaId ?? "none"} />
-        <KeyValue label="Research brief" value={post.sourceResearchBriefId ?? "none"} />
+        {existingPrUrl && (
+          <KeyValue label="Pull request" value={existingPrUrl} />
+        )}
+        {post.blogPrNumber !== undefined && (
+          <KeyValue label="PR number" value={`#${post.blogPrNumber}`} />
+        )}
+        {props.devMode && (
+          <>
+            <KeyValue label="Intent ID" value={String(intent?._id ?? "missing")} />
+            <KeyValue label="Provider post" value={providerState?.providerPostId ?? "not created"} />
+            <KeyValue label="Branch" value={post.branchName ?? "not created"} />
+            <KeyValue label="Source idea" value={post.sourceIdeaId ?? "none"} />
+            <KeyValue label="Research brief" value={post.sourceResearchBriefId ?? "none"} />
+          </>
+        )}
       </div>
 
-      {providerState?.lastResponseSummary && (
+      {providerState?.simulated && (
+        <div className="mt-4 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
+          Simulated submission — no post was sent to {channelLabel(post.channelId)}.
+        </div>
+      )}
+
+      {providerState?.lastResponseSummary && props.devMode && (
         <div className="mt-4 rounded-md border border-black/10 bg-black/[0.02] p-3 text-sm text-gray-700">
           {providerState.lastResponseSummary}
         </div>
@@ -1188,54 +1313,81 @@ function PublishingDetailDrawer(props: {
           <CheckCircle2 size={15} />
           Approve
         </button>
-        <button
-          className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5"
-          onClick={() => props.onReschedule(post._id)}
-          type="button"
-        >
-          <CalendarClock size={15} />
-          Reschedule
-        </button>
-        <button
-          className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
-          disabled={submitDisabled}
-          onClick={() => props.onSubmit(post._id)}
-          title={!approved ? "Approval is required before Mock Provider submission." : undefined}
-          type="button"
-        >
-          <Send size={15} />
-          Submit Now
-        </button>
-        <button
-          className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-3 py-2 text-sm font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
-          disabled={providerIntentRecorded}
-          onClick={() => props.onProviderIntent(post._id, providerIntentType)}
-          type="button"
-        >
-          <Ban size={15} />
-          {providerIntentType === "unpublish" ? "Record Unpublish Intent" : "Record Cancel Intent"}
-        </button>
-        {post.channelId === "corvo-blog" && (
+        {props.devMode && (
           <button
-            className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
-            disabled={Boolean(existingPrUrl)}
-            onClick={props.onCreatePr}
+            className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
+            disabled={submitDisabled}
+            onClick={() => props.onSubmit(post._id)}
+            title={!approved ? "Approval is required before simulating submission." : undefined}
             type="button"
           >
-            <FileText size={15} />
-            {existingPrUrl ? "PR Created" : "Create PR"}
+            <Send size={15} />
+            Simulate submission
           </button>
         )}
-        {retryableAttempt && (
+        {props.devMode && (
+          <button
+            className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-3 py-2 text-sm font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
+            disabled={providerIntentRecorded}
+            onClick={() => props.onProviderIntent(post._id, providerIntentType)}
+            type="button"
+          >
+            <Ban size={15} />
+            {providerIntentType === "unpublish" ? "Record Unpublish Intent" : "Record Cancel Intent"}
+          </button>
+        )}
+        {post.channelId === "corvo-blog" && (
+          <>
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+              disabled={openPrDisabled}
+              onClick={props.onCreatePr}
+              type="button"
+            >
+              <FileText size={15} />
+              {existingPrUrl ? "PR opened" : "Open PR"}
+            </button>
+            {existingPrUrl && (
+              <>
+                <a
+                  className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5"
+                  href={existingPrUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <ExternalLink size={15} />
+                  View PR
+                </a>
+                <button
+                  className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
+                  onClick={props.onCheckPrStatus}
+                  type="button"
+                >
+                  Check PR status
+                </button>
+              </>
+            )}
+          </>
+        )}
+        {props.devMode && retryableAttempt && (
           <button
             className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
             onClick={() => props.onRetry(post._id)}
             type="button"
           >
             <RotateCcw size={15} />
-            Retry Mock
+            Retry simulation
           </button>
         )}
+        <button
+          aria-label={`Delete ${post.title}`}
+          className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+          onClick={() => props.onDelete(post._id, post.title)}
+          type="button"
+        >
+          <Trash2 size={15} />
+          Delete draft
+        </button>
       </div>
 
       <PersistedPostComposer
@@ -1244,6 +1396,7 @@ function PublishingDetailDrawer(props: {
         onSave={props.onSaveComposer}
       />
 
+      {props.devMode && (
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <section className="rounded-lg border border-black/10 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold">
@@ -1300,6 +1453,7 @@ function PublishingDetailDrawer(props: {
           )}
         </section>
       </div>
+      )}
     </aside>
   );
 }
@@ -1312,19 +1466,42 @@ function PersistedPostComposer(props: {
     scheduledDate: string;
     scheduledTime: string;
     timezone: string;
-    platformSettings?:
-      | V2LinkedInPlatformSettings
-      | V2RedditPlatformSettings
-      | V2CorvoBlogPlatformSettings;
+    blogMetadata?: {
+      blogExcerpt?: string;
+      blogAuthor?: string;
+      blogCategory?: string;
+      blogTags?: string[];
+      blogSlug?: string;
+      heroImageUrl?: string;
+      heroImageStorageId?: Id<"_storage">;
+    };
   }) => void;
 }) {
   const { item } = props;
   const post = item.post;
   const intent = item.intent;
+  const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
+  const [blogExcerpt, setBlogExcerpt] = useState(post.blogExcerpt ?? "");
+  const [blogAuthor, setBlogAuthor] = useState(post.blogAuthor ?? DEFAULT_BLOG_AUTHOR);
+  const [blogCategory, setBlogCategory] = useState(
+    post.blogCategory ?? DEFAULT_BLOG_CATEGORY
+  );
+  const [blogTagsInput, setBlogTagsInput] = useState((post.blogTags ?? []).join(", "));
+  const [blogSlug, setBlogSlug] = useState(post.blogSlug ?? slugifyTitle(post.title));
+  const [slugTouched, setSlugTouched] = useState(Boolean(post.blogSlug));
+  const [heroImageUrl, setHeroImageUrl] = useState(post.heroImageUrl ?? "");
+  const [heroImageStorageId, setHeroImageStorageId] = useState<Id<"_storage"> | undefined>(
+    post.heroImageStorageId
+  );
+  const [heroUploading, setHeroUploading] = useState(false);
+  const resolvedHeroUrl = useQuery(
+    api.posts.getFileUrl,
+    heroImageStorageId ? { fileId: heroImageStorageId } : "skip"
+  );
   const [scheduledDate, setScheduledDate] = useState(
-    intent?.scheduledDate ?? post.scheduledDate ?? ""
+    normalizeScheduledDate(intent?.scheduledDate ?? post.scheduledDate) ?? ""
   );
   const [scheduledTime, setScheduledTime] = useState(
     intent?.scheduledTime ?? post.scheduledTime ?? ""
@@ -1332,60 +1509,61 @@ function PersistedPostComposer(props: {
   const [timezone, setTimezone] = useState(
     intent?.timezone ?? post.timezone ?? "America/Los_Angeles"
   );
-  const [linkedInSettings, setLinkedInSettings] = useState<V2LinkedInPlatformSettings>(() =>
-    linkedInSettingsFromPost(
-      post.channelId === "linkedin"
-        ? (post.platformSettings as V2LinkedInPlatformSettings | undefined)
-        : undefined
-    )
-  );
-  const [redditSettings, setRedditSettings] = useState<V2RedditPlatformSettings>(() =>
-    redditSettingsFromPost(
-      post.channelId === "reddit"
-        ? (post.platformSettings as V2RedditPlatformSettings | undefined)
-        : undefined
-    )
-  );
-  const [corvoBlogSettings, setCorvoBlogSettings] = useState<V2CorvoBlogPlatformSettings>(() =>
-    corvoBlogSettingsFromPost(
-      post.channelId === "corvo-blog"
-        ? (post.platformSettings as V2CorvoBlogPlatformSettings | undefined)
-        : undefined
-    )
-  );
 
   const contentChanged = title.trim() !== post.title || content !== post.content;
+  const persistedScheduleDate =
+    normalizeScheduledDate(intent?.scheduledDate ?? post.scheduledDate) ?? "";
   const scheduleChanged =
-    scheduledDate !== (intent?.scheduledDate ?? post.scheduledDate ?? "") ||
+    scheduledDate !== persistedScheduleDate ||
     scheduledTime !== (intent?.scheduledTime ?? post.scheduledTime ?? "") ||
     timezone !== (intent?.timezone ?? post.timezone ?? "America/Los_Angeles");
-  const nextPlatformSettings = serializePlatformSettings(post.channelId, {
-    linkedIn: linkedInSettings,
-    reddit: redditSettings,
-    corvoBlog: corvoBlogSettings,
-  });
-  const settingsChanged = platformSettingsChanged(
-    post.channelId,
-    post.platformSettings,
-    nextPlatformSettings
-  );
-  const linkedInOverLimit = post.channelId === "linkedin" && content.length > 3000;
+  const blogTags = parseTagsInput(blogTagsInput);
+  const blogMetadataChanged =
+    post.channelId === "corvo-blog" &&
+    (blogExcerpt !== (post.blogExcerpt ?? "") ||
+      blogAuthor !== (post.blogAuthor ?? "") ||
+      blogCategory !== (post.blogCategory ?? "") ||
+      JSON.stringify(blogTags) !== JSON.stringify(post.blogTags ?? []) ||
+      blogSlug !== (post.blogSlug ?? "") ||
+      heroImageUrl !== (post.heroImageUrl ?? "") ||
+      heroImageStorageId !== post.heroImageStorageId);
+  const heroPreviewUrl = heroImageUrl.trim() || resolvedHeroUrl || "";
   const canSave =
-    (contentChanged || scheduleChanged || settingsChanged) && title.trim().length > 0;
+    (contentChanged || scheduleChanged || blogMetadataChanged) && title.trim().length > 0;
+
+  async function handleHeroUpload(file: File) {
+    setHeroUploading(true);
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error("Hero image upload failed.");
+      const { storageId } = (await uploadRes.json()) as { storageId: Id<"_storage"> };
+      setHeroImageStorageId(storageId);
+      setHeroImageUrl("");
+    } catch {
+      // Upload errors surface on next save attempt via missing hero URL.
+    } finally {
+      setHeroUploading(false);
+    }
+  }
 
   return (
     <section className="mt-5 rounded-lg border border-black/10 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h4 className="text-sm font-semibold">Single Composer</h4>
+          <h4 className="text-sm font-semibold">Composer</h4>
           <p className="mt-1 text-xs text-gray-500">
-            One persisted editor for social and Corvo Blog posts. Content and platform setting
-            edits require re-approval; date-only schedule edits keep the current approval state.
+            Edit post content and metadata. Content changes require re-approval; date-only schedule
+            edits keep the current approval state.
           </p>
         </div>
         <div className="flex flex-wrap gap-1">
           <Badge>{post.brandId}</Badge>
-          <Badge>{V2_CHANNEL_LABELS[post.channelId]}</Badge>
+          <Badge>{channelLabel(post.channelId)}</Badge>
         </div>
       </div>
 
@@ -1395,7 +1573,13 @@ function PersistedPostComposer(props: {
             Title
             <input
               className="mt-1 w-full rounded-md border border-black/15 px-3 py-2 text-sm outline-none focus:border-[#15616d] focus:ring-2 focus:ring-[#15616d]/15"
-              onChange={(event) => setTitle(event.target.value)}
+              onChange={(event) => {
+                const nextTitle = event.target.value;
+                setTitle(nextTitle);
+                if (!slugTouched) {
+                  setBlogSlug(slugifyTitle(nextTitle));
+                }
+              }}
               value={title}
             />
           </label>
@@ -1436,30 +1620,115 @@ function PersistedPostComposer(props: {
               value={timezone}
             />
           </label>
-          <PlatformSettingsPane
-            channelId={post.channelId}
-            contentLength={content.length}
-            corvoBlog={corvoBlogSettings}
-            linkedIn={linkedInSettings}
-            onCorvoBlogChange={setCorvoBlogSettings}
-            onLinkedInChange={setLinkedInSettings}
-            onRedditChange={setRedditSettings}
-            reddit={redditSettings}
-          />
+          {post.channelId === "corvo-blog" && (
+            <div className="space-y-2 rounded-md border border-black/10 bg-black/[0.02] p-3">
+              <p className="text-xs font-semibold text-gray-700">Blog metadata</p>
+              <label className="block text-xs font-semibold text-gray-600">
+                Excerpt
+                <textarea
+                  className="mt-1 min-h-16 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+                  onChange={(event) => setBlogExcerpt(event.target.value)}
+                  value={blogExcerpt}
+                />
+              </label>
+              <label className="block text-xs font-semibold text-gray-600">
+                Author
+                <input
+                  className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+                  onChange={(event) => setBlogAuthor(event.target.value)}
+                  value={blogAuthor}
+                />
+              </label>
+              <label className="block text-xs font-semibold text-gray-600">
+                Category
+                <select
+                  className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+                  onChange={(event) => setBlogCategory(event.target.value)}
+                  value={blogCategory}
+                >
+                  {BLOG_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-gray-600">
+                Tags
+                <input
+                  className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+                  onChange={(event) => setBlogTagsInput(event.target.value)}
+                  placeholder="Corvo Labs, strategy"
+                  value={blogTagsInput}
+                />
+              </label>
+              <label className="block text-xs font-semibold text-gray-600">
+                Slug
+                <input
+                  className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+                  onChange={(event) => {
+                    setSlugTouched(true);
+                    setBlogSlug(event.target.value);
+                  }}
+                  value={blogSlug}
+                />
+              </label>
+              <label className="block text-xs font-semibold text-gray-600">
+                Hero image URL
+                <input
+                  className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
+                  onChange={(event) => {
+                    setHeroImageUrl(event.target.value);
+                    if (event.target.value.trim()) {
+                      setHeroImageStorageId(undefined);
+                    }
+                  }}
+                  placeholder="https://..."
+                  value={heroImageUrl}
+                />
+              </label>
+              <label className="block text-xs font-semibold text-gray-600">
+                Upload hero image
+                <input
+                  accept="image/*"
+                  className="mt-1 block w-full text-xs"
+                  disabled={heroUploading}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void handleHeroUpload(file);
+                    event.target.value = "";
+                  }}
+                  type="file"
+                />
+              </label>
+              {(heroImageUrl || resolvedHeroUrl) && (
+                <div className="mt-2 space-y-1">
+                  <img
+                    alt="Hero preview"
+                    className="h-auto max-w-full rounded"
+                    src={heroPreviewUrl}
+                  />
+                  <p className="line-clamp-2 break-all text-[11px] text-gray-500">
+                    {heroPreviewUrl}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-gray-500">
-          {contentChanged || settingsChanged
-            ? "Content or platform settings changed: saving will clear approval."
+          {contentChanged || blogMetadataChanged
+            ? "Content or metadata changed: saving will clear approval."
             : scheduleChanged
               ? "Schedule-only change: approval is preserved."
               : "No unsaved composer changes."}
         </p>
         <button
           className="inline-flex items-center gap-1 rounded-md bg-[#15616d] px-3 py-2 text-sm font-semibold text-white hover:bg-[#104d56] disabled:opacity-50"
-          disabled={!canSave || linkedInOverLimit}
+          disabled={!canSave}
           onClick={() =>
             props.onSave({
               title,
@@ -1467,7 +1736,18 @@ function PersistedPostComposer(props: {
               scheduledDate,
               scheduledTime,
               timezone,
-              platformSettings: settingsChanged ? nextPlatformSettings : undefined,
+              blogMetadata: blogMetadataChanged
+                ? {
+                    blogExcerpt: blogExcerpt.trim() || undefined,
+                    blogAuthor: blogAuthor.trim() || undefined,
+                    blogCategory: blogCategory.trim() || undefined,
+                    blogTags: blogTags.length ? blogTags : undefined,
+                    blogSlug: blogSlug.trim() || undefined,
+                    heroImageUrl:
+                      heroImageUrl.trim() || resolvedHeroUrl || undefined,
+                    heroImageStorageId,
+                  }
+                : undefined,
             })
           }
           type="button"
@@ -1480,215 +1760,6 @@ function PersistedPostComposer(props: {
   );
 }
 
-function PlatformSettingsPane(props: {
-  channelId: V2ChannelId;
-  contentLength: number;
-  linkedIn: V2LinkedInPlatformSettings;
-  reddit: V2RedditPlatformSettings;
-  corvoBlog: V2CorvoBlogPlatformSettings;
-  onLinkedInChange: (value: V2LinkedInPlatformSettings) => void;
-  onRedditChange: (value: V2RedditPlatformSettings) => void;
-  onCorvoBlogChange: (value: V2CorvoBlogPlatformSettings) => void;
-}) {
-  const { channelId } = props;
-
-  return (
-    <div className="rounded-md border border-black/10 bg-black/[0.02] p-3 text-xs text-gray-600">
-      <p className="font-semibold text-gray-700">Platform settings</p>
-      {channelId === "linkedin" && (
-        <div className="mt-2 space-y-2">
-          <p className={props.contentLength > 3000 ? "text-red-600" : undefined}>
-            LinkedIn character count: {props.contentLength} / 3000
-          </p>
-          <label className="block">
-            Call to action
-            <input
-              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
-              onChange={(event) =>
-                props.onLinkedInChange({ ...props.linkedIn, cta: event.target.value })
-              }
-              value={props.linkedIn.cta ?? ""}
-            />
-          </label>
-          <label className="block">
-            Hashtags
-            <input
-              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
-              onChange={(event) =>
-                props.onLinkedInChange({
-                  ...props.linkedIn,
-                  hashtags: normalizeHashtagsInput(event.target.value),
-                })
-              }
-              placeholder="#corvo, growth"
-              value={(props.linkedIn.hashtags ?? []).map((tag) => `#${tag}`).join(" ")}
-            />
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              checked={props.linkedIn.linkPreview ?? true}
-              onChange={(event) =>
-                props.onLinkedInChange({
-                  ...props.linkedIn,
-                  linkPreview: event.target.checked,
-                })
-              }
-              type="checkbox"
-            />
-            Enable link preview
-          </label>
-        </div>
-      )}
-      {channelId === "reddit" && (
-        <div className="mt-2 space-y-2">
-          <label className="block">
-            Subreddit
-            <input
-              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
-              onChange={(event) =>
-                props.onRedditChange({ ...props.reddit, subreddit: event.target.value })
-              }
-              placeholder="r/startups"
-              value={props.reddit.subreddit ?? ""}
-            />
-          </label>
-          <label className="block">
-            Flair
-            <input
-              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
-              onChange={(event) =>
-                props.onRedditChange({ ...props.reddit, flair: event.target.value })
-              }
-              value={props.reddit.flair ?? ""}
-            />
-          </label>
-          <label className="block">
-            Sensitivity
-            <input
-              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
-              onChange={(event) =>
-                props.onRedditChange({ ...props.reddit, sensitivity: event.target.value })
-              }
-              value={props.reddit.sensitivity ?? ""}
-            />
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              checked={props.reddit.nsfw ?? false}
-              onChange={(event) =>
-                props.onRedditChange({ ...props.reddit, nsfw: event.target.checked })
-              }
-              type="checkbox"
-            />
-            NSFW
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              checked={props.reddit.spoiler ?? false}
-              onChange={(event) =>
-                props.onRedditChange({ ...props.reddit, spoiler: event.target.checked })
-              }
-              type="checkbox"
-            />
-            Spoiler
-          </label>
-        </div>
-      )}
-      {channelId === "corvo-blog" && (
-        <div className="mt-2 space-y-2">
-          <label className="block">
-            Canonical URL override
-            <input
-              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
-              onChange={(event) =>
-                props.onCorvoBlogChange({
-                  ...props.corvoBlog,
-                  canonicalUrl: event.target.value,
-                })
-              }
-              value={props.corvoBlog.canonicalUrl ?? ""}
-            />
-          </label>
-          <label className="block">
-            OG image URL
-            <input
-              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
-              onChange={(event) =>
-                props.onCorvoBlogChange({ ...props.corvoBlog, ogImage: event.target.value })
-              }
-              value={props.corvoBlog.ogImage ?? ""}
-            />
-          </label>
-          <label className="block">
-            Status flag override
-            <input
-              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
-              onChange={(event) =>
-                props.onCorvoBlogChange({ ...props.corvoBlog, statusFlag: event.target.value })
-              }
-              value={props.corvoBlog.statusFlag ?? ""}
-            />
-          </label>
-          <label className="block">
-            Category override
-            <input
-              className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
-              onChange={(event) =>
-                props.onCorvoBlogChange({
-                  ...props.corvoBlog,
-                  categoryOverride: event.target.value,
-                })
-              }
-              value={props.corvoBlog.categoryOverride ?? ""}
-            />
-          </label>
-        </div>
-      )}
-      {!["linkedin", "reddit", "corvo-blog"].includes(channelId) && (
-        <p className="mt-2">Planning channel. Provider routing may be unavailable.</p>
-      )}
-    </div>
-  );
-}
-
-
-function FilterGroup<T extends string>(props: {
-  label: string;
-  options: Array<{ id: T; name?: string; label?: string }>;
-  selected: T[];
-  onToggle: (id: T) => void;
-}) {
-  return (
-    <fieldset>
-      <legend className="text-xs font-semibold uppercase text-gray-500">
-        {props.label}
-      </legend>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {props.options.map((option) => {
-          const checked = props.selected.includes(option.id);
-          return (
-            <label
-              className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium ${
-                checked
-                  ? "border-[#15616d] bg-[#e8f3f4] text-[#15616d]"
-                  : "border-black/10 text-gray-600 hover:bg-black/5"
-              }`}
-              key={option.id}
-            >
-              <input
-                checked={checked}
-                className="sr-only"
-                onChange={() => props.onToggle(option.id)}
-                type="checkbox"
-              />
-              {option.name ?? option.label ?? option.id}
-            </label>
-          );
-        })}
-      </div>
-    </fieldset>
-  );
-}
 
 function Metric(props: { label: string; value: number }) {
   return (
@@ -1703,6 +1774,22 @@ function Badge(props: { children: ReactNode }) {
   return (
     <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-gray-700">
       {props.children}
+    </span>
+  );
+}
+
+function PrStatusBadge(props: { status: "open" | "merged" | "closed" | "draft" }) {
+  const styles = {
+    open: "bg-sky-100 text-sky-800",
+    merged: "bg-emerald-100 text-emerald-800",
+    closed: "bg-gray-200 text-gray-700",
+    draft: "bg-amber-100 text-amber-800",
+  } as const;
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${styles[props.status]}`}
+    >
+      PR {prStatusLabel(props.status)}
     </span>
   );
 }

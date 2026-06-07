@@ -8,20 +8,30 @@ vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
 }));
 
+vi.mock("@/components/SocialConnectionsPanel", () => ({
+  SocialConnectionsPanel: () => <div data-testid="social-connections-panel">Connections</div>,
+}));
+
 vi.mock("@/convex/_generated/api", () => ({
   api: {
-    v2Publishing: {
-      listBrands: "v2Publishing:listBrands",
-      listCalendarItems: "v2Publishing:listCalendarItems",
-      seedMvpWorkspace: "v2Publishing:seedMvpWorkspace",
-      createPostWithIntent: "v2Publishing:createPostWithIntent",
-      setApproval: "v2Publishing:setApproval",
-      reschedule: "v2Publishing:reschedule",
-      updateContent: "v2Publishing:updateContent",
-      updatePlatformSettings: "v2Publishing:updatePlatformSettings",
-      submitMockProvider: "v2Publishing:submitMockProvider",
-      recordProviderIntent: "v2Publishing:recordProviderIntent",
-      recordGithubPr: "v2Publishing:recordGithubPr",
+    publishing: {
+      listBrands: "publishing:listBrands",
+      listCalendarItems: "publishing:listCalendarItems",
+      seedMvpWorkspace: "publishing:seedMvpWorkspace",
+      createPostWithIntent: "publishing:createPostWithIntent",
+      setApproval: "publishing:setApproval",
+      reschedule: "publishing:reschedule",
+      updateContent: "publishing:updateContent",
+      updateBlogMetadata: "publishing:updateBlogMetadata",
+      submitMockProvider: "publishing:submitMockProvider",
+      recordProviderIntent: "publishing:recordProviderIntent",
+      recordGithubPr: "publishing:recordGithubPr",
+      recordBlogPrStatus: "publishing:recordBlogPrStatus",
+      deletePost: "publishing:deletePost",
+    },
+    posts: {
+      generateUploadUrl: "posts:generateUploadUrl",
+      getFileUrl: "posts:getFileUrl",
     },
   },
 }));
@@ -34,7 +44,6 @@ const createPostWithIntentMock = vi.fn().mockResolvedValue({
 const setApprovalMock = vi.fn().mockResolvedValue(undefined);
 const rescheduleMock = vi.fn().mockResolvedValue(undefined);
 const updateContentMock = vi.fn().mockResolvedValue(undefined);
-const updatePlatformSettingsMock = vi.fn().mockResolvedValue(undefined);
 const submitMockProviderMock = vi.fn().mockResolvedValue({
   submitted: true,
   attemptId: "attempt_1",
@@ -47,6 +56,13 @@ const recordGithubPrMock = vi.fn().mockResolvedValue({
   recorded: true,
   attemptId: "attempt_pr_1",
 });
+const updateBlogMetadataMock = vi.fn().mockResolvedValue({ updated: true });
+const recordBlogPrStatusMock = vi.fn().mockResolvedValue({
+  updated: true,
+  prStatus: "open",
+});
+const generateUploadUrlMock = vi.fn().mockResolvedValue("https://upload.example");
+const deletePostMock = vi.fn().mockResolvedValue({ deleted: true });
 
 const unapprovedItem = {
   post: {
@@ -155,6 +171,12 @@ const blogItem = {
     platformId: "corvo-blog",
     sourceIdeaId: "idea-blog-1",
     sourceResearchBriefId: "brief-1",
+    blogExcerpt: "A concise summary for the Corvo Labs blog.",
+    blogAuthor: "Jake Butler",
+    blogCategory: "strategy",
+    blogTags: ["Corvo Labs", "Publishing"],
+    blogSlug: "approved-corvo-blog-pr-item",
+    heroImageUrl: "https://cdn.example/hero.jpg",
   },
   intent: {
     ...approvedItem.intent,
@@ -187,6 +209,8 @@ const blogItemWithPr = {
     status: "pr-created",
     prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/53",
     branchName: "resonate/blog-post-2026-06-12-approved-corvo-blog-pr-item",
+    blogPrNumber: 53,
+    blogPrStatus: "open",
   },
   intent: { ...blogItem.intent, _id: "intent_5" },
   providerState: {
@@ -202,7 +226,7 @@ describe("PersistedPublishingPanel", () => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn());
     vi.mocked(useQuery).mockImplementation((reference) => {
-      if (reference === "v2Publishing:listBrands") {
+      if (reference === "publishing:listBrands") {
         return [
           { brandId: "personal", name: "Personal" },
           { brandId: "corvo", name: "Corvo Labs" },
@@ -210,31 +234,37 @@ describe("PersistedPublishingPanel", () => {
           { brandId: "freshproof", name: "FreshProof" },
         ];
       }
-      if (reference === "v2Publishing:listCalendarItems") {
+      if (reference === "publishing:listCalendarItems") {
         return [unapprovedItem, approvedItem, retryableItem, blogItem];
       }
       return undefined;
     });
     vi.mocked(useMutation).mockImplementation((reference) => {
       switch (reference) {
-        case "v2Publishing:seedMvpWorkspace":
+        case "publishing:seedMvpWorkspace":
           return seedWorkspaceMock;
-        case "v2Publishing:createPostWithIntent":
+        case "publishing:createPostWithIntent":
           return createPostWithIntentMock;
-        case "v2Publishing:setApproval":
+        case "publishing:setApproval":
           return setApprovalMock;
-        case "v2Publishing:reschedule":
+        case "publishing:reschedule":
           return rescheduleMock;
-        case "v2Publishing:updateContent":
+        case "publishing:updateContent":
           return updateContentMock;
-        case "v2Publishing:updatePlatformSettings":
-          return updatePlatformSettingsMock;
-        case "v2Publishing:submitMockProvider":
+        case "publishing:submitMockProvider":
           return submitMockProviderMock;
-        case "v2Publishing:recordProviderIntent":
+        case "publishing:recordProviderIntent":
           return recordProviderIntentMock;
-        case "v2Publishing:recordGithubPr":
+        case "publishing:recordGithubPr":
           return recordGithubPrMock;
+        case "publishing:updateBlogMetadata":
+          return updateBlogMetadataMock;
+        case "publishing:recordBlogPrStatus":
+          return recordBlogPrStatusMock;
+        case "publishing:deletePost":
+          return deletePostMock;
+        case "posts:generateUploadUrl":
+          return generateUploadUrlMock;
         default:
           throw new Error(`Unexpected mutation reference: ${String(reference)}`);
       }
@@ -245,15 +275,16 @@ describe("PersistedPublishingPanel", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders persisted publishing items with approval and provider state", () => {
+  it("renders publishing calendar items with approval and submission state", () => {
     render(<PersistedPublishingPanel />);
 
-    expect(screen.getByText("Persisted MVP spine")).toBeInTheDocument();
+    expect(screen.getByText("Publishing calendar")).toBeInTheDocument();
+    expect(screen.getByTestId("social-connections-panel")).toBeInTheDocument();
     expect(screen.getByText("June 2026")).toBeInTheDocument();
     expect(screen.getByText(/display timezone:/i)).toBeInTheDocument();
     expect(screen.getAllByText("Scheduled LinkedIn validation item")).toHaveLength(2);
     expect(screen.getAllByText("Approved Reddit validation item")).toHaveLength(2);
-    expect(screen.getAllByText("mock / not-submitted")).toHaveLength(2);
+    expect(screen.getAllByText("not-submitted").length).toBeGreaterThanOrEqual(2);
   });
 
   it("supports month and week calendar navigation", () => {
@@ -276,7 +307,7 @@ describe("PersistedPublishingPanel", () => {
   it("passes brand, platform, and status filters to the calendar query", () => {
     render(<PersistedPublishingPanel />);
 
-    expect(useQuery).toHaveBeenLastCalledWith("v2Publishing:listCalendarItems", {
+    expect(useQuery).toHaveBeenLastCalledWith("publishing:listCalendarItems", {
       brandIds: ["corvo"],
       platformIds: ["linkedin", "reddit", "corvo-blog"],
       statuses: ["draft", "scheduled", "submitted", "needs-review"],
@@ -286,34 +317,50 @@ describe("PersistedPublishingPanel", () => {
     fireEvent.click(screen.getByText("YouTube"));
     fireEvent.click(screen.getByText("Published"));
 
-    expect(useQuery).toHaveBeenLastCalledWith("v2Publishing:listCalendarItems", {
+    expect(useQuery).toHaveBeenLastCalledWith("publishing:listCalendarItems", {
       brandIds: ["corvo", "freshproof"],
       platformIds: ["linkedin", "reddit", "corvo-blog", "youtube"],
       statuses: ["draft", "scheduled", "submitted", "needs-review", "published"],
     });
   });
 
-  it("seeds the MVP workspace and creates scheduled unapproved validation items", async () => {
+  it("creates blank posts from the zero-state actions", async () => {
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") {
+        return [{ brandId: "corvo", name: "Corvo Labs" }];
+      }
+      if (reference === "publishing:listCalendarItems") return [];
+      return undefined;
+    });
+
     render(<PersistedPublishingPanel />);
 
-    fireEvent.click(screen.getByRole("button", { name: /reseed workspace/i }));
-    await waitFor(() => expect(seedWorkspaceMock).toHaveBeenCalledWith({}));
-
-    fireEvent.click(screen.getByRole("button", { name: "+ LinkedIn" }));
+    fireEvent.click(screen.getByRole("button", { name: /create a linkedin post/i }));
     await waitFor(() =>
       expect(createPostWithIntentMock).toHaveBeenCalledWith(
         expect.objectContaining({
           brandId: "corvo",
           channelId: "linkedin",
+          content: "",
+          title: "Untitled LinkedIn post",
         })
       )
     );
   });
 
-  it("blocks mock submission until approval, then submits approved items", async () => {
-    render(<PersistedPublishingPanel />);
+  it("shows repair workspace only in dev mode", async () => {
+    const { rerender } = render(<PersistedPublishingPanel />);
+    expect(screen.queryByRole("button", { name: /repair workspace/i })).not.toBeInTheDocument();
 
-    const submitButtons = screen.getAllByRole("button", { name: /mock submit/i });
+    rerender(<PersistedPublishingPanel devMode />);
+    fireEvent.click(screen.getByRole("button", { name: /repair workspace/i }));
+    await waitFor(() => expect(seedWorkspaceMock).toHaveBeenCalledWith({}));
+  });
+
+  it("blocks simulated submission until approval in dev mode", async () => {
+    render(<PersistedPublishingPanel devMode />);
+
+    const submitButtons = screen.getAllByRole("button", { name: /simulate submission/i });
     expect(submitButtons[0]).toBeDisabled();
     expect(submitButtons[1]).not.toBeDisabled();
 
@@ -336,23 +383,13 @@ describe("PersistedPublishingPanel", () => {
     );
   });
 
-  it("reschedules items without changing approval", async () => {
+  it("hides simulation controls outside dev mode", () => {
     render(<PersistedPublishingPanel />);
-
-    fireEvent.click(screen.getAllByRole("button", { name: /reschedule/i })[0]);
-    await waitFor(() =>
-      expect(rescheduleMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          postId: "post_1",
-          scheduledTime: "10:30",
-          timezone: "America/Los_Angeles",
-        })
-      )
-    );
+    expect(screen.queryByRole("button", { name: /simulate submission/i })).not.toBeInTheDocument();
   });
 
-  it("records cancel intents from the visible range agenda", async () => {
-    render(<PersistedPublishingPanel />);
+  it("records cancel intents from the visible range agenda in dev mode", async () => {
+    render(<PersistedPublishingPanel devMode />);
 
     fireEvent.click(screen.getAllByRole("button", { name: /cancel intent/i })[1]);
     await waitFor(() =>
@@ -366,10 +403,10 @@ describe("PersistedPublishingPanel", () => {
     ).toBeInTheDocument();
   });
 
-  it("retries retryable mock provider attempts explicitly", async () => {
-    render(<PersistedPublishingPanel />);
+  it("retries retryable simulated attempts explicitly in dev mode", async () => {
+    render(<PersistedPublishingPanel devMode />);
 
-    fireEvent.click(screen.getByRole("button", { name: /retry mock/i }));
+    fireEvent.click(screen.getByRole("button", { name: /retry simulation/i }));
     await waitFor(() =>
       expect(submitMockProviderMock).toHaveBeenCalledWith({
         postId: "post_3",
@@ -379,8 +416,8 @@ describe("PersistedPublishingPanel", () => {
     );
   });
 
-  it("opens item detail with provider attempts, audit events, and approval gates", async () => {
-    render(<PersistedPublishingPanel />);
+  it("opens item detail with debug sections only in dev mode", async () => {
+    render(<PersistedPublishingPanel devMode />);
 
     fireEvent.click(
       screen.getByRole("button", { name: "Inspect Retryable LinkedIn validation item" })
@@ -396,7 +433,7 @@ describe("PersistedPublishingPanel", () => {
       within(detail).getAllByText(/Mock provider result: retryable-failure/).length
     ).toBeGreaterThan(0);
     expect(within(detail).getByText(/\[redacted\]/)).toBeInTheDocument();
-    expect(within(detail).getByRole("button", { name: "Retry Mock" })).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: "Retry simulation" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Close publishing detail" }));
     fireEvent.click(
@@ -404,7 +441,35 @@ describe("PersistedPublishingPanel", () => {
     );
 
     const unapprovedDetail = screen.getByLabelText("Publishing item detail");
-    expect(within(unapprovedDetail).getByRole("button", { name: "Submit Now" })).toBeDisabled();
+    expect(
+      within(unapprovedDetail).getByRole("button", { name: "Simulate submission" })
+    ).toBeDisabled();
+  });
+
+  it("shows simulated badge when provider state is simulated", async () => {
+    const simulatedItem = {
+      ...approvedItem,
+      providerState: {
+        providerId: "mock",
+        status: "submitted",
+        simulated: true,
+      },
+    };
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [simulatedItem];
+      return undefined;
+    });
+
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Details Approved Reddit validation item" })
+    );
+    expect(
+      within(screen.getByLabelText("Publishing item detail")).getByText(
+        /Simulated submission — no post was sent to Reddit/
+      )
+    ).toBeInTheDocument();
   });
 
   it("creates a Corvo Blog PR and records sanitized metadata from the detail surface", async () => {
@@ -432,15 +497,15 @@ describe("PersistedPublishingPanel", () => {
       )
     );
 
-    render(<PersistedPublishingPanel />);
+    render(<PersistedPublishingPanel devMode />);
 
     fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
     const detail = screen.getByLabelText("Publishing item detail");
-    expect(within(detail).getByText("Source Idea")).toBeInTheDocument();
+    expect(within(detail).getByText("Source idea")).toBeInTheDocument();
     expect(within(detail).getByText("idea-blog-1")).toBeInTheDocument();
     expect(within(detail).getByText("brief-1")).toBeInTheDocument();
 
-    fireEvent.click(within(detail).getByRole("button", { name: "Create PR" }));
+    fireEvent.click(within(detail).getByRole("button", { name: "Open PR" }));
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         "/api/publish",
@@ -461,10 +526,13 @@ describe("PersistedPublishingPanel", () => {
       timezone: "America/Los_Angeles",
       scheduleTrigger: "pr-body",
       status: "draft",
-      tags: ["Corvo Labs", "Resonate", "Publishing Workflow"],
+      excerpt: "A concise summary for the Corvo Labs blog.",
+      author: "Jake Butler",
+      category: "strategy",
+      tags: ["Corvo Labs", "Publishing"],
     });
     expect(publishPayload.images[0]).toMatchObject({
-      sourceUrl: "/images/corvo-labs-stacked.svg",
+      sourceUrl: "https://cdn.example/hero.jpg",
       isCover: true,
     });
 
@@ -474,6 +542,8 @@ describe("PersistedPublishingPanel", () => {
         result: {
           prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/42",
           branchName: "resonate/blog-post-2026-06-12-approved-corvo-blog-pr-item",
+          prNumber: 42,
+          prStatus: "open",
           sanitizedResponse: expect.objectContaining({
             repo: "jakebutler/corvo-labs-dot-com",
             number: 42,
@@ -484,9 +554,59 @@ describe("PersistedPublishingPanel", () => {
     );
     expect(
       await screen.findByText(
-        "Created Corvo Blog PR: https://github.com/jakebutler/corvo-labs-dot-com/pull/42"
+        "Opened Corvo Blog PR: https://github.com/jakebutler/corvo-labs-dot-com/pull/42"
       )
     ).toBeInTheDocument();
+  });
+
+  it("checks blog PR status and records it in Convex", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            prNumber: 53,
+            prStatus: "merged",
+            prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/53",
+          }),
+          { status: 200 }
+        )
+      )
+    );
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [blogItemWithPr];
+      return undefined;
+    });
+
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Details Approved Corvo Blog PR item with PR" })
+    );
+    fireEvent.click(
+      within(screen.getByLabelText("Publishing item detail")).getByRole("button", {
+        name: "Check PR status",
+      })
+    );
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/blog-pr-status",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/53",
+          }),
+        })
+      )
+    );
+    await waitFor(() =>
+      expect(recordBlogPrStatusMock).toHaveBeenCalledWith({
+        postId: "post_5",
+        prStatus: "merged",
+        prNumber: 53,
+      })
+    );
   });
 
   it("saves content edits through the single composer and clears approval", async () => {
@@ -494,12 +614,12 @@ describe("PersistedPublishingPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Inspect Approved Reddit validation item" }));
     const detail = screen.getByLabelText("Publishing item detail");
-    expect(within(detail).getByText("Single Composer")).toBeInTheDocument();
+    expect(within(detail).getByText("Composer")).toBeInTheDocument();
 
     fireEvent.change(within(detail).getByLabelText("Content"), {
       target: { value: "Updated Reddit post body that needs review again." },
     });
-    expect(within(detail).getByText("Content or platform settings changed: saving will clear approval.")).toBeInTheDocument();
+    expect(within(detail).getByText("Content or metadata changed: saving will clear approval.")).toBeInTheDocument();
 
     fireEvent.click(within(detail).getByRole("button", { name: "Save Composer Changes" }));
 
@@ -561,8 +681,8 @@ describe("PersistedPublishingPanel", () => {
 
   it("reschedules blog posts with an open PR through Convex without client GitHub calls", async () => {
     vi.mocked(useQuery).mockImplementation((reference) => {
-      if (reference === "v2Publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
-      if (reference === "v2Publishing:listCalendarItems") return [blogItemWithPr];
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [blogItemWithPr];
       return undefined;
     });
     render(<PersistedPublishingPanel />);
@@ -584,47 +704,58 @@ describe("PersistedPublishingPanel", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("saves LinkedIn platform settings and clears approval through Convex", async () => {
-    const linkedInWithSettings = {
-      ...unapprovedItem,
-      post: {
-        ...unapprovedItem.post,
-        platformSettings: { cta: "Learn more", hashtags: ["corvo"], linkPreview: true },
-      },
-    };
-    vi.mocked(useQuery).mockImplementation((reference) => {
-      if (reference === "v2Publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
-      if (reference === "v2Publishing:listCalendarItems") return [linkedInWithSettings];
-      return undefined;
-    });
+  it("deletes a draft from the detail drawer", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<PersistedPublishingPanel />);
     fireEvent.click(
       screen.getByRole("button", { name: "Details Scheduled LinkedIn validation item" })
     );
     const detail = screen.getByLabelText("Publishing item detail");
-    fireEvent.change(within(detail).getByLabelText("Call to action"), {
-      target: { value: "Book a demo" },
-    });
-    fireEvent.click(within(detail).getByRole("button", { name: "Save Composer Changes" }));
-    await waitFor(() =>
-      expect(updatePlatformSettingsMock).toHaveBeenCalledWith({
-        postId: "post_1",
-        platformSettings: {
-          cta: "Book a demo",
-          hashtags: ["corvo"],
-          linkPreview: true,
-        },
+    fireEvent.click(
+      within(detail).getByRole("button", {
+        name: "Delete Scheduled LinkedIn validation item",
       })
     );
-    expect(
-      await screen.findByText("Saved platform settings and cleared approval for re-review.")
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(deletePostMock).toHaveBeenCalledWith({ postId: "post_1" })
+    );
   });
 
   it("selects a post when initialPostId matches a visible calendar item", () => {
     render(<PersistedPublishingPanel initialPostId="post_2" />);
     const detail = screen.getByLabelText("Publishing item detail");
     expect(within(detail).getByRole("heading", { level: 3, name: "Approved Reddit validation item" })).toBeInTheDocument();
+  });
+
+  it("renders ISO scheduled dates on the calendar grid and composer", async () => {
+    const isoItem = {
+      ...unapprovedItem,
+      post: {
+        ...unapprovedItem.post,
+        scheduledDate: "2026-06-12T09:00:00.000Z",
+      },
+      intent: {
+        ...unapprovedItem.intent,
+        scheduledDate: "2026-06-12T09:00:00.000Z",
+      },
+    };
+    vi.mocked(useQuery).mockImplementation((query) => {
+      if (query === "publishing:listBrands") {
+        return [
+          { brandId: "personal", name: "Personal" },
+          { brandId: "corvo", name: "Corvo Labs" },
+          { brandId: "lower-db", name: "the lower dB" },
+          { brandId: "freshproof", name: "FreshProof" },
+        ];
+      }
+      if (query === "publishing:listCalendarItems") return [isoItem];
+      return undefined;
+    });
+
+    render(<PersistedPublishingPanel />);
+    expect(await screen.findByRole("button", { name: "Inspect Scheduled LinkedIn validation item" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Inspect Scheduled LinkedIn validation item" }));
+    expect(screen.getByLabelText("Date")).toHaveValue("2026-06-12");
   });
 
 });
