@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
   CalendarDays,
   Ban,
@@ -327,12 +327,25 @@ export function PersistedPublishingPanel({
   >(undefined);
   const [message, setMessage] = useState<string | null>(null);
 
-  const brands = useQuery(api.publishing.listBrands);
-  const items = useQuery(api.publishing.listCalendarItems, {
-    brandIds: brandFilters,
-    platformIds: platformFilters,
-    statuses: statusFilters,
-  }) as PersistedCalendarItem[] | undefined;
+  // Convex queries must wait for the Clerk token to reach the Convex client.
+  // Firing them before that makes requireUserId throw "Unauthorized" server-side,
+  // which surfaces as a client error on the calendar right after sign-in.
+  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
+
+  const brands = useQuery(
+    api.publishing.listBrands,
+    isConvexAuthenticated ? {} : "skip"
+  );
+  const items = useQuery(
+    api.publishing.listCalendarItems,
+    isConvexAuthenticated
+      ? {
+          brandIds: brandFilters,
+          platformIds: platformFilters,
+          statuses: statusFilters,
+        }
+      : "skip"
+  ) as PersistedCalendarItem[] | undefined;
   const seedWorkspace = useMutation(api.publishing.seedMvpWorkspace);
   const createPostWithIntent = useMutation(api.publishing.createPostWithIntent);
   const setApproval = useMutation(api.publishing.setApproval);

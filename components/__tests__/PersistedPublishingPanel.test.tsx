@@ -6,6 +6,9 @@ import { PersistedPublishingPanel } from "@/components/PersistedPublishingPanel"
 vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
   useQuery: vi.fn(),
+  // The panel skips its queries until Convex has the Clerk token, so the
+  // default here must report an authenticated session.
+  useConvexAuth: vi.fn(() => ({ isLoading: false, isAuthenticated: true })),
 }));
 
 vi.mock("@/components/SocialConnectionsPanel", () => ({

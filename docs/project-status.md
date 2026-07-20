@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 07/20/2026 12:15:15 PDT
+Last updated: 07/20/2026 12:30:29 PDT
 
 ## State
 
@@ -16,19 +16,20 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- be3135f fix: resolve allowlist email via clerkClient, not currentUser
+- d2cd8f7 feat: add sign-out via Clerk UserButton in the workspace header
 
 ## Recent Commits
 
+- d2cd8f7 feat: add sign-out via Clerk UserButton in the workspace header
 - be3135f fix: resolve allowlist email via clerkClient, not currentUser
 - 3bb03fc fix: add log-only rollout mode for the email allowlist
 - abce46a fix: enforce email allowlist, gate blog PR publishing on approval
 - 645f27f docs: add source-grounded series spec and consolidated tri-review
-- 5464f11 docs: commit 2026-06-07 cutover smoke and 2026-07-19 ship plan
 
 ## Local Working Tree
 
-- M  components/shell/Shell.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
 
 ## Next Agent Pickup
 
