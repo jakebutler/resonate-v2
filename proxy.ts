@@ -1,4 +1,4 @@
-import { clerkMiddleware, createRouteMatcher, currentUser } from "@clerk/nextjs/server";
+import { clerkMiddleware, createRouteMatcher, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
@@ -62,21 +62,37 @@ function denyRequest(req: Request, message: string, status: 403 | 503) {
  * apply an explicit policy rather than throwing out of middleware.
  */
 async function resolvePrimaryEmail(
+  userId: string,
   sessionClaims: Record<string, unknown> | null | undefined
 ): Promise<string | null> {
-  const claimEmail =
-    typeof sessionClaims?.email === "string"
-      ? sessionClaims.email
-      : typeof sessionClaims?.primary_email_address === "string"
-        ? sessionClaims.primary_email_address
-        : null;
-  if (claimEmail) return claimEmail.trim().toLowerCase();
+  // Preferred path: a session-token claim. Costs nothing. Requires the Clerk
+  // session token to be customized to include the email (see docs/ops-runbook).
+  for (const key of ["email", "primary_email_address", "email_address"]) {
+    const value = sessionClaims?.[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim().toLowerCase();
+    }
+  }
 
+  // Fallback: ask the Clerk Backend API directly.
+  //
+  // NOTE: currentUser() does NOT work here. It reads request context that
+  // clerkMiddleware has not established yet, and throws "Clerk can't detect
+  // usage of clerkMiddleware()". clerkClient() takes the userId explicitly and
+  // works in middleware, at the cost of one API call per request.
   try {
-    const user = await currentUser();
-    return user?.primaryEmailAddress?.emailAddress?.trim().toLowerCase() ?? null;
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const primaryId = user.primaryEmailAddressId;
+    const primary =
+      user.emailAddresses.find((entry) => entry.id === primaryId) ?? user.emailAddresses[0];
+    return primary?.emailAddress?.trim().toLowerCase() ?? null;
   } catch (error) {
-    console.error("[proxy] Failed to resolve user email for allowlist check.", error);
+    console.error(
+      "[proxy] Failed to resolve user email for allowlist check. Available session claim keys:",
+      sessionClaims ? Object.keys(sessionClaims).join(",") : "(none)",
+      error
+    );
     return null;
   }
 }
@@ -108,7 +124,10 @@ const authProxy = clerkMiddleware(async (auth, req) => {
     return NextResponse.next();
   }
 
-  const email = await resolvePrimaryEmail(sessionClaims as Record<string, unknown> | null);
+  const email = await resolvePrimaryEmail(
+    userId,
+    sessionClaims as Record<string, unknown> | null
+  );
 
   if (!email) {
     // Could not establish identity. Fail closed, but say so distinctly from a
