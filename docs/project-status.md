@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 07/19/2026 20:48:39 PDT
+Last updated: 07/19/2026 20:56:53 PDT
 
 ## State
 
@@ -12,37 +12,23 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Updated repository documentation and handoff records.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- 645f27f docs: add source-grounded series spec and consolidated tri-review
+- abce46a fix: enforce email allowlist, gate blog PR publishing on approval
 
 ## Recent Commits
 
+- abce46a fix: enforce email allowlist, gate blog PR publishing on approval
 - 645f27f docs: add source-grounded series spec and consolidated tri-review
 - 5464f11 docs: commit 2026-06-07 cutover smoke and 2026-07-19 ship plan
 - 9bbbde4 Complete production cutover: calendar at / and domain on resonate-v2.
 - e36fe51 Fix IdeaDetail post link type for workspace posts.
-- cf94b4e Standardize workspace UI and drop transitional v2 naming.
 
 ## Local Working Tree
 
 - M  .env.local.example
-- M  app/api/__tests__/e2e-mvp-flow.test.ts
-- M  app/api/claim-map/__tests__/route.test.ts
-- M  app/api/claim-map/route.ts
-- M  app/api/long-form-draft/__tests__/route.test.ts
-- M  app/api/long-form-draft/route.ts
-- M  app/api/publish/__tests__/route.test.ts
-- M  app/api/publish/route.ts
-- M  app/api/research-brief/__tests__/route.test.ts
-- M  app/api/research-brief/route.ts
-- M  components/PersistedPublishingPanel.tsx
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
-- A  docs/smoke-runs/2026-07-20-cutover-readiness.md
-- A  lib/pioneerAiRoute.ts
-- M  plans/2026-07-19-source-grounded-series-spec.md
 - M  proxy.ts
 
 ## Next Agent Pickup
