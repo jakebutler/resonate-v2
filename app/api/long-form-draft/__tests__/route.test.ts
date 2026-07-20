@@ -56,14 +56,17 @@ const validBody = {
 
 describe("POST /api/long-form-draft", () => {
   const originalApiKey = process.env.PIONEER_API_KEY;
+  const originalAllowMock = process.env.RESONATE_ALLOW_MOCK_AI;
 
   beforeEach(() => {
     vi.restoreAllMocks();
     delete process.env.PIONEER_API_KEY;
+    delete process.env.RESONATE_ALLOW_MOCK_AI;
   });
 
   afterEach(() => {
     process.env.PIONEER_API_KEY = originalApiKey;
+    process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
     vi.unstubAllGlobals();
   });
 
@@ -77,7 +80,16 @@ describe("POST /api/long-form-draft", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns a placeholder draft when Pioneer is not configured", async () => {
+  it("returns 503 when Pioneer is not configured and mock mode is disabled", async () => {
+    const res = await POST(makeRequest(validBody));
+    const data = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(data.error).toContain("PIONEER_API_KEY");
+  });
+
+  it("returns a placeholder draft when Pioneer is not configured and mock mode is enabled", async () => {
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
     const res = await POST(makeRequest(validBody));
     const data = await res.json();
 
@@ -90,12 +102,14 @@ describe("POST /api/long-form-draft", () => {
   });
 
   it("draft preserves thesis from the outline", async () => {
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
     const res = await POST(makeRequest(validBody));
     const data = await res.json();
     expect(data.draft).toContain("predictable");
   });
 
   it("draft includes footnote or citation reference from accepted claims", async () => {
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
     const res = await POST(makeRequest(validBody));
     const data = await res.json();
     expect(data.draft).toMatch(/\[1\]|\[\^1\]|STEP 4/i);
@@ -123,14 +137,14 @@ describe("POST /api/long-form-draft", () => {
     expect(data.draft).toContain("Evidence-based");
   });
 
-  it("falls back to mock when Pioneer fails", async () => {
+  it("returns 502 when Pioneer fails", async () => {
     process.env.PIONEER_API_KEY = "test-key";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("bad", { status: 502 })));
 
     const res = await POST(makeRequest(validBody));
     const data = await res.json();
 
-    expect(data.provider).toBe("mock");
-    expect(data.warning).toBeTruthy();
+    expect(res.status).toBe(502);
+    expect(data.error).toContain("PioneerAI");
   });
 });

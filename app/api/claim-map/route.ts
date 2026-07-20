@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { makeClaim, type ClaimConfidence, type EvidenceLabel, type SourceRecord } from "@/lib/domain";
+import {
+  allowMockAi,
+  missingPioneerKeyResponse,
+  pioneerUpstreamErrorResponse,
+} from "@/lib/pioneerAiRoute";
 
 export const runtime = "nodejs";
 
@@ -91,6 +96,9 @@ export async function POST(req: NextRequest) {
   const model = process.env.PIONEER_DRAFT_MODEL?.trim() || "claude-opus-4-7";
 
   if (!apiKey) {
+    if (!allowMockAi()) {
+      return missingPioneerKeyResponse();
+    }
     const claims = buildMockClaims(body.acceptedSources);
     return NextResponse.json({
       claims,
@@ -121,12 +129,7 @@ export async function POST(req: NextRequest) {
     if (!response.ok) {
       const detail = await response.text();
       console.error("Pioneer claim-map error [model=%s]: %s", model, detail);
-      const claims = buildMockClaims(body.acceptedSources);
-      return NextResponse.json({
-        claims,
-        provider: "mock",
-        warning: "PioneerAI returned an error. Returning mock claims for continuity.",
-      });
+      return pioneerUpstreamErrorResponse();
     }
 
     const data = await response.json();
@@ -141,12 +144,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!rawClaims) {
-      const claims = buildMockClaims(body.acceptedSources);
-      return NextResponse.json({
-        claims,
-        provider: "mock",
-        warning: "PioneerAI response could not be parsed as a claim list. Returning mock claims.",
-      });
+      return pioneerUpstreamErrorResponse("PioneerAI response could not be parsed as a claim list.");
     }
 
     const claims = rawClaims
@@ -164,11 +162,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ claims, provider: "pioneer", model });
   } catch (error) {
     console.error("Pioneer claim-map request failed:", error instanceof Error ? error.message : String(error));
-    const claims = buildMockClaims(body.acceptedSources);
-    return NextResponse.json({
-      claims,
-      provider: "mock",
-      warning: "PioneerAI request failed. Returning mock claims for continuity.",
-    });
+    return pioneerUpstreamErrorResponse();
   }
 }

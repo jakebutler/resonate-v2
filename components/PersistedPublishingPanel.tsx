@@ -609,6 +609,7 @@ export function PersistedPublishingPanel({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        postId: item.post._id,
         title: item.post.title,
         content: item.post.content,
         scheduledDate: item.intent?.scheduledDate ?? item.post.scheduledDate ?? nextFridayDate(),

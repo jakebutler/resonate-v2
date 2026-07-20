@@ -520,6 +520,7 @@ describe("PersistedPublishingPanel", () => {
       (vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string
     );
     expect(publishPayload).toMatchObject({
+      postId: "post_4",
       title: "Approved Corvo Blog PR item",
       scheduledDate: "2026-06-12",
       scheduledTime: "09:00",

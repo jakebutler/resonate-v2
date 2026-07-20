@@ -4,7 +4,7 @@
  * Tests the complete sequence without mocking the route handlers:
  * research-brief → (human accept) → claim-map → (human accept) → editorial-outline → long-form-draft
  *
- * All routes run with no PIONEER_API_KEY so we exercise the deterministic mock path.
+ * All routes run with RESONATE_ALLOW_MOCK_AI=1 so we exercise the deterministic mock path.
  * The sequence validates that the output of each step is compatible as input to the next.
  */
 import type { NextRequest } from "next/server";
@@ -26,13 +26,16 @@ function makeRequest(url: string, body: object): NextRequest {
 
 describe("MVP flow: full research pipeline (mock mode)", () => {
   const originalKey = process.env.PIONEER_API_KEY;
+  const originalAllowMock = process.env.RESONATE_ALLOW_MOCK_AI;
 
   beforeEach(() => {
     delete process.env.PIONEER_API_KEY;
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
   });
 
   afterEach(() => {
     process.env.PIONEER_API_KEY = originalKey;
+    process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
   });
 
   it("completes source discovery → claim map → outline → long-form draft in sequence", async () => {
@@ -127,13 +130,16 @@ describe("MVP flow: full research pipeline (mock mode)", () => {
 
 describe("MVP flow: Corvo Labs idea → blog draft (mock mode)", () => {
   const originalKey = process.env.PIONEER_API_KEY;
+  const originalAllowMock = process.env.RESONATE_ALLOW_MOCK_AI;
 
   beforeEach(() => {
     delete process.env.PIONEER_API_KEY;
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
   });
 
   afterEach(() => {
     process.env.PIONEER_API_KEY = originalKey;
+    process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
   });
 
   const corvoIdea = {

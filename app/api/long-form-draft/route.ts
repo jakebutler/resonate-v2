@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Claim, EditorialOutline } from "@/lib/domain";
+import {
+  allowMockAi,
+  missingPioneerKeyResponse,
+  pioneerUpstreamErrorResponse,
+} from "@/lib/pioneerAiRoute";
 
 export const runtime = "nodejs";
 
@@ -95,6 +100,9 @@ export async function POST(req: NextRequest) {
   const model = process.env.PIONEER_DRAFT_MODEL?.trim() || "claude-opus-4-7";
 
   if (!apiKey) {
+    if (!allowMockAi()) {
+      return missingPioneerKeyResponse();
+    }
     const draft = buildMockDraft(body as RequestBody);
     return NextResponse.json({
       draft,
@@ -124,22 +132,19 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       console.error("Pioneer long-form-draft error:", await response.text());
-      const draft = buildMockDraft(body as RequestBody);
-      return NextResponse.json({ draft, provider: "mock", warning: "PioneerAI error. Returning mock draft." });
+      return pioneerUpstreamErrorResponse();
     }
 
     const data = await response.json();
     const draft: string = data?.choices?.[0]?.message?.content ?? "";
 
     if (!draft.trim()) {
-      const mockDraft = buildMockDraft(body as RequestBody);
-      return NextResponse.json({ draft: mockDraft, provider: "mock", warning: "PioneerAI returned empty response. Returning mock draft." });
+      return pioneerUpstreamErrorResponse("PioneerAI returned an empty draft.");
     }
 
     return NextResponse.json({ draft, provider: "pioneer", model });
   } catch (error) {
     console.error("Pioneer long-form-draft request failed:", error instanceof Error ? error.message : String(error));
-    const draft = buildMockDraft(body as RequestBody);
-    return NextResponse.json({ draft, provider: "mock", warning: "PioneerAI request failed. Returning mock draft." });
+    return pioneerUpstreamErrorResponse();
   }
 }

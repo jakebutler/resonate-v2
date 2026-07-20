@@ -1,8 +1,24 @@
 import type { NextRequest } from "next/server"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
+const { mockConvexQuery } = vi.hoisted(() => ({
+  mockConvexQuery: vi.fn(),
+}))
+
 vi.mock("@clerk/nextjs/server", () => ({
-  auth: vi.fn().mockResolvedValue({ userId: "user_123" }),
+  auth: vi.fn().mockResolvedValue({
+    userId: "user_123",
+    getToken: vi.fn().mockResolvedValue("convex-token"),
+  }),
+}))
+
+vi.mock("convex/browser", () => ({
+  ConvexHttpClient: vi.fn(function ConvexHttpClientMock() {
+    return {
+      setAuth: vi.fn(),
+      query: mockConvexQuery,
+    }
+  }),
 }))
 
 vi.mock("@/lib/github", () => ({
@@ -41,8 +57,31 @@ function makeRequest(body: object): NextRequest {
   }) as unknown as NextRequest
 }
 
+const approvedPost = {
+  _id: "post_approved",
+  title: "Server Title",
+  content: "Server Content",
+  approvalState: "approved" as const,
+  scheduledDate: "2026-06-01",
+  scheduledTime: "10:00",
+  timezone: "America/New_York",
+  blogExcerpt: "Server excerpt",
+  blogAuthor: "Server Author",
+  blogTags: ["server-tag"],
+  blogCategory: "server-category",
+  heroImageUrl: "https://cdn.example.com/server-hero.jpg",
+}
+
 describe("POST /api/publish", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.NEXT_PUBLIC_CONVEX_URL = "https://example.convex.cloud"
+    mockConvexQuery.mockResolvedValue(approvedPost)
+    vi.mocked(auth).mockResolvedValue({
+      userId: "user_123",
+      getToken: vi.fn().mockResolvedValue("convex-token"),
+    } as Awaited<ReturnType<typeof auth>>)
+  })
 
   it("returns 401 when not authenticated", async () => {
     vi.mocked(auth).mockResolvedValueOnce({ userId: null } as Awaited<ReturnType<typeof auth>>)
@@ -168,5 +207,49 @@ describe("POST /api/publish", () => {
     vi.mocked(createBlogPostPR).mockRejectedValueOnce(new Error("GitHub API down"))
     const res = await POST(makeRequest({ title: "T", content: "C" }))
     expect(res.status).toBe(500)
+  })
+
+  it("returns 403 when postId is provided but post is not approved", async () => {
+    mockConvexQuery.mockResolvedValueOnce({ ...approvedPost, approvalState: "unapproved" })
+
+    const res = await POST(
+      makeRequest({
+        postId: "post_approved",
+        title: "Client Title",
+        content: "Client Content",
+      })
+    )
+
+    expect(res.status).toBe(403)
+    expect(createBlogPostPR).not.toHaveBeenCalled()
+  })
+
+  it("uses server-side post fields when postId is approved", async () => {
+    const res = await POST(
+      makeRequest({
+        postId: "post_approved",
+        title: "Client Title",
+        content: "Client Content",
+        excerpt: "Client excerpt",
+      })
+    )
+
+    expect(res.status).toBe(200)
+    expect(createBlogPostPR).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Server Title",
+        content: "Server Content",
+        excerpt: "Server excerpt",
+        author: "Server Author",
+        tags: ["server-tag"],
+        category: "server-category",
+        images: [
+          expect.objectContaining({
+            sourceUrl: "https://cdn.example.com/server-hero.jpg",
+            isCover: true,
+          }),
+        ],
+      })
+    )
   })
 })

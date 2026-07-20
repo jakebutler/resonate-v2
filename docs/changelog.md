@@ -2451,3 +2451,51 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - chore/docs-session-wrap
+
+## 07/19/2026 20:48:39 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	app/api/__tests__/e2e-mvp-flow.test.ts
+- M	app/api/claim-map/__tests__/route.test.ts
+- M	app/api/claim-map/route.ts
+- M	app/api/long-form-draft/__tests__/route.test.ts
+- M	app/api/long-form-draft/route.ts
+- M	app/api/publish/__tests__/route.test.ts
+- M	app/api/publish/route.ts
+- M	app/api/research-brief/__tests__/route.test.ts
+- M	app/api/research-brief/route.ts
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- A	docs/smoke-runs/2026-07-20-cutover-readiness.md
+- A	lib/pioneerAiRoute.ts
+- M	plans/2026-07-19-source-grounded-series-spec.md
+- M	proxy.ts
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  app/api/__tests__/e2e-mvp-flow.test.ts
+- M  app/api/claim-map/__tests__/route.test.ts
+- M  app/api/claim-map/route.ts
+- M  app/api/long-form-draft/__tests__/route.test.ts
+- M  app/api/long-form-draft/route.ts
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+- M  app/api/research-brief/__tests__/route.test.ts
+- M  app/api/research-brief/route.ts
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- A  docs/smoke-runs/2026-07-20-cutover-readiness.md
+- A  lib/pioneerAiRoute.ts
+- M  plans/2026-07-19-source-grounded-series-spec.md
+- M  proxy.ts
+
+### Branch
+
+- fix/publish-gate-and-failclosed

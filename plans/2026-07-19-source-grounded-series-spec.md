@@ -1027,3 +1027,33 @@ The spec mandates `requireUserId` → `requireBrandAccess` (spec:641) but omits 
 ## What the reviews confirmed as correct
 
 The `/research` dead-end and mock-fallback hazards are real and well-caught. Immutable corpus pinned to a commit SHA (spec:240-244) is the right call for a multi-week series. The publishing-safety invariants hold: `materializeEntry` never approves, no bulk approve, schedule≠approval (spec:147, 645-646), consistent with `createPostWithIntent` (`convex/publishing.ts:552-553`). The relationship to #45 is correctly drawn — no overlap, and this layer would make #45's evidence-QA agent tractable. The spec's own honesty about R3 being unsolvable in code is a point in its favor.
+
+---
+
+# Addendum: real notebook samples (2026-07-19) — answers O1
+
+Jake supplied three representative lab notebooks, all in `/Volumes/rexy/GitHub/lower-db`:
+
+- `docs/operations/claim-ledger-review/experiments/2026-05-25-v2-concurrent-experiments/human-review-calibration/repair-iteration-5/lab-notes.md` — 157 lines, 6.5 KB
+- `docs/operations/claim-ledger-review/experiments/2026-05-26-evidence-eval-loop-series/input-snapshot/human-review-calibration/repair-iteration-2/lab-notes.md` — 117 lines, 4.6 KB
+- `experiments/weekly-digest-search-bakeoff/lab-book.md` — 432 lines, 21 KB
+
+## What this changes
+
+**1. The "messy data" risk is much smaller than the adversarial review assumed.** These are clean, heading-structured markdown with an explicit `## Objective` / `## Implementation` / phase-or-round sections / conclusions rhythm. Heading-based chunking (§4.4) will work well on this shape. Sizes are trivial — the largest is 21 KB, so the whole corpus for one series fits comfortably in a single prompt if needed. **The chunker can be far simpler than specced, and the CSV/Jupyter truncation logic is not needed for slice 1.**
+
+**2. The corpus unit is the experiment DIRECTORY, not the notebook file.** `repair-iteration-5/` also contains `proposal.md`, `routing-summary.md`, `tuning-summary.md`, `review/`, and comparison output dirs; `weekly-digest-search-bakeoff/` also contains `notebook.ipynb`, `labels/`, `normalized/`, `reports/`. The notebook is the spine, but the citable artifacts sit beside it. `--path` pointed at the experiment directory is the right default.
+
+**3. The content is unusually citable — this is the strongest argument FOR the feature.** These notebooks are dense with hard numbers: `false_accept_rate: 0.0%`, `exact_agreement_rate: 68.8%`, `Raw result count: 505`, `deduped: 383`, `GDELT ... 76.2% error/failure rate`. Claims map to specific measured values with no interpretive gap — exactly the case where citation traceability pays off, and exactly where fabricated content would be most damaging.
+
+**4. A series maps naturally onto iterations/rounds.** `lab-book.md` runs Round 0 → Round 1 → …; the claim-ledger work runs repair-iteration-2 → 4 → 5, with later iterations explicitly referencing earlier ones. The narrative arc a reader wants ("the baseline failed, here's what we changed, here's what it proved") is already latent in the structure. **The series decomposition should follow the notebook's own round/iteration boundaries** rather than asking a model to invent an arc.
+
+**5. Publication scrubbing is confirmed necessary, with a concrete example.** `lab-book.md:33` cites `/Users/jacobbutler/Downloads/hybrid-results.json`. The notebooks also embed full `pnpm tsx` invocations with internal repo paths, internal prompt aliases (`bakeoff_judge_pioneer`, `claim_review_eval_judge_fireworks`), and vendor names. Some of that is fine to publish and some is not — it needs an operator decision at materialization, not a regex. Confirms O3 is real and that the `unreviewed` default gate matters.
+
+**6. `.gitignore` is a live concern (spec:198).** These experiment dirs contain generated output (`normalized/`, `reports/`, `labels/`) that may well be gitignored — and some of it is the actual evidence. The dry-run must clearly report what it skipped.
+
+## Revised guidance for the follow-up build
+
+Keep: immutable corpus pinned to commit SHA, heading-based chunking, the excerpt→`SourceRecord` adapter, series-as-installments.
+
+Change: drop CSV/ipynb chunking from slice 1 (markdown only); default the corpus unit to a directory; derive series installments from the notebook's own round/iteration headings; and carry **full excerpt text** into the claim step — non-negotiable given the P0 finding that `buildClaimPrompt` (`app/api/claim-map/route.ts:56-58`) never sees excerpt bodies.

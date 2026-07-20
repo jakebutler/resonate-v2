@@ -23,14 +23,17 @@ const validBrief = {
 
 describe("POST /api/research-brief", () => {
   const originalApiKey = process.env.PIONEER_API_KEY;
+  const originalAllowMock = process.env.RESONATE_ALLOW_MOCK_AI;
 
   beforeEach(() => {
     vi.restoreAllMocks();
     delete process.env.PIONEER_API_KEY;
+    delete process.env.RESONATE_ALLOW_MOCK_AI;
   });
 
   afterEach(() => {
     process.env.PIONEER_API_KEY = originalApiKey;
+    process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
     vi.unstubAllGlobals();
   });
 
@@ -44,7 +47,16 @@ describe("POST /api/research-brief", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns mock sources when Pioneer is not configured", async () => {
+  it("returns 503 when Pioneer is not configured and mock mode is disabled", async () => {
+    const res = await POST(makeRequest(validBrief));
+    const data = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(data.error).toContain("PIONEER_API_KEY");
+  });
+
+  it("returns mock sources when Pioneer is not configured and mock mode is enabled", async () => {
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
     const res = await POST(makeRequest(validBrief));
     const data = await res.json();
 
@@ -53,7 +65,6 @@ describe("POST /api/research-brief", () => {
     expect(Array.isArray(data.sources)).toBe(true);
     expect(data.sources.length).toBeGreaterThan(0);
 
-    // Each source has required shape
     for (const src of data.sources) {
       expect(src).toHaveProperty("id");
       expect(src).toHaveProperty("url");
@@ -64,6 +75,7 @@ describe("POST /api/research-brief", () => {
   });
 
   it("includes the 2026 clinical-practice discontinuation paper for GLP-1 regain topics", async () => {
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
     const res = await POST(makeRequest(validBrief));
     const data = await res.json();
 
@@ -80,6 +92,7 @@ describe("POST /api/research-brief", () => {
   });
 
   it("includes a warning when returning mock data", async () => {
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
     const res = await POST(makeRequest(validBrief));
     const data = await res.json();
     expect(data.warning).toBeTruthy();
@@ -135,7 +148,7 @@ describe("POST /api/research-brief", () => {
     );
   });
 
-  it("falls back to mock sources when Pioneer returns an error", async () => {
+  it("returns 502 when Pioneer returns an error", async () => {
     process.env.PIONEER_API_KEY = "test-pioneer-key";
     vi.stubGlobal(
       "fetch",
@@ -145,12 +158,11 @@ describe("POST /api/research-brief", () => {
     const res = await POST(makeRequest(validBrief));
     const data = await res.json();
 
-    expect(data.provider).toBe("mock");
-    expect(Array.isArray(data.sources)).toBe(true);
-    expect(data.warning).toBeTruthy();
+    expect(res.status).toBe(502);
+    expect(data.error).toContain("PioneerAI");
   });
 
-  it("falls back to mock sources when Pioneer returns malformed JSON", async () => {
+  it("returns 502 when Pioneer returns malformed JSON", async () => {
     process.env.PIONEER_API_KEY = "test-pioneer-key";
     vi.stubGlobal(
       "fetch",
@@ -167,11 +179,12 @@ describe("POST /api/research-brief", () => {
     const res = await POST(makeRequest(validBrief));
     const data = await res.json();
 
-    expect(data.provider).toBe("mock");
-    expect(data.warning).toBeTruthy();
+    expect(res.status).toBe(502);
+    expect(data.error).toContain("PioneerAI");
   });
 
   it("attaches automation metadata indicating which steps require human review", async () => {
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
     const res = await POST(makeRequest(validBrief));
     const data = await res.json();
 
