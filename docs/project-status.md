@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 07/19/2026 20:15:06 PDT
+Last updated: 07/19/2026 20:34:54 PDT
 
 ## State
 
@@ -16,20 +16,20 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 9bbbde4 Complete production cutover: calendar at / and domain on resonate-v2.
+- 5464f11 docs: commit 2026-06-07 cutover smoke and 2026-07-19 ship plan
 
 ## Recent Commits
 
+- 5464f11 docs: commit 2026-06-07 cutover smoke and 2026-07-19 ship plan
 - 9bbbde4 Complete production cutover: calendar at / and domain on resonate-v2.
 - e36fe51 Fix IdeaDetail post link type for workspace posts.
 - cf94b4e Standardize workspace UI and drop transitional v2 naming.
 - dcb47d3 docs: refresh cutover-readiness smoke after C.2 cutover verification
-- ff16b53 Merge pull request #33 from jakebutler/cutover-c3-final-review
 
 ## Local Working Tree
 
-- A  docs/smoke-runs/2026-06-07-cutover-readiness.md
-- A  plans/2026-07-19-ship-plan.md
+- A  plans/2026-07-19-source-grounded-series-spec.md
+- ?? docs/smoke-runs/2026-07-20-cutover-readiness.md
 
 ## Next Agent Pickup
 
