@@ -19,13 +19,17 @@ export const metadata: Metadata = {
 
 /** Matches CI so preview/branch builds can prerender without Vercel env injection. */
 const CLERK_BUILD_PLACEHOLDER_KEY = "pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA==";
+const CONVEX_BUILD_PLACEHOLDER_URL = "https://convex.test";
 
 const configuredClerkPublishableKey =
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim() || undefined;
 const clerkPublishableKey =
   configuredClerkPublishableKey ??
   (process.env.VERCEL_ENV === "production" ? undefined : CLERK_BUILD_PLACEHOLDER_KEY);
-const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.trim();
+const configuredConvexUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.trim() || undefined;
+const convexUrl =
+  configuredConvexUrl ??
+  (process.env.VERCEL_ENV === "production" ? undefined : CONVEX_BUILD_PLACEHOLDER_URL);
 const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
 
 export default function RootLayout({

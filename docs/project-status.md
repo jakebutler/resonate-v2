@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 07/20/2026 17:03:17 PDT
+Last updated: 07/21/2026 15:53:48 PDT
 
 ## State
 
@@ -16,22 +16,19 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 97b26f7 fix: skip calendar Convex queries until auth is ready
+- e8c231a fix: unblock Vercel preview builds and improve calendar editor UX
 
 ## Recent Commits
 
+- e8c231a fix: unblock Vercel preview builds and improve calendar editor UX
 - 97b26f7 fix: skip calendar Convex queries until auth is ready
 - d2cd8f7 feat: add sign-out via Clerk UserButton in the workspace header
 - be3135f fix: resolve allowlist email via clerkClient, not currentUser
 - 3bb03fc fix: add log-only rollout mode for the email allowlist
-- abce46a fix: enforce email allowlist, gate blog PR publishing on approval
 
 ## Local Working Tree
 
 - M  app/layout.tsx
-- M  components/PersistedPublishingPanel.tsx
-- A  components/shell/MarkdownPreview.tsx
-- M  components/shell/VariantReviewPanel.tsx
 
 ## Next Agent Pickup
 
