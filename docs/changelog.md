@@ -2575,3 +2575,27 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/publish-gate-and-failclosed
+
+## 07/20/2026 17:03:17 PDT
+
+### Summary
+
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	app/layout.tsx
+- M	components/PersistedPublishingPanel.tsx
+- A	components/shell/MarkdownPreview.tsx
+- M	components/shell/VariantReviewPanel.tsx
+
+### Working Tree Snapshot
+
+- M  app/layout.tsx
+- M  components/PersistedPublishingPanel.tsx
+- A  components/shell/MarkdownPreview.tsx
+- M  components/shell/VariantReviewPanel.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed

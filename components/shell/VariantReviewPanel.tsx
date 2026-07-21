@@ -7,6 +7,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MainCard } from "@/components/shell/MainCard";
+import { MarkdownPreview } from "@/components/shell/MarkdownPreview";
 import { Notice } from "@/components/shell/Notice";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { WorkspaceLayout } from "@/components/shell/WorkspaceLayout";
@@ -98,7 +99,9 @@ export function VariantReviewPanel({ postId }: VariantReviewPanelProps) {
           description={
             post
               ? isPending
-                ? "Review the full draft before accepting into the calendar."
+                ? post.channelId === "corvo-blog"
+                  ? "Review the draft, then accept to finish excerpt, hero image, and metadata in the calendar."
+                  : "Review the full draft before accepting into the calendar."
                 : `Status: ${reviewStatus}`
               : "Loading variant…"
           }
@@ -115,14 +118,16 @@ export function VariantReviewPanel({ postId }: VariantReviewPanelProps) {
               <p className="text-sm font-semibold">{CHANNEL_LABELS[post.channelId]}</p>
               <p className={cn("mt-1 text-sm", tokens.textMuted)}>
                 {isPending
-                  ? "Accept to schedule in the calendar, or reject to discard."
+                  ? post.channelId === "corvo-blog"
+                    ? "Accept opens the calendar editor where you finish blog setup before approval."
+                    : "Accept to schedule in the calendar, or reject to discard."
                   : `Review status: ${reviewStatus}`}
               </p>
             </div>
             {isPending ? (
               <div className="flex flex-wrap gap-2">
                 <Button disabled={busy !== null} onClick={acceptVariant} type="button" variant="accent">
-                  {busy === "accept" ? "Accepting…" : "Accept"}
+                  {busy === "accept" ? "Accepting…" : "Accept & open in calendar"}
                 </Button>
                 <Button
                   disabled={busy !== null}
@@ -140,9 +145,7 @@ export function VariantReviewPanel({ postId }: VariantReviewPanelProps) {
             )}
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-4">
-            <pre className={cn("whitespace-pre-wrap font-mono text-sm leading-relaxed", tokens.text)}>
-              {post.content}
-            </pre>
+            <MarkdownPreview content={post.content} />
           </div>
         </MainCard>
       ) : null}

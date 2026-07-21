@@ -24,6 +24,7 @@ import {
 import { SocialConnectionsPanel } from "@/components/SocialConnectionsPanel";
 import { FilterGroup, toggleFilterSet } from "@/components/shell/FilterGroup";
 import { MainCard } from "@/components/shell/MainCard";
+import { MarkdownPreview } from "@/components/shell/MarkdownPreview";
 import { Notice } from "@/components/shell/Notice";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { SidebarCard } from "@/components/shell/SidebarCard";
@@ -775,7 +776,14 @@ export function PersistedPublishingPanel({
         </>
       }
     >
-      <MainCard>
+      <div
+        className={
+          selectedItem
+            ? "grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start"
+            : undefined
+        }
+      >
+        <MainCard className={selectedItem ? "order-2 min-w-0 lg:order-1" : undefined}>
             <div className="grid gap-3 border-b border-black/10 p-4 sm:grid-cols-3">
               <Metric label="Not submitted" value={providerSummary.notSubmitted} />
               <Metric label="Submitted" value={providerSummary.submitted} />
@@ -961,22 +969,25 @@ export function PersistedPublishingPanel({
                 </div>
               </>
             )}
+        </MainCard>
         {selectedItem && (
-          <PublishingDetailDrawer
-            devMode={devMode}
-            item={selectedItem}
-            onApprove={handleApprove}
-            onCheckPrStatus={() => void handleCheckPrStatus(selectedItem)}
-            onClose={() => setManualSelectedPostId(null)}
-            onCreatePr={() => void handleCreatePr(selectedItem)}
-            onProviderIntent={handleProviderIntent}
-            onDelete={handleDelete}
-            onRetry={handleRetry}
-            onSaveComposer={(values) => handleSaveComposer(selectedItem, values)}
-            onSubmit={handleSubmit}
-          />
+          <div className="order-1 min-w-0 lg:order-2">
+            <PublishingDetailDrawer
+              devMode={devMode}
+              item={selectedItem}
+              onApprove={handleApprove}
+              onCheckPrStatus={() => void handleCheckPrStatus(selectedItem)}
+              onClose={() => setManualSelectedPostId(null)}
+              onCreatePr={() => void handleCreatePr(selectedItem)}
+              onProviderIntent={handleProviderIntent}
+              onDelete={handleDelete}
+              onRetry={handleRetry}
+              onSaveComposer={(values) => handleSaveComposer(selectedItem, values)}
+              onSubmit={handleSubmit}
+            />
+          </div>
         )}
-      </MainCard>
+      </div>
     </WorkspaceLayout>
   );
 }
@@ -1199,6 +1210,8 @@ function AgendaItem(props: {
   );
 }
 
+type DetailPanelTab = "compose" | "preview";
+
 function PublishingDetailDrawer(props: {
   devMode: boolean;
   item: PersistedCalendarItem;
@@ -1248,231 +1261,310 @@ function PublishingDetailDrawer(props: {
     providerIntentRecorded;
   const openPrDisabled =
     !approved || !blogPrReady(post) || Boolean(existingPrUrl);
+  const [activeTab, setActiveTab] = useState<DetailPanelTab>("compose");
 
   return (
     <aside
       aria-label="Publishing item detail"
-      className="mt-5 rounded-lg border border-black/10 bg-white p-5 shadow-sm"
+      className="flex max-h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm lg:sticky lg:top-4"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge>{channelLabel(post.channelId)}</Badge>
-            <Badge>{statusLabel(post.status)}</Badge>
-            <Badge>{post.approvalState}</Badge>
-            {providerState?.simulated && <Badge>Simulated</Badge>}
-            {post.blogPrStatus && <PrStatusBadge status={post.blogPrStatus} />}
+      <div className="shrink-0 border-b border-black/10 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>{channelLabel(post.channelId)}</Badge>
+              <Badge>{statusLabel(post.status)}</Badge>
+              <Badge>{post.approvalState}</Badge>
+              {providerState?.simulated && <Badge>Simulated</Badge>}
+              {post.blogPrStatus && <PrStatusBadge status={post.blogPrStatus} />}
+            </div>
+            <h3 className="mt-2 text-lg font-semibold">{post.title}</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              {formatDateTime(intent?.scheduledDate, intent?.scheduledTime, intent?.timezone)}
+              {" · "}
+              {providerState?.status ?? "not-submitted"}
+            </p>
           </div>
-          <h3 className="mt-2 text-lg font-semibold">{post.title}</h3>
-          <p className="mt-1 max-w-4xl text-sm text-gray-600">{post.content}</p>
-        </div>
-        <button
-          aria-label="Close publishing detail"
-          className="inline-flex size-8 items-center justify-center rounded-md border border-black/10 hover:bg-black/5"
-          onClick={props.onClose}
-          type="button"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <KeyValue label="Brand" value={post.brandId} />
-        <KeyValue label="Platform" value={channelLabel(post.channelId)} />
-        <KeyValue
-          label="Schedule"
-          value={formatDateTime(intent?.scheduledDate, intent?.scheduledTime, intent?.timezone)}
-        />
-        <KeyValue
-          label="Submission status"
-          value={providerState?.status ?? "not-submitted"}
-        />
-        {existingPrUrl && (
-          <KeyValue label="Pull request" value={existingPrUrl} />
-        )}
-        {post.blogPrNumber !== undefined && (
-          <KeyValue label="PR number" value={`#${post.blogPrNumber}`} />
-        )}
-        {props.devMode && (
-          <>
-            <KeyValue label="Intent ID" value={String(intent?._id ?? "missing")} />
-            <KeyValue label="Provider post" value={providerState?.providerPostId ?? "not created"} />
-            <KeyValue label="Branch" value={post.branchName ?? "not created"} />
-            <KeyValue label="Source idea" value={post.sourceIdeaId ?? "none"} />
-            <KeyValue label="Research brief" value={post.sourceResearchBriefId ?? "none"} />
-          </>
-        )}
-      </div>
-
-      {providerState?.simulated && (
-        <div className="mt-4 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
-          Simulated submission — no post was sent to {channelLabel(post.channelId)}.
-        </div>
-      )}
-
-      {providerState?.lastResponseSummary && props.devMode && (
-        <div className="mt-4 rounded-md border border-black/10 bg-black/[0.02] p-3 text-sm text-gray-700">
-          {providerState.lastResponseSummary}
-        </div>
-      )}
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          aria-label={`Approve ${post.title}`}
-          className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50"
-          disabled={approved}
-          onClick={() => props.onApprove(post._id)}
-          type="button"
-        >
-          <CheckCircle2 size={15} />
-          Approve
-        </button>
-        {props.devMode && (
           <button
-            className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
-            disabled={submitDisabled}
-            onClick={() => props.onSubmit(post._id)}
-            title={!approved ? "Approval is required before simulating submission." : undefined}
+            aria-label="Close publishing detail"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-black/10 hover:bg-black/5"
+            onClick={props.onClose}
             type="button"
           >
-            <Send size={15} />
-            Simulate submission
+            <X size={16} />
           </button>
-        )}
-        {props.devMode && (
-          <button
-            className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-3 py-2 text-sm font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
-            disabled={providerIntentRecorded}
-            onClick={() => props.onProviderIntent(post._id, providerIntentType)}
-            type="button"
-          >
-            <Ban size={15} />
-            {providerIntentType === "unpublish" ? "Record Unpublish Intent" : "Record Cancel Intent"}
-          </button>
-        )}
-        {post.channelId === "corvo-blog" && (
-          <>
+        </div>
+
+        <div
+          className="mt-4 inline-grid grid-cols-2 rounded-md border border-black/10 bg-black/[0.03] p-1"
+          role="tablist"
+        >
+          {(
+            [
+              { id: "compose" as const, label: "Compose" },
+              { id: "preview" as const, label: "Preview" },
+            ] as const
+          ).map((tab) => (
             <button
-              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
-              disabled={openPrDisabled}
-              onClick={props.onCreatePr}
+              aria-selected={activeTab === tab.id}
+              className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                activeTab === tab.id
+                  ? "bg-white text-[#15616d] shadow-sm"
+                  : "text-gray-600 hover:bg-white/70"
+              }`}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              role="tab"
               type="button"
             >
-              <FileText size={15} />
-              {existingPrUrl ? "PR opened" : "Open PR"}
+              {tab.label}
             </button>
-            {existingPrUrl && (
-              <>
-                <a
-                  className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5"
-                  href={existingPrUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <ExternalLink size={15} />
-                  View PR
-                </a>
-                <button
-                  className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
-                  onClick={props.onCheckPrStatus}
-                  type="button"
-                >
-                  Check PR status
-                </button>
-              </>
+          ))}
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        {activeTab === "preview" ? (
+          <MarkdownPreview content={post.content} />
+        ) : (
+          <>
+            {providerState?.simulated && (
+              <div className="mb-4 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
+                Simulated submission — no post was sent to {channelLabel(post.channelId)}.
+              </div>
+            )}
+
+            {providerState?.lastResponseSummary && props.devMode && (
+              <div className="mb-4 rounded-md border border-black/10 bg-black/[0.02] p-3 text-sm text-gray-700">
+                {providerState.lastResponseSummary}
+              </div>
+            )}
+
+            <PersistedPostComposer
+              embedded
+              item={item}
+              key={post._id}
+              onSave={props.onSaveComposer}
+            />
+
+            <details className="mt-4 rounded-lg border border-black/10 p-4">
+              <summary className="cursor-pointer text-sm font-semibold">Post details</summary>
+              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                <KeyValue label="Brand" value={post.brandId} />
+                <KeyValue label="Platform" value={channelLabel(post.channelId)} />
+                <KeyValue
+                  label="Schedule"
+                  value={formatDateTime(
+                    intent?.scheduledDate,
+                    intent?.scheduledTime,
+                    intent?.timezone
+                  )}
+                />
+                <KeyValue label="Approval" value={post.approvalState} />
+                <KeyValue
+                  label="Submission status"
+                  value={providerState?.status ?? "not-submitted"}
+                />
+                {existingPrUrl && <KeyValue label="Pull request" value={existingPrUrl} />}
+                {post.blogPrNumber !== undefined && (
+                  <KeyValue label="PR number" value={`#${post.blogPrNumber}`} />
+                )}
+                {props.devMode && (
+                  <>
+                    <KeyValue label="Intent ID" value={String(intent?._id ?? "missing")} />
+                    <KeyValue
+                      label="Provider post"
+                      value={providerState?.providerPostId ?? "not created"}
+                    />
+                    <KeyValue label="Branch" value={post.branchName ?? "not created"} />
+                    <KeyValue label="Source idea" value={post.sourceIdeaId ?? "none"} />
+                    <KeyValue
+                      label="Research brief"
+                      value={post.sourceResearchBriefId ?? "none"}
+                    />
+                  </>
+                )}
+              </dl>
+            </details>
+
+            {props.devMode && (
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <section className="rounded-lg border border-black/10 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Send size={15} />
+                    Provider Attempts
+                  </div>
+                  {!item.attempts?.length ? (
+                    <p className="mt-2 text-sm text-gray-600">No provider attempts recorded.</p>
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      {item.attempts.map((attempt, index) => (
+                        <div
+                          className="rounded-md border border-black/10 bg-black/[0.02] p-3"
+                          key={String(attempt._id ?? index)}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold">
+                              {attempt.providerId ?? "unknown"} / {attempt.status ?? "unknown"}
+                            </span>
+                            <span className="text-gray-500">
+                              {formatTimestamp(attempt.createdAt)}
+                            </span>
+                          </div>
+                          <dl className="mt-2 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                            <KeyValue
+                              label="Idempotency key"
+                              value={attempt.idempotencyKey ?? "missing"}
+                            />
+                            <KeyValue
+                              label="Retry count"
+                              value={String(attempt.retryCount ?? 0)}
+                            />
+                          </dl>
+                          <pre className="mt-2 max-h-40 overflow-auto rounded bg-white p-2 text-[11px] text-gray-700">
+                            {renderJson(attempt.sanitizedResponse)}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="rounded-lg border border-black/10 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <History size={15} />
+                    Audit Trail
+                  </div>
+                  {!item.auditEvents?.length ? (
+                    <p className="mt-2 text-sm text-gray-600">No audit events recorded.</p>
+                  ) : (
+                    <ol className="mt-3 space-y-3">
+                      {item.auditEvents.map((event, index) => (
+                        <li
+                          className="rounded-md border border-black/10 p-3"
+                          key={String(event._id ?? index)}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold">
+                              {event.action ?? "audit.event"}
+                            </span>
+                            <span className="text-gray-500">
+                              {formatTimestamp(event.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-700">
+                            {event.summary ?? "No summary."}
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </section>
+              </div>
             )}
           </>
         )}
-        {props.devMode && retryableAttempt && (
+      </div>
+
+      <div className="shrink-0 border-t border-black/10 bg-white p-4">
+        <div className="flex flex-wrap gap-2">
           <button
-            className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
-            onClick={() => props.onRetry(post._id)}
+            aria-label={`Approve ${post.title}`}
+            className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50"
+            disabled={approved}
+            onClick={() => props.onApprove(post._id)}
             type="button"
           >
-            <RotateCcw size={15} />
-            Retry simulation
+            <CheckCircle2 size={15} />
+            Approve
           </button>
-        )}
-        <button
-          aria-label={`Delete ${post.title}`}
-          className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
-          onClick={() => props.onDelete(post._id, post.title)}
-          type="button"
-        >
-          <Trash2 size={15} />
-          Delete draft
-        </button>
-      </div>
-
-      <PersistedPostComposer
-        item={item}
-        key={post._id}
-        onSave={props.onSaveComposer}
-      />
-
-      {props.devMode && (
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <section className="rounded-lg border border-black/10 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Send size={15} />
-            Provider Attempts
-          </div>
-          {!item.attempts?.length ? (
-            <p className="mt-2 text-sm text-gray-600">No provider attempts recorded.</p>
-          ) : (
-            <div className="mt-3 space-y-3">
-              {item.attempts.map((attempt, index) => (
-                <div
-                  className="rounded-md border border-black/10 bg-black/[0.02] p-3"
-                  key={String(attempt._id ?? index)}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold">
-                      {attempt.providerId ?? "unknown"} / {attempt.status ?? "unknown"}
-                    </span>
-                    <span className="text-gray-500">{formatTimestamp(attempt.createdAt)}</span>
-                  </div>
-                  <dl className="mt-2 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
-                    <KeyValue label="Idempotency key" value={attempt.idempotencyKey ?? "missing"} />
-                    <KeyValue label="Retry count" value={String(attempt.retryCount ?? 0)} />
-                  </dl>
-                  <pre className="mt-2 max-h-40 overflow-auto rounded bg-white p-2 text-[11px] text-gray-700">
-                    {renderJson(attempt.sanitizedResponse)}
-                  </pre>
-                </div>
-              ))}
-            </div>
+          {props.devMode && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
+              disabled={submitDisabled}
+              onClick={() => props.onSubmit(post._id)}
+              title={
+                !approved ? "Approval is required before simulating submission." : undefined
+              }
+              type="button"
+            >
+              <Send size={15} />
+              Simulate submission
+            </button>
           )}
-        </section>
-
-        <section className="rounded-lg border border-black/10 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <History size={15} />
-            Audit Trail
-          </div>
-          {!item.auditEvents?.length ? (
-            <p className="mt-2 text-sm text-gray-600">No audit events recorded.</p>
-          ) : (
-            <ol className="mt-3 space-y-3">
-              {item.auditEvents.map((event, index) => (
-                <li className="rounded-md border border-black/10 p-3" key={String(event._id ?? index)}>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold">{event.action ?? "audit.event"}</span>
-                    <span className="text-gray-500">{formatTimestamp(event.createdAt)}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-700">{event.summary ?? "No summary."}</p>
-                </li>
-              ))}
-            </ol>
+          {props.devMode && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-3 py-2 text-sm font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
+              disabled={providerIntentRecorded}
+              onClick={() => props.onProviderIntent(post._id, providerIntentType)}
+              type="button"
+            >
+              <Ban size={15} />
+              {providerIntentType === "unpublish"
+                ? "Record Unpublish Intent"
+                : "Record Cancel Intent"}
+            </button>
           )}
-        </section>
+          {post.channelId === "corvo-blog" && (
+            <>
+              <button
+                className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+                disabled={openPrDisabled}
+                onClick={props.onCreatePr}
+                type="button"
+              >
+                <FileText size={15} />
+                {existingPrUrl ? "PR opened" : "Open PR"}
+              </button>
+              {existingPrUrl && (
+                <>
+                  <a
+                    className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5"
+                    href={existingPrUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <ExternalLink size={15} />
+                    View PR
+                  </a>
+                  <button
+                    className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
+                    onClick={props.onCheckPrStatus}
+                    type="button"
+                  >
+                    Check PR status
+                  </button>
+                </>
+              )}
+            </>
+          )}
+          {props.devMode && retryableAttempt && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
+              onClick={() => props.onRetry(post._id)}
+              type="button"
+            >
+              <RotateCcw size={15} />
+              Retry simulation
+            </button>
+          )}
+          <button
+            aria-label={`Delete ${post.title}`}
+            className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+            onClick={() => props.onDelete(post._id, post.title)}
+            type="button"
+          >
+            <Trash2 size={15} />
+            Delete draft
+          </button>
+        </div>
       </div>
-      )}
     </aside>
   );
 }
 
 function PersistedPostComposer(props: {
+  embedded?: boolean;
   item: PersistedCalendarItem;
   onSave: (values: {
     title: string;
@@ -1566,7 +1658,13 @@ function PersistedPostComposer(props: {
   }
 
   return (
-    <section className="mt-5 rounded-lg border border-black/10 p-4">
+    <section
+      className={
+        props.embedded
+          ? undefined
+          : "mt-5 rounded-lg border border-black/10 p-4"
+      }
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold">Composer</h4>
