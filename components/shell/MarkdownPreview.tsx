@@ -18,7 +18,7 @@ export function MarkdownPreview({
   return (
     <div
       className={cn(
-        "prose prose-sm max-w-none text-gray-800 prose-headings:text-gray-900 prose-a:text-[#15616d]",
+        "prose prose-sm max-w-none text-gray-800 prose-headings:font-semibold prose-headings:text-gray-900 prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-a:text-[#15616d]",
         className
       )}
     >

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 07/21/2026 15:53:48 PDT
+Last updated: 07/21/2026 22:48:16 PDT
 
 ## State
 
@@ -16,19 +16,26 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- e8c231a fix: unblock Vercel preview builds and improve calendar editor UX
+- 722dddf fix: allow Vercel preview builds without NEXT_PUBLIC_CONVEX_URL
 
 ## Recent Commits
 
+- 722dddf fix: allow Vercel preview builds without NEXT_PUBLIC_CONVEX_URL
 - e8c231a fix: unblock Vercel preview builds and improve calendar editor UX
 - 97b26f7 fix: skip calendar Convex queries until auth is ready
 - d2cd8f7 feat: add sign-out via Clerk UserButton in the workspace header
 - be3135f fix: resolve allowlist email via clerkClient, not currentUser
-- 3bb03fc fix: add log-only rollout mode for the email allowlist
 
 ## Local Working Tree
 
+- M  .env.local.example
+- M  app/globals.css
 - M  app/layout.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/shell/MarkdownPreview.tsx
+- M  next.config.ts
+- M  package-lock.json
+- M  package.json
 
 ## Next Agent Pickup
 

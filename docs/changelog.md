@@ -2617,3 +2617,35 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/publish-gate-and-failclosed
+
+## 07/21/2026 22:48:16 PDT
+
+### Summary
+
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	app/globals.css
+- M	app/layout.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/shell/MarkdownPreview.tsx
+- M	next.config.ts
+- M	package-lock.json
+- M	package.json
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  app/globals.css
+- M  app/layout.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/shell/MarkdownPreview.tsx
+- M  next.config.ts
+- M  package-lock.json
+- M  package.json
+
+### Branch
+
+- fix/publish-gate-and-failclosed

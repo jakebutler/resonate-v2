@@ -909,7 +909,9 @@ export function PersistedPublishingPanel({
                       calendarView === "month" && date.getMonth() !== anchorDate.getMonth();
                     return (
                       <div
-                        className={`min-h-[132px] border-b border-r border-black/10 p-2 last:border-r-0 ${
+                        className={`border-b border-r border-black/10 p-2 last:border-r-0 ${
+                          selectedItem ? "min-h-[88px]" : "min-h-[132px]"
+                        } ${
                           outsideMonth ? "bg-black/[0.025] text-gray-400" : "bg-white"
                         }`}
                         key={dateKey}
@@ -922,20 +924,29 @@ export function PersistedPublishingPanel({
                             </span>
                           )}
                         </div>
-                        <div className="mt-2 space-y-1.5">
-                          {dayItems.slice(0, 3).map((item) => (
-                            <CalendarItemChip
-                              item={item}
-                              key={item.post._id}
-                              onSelect={() => setManualSelectedPostId(item.post._id)}
+                        {selectedItem ? (
+                          dayItems.length > 0 ? (
+                            <CalendarDayDots
+                              items={dayItems}
+                              onSelect={(postId) => setManualSelectedPostId(postId)}
                             />
-                          ))}
-                          {dayItems.length > 3 && (
-                            <p className="text-[11px] font-medium text-gray-500">
-                              +{dayItems.length - 3} more
-                            </p>
-                          )}
-                        </div>
+                          ) : null
+                        ) : (
+                          <div className="mt-2 space-y-1.5">
+                            {dayItems.slice(0, 3).map((item) => (
+                              <CalendarItemChip
+                                item={item}
+                                key={item.post._id}
+                                onSelect={() => setManualSelectedPostId(item.post._id)}
+                              />
+                            ))}
+                            {dayItems.length > 3 && (
+                              <p className="text-[11px] font-medium text-gray-500">
+                                +{dayItems.length - 3} more
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -992,6 +1003,56 @@ export function PersistedPublishingPanel({
   );
 }
 
+function channelAccentClass(channelId: ChannelId): string {
+  switch (channelId) {
+    case "corvo-blog":
+      return "bg-[#15616d]";
+    case "linkedin":
+      return "bg-[#0a66c2]";
+    case "reddit":
+      return "bg-[#ff4500]";
+    case "x":
+      return "bg-gray-900";
+    default:
+      return "bg-gray-400";
+  }
+}
+
+function CalendarDayDots({
+  items,
+  maxVisible = 6,
+  onSelect,
+}: {
+  items: PersistedCalendarItem[];
+  maxVisible?: number;
+  onSelect: (postId: Id<"v2Posts">) => void;
+}) {
+  const visible = items.slice(0, maxVisible);
+  const overflow = items.length - visible.length;
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+      {visible.map((item) => (
+        <button
+          aria-label={`Inspect ${item.post.title}`}
+          className="rounded-full p-0.5 hover:bg-[#15616d]/10"
+          key={item.post._id}
+          onClick={() => onSelect(item.post._id)}
+          type="button"
+        >
+          <span
+            aria-hidden
+            className={`block h-2 w-2 rounded-full ${channelAccentClass(item.post.channelId)}`}
+          />
+        </button>
+      ))}
+      {overflow > 0 && (
+        <span className="text-[10px] font-medium text-gray-500">+{overflow}</span>
+      )}
+    </div>
+  );
+}
+
 function CalendarItemChip({
   item,
   onSelect,
@@ -1001,6 +1062,9 @@ function CalendarItemChip({
 }) {
   const post = item.post;
   const providerState = item.providerState;
+  const scheduledTime = item.intent?.scheduledTime ?? "--:--";
+  const providerStatus = providerState?.status ?? "not-submitted";
+
   return (
     <button
       aria-label={`Inspect ${post.title}`}
@@ -1011,14 +1075,14 @@ function CalendarItemChip({
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-[11px] font-semibold">{post.title}</span>
         <span className="shrink-0 text-[10px] text-gray-500">
-          {item.intent?.scheduledTime ?? "--:--"}
+          {scheduledTime}
         </span>
       </div>
       <div className="mt-1 flex flex-wrap gap-1">
         <Badge>{channelLabel(post.channelId)}</Badge>
         <Badge>{post.approvalState}</Badge>
         <span className="rounded-full bg-[#ff7d00]/10 px-2 py-0.5 text-[10px] font-medium text-[#7a3b00]">
-          {providerState?.status ?? "not-submitted"}
+          {providerStatus}
         </span>
         {providerState?.simulated && (
           <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">

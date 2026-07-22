@@ -22,7 +22,11 @@ const CLERK_BUILD_PLACEHOLDER_KEY = "pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA==";
 const CONVEX_BUILD_PLACEHOLDER_URL = "https://convex.test";
 
 const configuredClerkPublishableKey =
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim() || undefined;
+  (process.env.VERCEL_ENV === "production"
+    ? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+    : process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_DEV ??
+      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  )?.trim() || undefined;
 const clerkPublishableKey =
   configuredClerkPublishableKey ??
   (process.env.VERCEL_ENV === "production" ? undefined : CLERK_BUILD_PLACEHOLDER_KEY);
