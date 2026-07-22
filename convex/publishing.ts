@@ -1,3 +1,4 @@
+import { previewSeedIdeas, previewSeedPosts } from "./previewSeedData";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
@@ -297,68 +298,203 @@ async function audit(
   });
 }
 
+async function seedBrandsAndChannels(
+  ctx: MutationCtx,
+  userId: string,
+  now: number
+) {
+  for (const brand of brandSeed) {
+    await ensureBrandRecord(ctx, brand.brandId, now);
+    await ensureBrandMembership(ctx, userId, brand.brandId, now);
+
+    for (const channelId of brand.channels) {
+      await ensureBrandChannel(ctx, brand.brandId, channelId, now);
+    }
+  }
+}
+
+function formatYmdFromOffset(dayOffset: number, now = Date.now()) {
+  const date = new Date(now);
+  date.setUTCDate(date.getUTCDate() + dayOffset);
+  return date.toISOString().slice(0, 10);
+}
+
+async function previewSeedRecordExists(
+  ctx: MutationCtx,
+  userId: string,
+  legacyId: string
+) {
+  const record = await ctx.db
+    .query("v2MigrationRecords")
+    .withIndex("by_legacy", (q) =>
+      q.eq("legacyTable", "previewSeed").eq("legacyId", legacyId)
+    )
+    .first();
+  return record?.userId === userId;
+}
+
+async function recordPreviewSeed(
+  ctx: MutationCtx,
+  userId: string,
+  legacyId: string,
+  targetTable: string,
+  targetId: string,
+  now: number
+) {
+  await ctx.db.insert("v2MigrationRecords", {
+    userId,
+    legacyTable: "previewSeed",
+    legacyId,
+    targetTable,
+    targetId,
+    createdAt: now,
+  });
+}
+
 export const seedMvpWorkspace = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await requireUserId(ctx);
     const now = Date.now();
+    await seedBrandsAndChannels(ctx, userId, now);
+    return { seeded: true };
+  },
+});
 
-    for (const brand of brandSeed) {
-      const existingBrand = await ctx.db
-        .query("v2Brands")
-        .withIndex("by_brand_id", (q) => q.eq("brandId", brand.brandId))
-        .first();
-      if (!existingBrand) {
-        await ctx.db.insert("v2Brands", {
-          brandId: brand.brandId,
-          name: brand.name,
-          description: brand.description,
-          createdAt: now,
-          updatedAt: now,
-        });
+export const seedPreviewWorkspace = mutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const now = Date.now();
+    const dryRun = args.dryRun ?? false;
+    const summary = {
+      seeded: true,
+      dryRun,
+      ideasCreated: 0,
+      postsCreated: 0,
+      skipped: 0,
+    };
+
+    await seedBrandsAndChannels(ctx, userId, now);
+
+    for (const idea of previewSeedIdeas) {
+      if (await previewSeedRecordExists(ctx, userId, idea.legacyId)) {
+        summary.skipped += 1;
+        continue;
+      }
+      if (dryRun) {
+        summary.ideasCreated += 1;
+        continue;
       }
 
-      const membership = await ctx.db
-        .query("v2BrandMemberships")
-        .withIndex("by_user_and_brand", (q) =>
-          q.eq("userId", userId).eq("brandId", brand.brandId)
-        )
-        .first();
-      if (!membership) {
-        await ctx.db.insert("v2BrandMemberships", {
-          userId,
-          brandId: brand.brandId,
-          role: "owner",
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-
-      for (const channelId of brand.channels) {
-        const existingChannel = await ctx.db
-          .query("v2Channels")
-          .withIndex("by_brand_and_channel", (q) =>
-            q.eq("brandId", brand.brandId).eq("channelId", channelId)
-          )
-          .first();
-        if (existingChannel) continue;
-        const providerId = providerForChannel(channelId);
-        await ctx.db.insert("v2Channels", {
-          brandId: brand.brandId,
-          channelId,
-          platformId: channelId,
-          label: channelId === "corvo-blog" ? "Corvo Labs Blog" : channelId,
-          providerId,
-          routable: providerId !== undefined,
-          socialAccountLabel:
-            channelId === "corvo-blog" ? "jakebutler/corvo-labs-dot-com" : brand.name,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
+      const trimmed = idea.content.trim();
+      const latestEntryPreview =
+        trimmed.length <= 140 ? trimmed : `${trimmed.slice(0, 140)}…`;
+      const ideaId = await ctx.db.insert("capturedIdeas", {
+        userId,
+        brandId: idea.brandId,
+        status: "inbox",
+        tags: idea.tags,
+        sourceUrl: idea.sourceUrl,
+        normalizedSourceUrl: idea.sourceUrl,
+        sourceDomain: idea.sourceDomain,
+        latestEntryPreview,
+        lastCapturedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert("capturedIdeaEntries", {
+        ideaId,
+        userId,
+        content: idea.content,
+        captureChannel: "web",
+        createdAt: now,
+      });
+      await recordPreviewSeed(
+        ctx,
+        userId,
+        idea.legacyId,
+        "capturedIdeas",
+        String(ideaId),
+        now
+      );
+      summary.ideasCreated += 1;
     }
 
-    return { seeded: true };
+    for (const post of previewSeedPosts) {
+      if (await previewSeedRecordExists(ctx, userId, post.legacyId)) {
+        summary.skipped += 1;
+        continue;
+      }
+      if (dryRun) {
+        summary.postsCreated += 1;
+        continue;
+      }
+
+      const channel = await ensureWorkspaceChannel(
+        ctx,
+        userId,
+        post.brandId,
+        post.channelId
+      );
+      const scheduledDate = formatYmdFromOffset(post.dayOffset, now);
+      const fingerprint = contentFingerprint(post.title, post.content);
+      const postId = await ctx.db.insert("v2Posts", {
+        userId,
+        brandId: post.brandId,
+        channelId: post.channelId,
+        platformId: channel.platformId,
+        title: post.title,
+        content: post.content,
+        status: "scheduled",
+        approvalState: "unapproved",
+        scheduledDate,
+        scheduledTime: post.scheduledTime,
+        timezone: "America/Los_Angeles",
+        blogExcerpt: post.blogExcerpt,
+        blogAuthor: post.blogAuthor,
+        blogCategory: post.blogCategory,
+        blogTags: post.blogTags,
+        blogSlug: post.blogSlug,
+        heroImageUrl: post.heroImageUrl,
+        contentFingerprint: fingerprint,
+        createdAt: now,
+        updatedAt: now,
+      });
+      const intentId = await ctx.db.insert("v2PublishingIntents", {
+        postId,
+        userId,
+        brandId: post.brandId,
+        channelId: post.channelId,
+        platformId: channel.platformId,
+        scheduledDate,
+        scheduledTime: post.scheduledTime,
+        timezone: "America/Los_Angeles",
+        approvalState: "unapproved",
+        contentFingerprint: fingerprint,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert("v2ProviderStates", {
+        postId,
+        intentId,
+        providerId: providerForChannel(post.channelId),
+        status: "not-submitted",
+        createdAt: now,
+        updatedAt: now,
+      });
+      await recordPreviewSeed(
+        ctx,
+        userId,
+        post.legacyId,
+        "v2Posts",
+        String(postId),
+        now
+      );
+      summary.postsCreated += 1;
+    }
+
+    return summary;
   },
 });
 

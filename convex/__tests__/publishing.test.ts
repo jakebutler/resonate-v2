@@ -360,3 +360,19 @@ describe("publishing cross-brand authorization", () => {
     expect(providerState?.simulated).toBe(true);
   });
 });
+
+describe("seedPreviewWorkspace", () => {
+  it("seeds preview fixtures idempotently", async () => {
+    const t = createTestHarness();
+    const asUser = t.withIdentity(CORVO_ONLY_USER);
+
+    const first = await asUser.mutation(api.publishing.seedPreviewWorkspace, {});
+    expect(first.ideasCreated).toBe(1);
+    expect(first.postsCreated).toBe(3);
+
+    const second = await asUser.mutation(api.publishing.seedPreviewWorkspace, {});
+    expect(second.skipped).toBeGreaterThanOrEqual(4);
+    expect(second.ideasCreated).toBe(0);
+    expect(second.postsCreated).toBe(0);
+  });
+});

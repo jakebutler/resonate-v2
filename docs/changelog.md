@@ -2618,33 +2618,48 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 - fix/publish-gate-and-failclosed
 
-## 07/21/2026 22:48:16 PDT
+## 07/21/2026 23:06:00 PDT
 
 ### Summary
 
-- Touched auth or environment wiring.
+- Added minimal preview sandbox seed (`publishing.seedPreviewWorkspace`) with prod-shaped fixtures for dev Convex only.
+- Documented runbook in `docs/preview-seed.md` and CLI helper `scripts/seed-preview.mjs`.
+
+### Staged Changes
+
+- (pending commit)
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 07/21/2026 23:05:37 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
 
 ### Staged Changes
 
 - M	.env.local.example
-- M	app/globals.css
-- M	app/layout.tsx
-- M	components/PersistedPublishingPanel.tsx
-- M	components/shell/MarkdownPreview.tsx
-- M	next.config.ts
-- M	package-lock.json
-- M	package.json
+- M	convex/__tests__/publishing.test.ts
+- A	convex/previewSeedData.ts
+- M	convex/publishing.ts
+- M	docs/changelog.md
+- A	docs/preview-seed.md
+- M	docs/project-status.md
+- A	scripts/seed-preview.mjs
 
 ### Working Tree Snapshot
 
 - M  .env.local.example
-- M  app/globals.css
-- M  app/layout.tsx
-- M  components/PersistedPublishingPanel.tsx
-- M  components/shell/MarkdownPreview.tsx
-- M  next.config.ts
-- M  package-lock.json
-- M  package.json
+- M  convex/__tests__/publishing.test.ts
+- A  convex/previewSeedData.ts
+- M  convex/publishing.ts
+- M  docs/changelog.md
+- A  docs/preview-seed.md
+- M  docs/project-status.md
+- A  scripts/seed-preview.mjs
 
 ### Branch
 
