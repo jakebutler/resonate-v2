@@ -131,6 +131,16 @@ export function SocialConnectionsPanel() {
                       ? platform.accountLabel || "Connected"
                       : platform.reason || "Authentication failed"}
                   </p>
+                  {!platform.ok && platform.sanitizedResponse && (
+                    <p className="mt-2 text-xs text-gray-500">
+                      {typeof platform.sanitizedResponse.status === "number"
+                        ? `Upstream HTTP ${platform.sanitizedResponse.status}. `
+                        : ""}
+                      {Array.isArray(platform.sanitizedResponse.errors)
+                        ? "Check Buffer/Zernio credentials or account access."
+                        : null}
+                    </p>
+                  )}
                   {!platform.ok && hints.length > 0 && (
                     <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-gray-600">
                       {hints.map((hint) => (

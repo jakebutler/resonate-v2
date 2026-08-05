@@ -1,40 +1,43 @@
 # Project Status
 
-Last updated: 07/21/2026 23:07:00 PDT
+Last updated: 08/05/2026 16:42:49 PDT
 
 ## State
 
-Resonate is a working content operations app with active surfaces for calendar planning, content editing, workflow review, and idea capture. Production UI fixes (calendar split view, markdown Preview typography) are deployed at `https://resonate.corvolabs.com`.
+Resonate is a working content operations app with active surfaces for calendar planning, content editing, workflow review, and idea capture.
 
 ## Current Task
 
-Operator parity eval steps 5–12 on production. Preview sandbox seed (`ea0a522`) is for dev Convex only.
+Maintain the living documentation and preserve a handoff-quality snapshot of the repo state.
 
 ## Session Focus
 
-- Shipped calendar/markdown UI fixes to production (`64bc205`).
-- Added minimal `seedPreviewWorkspace` for localhost/Vercel Preview (`docs/preview-seed.md`).
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- ea0a522 feat: add minimal preview sandbox seed for dev Convex
+- 5df9e32 docs: sync handoff after preview seed commit
 
 ## Recent Commits
 
+- 5df9e32 docs: sync handoff after preview seed commit
 - ea0a522 feat: add minimal preview sandbox seed for dev Convex
 - 64bc205 fix: improve calendar split view and markdown preview rendering
 - 722dddf fix: allow Vercel preview builds without NEXT_PUBLIC_CONVEX_URL
 - e8c231a fix: unblock Vercel preview builds and improve calendar editor UX
-- 97b26f7 fix: skip calendar Convex queries until auth is ready
 
 ## Local Working Tree
 
-- Clean
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+- M  components/PersistedPublishingPanel.tsx
+- M  components/SocialConnectionsPanel.tsx
+- M  lib/github.ts
 
 ## Next Agent Pickup
 
-- Record parity eval results for steps 5–12 in `docs/eval/YYYY-MM-DD-parity-run.md`.
-- Extend `convex/previewSeedData.ts` only when new preview use cases appear.
+- Start by checking the living docs against the current code before making assumptions.
+- If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
 
 ## Branch
 

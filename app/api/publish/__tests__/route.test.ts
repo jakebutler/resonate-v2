@@ -21,21 +21,34 @@ vi.mock("convex/browser", () => ({
   }),
 }))
 
-vi.mock("@/lib/github", () => ({
-  createBlogPostPR: vi.fn().mockResolvedValue({
-    prUrl: "https://github.com/org/repo/pull/1",
-    branchName: "resonate/blog-post-2026-03-04-test",
-    sanitizedResponse: {
-      repo: "jakebutler/corvo-labs-dot-com",
+vi.mock("@/lib/github", () => {
+  class BlogPostContractError extends Error {
+    readonly issues: string[];
+
+    constructor(issues: string[]) {
+      super(`Blog post fails the corvo-labs-dot-com MDX contract:\n- ${issues.join("\n- ")}`);
+      this.name = "BlogPostContractError";
+      this.issues = issues;
+    }
+  }
+
+  return {
+    BlogPostContractError,
+    createBlogPostPR: vi.fn().mockResolvedValue({
       prUrl: "https://github.com/org/repo/pull/1",
       branchName: "resonate/blog-post-2026-03-04-test",
-      number: 1,
-      state: "open",
-      scheduleTrigger: "pr-body",
-      scheduledDate: "2026-03-04",
-    },
-  }),
-}))
+      sanitizedResponse: {
+        repo: "jakebutler/corvo-labs-dot-com",
+        prUrl: "https://github.com/org/repo/pull/1",
+        branchName: "resonate/blog-post-2026-03-04-test",
+        number: 1,
+        state: "open",
+        scheduleTrigger: "pr-body",
+        scheduledDate: "2026-03-04",
+      },
+    }),
+  };
+});
 
 vi.mock("@/lib/imageAlt", () => ({
   enrichPublishImageAlts: vi.fn(async ({ coverImageAlt, images }) => ({
@@ -46,7 +59,7 @@ vi.mock("@/lib/imageAlt", () => ({
 
 import { POST } from "@/app/api/publish/route"
 import { auth } from "@clerk/nextjs/server"
-import { createBlogPostPR } from "@/lib/github"
+import { BlogPostContractError, createBlogPostPR } from "@/lib/github"
 import { enrichPublishImageAlts } from "@/lib/imageAlt"
 
 function makeRequest(body: object): NextRequest {
@@ -201,6 +214,35 @@ describe("POST /api/publish", () => {
 
     expect(res.status).toBe(400)
     expect(createBlogPostPR).not.toHaveBeenCalled()
+  })
+
+  it("uses client tags when the approved post has an empty tag array", async () => {
+    mockConvexQuery.mockResolvedValueOnce({ ...approvedPost, blogTags: [] })
+
+    const res = await POST(
+      makeRequest({
+        postId: "post_approved",
+        tags: ["corvo-labs", "strategy"],
+      })
+    )
+
+    expect(res.status).toBe(200)
+    expect(createBlogPostPR).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ["corvo-labs", "strategy"],
+      })
+    )
+  })
+
+  it("returns 400 with contract issues for BlogPostContractError", async () => {
+    vi.mocked(createBlogPostPR).mockRejectedValueOnce(
+      new BlogPostContractError(["Frontmatter `tags` must contain at least one tag."])
+    )
+
+    const res = await POST(makeRequest({ title: "T", content: "C", tags: [] }))
+    expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.issues).toEqual(["Frontmatter `tags` must contain at least one tag."])
   })
 
   it("returns 500 when createBlogPostPR throws", async () => {

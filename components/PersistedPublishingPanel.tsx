@@ -151,6 +151,15 @@ function slugifyTitle(title: string) {
     .replace(/^-|-$/g, "");
 }
 
+type BlogPublishSnapshot = {
+  excerpt?: string;
+  author?: string;
+  category?: string;
+  tags: string[];
+  slug?: string;
+  heroImageUrl?: string;
+};
+
 function parseTagsInput(value: string) {
   return value
     .split(",")
@@ -158,14 +167,27 @@ function parseTagsInput(value: string) {
     .filter(Boolean);
 }
 
-function blogPrReady(post: PersistedCalendarItem["post"]) {
+function blogPrReady(
+  post: PersistedCalendarItem["post"],
+  snapshot?: BlogPublishSnapshot | null
+) {
+  const tags = snapshot?.tags?.length ? snapshot.tags : post.blogTags;
+  const excerpt = snapshot?.excerpt?.trim() || post.blogExcerpt?.trim();
+  const author = snapshot?.author?.trim() || post.blogAuthor?.trim();
+  const category = snapshot?.category?.trim() || post.blogCategory?.trim();
+  const hero =
+    snapshot?.heroImageUrl?.trim() ||
+    post.heroImageUrl?.trim() ||
+    post.heroImageStorageId;
+
   return Boolean(
     post.title.trim() &&
       post.content.trim() &&
-      post.blogExcerpt?.trim() &&
-      post.blogAuthor?.trim() &&
-      post.blogCategory?.trim() &&
-      (post.heroImageUrl?.trim() || post.heroImageStorageId)
+      excerpt &&
+      author &&
+      category &&
+      (tags?.length ?? 0) > 0 &&
+      hero
   );
 }
 
@@ -591,7 +613,10 @@ export function PersistedPublishingPanel({
     );
   }
 
-  async function handleCreatePr(item: PersistedCalendarItem) {
+  async function handleCreatePr(
+    item: PersistedCalendarItem,
+    snapshot?: BlogPublishSnapshot | null
+  ) {
     if (item.post.channelId !== "corvo-blog") {
       setMessage("Open PR is only available for Corvo Blog posts.");
       return;
@@ -600,9 +625,9 @@ export function PersistedPublishingPanel({
       setMessage("Approve the post before opening a pull request.");
       return;
     }
-    if (!blogPrReady(item.post)) {
+    if (!blogPrReady(item.post, snapshot)) {
       setMessage(
-        "Fill in excerpt, author, category, content, and a hero image before opening a PR."
+        "Fill in excerpt, author, category, at least one tag, content, and a hero image before opening a PR."
       );
       return;
     }
@@ -612,7 +637,12 @@ export function PersistedPublishingPanel({
       return;
     }
 
-    const heroSourceUrl = item.post.heroImageUrl?.trim();
+    const excerpt = snapshot?.excerpt?.trim() || item.post.blogExcerpt?.trim();
+    const author = snapshot?.author?.trim() || item.post.blogAuthor?.trim();
+    const category = snapshot?.category?.trim() || item.post.blogCategory?.trim();
+    const tags = snapshot?.tags?.length ? snapshot.tags : item.post.blogTags ?? [];
+    const heroSourceUrl =
+      snapshot?.heroImageUrl?.trim() || item.post.heroImageUrl?.trim();
     if (!heroSourceUrl) {
       setMessage("Hero image URL is required before opening a PR.");
       return;
@@ -631,10 +661,11 @@ export function PersistedPublishingPanel({
         timezone: item.intent?.timezone ?? item.post.timezone ?? "America/Los_Angeles",
         scheduleTrigger: "pr-body",
         status: "draft",
-        excerpt: item.post.blogExcerpt,
-        author: item.post.blogAuthor,
-        tags: item.post.blogTags ?? [],
-        category: item.post.blogCategory,
+        excerpt,
+        author,
+        tags,
+        category,
+        slug: snapshot?.slug?.trim() || item.post.blogSlug?.trim(),
         featured: false,
         coverImageAlt: `Cover image for ${item.post.title}`,
         images: [
@@ -967,7 +998,7 @@ export function PersistedPublishingPanel({
                           key={item.post._id}
                           onApprove={handleApprove}
                           onCheckPrStatus={() => void handleCheckPrStatus(item)}
-                          onCreatePr={() => void handleCreatePr(item)}
+                          onCreatePr={(snapshot) => void handleCreatePr(item, snapshot)}
                           onInspect={() => setManualSelectedPostId(item.post._id)}
                           onProviderIntent={handleProviderIntent}
                           onDelete={handleDelete}
@@ -989,7 +1020,7 @@ export function PersistedPublishingPanel({
               onApprove={handleApprove}
               onCheckPrStatus={() => void handleCheckPrStatus(selectedItem)}
               onClose={() => setManualSelectedPostId(null)}
-              onCreatePr={() => void handleCreatePr(selectedItem)}
+              onCreatePr={(snapshot) => void handleCreatePr(selectedItem, snapshot)}
               onProviderIntent={handleProviderIntent}
               onDelete={handleDelete}
               onRetry={handleRetry}
@@ -1102,7 +1133,7 @@ function AgendaItem(props: {
   item: PersistedCalendarItem;
   onApprove: (postId: Id<"v2Posts">) => void;
   onCheckPrStatus: () => void;
-  onCreatePr: () => void;
+  onCreatePr: (snapshot: BlogPublishSnapshot | null) => void;
   onDelete: (postId: Id<"v2Posts">, title: string) => void;
   onInspect: () => void;
   onProviderIntent: (
@@ -1192,12 +1223,12 @@ function AgendaItem(props: {
               <button
                 className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
                 disabled={openPrDisabled}
-                onClick={props.onCreatePr}
+                onClick={() => props.onCreatePr(null)}
                 title={
                   !approved
                     ? "Approve the post before opening a PR."
                     : !blogPrReady(post)
-                      ? "Complete blog metadata before opening a PR."
+                      ? "Complete blog metadata (including tags) before opening a PR."
                       : existingPrUrl
                         ? "Pull request already exists."
                         : undefined
@@ -1282,7 +1313,7 @@ function PublishingDetailDrawer(props: {
   onApprove: (postId: Id<"v2Posts">) => void;
   onCheckPrStatus: () => void;
   onClose: () => void;
-  onCreatePr: () => void;
+  onCreatePr: (snapshot: BlogPublishSnapshot | null) => void;
   onDelete: (postId: Id<"v2Posts">, title: string) => void;
   onProviderIntent: (
     postId: Id<"v2Posts">,
@@ -1323,9 +1354,12 @@ function PublishingDetailDrawer(props: {
     !intent?.scheduledDate ||
     providerState?.status === "submitted" ||
     providerIntentRecorded;
-  const openPrDisabled =
-    !approved || !blogPrReady(post) || Boolean(existingPrUrl);
   const [activeTab, setActiveTab] = useState<DetailPanelTab>("compose");
+  const [publishSnapshot, setPublishSnapshot] = useState<BlogPublishSnapshot | null>(
+    null
+  );
+  const openPrDisabled =
+    !approved || !blogPrReady(post, publishSnapshot) || Boolean(existingPrUrl);
 
   return (
     <aside
@@ -1408,6 +1442,7 @@ function PublishingDetailDrawer(props: {
               embedded
               item={item}
               key={post._id}
+              onPublishSnapshotChange={setPublishSnapshot}
               onSave={props.onSaveComposer}
             />
 
@@ -1574,7 +1609,7 @@ function PublishingDetailDrawer(props: {
               <button
                 className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
                 disabled={openPrDisabled}
-                onClick={props.onCreatePr}
+                onClick={() => props.onCreatePr(publishSnapshot)}
                 type="button"
               >
                 <FileText size={15} />
@@ -1630,6 +1665,7 @@ function PublishingDetailDrawer(props: {
 function PersistedPostComposer(props: {
   embedded?: boolean;
   item: PersistedCalendarItem;
+  onPublishSnapshotChange?: (snapshot: BlogPublishSnapshot) => void;
   onSave: (values: {
     title: string;
     content: string;
@@ -1700,6 +1736,27 @@ function PersistedPostComposer(props: {
   const heroPreviewUrl = heroImageUrl.trim() || resolvedHeroUrl || "";
   const canSave =
     (contentChanged || scheduleChanged || blogMetadataChanged) && title.trim().length > 0;
+
+  useEffect(() => {
+    if (post.channelId !== "corvo-blog" || !props.onPublishSnapshotChange) return;
+    props.onPublishSnapshotChange({
+      excerpt: blogExcerpt,
+      author: blogAuthor,
+      category: blogCategory,
+      tags: blogTags,
+      slug: blogSlug,
+      heroImageUrl: heroPreviewUrl || undefined,
+    });
+  }, [
+    blogAuthor,
+    blogCategory,
+    blogExcerpt,
+    blogSlug,
+    blogTags,
+    heroPreviewUrl,
+    post.channelId,
+    props.onPublishSnapshotChange,
+  ]);
 
   async function handleHeroUpload(file: File) {
     setHeroUploading(true);
@@ -1882,6 +1939,7 @@ function PersistedPostComposer(props: {
                   <img
                     alt="Hero preview"
                     className="h-auto max-w-full rounded"
+                    referrerPolicy="no-referrer"
                     src={heroPreviewUrl}
                   />
                   <p className="line-clamp-2 break-all text-[11px] text-gray-500">

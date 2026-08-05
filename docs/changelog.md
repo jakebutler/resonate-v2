@@ -2664,3 +2664,29 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/publish-gate-and-failclosed
+
+## 08/05/2026 16:42:49 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	app/api/publish/__tests__/route.test.ts
+- M	app/api/publish/route.ts
+- M	components/PersistedPublishingPanel.tsx
+- M	components/SocialConnectionsPanel.tsx
+- M	lib/github.ts
+
+### Working Tree Snapshot
+
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+- M  components/PersistedPublishingPanel.tsx
+- M  components/SocialConnectionsPanel.tsx
+- M  lib/github.ts
+
+### Branch
+
+- fix/publish-gate-and-failclosed

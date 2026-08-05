@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createBlogPostPR } from "@/lib/github";
+import { createBlogPostPR, BlogPostContractError } from "@/lib/github";
 import { enrichPublishImageAlts } from "@/lib/imageAlt";
 import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
@@ -8,6 +8,22 @@ import type { Doc } from "@/convex/_generated/dataModel";
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function coalesceString(
+  server: string | undefined,
+  client: string | undefined
+): string | undefined {
+  const normalizedServer = server?.trim();
+  if (normalizedServer) return normalizedServer;
+  const normalizedClient = client?.trim();
+  return normalizedClient || server;
+}
+
+function coalesceTags(server: string[] | undefined, client: string[] | undefined): string[] {
+  if (server && server.length > 0) return server;
+  if (client && client.length > 0) return client;
+  return server ?? client ?? [];
 }
 
 function isImageAssetArray(
@@ -100,6 +116,7 @@ export async function POST(req: NextRequest) {
     author: clientAuthor,
     tags: clientTags,
     category: clientCategory,
+    slug: clientSlug,
     featured,
     coverImageAlt: clientCoverImageAlt,
     images: clientImages,
@@ -114,6 +131,7 @@ export async function POST(req: NextRequest) {
   let author = clientAuthor;
   let tags = clientTags;
   let category = clientCategory;
+  let slug = clientSlug;
   let coverImageAlt = clientCoverImageAlt;
   let images = clientImages;
 
@@ -129,10 +147,11 @@ export async function POST(req: NextRequest) {
     scheduledDate = post.scheduledDate ?? scheduledDate;
     scheduledTime = post.scheduledTime ?? scheduledTime;
     timezone = post.timezone ?? timezone;
-    excerpt = post.blogExcerpt ?? excerpt;
-    author = post.blogAuthor ?? author;
-    tags = post.blogTags ?? tags;
-    category = post.blogCategory ?? category;
+    excerpt = coalesceString(post.blogExcerpt, excerpt);
+    author = coalesceString(post.blogAuthor, author);
+    tags = coalesceTags(post.blogTags, tags);
+    category = coalesceString(post.blogCategory, category);
+    slug = coalesceString(post.blogSlug, slug);
     const postImages = coverImagesFromPost(post);
     if (postImages) {
       images = postImages;
@@ -159,6 +178,7 @@ export async function POST(req: NextRequest) {
     (scheduleTrigger !== undefined && !isScheduleTrigger(scheduleTrigger)) ||
     (tags !== undefined && !isStringArray(tags)) ||
     (category !== undefined && typeof category !== "string") ||
+    (slug !== undefined && typeof slug !== "string") ||
     (featured !== undefined && typeof featured !== "boolean") ||
     (coverImageAlt !== undefined && typeof coverImageAlt !== "string") ||
     (images !== undefined && !isImageAssetArray(images))
@@ -193,6 +213,7 @@ export async function POST(req: NextRequest) {
       author,
       tags,
       category,
+      slug,
       featured,
       coverImageAlt: altTextResult.coverImageAlt ?? coverImageAlt,
       images: altTextResult.images ?? images,
@@ -203,6 +224,12 @@ export async function POST(req: NextRequest) {
       sanitizedResponse: result.sanitizedResponse,
     });
   } catch (err) {
+    if (err instanceof BlogPostContractError) {
+      return NextResponse.json(
+        { error: err.message, issues: err.issues },
+        { status: 400 }
+      );
+    }
     console.error("GitHub publish error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Publish failed" },
