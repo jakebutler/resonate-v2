@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/05/2026 16:42:49 PDT
+Last updated: 08/05/2026 16:58:27 PDT
 
 ## State
 
@@ -16,23 +16,19 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 5df9e32 docs: sync handoff after preview seed commit
+- 0da864a fix: open blog PRs using composer tags and metadata
 
 ## Recent Commits
 
+- 0da864a fix: open blog PRs using composer tags and metadata
 - 5df9e32 docs: sync handoff after preview seed commit
 - ea0a522 feat: add minimal preview sandbox seed for dev Convex
 - 64bc205 fix: improve calendar split view and markdown preview rendering
 - 722dddf fix: allow Vercel preview builds without NEXT_PUBLIC_CONVEX_URL
-- e8c231a fix: unblock Vercel preview builds and improve calendar editor UX
 
 ## Local Working Tree
 
-- M  app/api/publish/__tests__/route.test.ts
-- M  app/api/publish/route.ts
 - M  components/PersistedPublishingPanel.tsx
-- M  components/SocialConnectionsPanel.tsx
-- M  lib/github.ts
 
 ## Next Agent Pickup
 

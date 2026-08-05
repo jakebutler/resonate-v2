@@ -167,28 +167,36 @@ function parseTagsInput(value: string) {
     .filter(Boolean);
 }
 
-function blogPrReady(
+function blogPrBlockedReason(
   post: PersistedCalendarItem["post"],
   snapshot?: BlogPublishSnapshot | null
-) {
-  const tags = snapshot?.tags?.length ? snapshot.tags : post.blogTags;
+): string | null {
+  if (!post.title.trim() || !post.content.trim()) {
+    return "Title and content are required before opening a PR.";
+  }
   const excerpt = snapshot?.excerpt?.trim() || post.blogExcerpt?.trim();
+  if (!excerpt) return "Add an excerpt before opening a PR.";
   const author = snapshot?.author?.trim() || post.blogAuthor?.trim();
+  if (!author) return "Add an author before opening a PR.";
   const category = snapshot?.category?.trim() || post.blogCategory?.trim();
+  if (!category) return "Add a category before opening a PR.";
+  const tags = snapshot?.tags?.length ? snapshot.tags : post.blogTags;
+  if (!(tags?.length ?? 0)) {
+    return "Add at least one tag in the Tags field before opening a PR.";
+  }
   const hero =
     snapshot?.heroImageUrl?.trim() ||
     post.heroImageUrl?.trim() ||
     post.heroImageStorageId;
+  if (!hero) return "Add a hero image before opening a PR.";
+  return null;
+}
 
-  return Boolean(
-    post.title.trim() &&
-      post.content.trim() &&
-      excerpt &&
-      author &&
-      category &&
-      (tags?.length ?? 0) > 0 &&
-      hero
-  );
+function blogPrReady(
+  post: PersistedCalendarItem["post"],
+  snapshot?: BlogPublishSnapshot | null
+) {
+  return blogPrBlockedReason(post, snapshot) === null;
 }
 
 function prStatusLabel(status?: string) {
@@ -1228,7 +1236,8 @@ function AgendaItem(props: {
                   !approved
                     ? "Approve the post before opening a PR."
                     : !blogPrReady(post)
-                      ? "Complete blog metadata (including tags) before opening a PR."
+                      ? blogPrBlockedReason(post) ??
+                        "Complete blog metadata (including tags) before opening a PR."
                       : existingPrUrl
                         ? "Pull request already exists."
                         : undefined
@@ -1360,6 +1369,11 @@ function PublishingDetailDrawer(props: {
   );
   const openPrDisabled =
     !approved || !blogPrReady(post, publishSnapshot) || Boolean(existingPrUrl);
+  const openPrBlockedReason = !approved
+    ? "Approve the post before opening a PR."
+    : existingPrUrl
+      ? "Pull request already exists."
+      : blogPrBlockedReason(post, publishSnapshot);
 
   return (
     <aside
@@ -1610,11 +1624,15 @@ function PublishingDetailDrawer(props: {
                 className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
                 disabled={openPrDisabled}
                 onClick={() => props.onCreatePr(publishSnapshot)}
+                title={openPrBlockedReason ?? undefined}
                 type="button"
               >
                 <FileText size={15} />
                 {existingPrUrl ? "PR opened" : "Open PR"}
               </button>
+              {openPrDisabled && openPrBlockedReason && !existingPrUrl && (
+                <p className="w-full text-xs text-amber-800">{openPrBlockedReason}</p>
+              )}
               {existingPrUrl && (
                 <>
                   <a

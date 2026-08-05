@@ -2690,3 +2690,21 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/publish-gate-and-failclosed
+
+## 08/05/2026 16:58:27 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed
