@@ -2708,3 +2708,27 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/publish-gate-and-failclosed
+
+## 08/05/2026 22:59:19 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/ui/__tests__/Button.test.tsx
+- M	components/ui/button.tsx
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/ui/__tests__/Button.test.tsx
+- M  components/ui/button.tsx
+
+### Branch
+
+- fix/button-loading-open-pr

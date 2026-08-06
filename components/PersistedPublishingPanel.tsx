@@ -29,6 +29,7 @@ import { Notice } from "@/components/shell/Notice";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { SidebarCard } from "@/components/shell/SidebarCard";
 import { WorkspaceLayout } from "@/components/shell/WorkspaceLayout";
+import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { normalizeScheduledDate, parseScheduledDate } from "@/lib/calendarDates";
@@ -357,6 +358,9 @@ export function PersistedPublishingPanel({
     Id<"v2Posts"> | null | undefined
   >(undefined);
   const [message, setMessage] = useState<string | null>(null);
+  const [openingPrPostId, setOpeningPrPostId] = useState<Id<"v2Posts"> | null>(
+    null
+  );
 
   // Convex queries must wait for the Clerk token to reach the Convex client.
   // Firing them before that makes requireUserId throw "Unauthorized" server-side,
@@ -656,78 +660,83 @@ export function PersistedPublishingPanel({
       return;
     }
 
+    setOpeningPrPostId(item.post._id);
     setMessage("Opening Corvo Blog pull request...");
-    const response = await fetch("/api/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      const response = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId: item.post._id,
+          title: item.post.title,
+          content: item.post.content,
+          scheduledDate: item.intent?.scheduledDate ?? item.post.scheduledDate ?? nextFridayDate(),
+          scheduledTime: item.intent?.scheduledTime ?? item.post.scheduledTime ?? "09:00",
+          timezone: item.intent?.timezone ?? item.post.timezone ?? "America/Los_Angeles",
+          scheduleTrigger: "pr-body",
+          status: "draft",
+          excerpt,
+          author,
+          tags,
+          category,
+          slug: snapshot?.slug?.trim() || item.post.blogSlug?.trim(),
+          featured: false,
+          coverImageAlt: `Cover image for ${item.post.title}`,
+          images: [
+            {
+              sourceUrl: heroSourceUrl,
+              alt: `Cover image for ${item.post.title}`,
+              isCover: true,
+            },
+          ],
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setMessage(data.error || "GitHub PR creation failed.");
+        return;
+      }
+
+      const sanitized =
+        data.sanitizedResponse &&
+        typeof data.sanitizedResponse === "object" &&
+        !Array.isArray(data.sanitizedResponse)
+          ? (data.sanitizedResponse as Record<string, unknown>)
+          : {};
+      const prNumber =
+        typeof sanitized.number === "number"
+          ? sanitized.number
+          : typeof data.number === "number"
+            ? data.number
+            : undefined;
+      const prStatusRaw = typeof sanitized.state === "string" ? sanitized.state : "open";
+      const prStatus =
+        prStatusRaw === "merged" ||
+        prStatusRaw === "closed" ||
+        prStatusRaw === "draft" ||
+        prStatusRaw === "open"
+          ? prStatusRaw
+          : "open";
+
+      await recordGithubPr({
         postId: item.post._id,
-        title: item.post.title,
-        content: item.post.content,
-        scheduledDate: item.intent?.scheduledDate ?? item.post.scheduledDate ?? nextFridayDate(),
-        scheduledTime: item.intent?.scheduledTime ?? item.post.scheduledTime ?? "09:00",
-        timezone: item.intent?.timezone ?? item.post.timezone ?? "America/Los_Angeles",
-        scheduleTrigger: "pr-body",
-        status: "draft",
-        excerpt,
-        author,
-        tags,
-        category,
-        slug: snapshot?.slug?.trim() || item.post.blogSlug?.trim(),
-        featured: false,
-        coverImageAlt: `Cover image for ${item.post.title}`,
-        images: [
-          {
-            sourceUrl: heroSourceUrl,
-            alt: `Cover image for ${item.post.title}`,
-            isCover: true,
-          },
-        ],
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setMessage(data.error || "GitHub PR creation failed.");
-      return;
-    }
-
-    const sanitized =
-      data.sanitizedResponse &&
-      typeof data.sanitizedResponse === "object" &&
-      !Array.isArray(data.sanitizedResponse)
-        ? (data.sanitizedResponse as Record<string, unknown>)
-        : {};
-    const prNumber =
-      typeof sanitized.number === "number"
-        ? sanitized.number
-        : typeof data.number === "number"
-          ? data.number
-          : undefined;
-    const prStatusRaw = typeof sanitized.state === "string" ? sanitized.state : "open";
-    const prStatus =
-      prStatusRaw === "merged" ||
-      prStatusRaw === "closed" ||
-      prStatusRaw === "draft" ||
-      prStatusRaw === "open"
-        ? prStatusRaw
-        : "open";
-
-    await recordGithubPr({
-      postId: item.post._id,
-      result: {
-        prUrl: data.prUrl,
-        branchName: data.branchName,
-        prNumber,
-        prStatus,
-        sanitizedResponse: data.sanitizedResponse ?? {
+        result: {
           prUrl: data.prUrl,
           branchName: data.branchName,
-          number: prNumber,
-          state: prStatus,
+          prNumber,
+          prStatus,
+          sanitizedResponse: data.sanitizedResponse ?? {
+            prUrl: data.prUrl,
+            branchName: data.branchName,
+            number: prNumber,
+            state: prStatus,
+          },
         },
-      },
-    });
-    setMessage(`Opened Corvo Blog PR: ${data.prUrl}`);
+      });
+      setMessage(`Opened Corvo Blog PR: ${data.prUrl}`);
+    } finally {
+      setOpeningPrPostId(null);
+    }
   }
 
   async function handleCheckPrStatus(item: PersistedCalendarItem) {
@@ -1004,6 +1013,7 @@ export function PersistedPublishingPanel({
                           devMode={devMode}
                           item={item}
                           key={item.post._id}
+                          openingPr={openingPrPostId === item.post._id}
                           onApprove={handleApprove}
                           onCheckPrStatus={() => void handleCheckPrStatus(item)}
                           onCreatePr={(snapshot) => void handleCreatePr(item, snapshot)}
@@ -1025,6 +1035,7 @@ export function PersistedPublishingPanel({
             <PublishingDetailDrawer
               devMode={devMode}
               item={selectedItem}
+              openingPr={openingPrPostId === selectedItem.post._id}
               onApprove={handleApprove}
               onCheckPrStatus={() => void handleCheckPrStatus(selectedItem)}
               onClose={() => setManualSelectedPostId(null)}
@@ -1139,6 +1150,7 @@ function CalendarItemChip({
 function AgendaItem(props: {
   devMode: boolean;
   item: PersistedCalendarItem;
+  openingPr?: boolean;
   onApprove: (postId: Id<"v2Posts">) => void;
   onCheckPrStatus: () => void;
   onCreatePr: (snapshot: BlogPublishSnapshot | null) => void;
@@ -1228,10 +1240,12 @@ function AgendaItem(props: {
           )}
           {post.channelId === "corvo-blog" && (
             <>
-              <button
-                className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+              <Button
+                className="border-[#15616d]/25 text-[#15616d] hover:bg-[#15616d]/10"
                 disabled={openPrDisabled}
+                loading={Boolean(props.openingPr)}
                 onClick={() => props.onCreatePr(null)}
+                size="sm"
                 title={
                   !approved
                     ? "Approve the post before opening a PR."
@@ -1243,10 +1257,15 @@ function AgendaItem(props: {
                         : undefined
                 }
                 type="button"
+                variant="outline"
               >
-                <FileText size={14} />
-                {existingPrUrl ? "PR opened" : "Open PR"}
-              </button>
+                {!props.openingPr ? <FileText size={14} /> : null}
+                {props.openingPr
+                  ? "Opening…"
+                  : existingPrUrl
+                    ? "PR opened"
+                    : "Open PR"}
+              </Button>
               {existingPrUrl && (
                 <>
                   <a
@@ -1319,6 +1338,7 @@ type DetailPanelTab = "compose" | "preview";
 function PublishingDetailDrawer(props: {
   devMode: boolean;
   item: PersistedCalendarItem;
+  openingPr?: boolean;
   onApprove: (postId: Id<"v2Posts">) => void;
   onCheckPrStatus: () => void;
   onClose: () => void;
@@ -1620,16 +1640,22 @@ function PublishingDetailDrawer(props: {
           )}
           {post.channelId === "corvo-blog" && (
             <>
-              <button
-                className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+              <Button
+                className="border-[#15616d]/25 text-[#15616d] hover:bg-[#15616d]/10"
                 disabled={openPrDisabled}
+                loading={Boolean(props.openingPr)}
                 onClick={() => props.onCreatePr(publishSnapshot)}
                 title={openPrBlockedReason ?? undefined}
                 type="button"
+                variant="outline"
               >
-                <FileText size={15} />
-                {existingPrUrl ? "PR opened" : "Open PR"}
-              </button>
+                {!props.openingPr ? <FileText size={15} /> : null}
+                {props.openingPr
+                  ? "Opening…"
+                  : existingPrUrl
+                    ? "PR opened"
+                    : "Open PR"}
+              </Button>
               {openPrDisabled && openPrBlockedReason && !existingPrUrl && (
                 <p className="w-full text-xs text-amber-800">{openPrBlockedReason}</p>
               )}
@@ -1770,7 +1796,7 @@ function PersistedPostComposer(props: {
     blogCategory,
     blogExcerpt,
     blogSlug,
-    blogTags,
+    blogTagsInput,
     heroPreviewUrl,
     post.channelId,
     props.onPublishSnapshotChange,

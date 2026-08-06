@@ -563,6 +563,49 @@ describe("PersistedPublishingPanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("disables Open PR and shows loading while the PR request is in flight", async () => {
+    let resolveFetch: ((value: Response) => void) | undefined;
+    const fetchPromise = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => fetchPromise)
+    );
+
+    render(<PersistedPublishingPanel devMode />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.click(within(detail).getByRole("button", { name: "Open PR" }));
+
+    await waitFor(() => {
+      const loadingButton = within(detail).getByRole("button", { name: /Opening/i });
+      expect(loadingButton).toBeDisabled();
+      expect(loadingButton).toHaveAttribute("aria-busy", "true");
+    });
+
+    resolveFetch?.(
+      new Response(
+        JSON.stringify({
+          prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/42",
+          branchName: "resonate/blog-post-2026-06-12-approved-corvo-blog-pr-item",
+          sanitizedResponse: {
+            number: 42,
+            state: "open",
+          },
+        }),
+        { status: 200 }
+      )
+    );
+
+    expect(
+      await screen.findByText(
+        "Opened Corvo Blog PR: https://github.com/jakebutler/corvo-labs-dot-com/pull/42"
+      )
+    ).toBeInTheDocument();
+  });
+
   it("checks blog PR status and records it in Convex", async () => {
     vi.stubGlobal(
       "fetch",

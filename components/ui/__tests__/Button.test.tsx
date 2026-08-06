@@ -41,4 +41,34 @@ describe('Button', () => {
     render(<Button type="submit">Submit</Button>)
     expect(screen.getByText('Submit').closest('button')).toHaveAttribute('type', 'submit')
   })
+
+  it('disables and marks busy when loading', () => {
+    render(<Button loading>Open PR</Button>)
+    const button = screen.getByRole('button', { name: /Open PR/i })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('aria-busy', 'true')
+  })
+
+  it('does not call onClick when loading', () => {
+    const handler = vi.fn()
+    render(
+      <Button loading onClick={handler}>
+        Open PR
+      </Button>
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Open PR/i }))
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('shows a loading spinner when loading', () => {
+    render(<Button loading>Open PR</Button>)
+    expect(screen.getByRole('button', { name: /Open PR/i })).toContainElement(
+      screen.getByTestId('button-loading-spinner')
+    )
+  })
+
+  it('does not show a loading spinner when not loading', () => {
+    render(<Button>Open PR</Button>)
+    expect(screen.queryByTestId('button-loading-spinner')).not.toBeInTheDocument()
+  })
 })

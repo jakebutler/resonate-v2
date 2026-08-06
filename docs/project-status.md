@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/05/2026 16:58:27 PDT
+Last updated: 08/05/2026 22:59:19 PDT
 
 ## State
 
@@ -16,19 +16,22 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 0da864a fix: open blog PRs using composer tags and metadata
+- 41c6515 fix: show why Open PR is disabled when tags are missing
 
 ## Recent Commits
 
+- 41c6515 fix: show why Open PR is disabled when tags are missing
 - 0da864a fix: open blog PRs using composer tags and metadata
 - 5df9e32 docs: sync handoff after preview seed commit
 - ea0a522 feat: add minimal preview sandbox seed for dev Convex
 - 64bc205 fix: improve calendar split view and markdown preview rendering
-- 722dddf fix: allow Vercel preview builds without NEXT_PUBLIC_CONVEX_URL
 
 ## Local Working Tree
 
 - M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/ui/__tests__/Button.test.tsx
+- M  components/ui/button.tsx
 
 ## Next Agent Pickup
 
@@ -37,4 +40,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- fix/publish-gate-and-failclosed
+- fix/button-loading-open-pr
