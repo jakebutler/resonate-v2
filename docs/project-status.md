@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/06/2026 12:35:22 PDT
+Last updated: 08/06/2026 12:44:25 PDT
 
 ## State
 
@@ -12,23 +12,25 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Touched auth or environment wiring.
 
 ## Last Completed Task
 
-- c361863 fix: address cubic review on publish gate and fail-closed auth
+- a604eb1 chore: re-trigger CI for publish-gate review fixes
 
 ## Recent Commits
 
+- a604eb1 chore: re-trigger CI for publish-gate review fixes
+- 6972612 chore: drop unused publish route helpers after gate rewrite
 - c361863 fix: address cubic review on publish gate and fail-closed auth
 - 67cbbef Merge pull request #48 from jakebutler/fix/button-loading-open-pr
 - 6ab5354 docs: point project-status at Open PR button loading HEAD
-- 8669d69 fix: skip disabled on asChild anchors and sync project status
-- da5e35b fix: tighten asChild Button semantics and Open PR loading coverage
 
 ## Local Working Tree
 
-- M  app/api/publish/route.ts
+- M  .github/workflows/test.yml
+- M  components/ConvexClientProvider.tsx
+- M  components/shell/Shell.tsx
 
 ## Next Agent Pickup
 

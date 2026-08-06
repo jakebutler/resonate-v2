@@ -10,7 +10,9 @@ type ShellProps = {
   children: React.ReactNode;
 };
 
-const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
+const bypassAuthForE2E =
+  process.env.E2E_BYPASS_AUTH === "1" ||
+  process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1";
 
 function navLinkClass(active: boolean) {
   return cn(

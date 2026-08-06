@@ -2877,3 +2877,25 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/publish-gate-and-failclosed
+
+## 08/06/2026 12:44:25 PDT
+
+### Summary
+
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	.github/workflows/test.yml
+- M	components/ConvexClientProvider.tsx
+- M	components/shell/Shell.tsx
+
+### Working Tree Snapshot
+
+- M  .github/workflows/test.yml
+- M  components/ConvexClientProvider.tsx
+- M  components/shell/Shell.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed
