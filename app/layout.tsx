@@ -17,8 +17,30 @@ export const metadata: Metadata = {
   description: "Publishing schedule manager for Corvo Labs",
 };
 
-const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
-const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.trim();
+/** Matches CI so preview/branch builds can prerender without Vercel env injection. */
+const CLERK_BUILD_PLACEHOLDER_KEY = "pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA==";
+const CONVEX_BUILD_PLACEHOLDER_URL = "https://convex.test";
+
+const vercelEnv = process.env.VERCEL_ENV?.trim();
+const isVercelProduction = vercelEnv === "production";
+const isNonProductionRuntime =
+  !isVercelProduction && process.env.NODE_ENV !== "production";
+const preferDevClerkKeys =
+  vercelEnv === "preview" || vercelEnv === "development" || isNonProductionRuntime;
+
+const configuredClerkPublishableKey =
+  (preferDevClerkKeys
+    ? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_DEV ??
+      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+    : process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  )?.trim() || undefined;
+const clerkPublishableKey =
+  configuredClerkPublishableKey ??
+  (isNonProductionRuntime ? CLERK_BUILD_PLACEHOLDER_KEY : undefined);
+const configuredConvexUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.trim() || undefined;
+const convexUrl =
+  configuredConvexUrl ??
+  (isNonProductionRuntime ? CONVEX_BUILD_PLACEHOLDER_URL : undefined);
 const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
 
 export default function RootLayout({
@@ -38,6 +60,12 @@ export default function RootLayout({
 
   if (bypassAuthForE2E) {
     return app;
+  }
+
+  if (!clerkPublishableKey) {
+    throw new Error(
+      "Missing required environment variable: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+    );
   }
 
   return (

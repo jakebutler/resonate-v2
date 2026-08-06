@@ -337,6 +337,7 @@ export async function createBlogPostPR(params: {
   author?: string;
   tags?: string[];
   category?: string;
+  slug?: string;
   featured?: boolean;
   coverImageAlt?: string;
   images?: PublishImageAsset[];
@@ -374,7 +375,8 @@ export async function createBlogPostPR(params: {
   const scheduledTime = params.scheduledTime?.trim() || undefined;
   const timezone = params.timezone?.trim() || undefined;
   const scheduleTrigger = params.scheduleTrigger ?? "pr-body";
-  const slug = `${date}-${slugify(params.title)}`;
+  const slugBase = params.slug?.trim() || slugify(params.title);
+  const slug = `${date}-${slugBase}`;
   const fileName = `${slug}.mdx`;
   const filePath = `${CONTENT_PATH}/${fileName}`;
   const branchName = `resonate/blog-post-${slug}`;

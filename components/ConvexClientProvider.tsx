@@ -1,9 +1,21 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
+
+function useE2EBypassAuth() {
+  const fetchAccessToken = useCallback(async () => null, []);
+  return useMemo(
+    () => ({
+      isLoading: false,
+      isAuthenticated: true,
+      fetchAccessToken,
+    }),
+    [fetchAccessToken]
+  );
+}
 
 export function ConvexClientProvider({
   children,
@@ -25,7 +37,13 @@ export function ConvexClientProvider({
   }
 
   if (bypassAuth) {
-    return <ConvexProvider client={clientRef.current}>{children}</ConvexProvider>;
+    // Keep an auth-capable provider so `useConvexAuth` works under E2E bypass
+    // (plain ConvexProvider throws during prerender of research/calendar).
+    return (
+      <ConvexProviderWithAuth client={clientRef.current} useAuth={useE2EBypassAuth}>
+        {children}
+      </ConvexProviderWithAuth>
+    );
   }
 
   return (

@@ -28,14 +28,21 @@ const validBody = {
 
 describe("POST /api/claim-map", () => {
   const originalApiKey = process.env.PIONEER_API_KEY;
+  const originalAllowMock = process.env.RESONATE_ALLOW_MOCK_AI;
 
   beforeEach(() => {
     vi.restoreAllMocks();
     delete process.env.PIONEER_API_KEY;
+    delete process.env.RESONATE_ALLOW_MOCK_AI;
   });
 
   afterEach(() => {
     process.env.PIONEER_API_KEY = originalApiKey;
+    if (originalAllowMock === undefined) {
+      delete process.env.RESONATE_ALLOW_MOCK_AI;
+    } else {
+      process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
+    }
     vi.unstubAllGlobals();
   });
 
@@ -49,7 +56,16 @@ describe("POST /api/claim-map", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns mock claims when Pioneer is not configured", async () => {
+  it("returns 503 when Pioneer is not configured and mock mode is disabled", async () => {
+    const res = await POST(makeRequest(validBody));
+    const data = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(data.error).toContain("PIONEER_API_KEY");
+  });
+
+  it("returns mock claims when Pioneer is not configured and mock mode is enabled", async () => {
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
     const res = await POST(makeRequest(validBody));
     const data = await res.json();
 
@@ -69,6 +85,7 @@ describe("POST /api/claim-map", () => {
   });
 
   it("attaches sourceIds referencing the passed accepted sources", async () => {
+    process.env.RESONATE_ALLOW_MOCK_AI = "1";
     const res = await POST(makeRequest(validBody));
     const data = await res.json();
     const allSourceIds = data.claims.flatMap((c: { sourceIds: string[] }) => c.sourceIds);
@@ -113,18 +130,18 @@ describe("POST /api/claim-map", () => {
     expect(data.claims[0].evidenceLabel).toBe("rct-meta-analysis");
   });
 
-  it("falls back to mock when Pioneer fails", async () => {
+  it("returns 502 when Pioneer fails", async () => {
     process.env.PIONEER_API_KEY = "test-pioneer-key";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("error", { status: 502 })));
 
     const res = await POST(makeRequest(validBody));
     const data = await res.json();
 
-    expect(data.provider).toBe("mock");
-    expect(data.warning).toBeTruthy();
+    expect(res.status).toBe(502);
+    expect(data.error).toContain("PioneerAI");
   });
 
-  it("falls back to mock when Pioneer returns unparseable content", async () => {
+  it("returns 502 when Pioneer returns unparseable content", async () => {
     process.env.PIONEER_API_KEY = "test-pioneer-key";
     vi.stubGlobal(
       "fetch",
@@ -139,6 +156,7 @@ describe("POST /api/claim-map", () => {
     const res = await POST(makeRequest(validBody));
     const data = await res.json();
 
-    expect(data.provider).toBe("mock");
+    expect(res.status).toBe(502);
+    expect(data.error).toContain("PioneerAI");
   });
 });

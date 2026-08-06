@@ -2412,3 +2412,526 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - main
+
+## 07/19/2026 20:15:06 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	docs/smoke-runs/2026-06-07-cutover-readiness.md
+- A	plans/2026-07-19-ship-plan.md
+
+### Working Tree Snapshot
+
+- A  docs/smoke-runs/2026-06-07-cutover-readiness.md
+- A  plans/2026-07-19-ship-plan.md
+
+### Branch
+
+- chore/docs-session-wrap
+
+## 07/19/2026 20:34:54 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	plans/2026-07-19-source-grounded-series-spec.md
+
+### Working Tree Snapshot
+
+- A  plans/2026-07-19-source-grounded-series-spec.md
+- ?? docs/smoke-runs/2026-07-20-cutover-readiness.md
+
+### Branch
+
+- chore/docs-session-wrap
+
+## 07/19/2026 20:48:39 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	app/api/__tests__/e2e-mvp-flow.test.ts
+- M	app/api/claim-map/__tests__/route.test.ts
+- M	app/api/claim-map/route.ts
+- M	app/api/long-form-draft/__tests__/route.test.ts
+- M	app/api/long-form-draft/route.ts
+- M	app/api/publish/__tests__/route.test.ts
+- M	app/api/publish/route.ts
+- M	app/api/research-brief/__tests__/route.test.ts
+- M	app/api/research-brief/route.ts
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- A	docs/smoke-runs/2026-07-20-cutover-readiness.md
+- A	lib/pioneerAiRoute.ts
+- M	plans/2026-07-19-source-grounded-series-spec.md
+- M	proxy.ts
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  app/api/__tests__/e2e-mvp-flow.test.ts
+- M  app/api/claim-map/__tests__/route.test.ts
+- M  app/api/claim-map/route.ts
+- M  app/api/long-form-draft/__tests__/route.test.ts
+- M  app/api/long-form-draft/route.ts
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+- M  app/api/research-brief/__tests__/route.test.ts
+- M  app/api/research-brief/route.ts
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- A  docs/smoke-runs/2026-07-20-cutover-readiness.md
+- A  lib/pioneerAiRoute.ts
+- M  plans/2026-07-19-source-grounded-series-spec.md
+- M  proxy.ts
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 07/19/2026 20:56:53 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	proxy.ts
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  proxy.ts
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 07/19/2026 21:07:43 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	proxy.ts
+
+### Working Tree Snapshot
+
+- M  proxy.ts
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 07/20/2026 12:15:15 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/shell/Shell.tsx
+
+### Working Tree Snapshot
+
+- M  components/shell/Shell.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 07/20/2026 12:30:29 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 07/20/2026 17:03:17 PDT
+
+### Summary
+
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	app/layout.tsx
+- M	components/PersistedPublishingPanel.tsx
+- A	components/shell/MarkdownPreview.tsx
+- M	components/shell/VariantReviewPanel.tsx
+
+### Working Tree Snapshot
+
+- M  app/layout.tsx
+- M  components/PersistedPublishingPanel.tsx
+- A  components/shell/MarkdownPreview.tsx
+- M  components/shell/VariantReviewPanel.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 07/21/2026 15:53:48 PDT
+
+### Summary
+
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	app/layout.tsx
+
+### Working Tree Snapshot
+
+- M  app/layout.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 07/21/2026 23:06:00 PDT
+
+### Summary
+
+- Added minimal preview sandbox seed (`publishing.seedPreviewWorkspace`) with prod-shaped fixtures for dev Convex only.
+- Documented runbook in `docs/preview-seed.md` and CLI helper `scripts/seed-preview.mjs`.
+
+### Staged Changes
+
+- (pending commit)
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 07/21/2026 23:05:37 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	convex/__tests__/publishing.test.ts
+- A	convex/previewSeedData.ts
+- M	convex/publishing.ts
+- M	docs/changelog.md
+- A	docs/preview-seed.md
+- M	docs/project-status.md
+- A	scripts/seed-preview.mjs
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  convex/__tests__/publishing.test.ts
+- A  convex/previewSeedData.ts
+- M  convex/publishing.ts
+- M  docs/changelog.md
+- A  docs/preview-seed.md
+- M  docs/project-status.md
+- A  scripts/seed-preview.mjs
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 08/05/2026 16:42:49 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	app/api/publish/__tests__/route.test.ts
+- M	app/api/publish/route.ts
+- M	components/PersistedPublishingPanel.tsx
+- M	components/SocialConnectionsPanel.tsx
+- M	lib/github.ts
+
+### Working Tree Snapshot
+
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+- M  components/PersistedPublishingPanel.tsx
+- M  components/SocialConnectionsPanel.tsx
+- M  lib/github.ts
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 08/05/2026 16:58:27 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 08/05/2026 22:59:19 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/ui/__tests__/Button.test.tsx
+- M	components/ui/button.tsx
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/ui/__tests__/Button.test.tsx
+- M  components/ui/button.tsx
+
+### Branch
+
+- fix/button-loading-open-pr
+
+## 08/05/2026 23:13:34 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/ui/__tests__/Button.test.tsx
+- M	components/ui/button.tsx
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/ui/__tests__/Button.test.tsx
+- M  components/ui/button.tsx
+
+### Branch
+
+- fix/button-loading-open-pr
+
+## 08/05/2026 23:57:54 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/ui/__tests__/Button.test.tsx
+- M	components/ui/button.tsx
+
+### Working Tree Snapshot
+
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/ui/__tests__/Button.test.tsx
+- M  components/ui/button.tsx
+
+### Branch
+
+- fix/button-loading-open-pr
+
+## 08/06/2026 00:30:54 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	components/ui/__tests__/Button.test.tsx
+- M	components/ui/button.tsx
+- M	docs/project-status.md
+
+### Working Tree Snapshot
+
+- M  components/ui/__tests__/Button.test.tsx
+- M  components/ui/button.tsx
+- M  docs/project-status.md
+
+### Branch
+
+- fix/button-loading-open-pr
+
+## 08/06/2026 12:33:41 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	app/api/__tests__/e2e-mvp-flow.test.ts
+- M	app/api/claim-map/__tests__/route.test.ts
+- M	app/api/long-form-draft/__tests__/route.test.ts
+- M	app/api/publish/__tests__/route.test.ts
+- M	app/api/publish/route.ts
+- M	app/api/research-brief/__tests__/route.test.ts
+- M	app/layout.tsx
+- M	components/BlogPostEditor/BlogPostEditor.tsx
+- M	components/FullScreenEditor/FullScreenEditor.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/ResearchApp.tsx
+- M	components/SocialConnectionsPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/shell/Shell.tsx
+- M	convex/__tests__/publishing.test.ts
+- M	convex/publishing.ts
+- M	docs/preview-seed.md
+- M	lib/pioneerAiRoute.ts
+- M	next.config.ts
+- M	proxy.ts
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  app/api/__tests__/e2e-mvp-flow.test.ts
+- M  app/api/claim-map/__tests__/route.test.ts
+- M  app/api/long-form-draft/__tests__/route.test.ts
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+- M  app/api/research-brief/__tests__/route.test.ts
+- M  app/layout.tsx
+- M  components/BlogPostEditor/BlogPostEditor.tsx
+- M  components/FullScreenEditor/FullScreenEditor.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/ResearchApp.tsx
+- M  components/SocialConnectionsPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/shell/Shell.tsx
+- M  convex/__tests__/publishing.test.ts
+- M  convex/publishing.ts
+- M  docs/preview-seed.md
+- M  lib/pioneerAiRoute.ts
+- M  next.config.ts
+- M  proxy.ts
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 08/06/2026 12:35:22 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	app/api/publish/route.ts
+
+### Working Tree Snapshot
+
+- M  app/api/publish/route.ts
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 08/06/2026 12:44:25 PDT
+
+### Summary
+
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	.github/workflows/test.yml
+- M	components/ConvexClientProvider.tsx
+- M	components/shell/Shell.tsx
+
+### Working Tree Snapshot
+
+- M  .github/workflows/test.yml
+- M  components/ConvexClientProvider.tsx
+- M  components/shell/Shell.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 08/06/2026 12:44:59 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/__tests__/ConvexClientProvider.test.tsx
+
+### Working Tree Snapshot
+
+- M  components/__tests__/ConvexClientProvider.test.tsx
+
+### Branch
+
+- fix/publish-gate-and-failclosed
+
+## 08/06/2026 13:48:29 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	.github/workflows/test.yml
+
+### Working Tree Snapshot
+
+- M  .github/workflows/test.yml
+
+### Branch
+
+- fix/publish-gate-and-failclosed

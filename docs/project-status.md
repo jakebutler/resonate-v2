@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 06/07/2026 00:06:49 PDT
+Last updated: 08/06/2026 13:48:29 PDT
 
 ## State
 
@@ -12,45 +12,29 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Updated repository documentation and handoff records.
-- Touched the captured ideas experience.
-- Touched the main dashboard surfaces.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- e36fe51 Fix IdeaDetail post link type for workspace posts.
+- 3adb64c chore: re-trigger CI on publish-gate tip with E2E bypass fix
 
 ## Recent Commits
 
-- e36fe51 Fix IdeaDetail post link type for workspace posts.
-- cf94b4e Standardize workspace UI and drop transitional v2 naming.
-- dcb47d3 docs: refresh cutover-readiness smoke after C.2 cutover verification
-- ff16b53 Merge pull request #33 from jakebutler/cutover-c3-final-review
-- 89cdfe0 docs: C.2 cutover complete + C.3 final review package (2026-06-06)
+- 3adb64c chore: re-trigger CI on publish-gate tip with E2E bypass fix
+- d023f9c test: cover E2E bypass Convex auth provider path
+- eb50fa1 fix: make E2E auth bypass prerender research and calendar
+- a604eb1 chore: re-trigger CI for publish-gate review fixes
+- 6972612 chore: drop unused publish route helpers after gate rewrite
 
 ## Local Working Tree
 
-- M  app/__tests__/page.test.tsx
-- D  app/calendar/page.tsx
-- M  app/ideas/page.tsx
-- A  app/legacy/page.tsx
-- M  app/page.tsx
-- M  components/EditorPageRouter.tsx
-- M  components/ResearchApp.tsx
-- M  components/shell/Shell.tsx
-- M  components/shell/VariantReviewPanel.tsx
-- M  docs/changelog.md
-- M  docs/eval/reviewable-parity-script.md
-- M  docs/project-status.md
-- M  next.config.ts
-- M  scripts/cutover-smoke.mjs
+- M  .github/workflows/test.yml
 
 ## Next Agent Pickup
 
 - Start by checking the living docs against the current code before making assumptions.
 - If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
-- Do not conflate the captured ideas inbox with the separate workflow idea system.
 
 ## Branch
 
-- main
+- fix/publish-gate-and-failclosed

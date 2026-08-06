@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
   CalendarDays,
   Ban,
@@ -24,10 +24,12 @@ import {
 import { SocialConnectionsPanel } from "@/components/SocialConnectionsPanel";
 import { FilterGroup, toggleFilterSet } from "@/components/shell/FilterGroup";
 import { MainCard } from "@/components/shell/MainCard";
+import { MarkdownPreview } from "@/components/shell/MarkdownPreview";
 import { Notice } from "@/components/shell/Notice";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { SidebarCard } from "@/components/shell/SidebarCard";
 import { WorkspaceLayout } from "@/components/shell/WorkspaceLayout";
+import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { normalizeScheduledDate, parseScheduledDate } from "@/lib/calendarDates";
@@ -150,6 +152,15 @@ function slugifyTitle(title: string) {
     .replace(/^-|-$/g, "");
 }
 
+type BlogPublishSnapshot = {
+  excerpt?: string;
+  author?: string;
+  category?: string;
+  tags: string[];
+  slug?: string;
+  heroImageUrl?: string;
+};
+
 function parseTagsInput(value: string) {
   return value
     .split(",")
@@ -157,15 +168,36 @@ function parseTagsInput(value: string) {
     .filter(Boolean);
 }
 
-function blogPrReady(post: PersistedCalendarItem["post"]) {
-  return Boolean(
-    post.title.trim() &&
-      post.content.trim() &&
-      post.blogExcerpt?.trim() &&
-      post.blogAuthor?.trim() &&
-      post.blogCategory?.trim() &&
-      (post.heroImageUrl?.trim() || post.heroImageStorageId)
-  );
+function blogPrBlockedReason(
+  post: PersistedCalendarItem["post"],
+  snapshot?: BlogPublishSnapshot | null
+): string | null {
+  if (!post.title.trim() || !post.content.trim()) {
+    return "Title and content are required before opening a PR.";
+  }
+  const excerpt = snapshot?.excerpt?.trim() || post.blogExcerpt?.trim();
+  if (!excerpt) return "Add an excerpt before opening a PR.";
+  const author = snapshot?.author?.trim() || post.blogAuthor?.trim();
+  if (!author) return "Add an author before opening a PR.";
+  const category = snapshot?.category?.trim() || post.blogCategory?.trim();
+  if (!category) return "Add a category before opening a PR.";
+  const tags = snapshot?.tags?.length ? snapshot.tags : post.blogTags;
+  if (!(tags?.length ?? 0)) {
+    return "Add at least one tag in the Tags field before opening a PR.";
+  }
+  const hero =
+    snapshot?.heroImageUrl?.trim() ||
+    post.heroImageUrl?.trim() ||
+    post.heroImageStorageId;
+  if (!hero) return "Add a hero image before opening a PR.";
+  return null;
+}
+
+function blogPrReady(
+  post: PersistedCalendarItem["post"],
+  snapshot?: BlogPublishSnapshot | null
+) {
+  return blogPrBlockedReason(post, snapshot) === null;
 }
 
 function prStatusLabel(status?: string) {
@@ -326,13 +358,31 @@ export function PersistedPublishingPanel({
     Id<"v2Posts"> | null | undefined
   >(undefined);
   const [message, setMessage] = useState<string | null>(null);
+  const [openingPrPostIds, setOpeningPrPostIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
+  const openingPrPostIdsRef = useRef<Set<string>>(new Set());
 
-  const brands = useQuery(api.publishing.listBrands);
-  const items = useQuery(api.publishing.listCalendarItems, {
-    brandIds: brandFilters,
-    platformIds: platformFilters,
-    statuses: statusFilters,
-  }) as PersistedCalendarItem[] | undefined;
+  // Convex queries must wait for the Clerk token to reach the Convex client.
+  // Firing them before that makes requireUserId throw "Unauthorized" server-side,
+  // which surfaces as a client error on the calendar right after sign-in.
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } =
+    useConvexAuth();
+
+  const brands = useQuery(
+    api.publishing.listBrands,
+    isConvexAuthenticated ? {} : "skip"
+  );
+  const items = useQuery(
+    api.publishing.listCalendarItems,
+    isConvexAuthenticated
+      ? {
+          brandIds: brandFilters,
+          platformIds: platformFilters,
+          statuses: statusFilters,
+        }
+      : "skip"
+  ) as PersistedCalendarItem[] | undefined;
   const seedWorkspace = useMutation(api.publishing.seedMvpWorkspace);
   const createPostWithIntent = useMutation(api.publishing.createPostWithIntent);
   const setApproval = useMutation(api.publishing.setApproval);
@@ -577,7 +627,10 @@ export function PersistedPublishingPanel({
     );
   }
 
-  async function handleCreatePr(item: PersistedCalendarItem) {
+  async function handleCreatePr(
+    item: PersistedCalendarItem,
+    snapshot?: BlogPublishSnapshot | null
+  ) {
     if (item.post.channelId !== "corvo-blog") {
       setMessage("Open PR is only available for Corvo Blog posts.");
       return;
@@ -586,9 +639,9 @@ export function PersistedPublishingPanel({
       setMessage("Approve the post before opening a pull request.");
       return;
     }
-    if (!blogPrReady(item.post)) {
+    if (!blogPrReady(item.post, snapshot)) {
       setMessage(
-        "Fill in excerpt, author, category, content, and a hero image before opening a PR."
+        "Fill in excerpt, author, category, at least one tag, content, and a hero image before opening a PR."
       );
       return;
     }
@@ -598,82 +651,86 @@ export function PersistedPublishingPanel({
       return;
     }
 
-    const heroSourceUrl = item.post.heroImageUrl?.trim();
-    if (!heroSourceUrl) {
-      setMessage("Hero image URL is required before opening a PR.");
+    if (openingPrPostIdsRef.current.has(item.post._id)) {
       return;
     }
 
+    const snapshotDiffers =
+      Boolean(snapshot) &&
+      ((snapshot?.excerpt?.trim() || "") !== (item.post.blogExcerpt?.trim() || "") ||
+        (snapshot?.author?.trim() || "") !== (item.post.blogAuthor?.trim() || "") ||
+        (snapshot?.category?.trim() || "") !== (item.post.blogCategory?.trim() || "") ||
+        JSON.stringify(snapshot?.tags ?? []) !== JSON.stringify(item.post.blogTags ?? []) ||
+        (snapshot?.slug?.trim() || "") !== (item.post.blogSlug?.trim() || "") ||
+        (snapshot?.heroImageUrl?.trim() || "") !== (item.post.heroImageUrl?.trim() || ""));
+    if (snapshotDiffers) {
+      setMessage(
+        "Save blog metadata and re-approve the post before opening a PR. Unsaved composer changes are not sent to publish."
+      );
+      return;
+    }
+
+    openingPrPostIdsRef.current.add(item.post._id);
+    setOpeningPrPostIds(new Set(openingPrPostIdsRef.current));
     setMessage("Opening Corvo Blog pull request...");
-    const response = await fetch("/api/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: item.post.title,
-        content: item.post.content,
-        scheduledDate: item.intent?.scheduledDate ?? item.post.scheduledDate ?? nextFridayDate(),
-        scheduledTime: item.intent?.scheduledTime ?? item.post.scheduledTime ?? "09:00",
-        timezone: item.intent?.timezone ?? item.post.timezone ?? "America/Los_Angeles",
-        scheduleTrigger: "pr-body",
-        status: "draft",
-        excerpt: item.post.blogExcerpt,
-        author: item.post.blogAuthor,
-        tags: item.post.blogTags ?? [],
-        category: item.post.blogCategory,
-        featured: false,
-        coverImageAlt: `Cover image for ${item.post.title}`,
-        images: [
-          {
-            sourceUrl: heroSourceUrl,
-            alt: `Cover image for ${item.post.title}`,
-            isCover: true,
-          },
-        ],
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setMessage(data.error || "GitHub PR creation failed.");
-      return;
-    }
+    try {
+      const response = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId: item.post._id,
+          scheduleTrigger: "pr-body",
+          status: "draft",
+          coverImageAlt: `Cover image for ${item.post.title}`,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setMessage(data.error || "GitHub PR creation failed.");
+        return;
+      }
 
-    const sanitized =
-      data.sanitizedResponse &&
-      typeof data.sanitizedResponse === "object" &&
-      !Array.isArray(data.sanitizedResponse)
-        ? (data.sanitizedResponse as Record<string, unknown>)
-        : {};
-    const prNumber =
-      typeof sanitized.number === "number"
-        ? sanitized.number
-        : typeof data.number === "number"
-          ? data.number
-          : undefined;
-    const prStatusRaw = typeof sanitized.state === "string" ? sanitized.state : "open";
-    const prStatus =
-      prStatusRaw === "merged" ||
-      prStatusRaw === "closed" ||
-      prStatusRaw === "draft" ||
-      prStatusRaw === "open"
-        ? prStatusRaw
-        : "open";
+      const sanitized =
+        data.sanitizedResponse &&
+        typeof data.sanitizedResponse === "object" &&
+        !Array.isArray(data.sanitizedResponse)
+          ? (data.sanitizedResponse as Record<string, unknown>)
+          : {};
+      const prNumber =
+        typeof sanitized.number === "number"
+          ? sanitized.number
+          : typeof data.number === "number"
+            ? data.number
+            : undefined;
+      const prStatusRaw = typeof sanitized.state === "string" ? sanitized.state : "open";
+      const prStatus =
+        prStatusRaw === "merged" ||
+        prStatusRaw === "closed" ||
+        prStatusRaw === "draft" ||
+        prStatusRaw === "open"
+          ? prStatusRaw
+          : "open";
 
-    await recordGithubPr({
-      postId: item.post._id,
-      result: {
-        prUrl: data.prUrl,
-        branchName: data.branchName,
-        prNumber,
-        prStatus,
-        sanitizedResponse: data.sanitizedResponse ?? {
+      await recordGithubPr({
+        postId: item.post._id,
+        result: {
           prUrl: data.prUrl,
           branchName: data.branchName,
-          number: prNumber,
-          state: prStatus,
+          prNumber,
+          prStatus,
+          sanitizedResponse: data.sanitizedResponse ?? {
+            prUrl: data.prUrl,
+            branchName: data.branchName,
+            number: prNumber,
+            state: prStatus,
+          },
         },
-      },
-    });
-    setMessage(`Opened Corvo Blog PR: ${data.prUrl}`);
+      });
+      setMessage(`Opened Corvo Blog PR: ${data.prUrl}`);
+    } finally {
+      openingPrPostIdsRef.current.delete(item.post._id);
+      setOpeningPrPostIds(new Set(openingPrPostIdsRef.current));
+    }
   }
 
   async function handleCheckPrStatus(item: PersistedCalendarItem) {
@@ -761,7 +818,14 @@ export function PersistedPublishingPanel({
         </>
       }
     >
-      <MainCard>
+      <div
+        className={
+          selectedItem
+            ? "grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start"
+            : undefined
+        }
+      >
+        <MainCard className={selectedItem ? "order-2 min-w-0 lg:order-1" : undefined}>
             <div className="grid gap-3 border-b border-black/10 p-4 sm:grid-cols-3">
               <Metric label="Not submitted" value={providerSummary.notSubmitted} />
               <Metric label="Submitted" value={providerSummary.submitted} />
@@ -821,11 +885,22 @@ export function PersistedPublishingPanel({
               </div>
             </div>
 
-            {loading && (
+            {isConvexAuthLoading && (
+              <p className="p-4 text-sm text-gray-600">Connecting to your workspace...</p>
+            )}
+
+            {!isConvexAuthLoading && !isConvexAuthenticated && (
+              <p className="p-4 text-sm text-red-700">
+                Convex authentication failed. Sign in again, or check that the Clerk Convex JWT
+                template and CLERK_JWT_ISSUER_DOMAIN are configured.
+              </p>
+            )}
+
+            {isConvexAuthenticated && loading && (
               <p className="p-4 text-sm text-gray-600">Loading your publishing calendar...</p>
             )}
 
-            {!loading && visibleItems.length === 0 && (
+            {isConvexAuthenticated && !loading && visibleItems.length === 0 && (
               <div className="p-8 text-center">
                 <h3 className="text-lg font-semibold text-gray-900">Your calendar is empty</h3>
                 <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">
@@ -864,7 +939,7 @@ export function PersistedPublishingPanel({
               </div>
             )}
 
-            {!loading && visibleItems.length > 0 && (
+            {isConvexAuthenticated && !loading && visibleItems.length > 0 && (
               <>
                 <div className="grid grid-cols-7 border-b border-black/10 bg-black/[0.02] text-center text-[11px] font-semibold uppercase text-gray-500">
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
@@ -887,7 +962,9 @@ export function PersistedPublishingPanel({
                       calendarView === "month" && date.getMonth() !== anchorDate.getMonth();
                     return (
                       <div
-                        className={`min-h-[132px] border-b border-r border-black/10 p-2 last:border-r-0 ${
+                        className={`border-b border-r border-black/10 p-2 last:border-r-0 ${
+                          selectedItem ? "min-h-[88px]" : "min-h-[132px]"
+                        } ${
                           outsideMonth ? "bg-black/[0.025] text-gray-400" : "bg-white"
                         }`}
                         key={dateKey}
@@ -900,20 +977,29 @@ export function PersistedPublishingPanel({
                             </span>
                           )}
                         </div>
-                        <div className="mt-2 space-y-1.5">
-                          {dayItems.slice(0, 3).map((item) => (
-                            <CalendarItemChip
-                              item={item}
-                              key={item.post._id}
-                              onSelect={() => setManualSelectedPostId(item.post._id)}
+                        {selectedItem ? (
+                          dayItems.length > 0 ? (
+                            <CalendarDayDots
+                              items={dayItems}
+                              onSelect={(postId) => setManualSelectedPostId(postId)}
                             />
-                          ))}
-                          {dayItems.length > 3 && (
-                            <p className="text-[11px] font-medium text-gray-500">
-                              +{dayItems.length - 3} more
-                            </p>
-                          )}
-                        </div>
+                          ) : null
+                        ) : (
+                          <div className="mt-2 space-y-1.5">
+                            {dayItems.slice(0, 3).map((item) => (
+                              <CalendarItemChip
+                                item={item}
+                                key={item.post._id}
+                                onSelect={() => setManualSelectedPostId(item.post._id)}
+                              />
+                            ))}
+                            {dayItems.length > 3 && (
+                              <p className="text-[11px] font-medium text-gray-500">
+                                +{dayItems.length - 3} more
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -932,9 +1018,10 @@ export function PersistedPublishingPanel({
                           devMode={devMode}
                           item={item}
                           key={item.post._id}
+                          openingPr={openingPrPostIds.has(item.post._id)}
                           onApprove={handleApprove}
                           onCheckPrStatus={() => void handleCheckPrStatus(item)}
-                          onCreatePr={() => void handleCreatePr(item)}
+                          onCreatePr={(snapshot) => void handleCreatePr(item, snapshot)}
                           onInspect={() => setManualSelectedPostId(item.post._id)}
                           onProviderIntent={handleProviderIntent}
                           onDelete={handleDelete}
@@ -947,23 +1034,78 @@ export function PersistedPublishingPanel({
                 </div>
               </>
             )}
+        </MainCard>
         {selectedItem && (
-          <PublishingDetailDrawer
-            devMode={devMode}
-            item={selectedItem}
-            onApprove={handleApprove}
-            onCheckPrStatus={() => void handleCheckPrStatus(selectedItem)}
-            onClose={() => setManualSelectedPostId(null)}
-            onCreatePr={() => void handleCreatePr(selectedItem)}
-            onProviderIntent={handleProviderIntent}
-            onDelete={handleDelete}
-            onRetry={handleRetry}
-            onSaveComposer={(values) => handleSaveComposer(selectedItem, values)}
-            onSubmit={handleSubmit}
-          />
+          <div className="order-1 min-w-0 lg:order-2">
+            <PublishingDetailDrawer
+              key={selectedItem.post._id}
+              devMode={devMode}
+              item={selectedItem}
+              openingPr={openingPrPostIds.has(selectedItem.post._id)}
+              onApprove={handleApprove}
+              onCheckPrStatus={() => void handleCheckPrStatus(selectedItem)}
+              onClose={() => setManualSelectedPostId(null)}
+              onCreatePr={(snapshot) => void handleCreatePr(selectedItem, snapshot)}
+              onProviderIntent={handleProviderIntent}
+              onDelete={handleDelete}
+              onRetry={handleRetry}
+              onSaveComposer={(values) => handleSaveComposer(selectedItem, values)}
+              onSubmit={handleSubmit}
+            />
+          </div>
         )}
-      </MainCard>
+      </div>
     </WorkspaceLayout>
+  );
+}
+
+function channelAccentClass(channelId: ChannelId): string {
+  switch (channelId) {
+    case "corvo-blog":
+      return "bg-[#15616d]";
+    case "linkedin":
+      return "bg-[#0a66c2]";
+    case "reddit":
+      return "bg-[#ff4500]";
+    case "x":
+      return "bg-gray-900";
+    default:
+      return "bg-gray-400";
+  }
+}
+
+function CalendarDayDots({
+  items,
+  maxVisible = 6,
+  onSelect,
+}: {
+  items: PersistedCalendarItem[];
+  maxVisible?: number;
+  onSelect: (postId: Id<"v2Posts">) => void;
+}) {
+  const visible = items.slice(0, maxVisible);
+  const overflow = items.length - visible.length;
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+      {visible.map((item) => (
+        <button
+          aria-label={`Inspect ${item.post.title}`}
+          className="rounded-full p-0.5 hover:bg-[#15616d]/10"
+          key={item.post._id}
+          onClick={() => onSelect(item.post._id)}
+          type="button"
+        >
+          <span
+            aria-hidden
+            className={`block h-2 w-2 rounded-full ${channelAccentClass(item.post.channelId)}`}
+          />
+        </button>
+      ))}
+      {overflow > 0 && (
+        <span className="text-[10px] font-medium text-gray-500">+{overflow}</span>
+      )}
+    </div>
   );
 }
 
@@ -976,6 +1118,9 @@ function CalendarItemChip({
 }) {
   const post = item.post;
   const providerState = item.providerState;
+  const scheduledTime = item.intent?.scheduledTime ?? "--:--";
+  const providerStatus = providerState?.status ?? "not-submitted";
+
   return (
     <button
       aria-label={`Inspect ${post.title}`}
@@ -986,14 +1131,14 @@ function CalendarItemChip({
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-[11px] font-semibold">{post.title}</span>
         <span className="shrink-0 text-[10px] text-gray-500">
-          {item.intent?.scheduledTime ?? "--:--"}
+          {scheduledTime}
         </span>
       </div>
       <div className="mt-1 flex flex-wrap gap-1">
         <Badge>{channelLabel(post.channelId)}</Badge>
         <Badge>{post.approvalState}</Badge>
         <span className="rounded-full bg-[#ff7d00]/10 px-2 py-0.5 text-[10px] font-medium text-[#7a3b00]">
-          {providerState?.status ?? "not-submitted"}
+          {providerStatus}
         </span>
         {providerState?.simulated && (
           <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
@@ -1008,12 +1153,44 @@ function CalendarItemChip({
   );
 }
 
+function OpenPrButton(props: {
+  disabled: boolean;
+  existingPrUrl?: string;
+  iconSize?: number;
+  loading: boolean;
+  onClick: () => void;
+  size?: "sm" | "default";
+  title?: string;
+}) {
+  const iconSize = props.iconSize ?? 15;
+  return (
+    <Button
+      className="border-[#15616d]/25 text-[#15616d] hover:bg-[#15616d]/10"
+      disabled={props.disabled}
+      loading={props.loading}
+      onClick={props.onClick}
+      size={props.size}
+      title={props.title}
+      type="button"
+      variant="outline"
+    >
+      {!props.loading ? <FileText size={iconSize} /> : null}
+      {props.loading
+        ? "Opening…"
+        : props.existingPrUrl
+          ? "PR opened"
+          : "Open PR"}
+    </Button>
+  );
+}
+
 function AgendaItem(props: {
   devMode: boolean;
   item: PersistedCalendarItem;
+  openingPr?: boolean;
   onApprove: (postId: Id<"v2Posts">) => void;
   onCheckPrStatus: () => void;
-  onCreatePr: () => void;
+  onCreatePr: (snapshot: BlogPublishSnapshot | null) => void;
   onDelete: (postId: Id<"v2Posts">, title: string) => void;
   onInspect: () => void;
   onProviderIntent: (
@@ -1100,24 +1277,23 @@ function AgendaItem(props: {
           )}
           {post.channelId === "corvo-blog" && (
             <>
-              <button
-                className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+              <OpenPrButton
                 disabled={openPrDisabled}
-                onClick={props.onCreatePr}
+                existingPrUrl={existingPrUrl}
+                iconSize={14}
+                loading={Boolean(props.openingPr)}
+                onClick={() => props.onCreatePr(null)}
+                size="sm"
                 title={
                   !approved
                     ? "Approve the post before opening a PR."
                     : !blogPrReady(post)
-                      ? "Complete blog metadata before opening a PR."
+                      ? blogPrBlockedReason(post) ?? undefined
                       : existingPrUrl
                         ? "Pull request already exists."
                         : undefined
                 }
-                type="button"
-              >
-                <FileText size={14} />
-                {existingPrUrl ? "PR opened" : "Open PR"}
-              </button>
+              />
               {existingPrUrl && (
                 <>
                   <a
@@ -1185,13 +1361,16 @@ function AgendaItem(props: {
   );
 }
 
+type DetailPanelTab = "compose" | "preview";
+
 function PublishingDetailDrawer(props: {
   devMode: boolean;
   item: PersistedCalendarItem;
+  openingPr?: boolean;
   onApprove: (postId: Id<"v2Posts">) => void;
   onCheckPrStatus: () => void;
   onClose: () => void;
-  onCreatePr: () => void;
+  onCreatePr: (snapshot: BlogPublishSnapshot | null) => void;
   onDelete: (postId: Id<"v2Posts">, title: string) => void;
   onProviderIntent: (
     postId: Id<"v2Posts">,
@@ -1232,234 +1411,324 @@ function PublishingDetailDrawer(props: {
     !intent?.scheduledDate ||
     providerState?.status === "submitted" ||
     providerIntentRecorded;
+  const [activeTab, setActiveTab] = useState<DetailPanelTab>("compose");
+  const [publishSnapshot, setPublishSnapshot] = useState<BlogPublishSnapshot | null>(
+    null
+  );
   const openPrDisabled =
-    !approved || !blogPrReady(post) || Boolean(existingPrUrl);
+    !approved || !blogPrReady(post, publishSnapshot) || Boolean(existingPrUrl);
+  const openPrBlockedReason = !approved
+    ? "Approve the post before opening a PR."
+    : existingPrUrl
+      ? "Pull request already exists."
+      : blogPrBlockedReason(post, publishSnapshot);
 
   return (
     <aside
       aria-label="Publishing item detail"
-      className="mt-5 rounded-lg border border-black/10 bg-white p-5 shadow-sm"
+      className="flex max-h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm lg:sticky lg:top-4"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge>{channelLabel(post.channelId)}</Badge>
-            <Badge>{statusLabel(post.status)}</Badge>
-            <Badge>{post.approvalState}</Badge>
-            {providerState?.simulated && <Badge>Simulated</Badge>}
-            {post.blogPrStatus && <PrStatusBadge status={post.blogPrStatus} />}
+      <div className="shrink-0 border-b border-black/10 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>{channelLabel(post.channelId)}</Badge>
+              <Badge>{statusLabel(post.status)}</Badge>
+              <Badge>{post.approvalState}</Badge>
+              {providerState?.simulated && <Badge>Simulated</Badge>}
+              {post.blogPrStatus && <PrStatusBadge status={post.blogPrStatus} />}
+            </div>
+            <h3 className="mt-2 text-lg font-semibold">{post.title}</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              {formatDateTime(intent?.scheduledDate, intent?.scheduledTime, intent?.timezone)}
+              {" · "}
+              {providerState?.status ?? "not-submitted"}
+            </p>
           </div>
-          <h3 className="mt-2 text-lg font-semibold">{post.title}</h3>
-          <p className="mt-1 max-w-4xl text-sm text-gray-600">{post.content}</p>
-        </div>
-        <button
-          aria-label="Close publishing detail"
-          className="inline-flex size-8 items-center justify-center rounded-md border border-black/10 hover:bg-black/5"
-          onClick={props.onClose}
-          type="button"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <KeyValue label="Brand" value={post.brandId} />
-        <KeyValue label="Platform" value={channelLabel(post.channelId)} />
-        <KeyValue
-          label="Schedule"
-          value={formatDateTime(intent?.scheduledDate, intent?.scheduledTime, intent?.timezone)}
-        />
-        <KeyValue
-          label="Submission status"
-          value={providerState?.status ?? "not-submitted"}
-        />
-        {existingPrUrl && (
-          <KeyValue label="Pull request" value={existingPrUrl} />
-        )}
-        {post.blogPrNumber !== undefined && (
-          <KeyValue label="PR number" value={`#${post.blogPrNumber}`} />
-        )}
-        {props.devMode && (
-          <>
-            <KeyValue label="Intent ID" value={String(intent?._id ?? "missing")} />
-            <KeyValue label="Provider post" value={providerState?.providerPostId ?? "not created"} />
-            <KeyValue label="Branch" value={post.branchName ?? "not created"} />
-            <KeyValue label="Source idea" value={post.sourceIdeaId ?? "none"} />
-            <KeyValue label="Research brief" value={post.sourceResearchBriefId ?? "none"} />
-          </>
-        )}
-      </div>
-
-      {providerState?.simulated && (
-        <div className="mt-4 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
-          Simulated submission — no post was sent to {channelLabel(post.channelId)}.
-        </div>
-      )}
-
-      {providerState?.lastResponseSummary && props.devMode && (
-        <div className="mt-4 rounded-md border border-black/10 bg-black/[0.02] p-3 text-sm text-gray-700">
-          {providerState.lastResponseSummary}
-        </div>
-      )}
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          aria-label={`Approve ${post.title}`}
-          className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50"
-          disabled={approved}
-          onClick={() => props.onApprove(post._id)}
-          type="button"
-        >
-          <CheckCircle2 size={15} />
-          Approve
-        </button>
-        {props.devMode && (
           <button
-            className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
-            disabled={submitDisabled}
-            onClick={() => props.onSubmit(post._id)}
-            title={!approved ? "Approval is required before simulating submission." : undefined}
+            aria-label="Close publishing detail"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-black/10 hover:bg-black/5"
+            onClick={props.onClose}
             type="button"
           >
-            <Send size={15} />
-            Simulate submission
+            <X size={16} />
           </button>
-        )}
-        {props.devMode && (
-          <button
-            className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-3 py-2 text-sm font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
-            disabled={providerIntentRecorded}
-            onClick={() => props.onProviderIntent(post._id, providerIntentType)}
-            type="button"
-          >
-            <Ban size={15} />
-            {providerIntentType === "unpublish" ? "Record Unpublish Intent" : "Record Cancel Intent"}
-          </button>
-        )}
-        {post.channelId === "corvo-blog" && (
-          <>
+        </div>
+
+        <div
+          className="mt-4 inline-grid grid-cols-2 rounded-md border border-black/10 bg-black/[0.03] p-1"
+          role="tablist"
+        >
+          {(
+            [
+              { id: "compose" as const, label: "Compose" },
+              { id: "preview" as const, label: "Preview" },
+            ] as const
+          ).map((tab) => (
             <button
-              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
-              disabled={openPrDisabled}
-              onClick={props.onCreatePr}
+              aria-selected={activeTab === tab.id}
+              className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                activeTab === tab.id
+                  ? "bg-white text-[#15616d] shadow-sm"
+                  : "text-gray-600 hover:bg-white/70"
+              }`}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              role="tab"
               type="button"
             >
-              <FileText size={15} />
-              {existingPrUrl ? "PR opened" : "Open PR"}
+              {tab.label}
             </button>
-            {existingPrUrl && (
-              <>
-                <a
-                  className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5"
-                  href={existingPrUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <ExternalLink size={15} />
-                  View PR
-                </a>
-                <button
-                  className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
-                  onClick={props.onCheckPrStatus}
-                  type="button"
-                >
-                  Check PR status
-                </button>
-              </>
+          ))}
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        {activeTab === "preview" ? (
+          <MarkdownPreview content={post.content} />
+        ) : (
+          <>
+            {providerState?.simulated && (
+              <div className="mb-4 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
+                Simulated submission — no post was sent to {channelLabel(post.channelId)}.
+              </div>
+            )}
+
+            {providerState?.lastResponseSummary && props.devMode && (
+              <div className="mb-4 rounded-md border border-black/10 bg-black/[0.02] p-3 text-sm text-gray-700">
+                {providerState.lastResponseSummary}
+              </div>
+            )}
+
+            <PersistedPostComposer
+              embedded
+              item={item}
+              key={post._id}
+              onPublishSnapshotChange={setPublishSnapshot}
+              onSave={props.onSaveComposer}
+            />
+
+            <details className="mt-4 rounded-lg border border-black/10 p-4">
+              <summary className="cursor-pointer text-sm font-semibold">Post details</summary>
+              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                <KeyValue label="Brand" value={post.brandId} />
+                <KeyValue label="Platform" value={channelLabel(post.channelId)} />
+                <KeyValue
+                  label="Schedule"
+                  value={formatDateTime(
+                    intent?.scheduledDate,
+                    intent?.scheduledTime,
+                    intent?.timezone
+                  )}
+                />
+                <KeyValue label="Approval" value={post.approvalState} />
+                <KeyValue
+                  label="Submission status"
+                  value={providerState?.status ?? "not-submitted"}
+                />
+                {existingPrUrl && <KeyValue label="Pull request" value={existingPrUrl} />}
+                {post.blogPrNumber !== undefined && (
+                  <KeyValue label="PR number" value={`#${post.blogPrNumber}`} />
+                )}
+                {props.devMode && (
+                  <>
+                    <KeyValue label="Intent ID" value={String(intent?._id ?? "missing")} />
+                    <KeyValue
+                      label="Provider post"
+                      value={providerState?.providerPostId ?? "not created"}
+                    />
+                    <KeyValue label="Branch" value={post.branchName ?? "not created"} />
+                    <KeyValue label="Source idea" value={post.sourceIdeaId ?? "none"} />
+                    <KeyValue
+                      label="Research brief"
+                      value={post.sourceResearchBriefId ?? "none"}
+                    />
+                  </>
+                )}
+              </dl>
+            </details>
+
+            {props.devMode && (
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <section className="rounded-lg border border-black/10 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Send size={15} />
+                    Provider Attempts
+                  </div>
+                  {!item.attempts?.length ? (
+                    <p className="mt-2 text-sm text-gray-600">No provider attempts recorded.</p>
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      {item.attempts.map((attempt, index) => (
+                        <div
+                          className="rounded-md border border-black/10 bg-black/[0.02] p-3"
+                          key={String(attempt._id ?? index)}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold">
+                              {attempt.providerId ?? "unknown"} / {attempt.status ?? "unknown"}
+                            </span>
+                            <span className="text-gray-500">
+                              {formatTimestamp(attempt.createdAt)}
+                            </span>
+                          </div>
+                          <dl className="mt-2 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                            <KeyValue
+                              label="Idempotency key"
+                              value={attempt.idempotencyKey ?? "missing"}
+                            />
+                            <KeyValue
+                              label="Retry count"
+                              value={String(attempt.retryCount ?? 0)}
+                            />
+                          </dl>
+                          <pre className="mt-2 max-h-40 overflow-auto rounded bg-white p-2 text-[11px] text-gray-700">
+                            {renderJson(attempt.sanitizedResponse)}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="rounded-lg border border-black/10 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <History size={15} />
+                    Audit Trail
+                  </div>
+                  {!item.auditEvents?.length ? (
+                    <p className="mt-2 text-sm text-gray-600">No audit events recorded.</p>
+                  ) : (
+                    <ol className="mt-3 space-y-3">
+                      {item.auditEvents.map((event, index) => (
+                        <li
+                          className="rounded-md border border-black/10 p-3"
+                          key={String(event._id ?? index)}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold">
+                              {event.action ?? "audit.event"}
+                            </span>
+                            <span className="text-gray-500">
+                              {formatTimestamp(event.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-700">
+                            {event.summary ?? "No summary."}
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </section>
+              </div>
             )}
           </>
         )}
-        {props.devMode && retryableAttempt && (
+      </div>
+
+      <div className="shrink-0 border-t border-black/10 bg-white p-4">
+        <div className="flex flex-wrap gap-2">
           <button
-            className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
-            onClick={() => props.onRetry(post._id)}
+            aria-label={`Approve ${post.title}`}
+            className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50"
+            disabled={approved}
+            onClick={() => props.onApprove(post._id)}
             type="button"
           >
-            <RotateCcw size={15} />
-            Retry simulation
+            <CheckCircle2 size={15} />
+            Approve
           </button>
-        )}
-        <button
-          aria-label={`Delete ${post.title}`}
-          className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
-          onClick={() => props.onDelete(post._id, post.title)}
-          type="button"
-        >
-          <Trash2 size={15} />
-          Delete draft
-        </button>
-      </div>
-
-      <PersistedPostComposer
-        item={item}
-        key={post._id}
-        onSave={props.onSaveComposer}
-      />
-
-      {props.devMode && (
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <section className="rounded-lg border border-black/10 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Send size={15} />
-            Provider Attempts
-          </div>
-          {!item.attempts?.length ? (
-            <p className="mt-2 text-sm text-gray-600">No provider attempts recorded.</p>
-          ) : (
-            <div className="mt-3 space-y-3">
-              {item.attempts.map((attempt, index) => (
-                <div
-                  className="rounded-md border border-black/10 bg-black/[0.02] p-3"
-                  key={String(attempt._id ?? index)}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold">
-                      {attempt.providerId ?? "unknown"} / {attempt.status ?? "unknown"}
-                    </span>
-                    <span className="text-gray-500">{formatTimestamp(attempt.createdAt)}</span>
-                  </div>
-                  <dl className="mt-2 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
-                    <KeyValue label="Idempotency key" value={attempt.idempotencyKey ?? "missing"} />
-                    <KeyValue label="Retry count" value={String(attempt.retryCount ?? 0)} />
-                  </dl>
-                  <pre className="mt-2 max-h-40 overflow-auto rounded bg-white p-2 text-[11px] text-gray-700">
-                    {renderJson(attempt.sanitizedResponse)}
-                  </pre>
-                </div>
-              ))}
-            </div>
+          {props.devMode && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
+              disabled={submitDisabled}
+              onClick={() => props.onSubmit(post._id)}
+              title={
+                !approved ? "Approval is required before simulating submission." : undefined
+              }
+              type="button"
+            >
+              <Send size={15} />
+              Simulate submission
+            </button>
           )}
-        </section>
-
-        <section className="rounded-lg border border-black/10 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <History size={15} />
-            Audit Trail
-          </div>
-          {!item.auditEvents?.length ? (
-            <p className="mt-2 text-sm text-gray-600">No audit events recorded.</p>
-          ) : (
-            <ol className="mt-3 space-y-3">
-              {item.auditEvents.map((event, index) => (
-                <li className="rounded-md border border-black/10 p-3" key={String(event._id ?? index)}>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold">{event.action ?? "audit.event"}</span>
-                    <span className="text-gray-500">{formatTimestamp(event.createdAt)}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-700">{event.summary ?? "No summary."}</p>
-                </li>
-              ))}
-            </ol>
+          {props.devMode && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-3 py-2 text-sm font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
+              disabled={providerIntentRecorded}
+              onClick={() => props.onProviderIntent(post._id, providerIntentType)}
+              type="button"
+            >
+              <Ban size={15} />
+              {providerIntentType === "unpublish"
+                ? "Record Unpublish Intent"
+                : "Record Cancel Intent"}
+            </button>
           )}
-        </section>
+          {post.channelId === "corvo-blog" && (
+            <>
+              <OpenPrButton
+                disabled={openPrDisabled}
+                existingPrUrl={existingPrUrl}
+                loading={Boolean(props.openingPr)}
+                onClick={() => props.onCreatePr(publishSnapshot)}
+                title={openPrBlockedReason ?? undefined}
+              />
+              {openPrDisabled && openPrBlockedReason && !existingPrUrl && (
+                <p className="w-full text-xs text-amber-800">{openPrBlockedReason}</p>
+              )}
+              {existingPrUrl && (
+                <>
+                  <a
+                    className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5"
+                    href={existingPrUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <ExternalLink size={15} />
+                    View PR
+                  </a>
+                  <button
+                    className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
+                    onClick={props.onCheckPrStatus}
+                    type="button"
+                  >
+                    Check PR status
+                  </button>
+                </>
+              )}
+            </>
+          )}
+          {props.devMode && retryableAttempt && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
+              onClick={() => props.onRetry(post._id)}
+              type="button"
+            >
+              <RotateCcw size={15} />
+              Retry simulation
+            </button>
+          )}
+          <button
+            aria-label={`Delete ${post.title}`}
+            className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+            onClick={() => props.onDelete(post._id, post.title)}
+            type="button"
+          >
+            <Trash2 size={15} />
+            Delete draft
+          </button>
+        </div>
       </div>
-      )}
     </aside>
   );
 }
 
 function PersistedPostComposer(props: {
+  embedded?: boolean;
   item: PersistedCalendarItem;
+  onPublishSnapshotChange?: (snapshot: BlogPublishSnapshot) => void;
   onSave: (values: {
     title: string;
     content: string;
@@ -1531,6 +1800,27 @@ function PersistedPostComposer(props: {
   const canSave =
     (contentChanged || scheduleChanged || blogMetadataChanged) && title.trim().length > 0;
 
+  useEffect(() => {
+    if (post.channelId !== "corvo-blog" || !props.onPublishSnapshotChange) return;
+    props.onPublishSnapshotChange({
+      excerpt: blogExcerpt,
+      author: blogAuthor,
+      category: blogCategory,
+      tags: blogTags,
+      slug: blogSlug,
+      heroImageUrl: heroPreviewUrl || undefined,
+    });
+  }, [
+    blogAuthor,
+    blogCategory,
+    blogExcerpt,
+    blogSlug,
+    blogTagsInput,
+    heroPreviewUrl,
+    post.channelId,
+    props.onPublishSnapshotChange,
+  ]);
+
   async function handleHeroUpload(file: File) {
     setHeroUploading(true);
     try {
@@ -1552,7 +1842,13 @@ function PersistedPostComposer(props: {
   }
 
   return (
-    <section className="mt-5 rounded-lg border border-black/10 p-4">
+    <section
+      className={
+        props.embedded
+          ? undefined
+          : "mt-5 rounded-lg border border-black/10 p-4"
+      }
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold">Composer</h4>
@@ -1706,6 +2002,7 @@ function PersistedPostComposer(props: {
                   <img
                     alt="Hero preview"
                     className="h-auto max-w-full rounded"
+                    referrerPolicy="no-referrer"
                     src={heroPreviewUrl}
                   />
                   <p className="line-clamp-2 break-all text-[11px] text-gray-500">

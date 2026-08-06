@@ -4,6 +4,11 @@ import {
   type EvidenceLabel,
   type SourceRecord,
 } from "@/lib/domain";
+import {
+  allowMockAi,
+  missingPioneerKeyResponse,
+  pioneerUpstreamErrorResponse,
+} from "@/lib/pioneerAiRoute";
 
 export const runtime = "nodejs";
 
@@ -196,6 +201,9 @@ export async function POST(req: NextRequest) {
   const model = process.env.PIONEER_DRAFT_MODEL?.trim() || "claude-opus-4-7";
 
   if (!apiKey) {
+    if (!allowMockAi()) {
+      return missingPioneerKeyResponse();
+    }
     const sources: SourceRecord[] = withFreshnessSupplements(body, FRESHPROOF_MOCK_SOURCES).map((s) =>
       makeSourceRecord({ ...s, addedBy: "agent" })
     );
@@ -232,16 +240,7 @@ export async function POST(req: NextRequest) {
     if (!response.ok) {
       const detail = await response.text();
       console.error("Pioneer research-brief error [model=%s]: %s", model, detail);
-      const sources: SourceRecord[] = withFreshnessSupplements(body, FRESHPROOF_MOCK_SOURCES).map((s) =>
-        makeSourceRecord({ ...s, addedBy: "agent" })
-      );
-      return NextResponse.json({
-        sources,
-        provider: "mock",
-        automationNotes: AUTOMATION_NOTES,
-        warning:
-          "PioneerAI returned an error. Returning mock sources for continuity.",
-      });
+      return pioneerUpstreamErrorResponse();
     }
 
     const data = await response.json();
@@ -249,16 +248,9 @@ export async function POST(req: NextRequest) {
     const raw = sourcesFromPioneerContent(content);
 
     if (!raw) {
-      const sources: SourceRecord[] = withFreshnessSupplements(body, FRESHPROOF_MOCK_SOURCES).map((s) =>
-        makeSourceRecord({ ...s, addedBy: "agent" })
+      return pioneerUpstreamErrorResponse(
+        "PioneerAI returned a response that could not be parsed as a source list."
       );
-      return NextResponse.json({
-        sources,
-        provider: "mock",
-        automationNotes: AUTOMATION_NOTES,
-        warning:
-          "PioneerAI returned a response that could not be parsed as a source list. Returning mock sources.",
-      });
     }
 
     const sources: SourceRecord[] = withFreshnessSupplements(body, raw).map((s) =>
@@ -276,14 +268,6 @@ export async function POST(req: NextRequest) {
       "Pioneer research-brief request failed:",
       error instanceof Error ? error.message : String(error)
     );
-    const sources: SourceRecord[] = withFreshnessSupplements(body, FRESHPROOF_MOCK_SOURCES).map((s) =>
-      makeSourceRecord({ ...s, addedBy: "agent" })
-    );
-    return NextResponse.json({
-      sources,
-      provider: "mock",
-      automationNotes: AUTOMATION_NOTES,
-      warning: "PioneerAI request failed. Returning mock sources for continuity.",
-    });
+    return pioneerUpstreamErrorResponse();
   }
 }

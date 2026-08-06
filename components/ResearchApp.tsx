@@ -689,7 +689,15 @@ export function ResearchApp({
           targetOutputs: brief.targetOutputs,
         }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setNotice(
+          typeof data.error === "string"
+            ? data.error
+            : `Source discovery failed (${response.status}).`
+        );
+        return;
+      }
       const sources: SourceRecord[] = Array.isArray(data.sources) ? data.sources : [];
       setResearchBrief({ ...brief, sources, status: "source-review" });
       setPersistedResearchBriefId(null);
