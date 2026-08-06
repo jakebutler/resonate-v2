@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
+import { createElement, Fragment } from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { Button } from '@/components/ui/button'
+import { Button, resolveAsChildElement } from '@/components/ui/button'
 
 describe('Button', () => {
   it('renders children', () => {
@@ -106,8 +107,54 @@ describe('Button', () => {
     const link = screen.getByRole('link', { name: /Continue/i })
     expect(link).toHaveAttribute('aria-busy', 'true')
     expect(link).toHaveAttribute('aria-disabled', 'true')
+    expect(link).toHaveAttribute('tabindex', '-1')
     expect(link).toContainElement(screen.getByTestId('button-loading-spinner'))
     fireEvent.click(link)
     expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('rejects Fragment children when asChild is set', () => {
+    expect(() =>
+      resolveAsChildElement(
+        createElement(Fragment, null, createElement('a', { href: '#' }, 'Continue'))
+      )
+    ).toThrow(/does not support React.Fragment/i)
+  })
+
+  it('preserves caller aria-disabled on slotted child when not disabled', () => {
+    render(
+      <Button asChild aria-disabled={true}>
+        <a href="https://example.com">Continue</a>
+      </Button>
+    )
+    expect(screen.getByRole('link', { name: /Continue/i })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
+  })
+
+  it('forces aria-busy on slotted child when loading even if child sets false', () => {
+    render(
+      <Button asChild loading>
+        <a aria-busy={false} href="https://example.com">
+          Continue
+        </a>
+      </Button>
+    )
+    expect(screen.getByRole('link', { name: /Continue/i })).toHaveAttribute(
+      'aria-busy',
+      'true'
+    )
+  })
+
+  it('forwards disabled to a slotted native button and removes it from tab order', () => {
+    render(
+      <Button asChild disabled>
+        <button type="button">Go</button>
+      </Button>
+    )
+    const button = screen.getByRole('button', { name: 'Go' })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('tabindex', '-1')
   })
 })

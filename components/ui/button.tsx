@@ -58,11 +58,39 @@ function LoadingSpinner() {
   )
 }
 
+type SlottedChildProps = {
+  children?: React.ReactNode
+  onClick?: React.MouseEventHandler
+  disabled?: boolean
+  tabIndex?: number
+  "aria-busy"?: boolean | "true" | "false"
+  "aria-disabled"?: boolean | "true" | "false"
+}
+
 type ButtonProps = React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
     loading?: boolean
   }
+
+function isFragmentElement(element: React.ReactElement): boolean {
+  return element.type === React.Fragment
+}
+
+/** Validates the asChild host element; exported for unit tests. */
+function resolveAsChildElement(
+  children: React.ReactNode
+): React.ReactElement<SlottedChildProps> {
+  if (!React.isValidElement<SlottedChildProps>(children)) {
+    throw new Error("Button asChild expects a single React element child.")
+  }
+  if (isFragmentElement(children)) {
+    throw new Error(
+      "Button asChild does not support React.Fragment. Pass a single host element (e.g. <a> or <button>)."
+    )
+  }
+  return children
+}
 
 function Button({
   className,
@@ -74,21 +102,19 @@ function Button({
   children,
   onClick,
   "aria-busy": ariaBusy,
+  "aria-disabled": ariaDisabled,
   ...props
 }: ButtonProps) {
   const isDisabled = Boolean(disabled || loading)
   const resolvedAriaBusy = loading ? true : ariaBusy
+  const resolvedAriaDisabled = isDisabled ? true : ariaDisabled
   const classes = cn(
     buttonVariants({ variant, size, className }),
     asChild && isDisabled && "pointer-events-none opacity-50"
   )
 
   if (asChild) {
-    if (!React.isValidElement<{ children?: React.ReactNode; onClick?: React.MouseEventHandler }>(children)) {
-      throw new Error("Button asChild expects a single React element child.")
-    }
-
-    const slotted = children
+    const slotted = resolveAsChildElement(children)
     return (
       <Slot.Root
         data-slot="button"
@@ -96,10 +122,16 @@ function Button({
         data-variant={variant}
         className={classes}
         {...props}
-        aria-disabled={isDisabled || undefined}
-        aria-busy={resolvedAriaBusy}
       >
         {React.cloneElement(slotted, {
+          disabled: isDisabled ? true : slotted.props.disabled,
+          "aria-disabled": isDisabled
+            ? true
+            : (ariaDisabled ?? slotted.props["aria-disabled"]),
+          "aria-busy": loading
+            ? true
+            : (ariaBusy ?? slotted.props["aria-busy"]),
+          tabIndex: isDisabled ? -1 : slotted.props.tabIndex,
           onClick: (event: React.MouseEvent) => {
             if (isDisabled) {
               event.preventDefault()
@@ -131,6 +163,7 @@ function Button({
       {...props}
       disabled={isDisabled}
       aria-busy={resolvedAriaBusy}
+      aria-disabled={resolvedAriaDisabled}
       onClick={onClick}
     >
       {loading ? <LoadingSpinner /> : null}
@@ -139,4 +172,4 @@ function Button({
   )
 }
 
-export { Button, buttonVariants }
+export { Button, buttonVariants, resolveAsChildElement }

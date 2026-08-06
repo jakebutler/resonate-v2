@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/05/2026 23:13:34 PDT
+Last updated: 08/05/2026 23:57:54 PDT
 
 ## State
 
@@ -16,19 +16,18 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 79a4ad8 fix: add Button loading state for Open PR actions
+- b31ca39 fix: harden Button loading and per-post Open PR in-flight state
 
 ## Recent Commits
 
+- b31ca39 fix: harden Button loading and per-post Open PR in-flight state
 - 79a4ad8 fix: add Button loading state for Open PR actions
 - 41c6515 fix: show why Open PR is disabled when tags are missing
 - 0da864a fix: open blog PRs using composer tags and metadata
 - 5df9e32 docs: sync handoff after preview seed commit
-- ea0a522 feat: add minimal preview sandbox seed for dev Convex
 
 ## Local Working Tree
 
-- M  components/PersistedPublishingPanel.tsx
 - M  components/__tests__/PersistedPublishingPanel.test.tsx
 - M  components/ui/__tests__/Button.test.tsx
 - M  components/ui/button.tsx
