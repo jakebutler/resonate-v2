@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/06/2026 12:44:25 PDT
+Last updated: 08/06/2026 12:44:59 PDT
 
 ## State
 
@@ -12,25 +12,23 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Touched auth or environment wiring.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- a604eb1 chore: re-trigger CI for publish-gate review fixes
+- eb50fa1 fix: make E2E auth bypass prerender research and calendar
 
 ## Recent Commits
 
+- eb50fa1 fix: make E2E auth bypass prerender research and calendar
 - a604eb1 chore: re-trigger CI for publish-gate review fixes
 - 6972612 chore: drop unused publish route helpers after gate rewrite
 - c361863 fix: address cubic review on publish gate and fail-closed auth
 - 67cbbef Merge pull request #48 from jakebutler/fix/button-loading-open-pr
-- 6ab5354 docs: point project-status at Open PR button loading HEAD
 
 ## Local Working Tree
 
-- M  .github/workflows/test.yml
-- M  components/ConvexClientProvider.tsx
-- M  components/shell/Shell.tsx
+- M  components/__tests__/ConvexClientProvider.test.tsx
 
 ## Next Agent Pickup
 
