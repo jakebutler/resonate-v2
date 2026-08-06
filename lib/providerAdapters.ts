@@ -4,7 +4,7 @@ import type {
   ProviderAttemptStatus,
   ProviderId,
   ProviderStateStatus,
-} from "@/lib/domain";
+} from "./domain";
 
 export type ProviderSubmission = {
   postId: string;

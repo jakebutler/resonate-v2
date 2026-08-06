@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/06/2026 13:48:29 PDT
+Last updated: 08/06/2026 14:00:58 PDT
 
 ## State
 
@@ -16,19 +16,23 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 3adb64c chore: re-trigger CI on publish-gate tip with E2E bypass fix
+- 9895fbd Merge pull request #46 from jakebutler/fix/publish-gate-and-failclosed
 
 ## Recent Commits
 
+- 9895fbd Merge pull request #46 from jakebutler/fix/publish-gate-and-failclosed
+- ab923e2 fix: run E2E on workflow_dispatch so branch tips can be verified
 - 3adb64c chore: re-trigger CI on publish-gate tip with E2E bypass fix
 - d023f9c test: cover E2E bypass Convex auth provider path
 - eb50fa1 fix: make E2E auth bypass prerender research and calendar
-- a604eb1 chore: re-trigger CI for publish-gate review fixes
-- 6972612 chore: drop unused publish route helpers after gate rewrite
 
 ## Local Working Tree
 
-- M  .github/workflows/test.yml
+- M  convex/__tests__/publishing.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/bufferLive.ts
+- M  convex/publishing.ts
+- M  lib/providerAdapters.ts
 
 ## Next Agent Pickup
 
@@ -37,4 +41,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- fix/publish-gate-and-failclosed
+- feat/buffer-live-submit

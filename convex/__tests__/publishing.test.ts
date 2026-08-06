@@ -2,7 +2,7 @@ import { convexTest } from "convex-test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 
@@ -358,6 +358,191 @@ describe("publishing cross-brand authorization", () => {
     });
 
     expect(providerState?.simulated).toBe(true);
+  });
+
+  it("rejects Buffer live context for unapproved LinkedIn posts", async () => {
+    const t = createTestHarness();
+    const { asUser, userId } = await setupCorvoOnlyMember(t);
+    const { postId } = await asUser.mutation(api.publishing.createPostWithIntent, {
+      brandId: "corvo",
+      channelId: "linkedin",
+      title: "Unapproved LinkedIn",
+      content: "Must not hit Buffer",
+      scheduledDate: "2026-06-20",
+    });
+
+    const context = await asUser.query(internal.publishing.getBufferSubmissionContext, {
+      postId,
+      userId,
+    });
+
+    expect(context.eligible).toBe(false);
+    if (!context.eligible) {
+      expect(context.reason).toBe("Post is not approved.");
+    }
+  });
+
+  it("records Buffer submit attempt with provider post id and non-simulated state", async () => {
+    const t = createTestHarness();
+    const { asUser, userId } = await setupCorvoOnlyMember(t);
+    const { postId } = await asUser.mutation(api.publishing.createPostWithIntent, {
+      brandId: "corvo",
+      channelId: "linkedin",
+      title: "Approved LinkedIn",
+      content: "Queue me",
+      scheduledDate: "2026-06-20",
+      scheduledTime: "09:00",
+    });
+    await asUser.mutation(api.publishing.setApproval, {
+      postId,
+      approvalState: "approved",
+    });
+
+    const prepared = await asUser.query(internal.publishing.getBufferSubmissionContext, {
+      postId,
+      userId,
+    });
+    expect(prepared.eligible).toBe(true);
+    if (!prepared.eligible) throw new Error("expected eligible");
+
+    const recorded = await asUser.mutation(internal.publishing.recordBufferSubmitResult, {
+      postId,
+      userId,
+      intentId: prepared.intentId,
+      brandId: prepared.brandId,
+      idempotencyKey: prepared.idempotencyKey,
+      retryCount: prepared.retryCount,
+      submissionSnapshot: {
+        postId: prepared.submission.postId,
+        brandId: prepared.submission.brandId,
+        channelId: prepared.submission.channelId,
+        title: prepared.submission.title,
+        content: prepared.submission.content,
+        scheduledDate: prepared.submission.scheduledDate,
+        scheduledTime: prepared.submission.scheduledTime,
+        timezone: prepared.submission.timezone,
+      },
+      ok: true,
+      status: "success",
+      providerStateStatus: "submitted",
+      providerPostId: "buffer-post-123",
+      sanitizedResponse: {
+        providerId: "buffer",
+        providerPostId: "buff...0123",
+        accessToken: "should-not-persist",
+      },
+    });
+
+    expect(recorded.submitted).toBe(true);
+
+    const providerState = await t.run(async (ctx) => {
+      const intent = await ctx.db
+        .query("v2PublishingIntents")
+        .withIndex("by_post", (q) => q.eq("postId", postId))
+        .first();
+      return intent
+        ? await ctx.db
+            .query("v2ProviderStates")
+            .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
+            .first()
+        : null;
+    });
+    const attempt = await t.run(async (ctx) => ctx.db.get(recorded.attemptId));
+    const audits = await t.run(async (ctx) =>
+      ctx.db
+        .query("v2AuditEvents")
+        .withIndex("by_post", (q) => q.eq("postId", postId))
+        .collect()
+    );
+
+    expect(providerState?.providerId).toBe("buffer");
+    expect(providerState?.providerPostId).toBe("buffer-post-123");
+    expect(providerState?.simulated).toBe(false);
+    expect(providerState?.status).toBe("submitted");
+    expect(attempt?.providerId).toBe("buffer");
+    expect(attempt?.sanitizedResponse?.accessToken).toBe("[redacted]");
+    expect(audits.some((event) => event.action === "provider.buffer_submit")).toBe(true);
+  });
+
+  it("records Buffer cancel round-trip against provider state", async () => {
+    const t = createTestHarness();
+    const { asUser, userId } = await setupCorvoOnlyMember(t);
+    const { postId } = await asUser.mutation(api.publishing.createPostWithIntent, {
+      brandId: "corvo",
+      channelId: "linkedin",
+      title: "Cancel me",
+      content: "Queued then cancelled",
+      scheduledDate: "2026-06-21",
+    });
+    await asUser.mutation(api.publishing.setApproval, {
+      postId,
+      approvalState: "approved",
+    });
+
+    const prepared = await asUser.query(internal.publishing.getBufferSubmissionContext, {
+      postId,
+      userId,
+    });
+    if (!prepared.eligible) throw new Error("expected eligible");
+
+    await asUser.mutation(internal.publishing.recordBufferSubmitResult, {
+      postId,
+      userId,
+      intentId: prepared.intentId,
+      brandId: prepared.brandId,
+      idempotencyKey: prepared.idempotencyKey,
+      retryCount: 0,
+      submissionSnapshot: {
+        postId: prepared.submission.postId,
+        brandId: prepared.submission.brandId,
+        channelId: prepared.submission.channelId,
+        title: prepared.submission.title,
+        content: prepared.submission.content,
+        scheduledDate: prepared.submission.scheduledDate,
+        scheduledTime: prepared.submission.scheduledTime,
+        timezone: prepared.submission.timezone,
+      },
+      ok: true,
+      status: "success",
+      providerStateStatus: "submitted",
+      providerPostId: "buffer-cancel-1",
+      sanitizedResponse: { providerId: "buffer" },
+    });
+
+    const cancelContext = await asUser.query(internal.publishing.getBufferCancelContext, {
+      postId,
+      userId,
+    });
+    expect(cancelContext.eligible).toBe(true);
+    if (!cancelContext.eligible) throw new Error("expected cancel eligible");
+    expect(cancelContext.providerPostId).toBe("buffer-cancel-1");
+
+    await asUser.mutation(internal.publishing.recordBufferCancelResult, {
+      postId,
+      userId,
+      intentId: cancelContext.intentId,
+      brandId: cancelContext.brandId,
+      intentType: "cancel",
+      ok: true,
+      providerStateStatus: "cancel-intent-recorded",
+      providerPostId: cancelContext.providerPostId,
+      sanitizedResponse: { providerId: "buffer", deleted: true },
+    });
+
+    const providerState = await t.run(async (ctx) => {
+      const intent = await ctx.db
+        .query("v2PublishingIntents")
+        .withIndex("by_post", (q) => q.eq("postId", postId))
+        .first();
+      return intent
+        ? await ctx.db
+            .query("v2ProviderStates")
+            .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
+            .first()
+        : null;
+    });
+    expect(providerState?.status).toBe("cancel-intent-recorded");
+    expect(providerState?.simulated).toBe(false);
   });
 });
 

@@ -2935,3 +2935,29 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/publish-gate-and-failclosed
+
+## 08/06/2026 14:00:58 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	convex/__tests__/publishing.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/bufferLive.ts
+- M	convex/publishing.ts
+- M	lib/providerAdapters.ts
+
+### Working Tree Snapshot
+
+- M  convex/__tests__/publishing.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/bufferLive.ts
+- M  convex/publishing.ts
+- M  lib/providerAdapters.ts
+
+### Branch
+
+- feat/buffer-live-submit
