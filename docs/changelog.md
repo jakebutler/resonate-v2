@@ -2961,3 +2961,35 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/buffer-live-submit
+
+## 08/06/2026 14:03:31 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	convex/__tests__/publishing.test.ts
+- M	convex/bufferLive.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- M	lib/domain.ts
+- M	lib/providerAdapters.ts
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/publishing.test.ts
+- M  convex/bufferLive.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- M  lib/domain.ts
+- M  lib/providerAdapters.ts
+
+### Branch
+
+- feat/buffer-live-submit

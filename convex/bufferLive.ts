@@ -38,6 +38,20 @@ async function requireActionUserId(ctx: {
   return identity.subject;
 }
 
+function providerFailureFromError(error: unknown): ProviderResult {
+  const message = error instanceof Error ? error.message : "Buffer provider call failed.";
+  return {
+    ok: false,
+    status: "retryable-failure",
+    providerStateStatus: "failed",
+    reason: message,
+    sanitizedResponse: {
+      providerId: "buffer",
+      error: message,
+    },
+  };
+}
+
 export const submit = action({
   args: {
     postId: v.id("v2Posts"),
@@ -60,51 +74,53 @@ export const submit = action({
       };
     }
 
-    const prepared = await ctx.runQuery(internal.publishing.getBufferSubmissionContext, {
+    const claimed = await ctx.runMutation(internal.publishing.claimBufferSubmission, {
       postId: args.postId,
       userId,
       retry: args.retry,
     });
 
-    if (!prepared.eligible) {
-      if ("brandId" in prepared && prepared.brandId) {
+    if (!claimed.eligible) {
+      if ("brandId" in claimed && claimed.brandId) {
         await ctx.runMutation(internal.publishing.auditBufferSkip, {
           postId: args.postId,
           userId,
-          brandId: prepared.brandId,
-          intentId: "intentId" in prepared ? prepared.intentId : undefined,
-          reason: prepared.reason,
+          brandId: claimed.brandId,
+          intentId: "intentId" in claimed ? claimed.intentId : undefined,
+          reason: claimed.reason,
         });
       }
       return {
         submitted: false,
         liveGateOff: false,
-        reason: prepared.reason,
+        reason: claimed.reason,
       };
     }
 
-    // Approval and channel eligibility already enforced above — never call Buffer otherwise.
-    const result: ProviderResult = await bufferProviderAdapter.submit(
-      prepared.submission,
-      bufferAdapterContext()
-    );
+    let result: ProviderResult;
+    try {
+      result = await bufferProviderAdapter.submit(claimed.submission, bufferAdapterContext());
+    } catch (error) {
+      result = providerFailureFromError(error);
+    }
 
     const recorded = await ctx.runMutation(internal.publishing.recordBufferSubmitResult, {
       postId: args.postId,
       userId,
-      intentId: prepared.intentId,
-      brandId: prepared.brandId,
-      idempotencyKey: prepared.idempotencyKey,
-      retryCount: prepared.retryCount,
+      intentId: claimed.intentId,
+      brandId: claimed.brandId,
+      attemptId: claimed.attemptId,
+      idempotencyKey: claimed.idempotencyKey,
+      retryCount: claimed.retryCount,
       submissionSnapshot: {
-        postId: prepared.submission.postId,
-        brandId: prepared.submission.brandId,
-        channelId: prepared.submission.channelId,
-        title: prepared.submission.title,
-        content: prepared.submission.content,
-        scheduledDate: prepared.submission.scheduledDate,
-        scheduledTime: prepared.submission.scheduledTime,
-        timezone: prepared.submission.timezone,
+        postId: claimed.submission.postId,
+        brandId: claimed.submission.brandId,
+        channelId: claimed.submission.channelId,
+        title: claimed.submission.title,
+        content: claimed.submission.content,
+        scheduledDate: claimed.submission.scheduledDate,
+        scheduledTime: claimed.submission.scheduledTime,
+        timezone: claimed.submission.timezone,
       },
       ok: result.ok,
       status: result.status,
@@ -115,11 +131,15 @@ export const submit = action({
     });
 
     return {
-      submitted: result.ok,
+      submitted: recorded.submitted,
       liveGateOff: false,
       attemptId: recorded.attemptId,
       providerPostId: result.providerPostId,
-      reason: result.ok ? undefined : result.reason,
+      reason: recorded.submitted
+        ? undefined
+        : recorded.stale
+          ? "Approval or content changed while Buffer submission was in flight."
+          : result.reason,
     };
   },
 });
@@ -158,22 +178,27 @@ export const cancelOrUnpublish = action({
       };
     }
 
-    const result: ProviderResult = await bufferProviderAdapter.recordCancelOrUnpublishIntent(
-      {
-        postId: String(args.postId),
-        brandId: prepared.brandId,
-        channelId: prepared.channelId,
-        title: prepared.title,
-        content: prepared.content,
-        scheduledDate: prepared.scheduledDate,
-        scheduledTime: prepared.scheduledTime,
-        timezone: prepared.timezone,
-        idempotencyKey: `${prepared.intentId}:buffer:${args.intentType}`,
-        providerPostId: prepared.providerPostId,
-      },
-      args.intentType,
-      bufferAdapterContext()
-    );
+    let result: ProviderResult;
+    try {
+      result = await bufferProviderAdapter.recordCancelOrUnpublishIntent(
+        {
+          postId: String(args.postId),
+          brandId: prepared.brandId,
+          channelId: prepared.channelId,
+          title: prepared.title,
+          content: prepared.content,
+          scheduledDate: prepared.scheduledDate,
+          scheduledTime: prepared.scheduledTime,
+          timezone: prepared.timezone,
+          idempotencyKey: `${prepared.intentId}:buffer:${args.intentType}`,
+          providerPostId: prepared.providerPostId,
+        },
+        args.intentType,
+        bufferAdapterContext()
+      );
+    } catch (error) {
+      result = providerFailureFromError(error);
+    }
 
     await ctx.runMutation(internal.publishing.recordBufferCancelResult, {
       postId: args.postId,

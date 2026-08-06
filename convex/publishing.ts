@@ -1670,15 +1670,28 @@ function assembleLinkedInSubmissionContent(
 ) {
   const settings =
     platformSettings && typeof platformSettings === "object"
-      ? (platformSettings as { hashtags?: string[]; cta?: string })
+      ? (platformSettings as { hashtags?: unknown; cta?: string })
       : undefined;
-  const hashtags = (settings?.hashtags ?? [])
+  // Migrated posts may store hashtags as a string; only array entries are used.
+  const rawHashtags = settings?.hashtags;
+  const hashtagList = Array.isArray(rawHashtags) ? rawHashtags : [];
+  const hashtags = hashtagList
+    .filter((tag): tag is string => typeof tag === "string")
     .map((tag) => tag.trim())
     .filter(Boolean)
     .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
   const body = content.trim();
   if (hashtags.length === 0) return body;
   return `${body}\n\n${hashtags.join(" ")}`;
+}
+
+function brandHasBufferLinkedInMapping(brandId: BrandId): boolean {
+  return brandId === "corvo" || brandId === "lower-db";
+}
+
+function isLiveBufferProviderPostId(providerPostId: string | undefined): boolean {
+  if (!providerPostId?.trim()) return false;
+  return !providerPostId.startsWith("mock-");
 }
 
 function mapProviderStateToPostStatus(
@@ -1721,6 +1734,13 @@ export const getBufferSubmissionContext = internalQuery({
         eligible: false as const,
         brandId: post.brandId,
         reason: "Buffer live submission is only available for LinkedIn posts.",
+      };
+    }
+    if (!brandHasBufferLinkedInMapping(post.brandId)) {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        reason: `No Buffer LinkedIn channel mapping exists for brand ${post.brandId}.`,
       };
     }
 
@@ -1852,11 +1872,31 @@ export const getBufferCancelContext = internalQuery({
       .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
       .first();
 
+    if (
+      !providerState ||
+      providerState.simulated === true ||
+      providerState.providerId !== "buffer" ||
+      !isLiveBufferProviderPostId(providerState.providerPostId)
+    ) {
+      return {
+        eligible: false as const,
+        reason:
+          "Buffer cancel requires an existing non-simulated Buffer submission with a provider post id.",
+      };
+    }
+
+    if (providerState.status === "cancel-intent-recorded") {
+      return {
+        eligible: false as const,
+        reason: "Buffer cancel was already recorded for this submission.",
+      };
+    }
+
     return {
       eligible: true as const,
       brandId: post.brandId,
       intentId: intent._id,
-      providerPostId: providerState?.providerPostId,
+      providerPostId: providerState.providerPostId,
       contentFingerprint: intent.contentFingerprint,
       title: post.title,
       content: assembleLinkedInSubmissionContent(post.content, post.platformSettings),
@@ -1869,6 +1909,7 @@ export const getBufferCancelContext = internalQuery({
 });
 
 const bufferAttemptStatusValidator = v.union(
+  v.literal("pending"),
   v.literal("success"),
   v.literal("retryable-failure"),
   v.literal("permanent-failure"),
@@ -1886,12 +1927,198 @@ const bufferProviderStateStatusValidator = v.union(
   v.literal("cancel-intent-recorded")
 );
 
+export const claimBufferSubmission = internalMutation({
+  args: {
+    postId: v.id("v2Posts"),
+    userId: v.string(),
+    retry: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    // Inline eligibility — same checks as getBufferSubmissionContext, then claim atomically.
+    const post = await ctx.db.get(args.postId);
+    if (!post || post.userId !== args.userId) {
+      return { eligible: false as const, reason: "Post not found" };
+    }
+    try {
+      await requireBrandAccess(ctx, args.userId, post.brandId);
+    } catch {
+      return { eligible: false as const, reason: "Brand access denied" };
+    }
+    if (post.channelId !== "linkedin") {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        reason: "Buffer live submission is only available for LinkedIn posts.",
+      };
+    }
+    if (!brandHasBufferLinkedInMapping(post.brandId)) {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        reason: `No Buffer LinkedIn channel mapping exists for brand ${post.brandId}.`,
+      };
+    }
+
+    const intent = await latestIntent(ctx, args.postId);
+    if (!intent) {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        reason: "Publishing intent not found",
+      };
+    }
+
+    const channel = await ctx.db
+      .query("v2Channels")
+      .withIndex("by_brand_and_channel", (q) =>
+        q.eq("brandId", post.brandId).eq("channelId", post.channelId)
+      )
+      .first();
+
+    const ineligibleReason = !channel?.routable
+      ? "Channel is not routable."
+      : intent.approvalState !== "approved"
+        ? "Post is not approved."
+        : !intent.scheduledDate
+          ? "Scheduled date is required."
+          : intent.contentFingerprint !== contentFingerprint(post.title, post.content)
+            ? "Content changed after approval."
+            : null;
+
+    if (ineligibleReason) {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        intentId: intent._id,
+        reason: ineligibleReason,
+      };
+    }
+
+    const previousAttempts = await ctx.db
+      .query("v2PublishAttempts")
+      .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
+      .collect();
+    const latestAttempt = [...previousAttempts].sort((a, b) => b.createdAt - a.createdAt)[0];
+    const baseIdempotencyKey = `${intent._id}:${intent.contentFingerprint}`;
+    const existingAttempt = await ctx.db
+      .query("v2PublishAttempts")
+      .withIndex("by_idempotency_key", (q) => q.eq("idempotencyKey", baseIdempotencyKey))
+      .first();
+
+    if (existingAttempt && existingAttempt.status === "pending") {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        intentId: intent._id,
+        reason: "Duplicate submission prevented.",
+      };
+    }
+
+    if (existingAttempt) {
+      const retryable =
+        args.retry &&
+        (latestAttempt?.status === "retryable-failure" ||
+          latestAttempt?.status === "ambiguous");
+      if (!retryable) {
+        return {
+          eligible: false as const,
+          brandId: post.brandId,
+          intentId: intent._id,
+          reason: args.retry
+            ? "Previous attempt is not retryable."
+            : "Duplicate submission prevented.",
+        };
+      }
+    }
+    if (args.retry && !existingAttempt) {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        intentId: intent._id,
+        reason: "No previous attempt exists to retry.",
+      };
+    }
+
+    const idempotencyKey = args.retry
+      ? `${baseIdempotencyKey}:retry:${previousAttempts.length}`
+      : baseIdempotencyKey;
+
+    // Serialize concurrent claims by patching the intent document.
+    if (
+      intent.activeBufferClaimKey &&
+      intent.activeBufferClaimKey !== idempotencyKey &&
+      !args.retry
+    ) {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        intentId: intent._id,
+        reason: "Duplicate submission prevented.",
+      };
+    }
+    if (intent.activeBufferClaimKey === idempotencyKey) {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        intentId: intent._id,
+        reason: "Duplicate submission prevented.",
+      };
+    }
+
+    const now = Date.now();
+    const submissionSnapshot = {
+      postId: String(post._id),
+      brandId: post.brandId,
+      channelId: post.channelId,
+      title: post.title,
+      content: assembleLinkedInSubmissionContent(post.content, post.platformSettings),
+      scheduledDate: intent.scheduledDate,
+      scheduledTime: intent.scheduledTime,
+      timezone: intent.timezone,
+    };
+
+    await ctx.db.patch(intent._id, {
+      activeBufferClaimKey: idempotencyKey,
+      updatedAt: now,
+    });
+
+    const attemptId = await ctx.db.insert("v2PublishAttempts", {
+      postId: post._id,
+      intentId: intent._id,
+      userId: args.userId,
+      providerId: "buffer",
+      status: "pending",
+      idempotencyKey,
+      retryCount: previousAttempts.length,
+      submissionSnapshot,
+      sanitizedResponse: { providerId: "buffer", phase: "claimed" },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return {
+      eligible: true as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      attemptId,
+      retryCount: previousAttempts.length,
+      idempotencyKey,
+      contentFingerprint: intent.contentFingerprint,
+      submission: {
+        ...submissionSnapshot,
+        idempotencyKey,
+      },
+    };
+  },
+});
+
 export const recordBufferSubmitResult = internalMutation({
   args: {
     postId: v.id("v2Posts"),
     userId: v.string(),
     intentId: v.id("v2PublishingIntents"),
     brandId: brandIdValidator,
+    attemptId: v.id("v2PublishAttempts"),
     idempotencyKey: v.string(),
     retryCount: v.number(),
     submissionSnapshot: v.object({
@@ -1918,16 +2145,36 @@ export const recordBufferSubmitResult = internalMutation({
     }
     await requireBrandAccess(ctx, args.userId, post.brandId);
 
+    const intent = await ctx.db.get(args.intentId);
+    if (!intent) throw new Error("Publishing intent not found");
+
     const now = Date.now();
-    const attemptId = await ctx.db.insert("v2PublishAttempts", {
-      postId: args.postId,
-      intentId: args.intentId,
-      userId: args.userId,
-      providerId: "buffer",
-      status: args.status,
-      idempotencyKey: args.idempotencyKey,
-      retryCount: args.retryCount,
-      submissionSnapshot: args.submissionSnapshot,
+    const intentStillValid =
+      intent.approvalState === "approved" &&
+      intent.contentFingerprint === contentFingerprint(post.title, post.content) &&
+      assembleLinkedInSubmissionContent(post.content, post.platformSettings) ===
+        args.submissionSnapshot.content;
+
+    const effectiveOk = args.ok && intentStillValid;
+    const effectiveStatus = !intentStillValid
+      ? ("permanent-failure" as const)
+      : args.status === "pending"
+        ? ("ambiguous" as const)
+        : args.status;
+    const effectiveProviderStatus = !intentStillValid
+      ? ("failed" as const)
+      : args.providerStateStatus;
+    const staleReason =
+      "Approval or content changed while Buffer submission was in flight; provider result was not applied to post state.";
+
+    const summary = !intentStillValid
+      ? staleReason
+      : effectiveOk
+        ? `Buffer submission recorded${args.providerPostId ? ` (${args.providerPostId})` : ""}.`
+        : args.reason ?? "Buffer submission failed.";
+
+    await ctx.db.patch(args.attemptId, {
+      status: effectiveStatus,
       sanitizedResponse: sanitizeProviderResponse(
         args.sanitizedResponse &&
           typeof args.sanitizedResponse === "object" &&
@@ -1935,54 +2182,66 @@ export const recordBufferSubmitResult = internalMutation({
           ? (args.sanitizedResponse as Record<string, unknown>)
           : { providerId: "buffer" }
       ),
-      createdAt: now,
       updatedAt: now,
     });
 
-    const summary = args.ok
-      ? `Buffer submission recorded${args.providerPostId ? ` (${args.providerPostId})` : ""}.`
-      : args.reason ?? "Buffer submission failed.";
-
-    const providerState = await ctx.db
-      .query("v2ProviderStates")
-      .withIndex("by_intent", (q) => q.eq("intentId", args.intentId))
-      .first();
-    const providerPatch = {
-      providerId: "buffer" as const,
-      status: args.providerStateStatus,
-      simulated: false,
-      providerPostId: args.providerPostId,
-      lastAttemptId: attemptId,
-      lastResponseSummary: summary,
+    await ctx.db.patch(args.intentId, {
+      activeBufferClaimKey: undefined,
       updatedAt: now,
-    };
-    if (providerState) {
-      await ctx.db.patch(providerState._id, providerPatch);
-    } else {
-      await ctx.db.insert("v2ProviderStates", {
-        postId: args.postId,
-        intentId: args.intentId,
-        ...providerPatch,
-        createdAt: now,
+    });
+
+    // Only advance provider/post state when the claimed intent is still approved & unchanged.
+    if (intentStillValid) {
+      const providerState = await ctx.db
+        .query("v2ProviderStates")
+        .withIndex("by_intent", (q) => q.eq("intentId", args.intentId))
+        .first();
+      const providerPatch = {
+        providerId: "buffer" as const,
+        status: effectiveProviderStatus,
+        simulated: false,
+        providerPostId: args.providerPostId,
+        lastAttemptId: args.attemptId,
+        lastResponseSummary: summary,
+        updatedAt: now,
+      };
+      if (providerState) {
+        await ctx.db.patch(providerState._id, providerPatch);
+      } else {
+        await ctx.db.insert("v2ProviderStates", {
+          postId: args.postId,
+          intentId: args.intentId,
+          ...providerPatch,
+          createdAt: now,
+        });
+      }
+
+      await ctx.db.patch(args.postId, {
+        status: mapProviderStateToPostStatus(effectiveProviderStatus),
+        updatedAt: now,
       });
     }
-
-    await ctx.db.patch(args.postId, {
-      status: mapProviderStateToPostStatus(args.providerStateStatus),
-      updatedAt: now,
-    });
 
     await audit(ctx, {
       userId: args.userId,
       brandId: args.brandId,
       postId: args.postId,
       intentId: args.intentId,
-      action: args.ok ? "provider.buffer_submit" : "provider.buffer_submit_failed",
+      action: effectiveOk
+        ? "provider.buffer_submit"
+        : !intentStillValid
+          ? "provider.buffer_submit_stale"
+          : "provider.buffer_submit_failed",
       summary,
-      metadata: { attemptId, providerPostId: args.providerPostId },
+      metadata: { attemptId: args.attemptId, providerPostId: args.providerPostId },
     });
 
-    return { recorded: true as const, attemptId, submitted: args.ok };
+    return {
+      recorded: true as const,
+      attemptId: args.attemptId,
+      submitted: effectiveOk,
+      stale: !intentStillValid,
+    };
   },
 });
 
@@ -2017,17 +2276,27 @@ export const recordBufferCancelResult = internalMutation({
       .query("v2ProviderStates")
       .withIndex("by_intent", (q) => q.eq("intentId", args.intentId))
       .first();
+
+    // Failed cancels stay retryable: keep prior live Buffer state when present.
+    const nextStatus = args.ok
+      ? args.providerStateStatus
+      : providerState?.status === "cancel-intent-recorded"
+        ? providerState.status
+        : args.providerStateStatus === "cancel-intent-recorded"
+          ? "failed"
+          : args.providerStateStatus;
+
     const providerPatch = {
       providerId: "buffer" as const,
-      status: args.providerStateStatus,
+      status: nextStatus,
       simulated: false,
-      providerPostId: args.providerPostId,
+      providerPostId: args.providerPostId ?? providerState?.providerPostId,
       lastResponseSummary: summary,
       updatedAt: now,
     };
     if (providerState) {
       await ctx.db.patch(providerState._id, providerPatch);
-    } else {
+    } else if (args.ok) {
       await ctx.db.insert("v2ProviderStates", {
         postId: args.postId,
         intentId: args.intentId,

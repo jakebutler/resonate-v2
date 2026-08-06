@@ -398,29 +398,30 @@ describe("publishing cross-brand authorization", () => {
       approvalState: "approved",
     });
 
-    const prepared = await asUser.query(internal.publishing.getBufferSubmissionContext, {
+    const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, {
       postId,
       userId,
     });
-    expect(prepared.eligible).toBe(true);
-    if (!prepared.eligible) throw new Error("expected eligible");
+    expect(claimed.eligible).toBe(true);
+    if (!claimed.eligible) throw new Error("expected eligible");
 
     const recorded = await asUser.mutation(internal.publishing.recordBufferSubmitResult, {
       postId,
       userId,
-      intentId: prepared.intentId,
-      brandId: prepared.brandId,
-      idempotencyKey: prepared.idempotencyKey,
-      retryCount: prepared.retryCount,
+      intentId: claimed.intentId,
+      brandId: claimed.brandId,
+      attemptId: claimed.attemptId,
+      idempotencyKey: claimed.idempotencyKey,
+      retryCount: claimed.retryCount,
       submissionSnapshot: {
-        postId: prepared.submission.postId,
-        brandId: prepared.submission.brandId,
-        channelId: prepared.submission.channelId,
-        title: prepared.submission.title,
-        content: prepared.submission.content,
-        scheduledDate: prepared.submission.scheduledDate,
-        scheduledTime: prepared.submission.scheduledTime,
-        timezone: prepared.submission.timezone,
+        postId: claimed.submission.postId,
+        brandId: claimed.submission.brandId,
+        channelId: claimed.submission.channelId,
+        title: claimed.submission.title,
+        content: claimed.submission.content,
+        scheduledDate: claimed.submission.scheduledDate,
+        scheduledTime: claimed.submission.scheduledTime,
+        timezone: claimed.submission.timezone,
       },
       ok: true,
       status: "success",
@@ -479,28 +480,29 @@ describe("publishing cross-brand authorization", () => {
       approvalState: "approved",
     });
 
-    const prepared = await asUser.query(internal.publishing.getBufferSubmissionContext, {
+    const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, {
       postId,
       userId,
     });
-    if (!prepared.eligible) throw new Error("expected eligible");
+    if (!claimed.eligible) throw new Error("expected eligible");
 
     await asUser.mutation(internal.publishing.recordBufferSubmitResult, {
       postId,
       userId,
-      intentId: prepared.intentId,
-      brandId: prepared.brandId,
-      idempotencyKey: prepared.idempotencyKey,
+      intentId: claimed.intentId,
+      brandId: claimed.brandId,
+      attemptId: claimed.attemptId,
+      idempotencyKey: claimed.idempotencyKey,
       retryCount: 0,
       submissionSnapshot: {
-        postId: prepared.submission.postId,
-        brandId: prepared.submission.brandId,
-        channelId: prepared.submission.channelId,
-        title: prepared.submission.title,
-        content: prepared.submission.content,
-        scheduledDate: prepared.submission.scheduledDate,
-        scheduledTime: prepared.submission.scheduledTime,
-        timezone: prepared.submission.timezone,
+        postId: claimed.submission.postId,
+        brandId: claimed.submission.brandId,
+        channelId: claimed.submission.channelId,
+        title: claimed.submission.title,
+        content: claimed.submission.content,
+        scheduledDate: claimed.submission.scheduledDate,
+        scheduledTime: claimed.submission.scheduledTime,
+        timezone: claimed.submission.timezone,
       },
       ok: true,
       status: "success",
@@ -544,6 +546,112 @@ describe("publishing cross-brand authorization", () => {
     expect(providerState?.status).toBe("cancel-intent-recorded");
     expect(providerState?.simulated).toBe(false);
   });
+  it("rejects Buffer claim for unapproved LinkedIn and leaves no attempts", async () => {
+    const t = createTestHarness();
+    const { asUser, userId } = await setupCorvoOnlyMember(t);
+    const { postId } = await asUser.mutation(api.publishing.createPostWithIntent, {
+      brandId: "corvo",
+      channelId: "linkedin",
+      title: "Unapproved LinkedIn action path",
+      content: "Must not hit Buffer",
+      scheduledDate: "2026-06-20",
+    });
+
+    const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, {
+      postId,
+      userId,
+    });
+    expect(claimed.eligible).toBe(false);
+    if (!claimed.eligible) {
+      expect(claimed.reason).toBe("Post is not approved.");
+    }
+
+    const attempts = await t.run(async (ctx) =>
+      ctx.db
+        .query("v2PublishAttempts")
+        .withIndex("by_post", (q) => q.eq("postId", postId))
+        .collect()
+    );
+    expect(attempts).toHaveLength(0);
+  });
+
+  it("rejects Buffer live context for unmapped brands", async () => {
+    const t = createTestHarness();
+    const asUser = t.withIdentity({ subject: "user-personal", name: "Personal" });
+    const userId = "user-personal";
+    const now = Date.now();
+    await asUser.run(async (ctx) => {
+      await ctx.db.insert("v2Brands", {
+        brandId: "personal",
+        name: "Personal",
+        description: "Test",
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert("v2BrandMemberships", {
+        userId,
+        brandId: "personal",
+        role: "owner",
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert("v2Channels", {
+        brandId: "personal",
+        channelId: "linkedin",
+        platformId: "linkedin",
+        label: "linkedin",
+        providerId: "buffer",
+        routable: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+    const { postId } = await asUser.mutation(api.publishing.createPostWithIntent, {
+      brandId: "personal",
+      channelId: "linkedin",
+      title: "Personal LinkedIn",
+      content: "No mapping",
+      scheduledDate: "2026-06-20",
+    });
+    await asUser.mutation(api.publishing.setApproval, {
+      postId,
+      approvalState: "approved",
+    });
+    const context = await asUser.query(internal.publishing.getBufferSubmissionContext, {
+      postId,
+      userId,
+    });
+    expect(context.eligible).toBe(false);
+    if (!context.eligible) {
+      expect(context.reason).toMatch(/No Buffer LinkedIn channel mapping/);
+    }
+  });
+
+  it("rejects cancel context without a live Buffer provider post", async () => {
+    const t = createTestHarness();
+    const { asUser, userId } = await setupCorvoOnlyMember(t);
+    const { postId } = await asUser.mutation(api.publishing.createPostWithIntent, {
+      brandId: "corvo",
+      channelId: "linkedin",
+      title: "Simulated only",
+      content: "No live cancel",
+      scheduledDate: "2026-06-23",
+    });
+    await asUser.mutation(api.publishing.setApproval, {
+      postId,
+      approvalState: "approved",
+    });
+    await asUser.mutation(api.publishing.submitMockProvider, {
+      postId,
+      mode: "success",
+    });
+    const cancel = await asUser.query(internal.publishing.getBufferCancelContext, {
+      postId,
+      userId,
+    });
+    expect(cancel.eligible).toBe(false);
+  });
+
 });
 
 describe("seedPreviewWorkspace", () => {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
   CalendarDays,
   Ban,
@@ -37,6 +37,7 @@ import {
   BRANDS,
   CHANNEL_LABELS,
   STATUS_LABELS,
+  brandHasBufferLinkedInMapping,
   type BrandId,
   type ChannelId,
   type PostStatus,
@@ -106,6 +107,15 @@ type PersistedCalendarItem = {
     createdAt?: number;
   }>;
 };
+
+function hasLiveBufferProviderPost(providerState: PersistedCalendarItem["providerState"]) {
+  if (!providerState) return false;
+  if (providerState.simulated === true) return false;
+  if (providerState.providerId && providerState.providerId !== "buffer") return false;
+  const providerPostId = providerState.providerPostId?.trim();
+  if (!providerPostId || providerPostId.startsWith("mock-")) return false;
+  return true;
+}
 
 const brandOptions = BRANDS.map((brand) => ({
   id: brand.id,
@@ -362,6 +372,9 @@ export function PersistedPublishingPanel({
     () => new Set()
   );
   const openingPrPostIdsRef = useRef<Set<string>>(new Set());
+  const [bufferLiveBusyPostId, setBufferLiveBusyPostId] = useState<Id<"v2Posts"> | null>(
+    null
+  );
 
   // Convex queries must wait for the Clerk token to reach the Convex client.
   // Firing them before that makes requireUserId throw "Unauthorized" server-side,
@@ -383,6 +396,10 @@ export function PersistedPublishingPanel({
         }
       : "skip"
   ) as PersistedCalendarItem[] | undefined;
+  const bufferLiveGate = useQuery(
+    api.publishing.bufferLiveSubmissionEnabled,
+    isConvexAuthenticated ? {} : "skip"
+  );
   const seedWorkspace = useMutation(api.publishing.seedMvpWorkspace);
   const createPostWithIntent = useMutation(api.publishing.createPostWithIntent);
   const setApproval = useMutation(api.publishing.setApproval);
@@ -390,10 +407,14 @@ export function PersistedPublishingPanel({
   const updateContent = useMutation(api.publishing.updateContent);
   const submitMockProvider = useMutation(api.publishing.submitMockProvider);
   const recordProviderIntent = useMutation(api.publishing.recordProviderIntent);
+  const submitBufferLive = useAction(api.bufferLive.submit);
+  const cancelBufferLive = useAction(api.bufferLive.cancelOrUnpublish);
   const recordGithubPr = useMutation(api.publishing.recordGithubPr);
   const updateBlogMetadata = useMutation(api.publishing.updateBlogMetadata);
   const recordBlogPrStatus = useMutation(api.publishing.recordBlogPrStatus);
   const deletePost = useMutation(api.publishing.deletePost);
+  const bufferLiveGateResolved = bufferLiveGate !== undefined;
+  const bufferLiveEnabled = bufferLiveGate?.enabled === true;
 
   const isSeeded = (brands?.length ?? 0) > 0;
   const visibleItems = useMemo(() => items ?? [], [items]);
@@ -595,7 +616,33 @@ export function PersistedPublishingPanel({
     }
   }
 
-  async function handleSubmit(postId: Id<"v2Posts">) {
+  async function handleSubmit(item: PersistedCalendarItem) {
+    const postId = item.post._id;
+    if (bufferLiveBusyPostId) return;
+    if (item.post.channelId === "linkedin" && bufferLiveEnabled) {
+      setBufferLiveBusyPostId(postId);
+      try {
+        const result = await submitBufferLive({ postId });
+        if (result.liveGateOff) {
+          const simulated = await submitMockProvider({ postId, mode: "success" });
+          setMessage(
+            simulated.submitted
+              ? "Buffer live gate is off — simulated submission recorded. No post was sent to LinkedIn."
+              : (simulated.reason ?? "Simulated submission was skipped.")
+          );
+          return;
+        }
+        setMessage(
+          result.submitted
+            ? "Submitted to Buffer queue for LinkedIn."
+            : (result.reason ?? "Buffer submission was skipped.")
+        );
+      } finally {
+        setBufferLiveBusyPostId(null);
+      }
+      return;
+    }
+
     const result = await submitMockProvider({ postId, mode: "success" });
     setMessage(
       result.submitted
@@ -604,7 +651,37 @@ export function PersistedPublishingPanel({
     );
   }
 
-  async function handleRetry(postId: Id<"v2Posts">) {
+  async function handleRetry(item: PersistedCalendarItem) {
+    const postId = item.post._id;
+    if (bufferLiveBusyPostId) return;
+    if (item.post.channelId === "linkedin" && bufferLiveEnabled) {
+      setBufferLiveBusyPostId(postId);
+      try {
+        const result = await submitBufferLive({ postId, retry: true });
+        if (result.liveGateOff) {
+          const simulated = await submitMockProvider({
+            postId,
+            mode: "success",
+            retry: true,
+          });
+          setMessage(
+            simulated.submitted
+              ? "Buffer live gate is off — simulated retry recorded."
+              : (simulated.reason ?? "Simulated submission retry was skipped.")
+          );
+          return;
+        }
+        setMessage(
+          result.submitted
+            ? "Buffer submission retry recorded."
+            : (result.reason ?? "Buffer submission retry was skipped.")
+        );
+      } finally {
+        setBufferLiveBusyPostId(null);
+      }
+      return;
+    }
+
     const result = await submitMockProvider({ postId, mode: "success", retry: true });
     setMessage(
       result.submitted
@@ -614,9 +691,39 @@ export function PersistedPublishingPanel({
   }
 
   async function handleProviderIntent(
-    postId: Id<"v2Posts">,
+    item: PersistedCalendarItem,
     intentType: "cancel" | "unpublish"
   ) {
+    const postId = item.post._id;
+    if (bufferLiveBusyPostId) return;
+    if (item.post.channelId === "linkedin" && bufferLiveEnabled) {
+      setBufferLiveBusyPostId(postId);
+      try {
+        const result = await cancelBufferLive({ postId, intentType });
+        if (result.liveGateOff) {
+          const recorded = await recordProviderIntent({ postId, intentType });
+          setMessage(
+            recorded.recorded
+              ? intentType === "unpublish"
+                ? "Buffer live gate is off — recorded an unpublish intent for operator follow-up."
+                : "Buffer live gate is off — recorded a cancel intent for operator follow-up."
+              : "Provider intent was not recorded."
+          );
+          return;
+        }
+        setMessage(
+          result.ok
+            ? intentType === "unpublish"
+              ? "Buffer unpublish/delete completed."
+              : "Buffer cancel/delete completed."
+            : (result.reason ?? "Buffer cancel did not complete.")
+        );
+      } finally {
+        setBufferLiveBusyPostId(null);
+      }
+      return;
+    }
+
     const result = await recordProviderIntent({ postId, intentType });
     setMessage(
       result.recorded
@@ -1015,6 +1122,9 @@ export function PersistedPublishingPanel({
                     <div className="mt-3 divide-y divide-black/10">
                       {rangeItems.map((item) => (
                         <AgendaItem
+                          bufferLiveBusy={bufferLiveBusyPostId === item.post._id}
+                          bufferLiveEnabled={bufferLiveEnabled}
+                          bufferLiveGateResolved={bufferLiveGateResolved}
                           devMode={devMode}
                           item={item}
                           key={item.post._id}
@@ -1039,6 +1149,9 @@ export function PersistedPublishingPanel({
           <div className="order-1 min-w-0 lg:order-2">
             <PublishingDetailDrawer
               key={selectedItem.post._id}
+              bufferLiveBusy={bufferLiveBusyPostId === selectedItem.post._id}
+              bufferLiveEnabled={bufferLiveEnabled}
+              bufferLiveGateResolved={bufferLiveGateResolved}
               devMode={devMode}
               item={selectedItem}
               openingPr={openingPrPostIds.has(selectedItem.post._id)}
@@ -1185,6 +1298,9 @@ function OpenPrButton(props: {
 }
 
 function AgendaItem(props: {
+  bufferLiveBusy: boolean;
+  bufferLiveEnabled: boolean;
+  bufferLiveGateResolved: boolean;
   devMode: boolean;
   item: PersistedCalendarItem;
   openingPr?: boolean;
@@ -1194,11 +1310,11 @@ function AgendaItem(props: {
   onDelete: (postId: Id<"v2Posts">, title: string) => void;
   onInspect: () => void;
   onProviderIntent: (
-    postId: Id<"v2Posts">,
+    item: PersistedCalendarItem,
     intentType: "cancel" | "unpublish"
   ) => void;
-  onRetry: (postId: Id<"v2Posts">) => void;
-  onSubmit: (postId: Id<"v2Posts">) => void;
+  onRetry: (item: PersistedCalendarItem) => void;
+  onSubmit: (item: PersistedCalendarItem) => void;
 }) {
   const { item } = props;
   const post = item.post;
@@ -1211,11 +1327,19 @@ function AgendaItem(props: {
   const retryableAttempt =
     item.lastAttempt?.status === "retryable-failure" ||
     item.lastAttempt?.status === "ambiguous";
+  const isLinkedIn = post.channelId === "linkedin";
+  const showLiveBuffer = isLinkedIn && props.bufferLiveEnabled;
+  const showSimulate =
+    props.devMode &&
+    (!isLinkedIn || (props.bufferLiveGateResolved && !props.bufferLiveEnabled));
+  const liveCancelAvailable = showLiveBuffer && hasLiveBufferProviderPost(providerState);
   const submitDisabled =
     !approved ||
     !intent?.scheduledDate ||
     providerState?.status === "submitted" ||
-    providerIntentRecorded;
+    providerIntentRecorded ||
+    props.bufferLiveBusy ||
+    (showLiveBuffer && !brandHasBufferLinkedInMapping(post.brandId));
   const openPrDisabled =
     !approved || !blogPrReady(post) || Boolean(existingPrUrl);
 
@@ -1252,11 +1376,23 @@ function AgendaItem(props: {
             <CheckCircle2 size={14} />
             Approve
           </button>
-          {props.devMode && (
+          {showLiveBuffer && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md bg-[#15616d] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0f4a53] disabled:opacity-50"
+              disabled={submitDisabled}
+              onClick={() => props.onSubmit(item)}
+              title={!approved ? "Approval is required before Buffer submission." : undefined}
+              type="button"
+            >
+              <Send size={14} />
+              Submit to Buffer
+            </button>
+          )}
+          {showSimulate && (
             <button
               className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
               disabled={submitDisabled}
-              onClick={() => props.onSubmit(post._id)}
+              onClick={() => props.onSubmit(item)}
               title={!approved ? "Approval is required before simulating submission." : undefined}
               type="button"
             >
@@ -1264,11 +1400,22 @@ function AgendaItem(props: {
               Simulate submission
             </button>
           )}
-          {props.devMode && (
+          {showLiveBuffer && liveCancelAvailable && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+              disabled={providerIntentRecorded || props.bufferLiveBusy}
+              onClick={() => props.onProviderIntent(item, providerIntentType)}
+              type="button"
+            >
+              <Ban size={14} />
+              {providerIntentType === "unpublish" ? "Unpublish in Buffer" : "Cancel in Buffer"}
+            </button>
+          )}
+          {showSimulate && (
             <button
               className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-2.5 py-1.5 text-xs font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
               disabled={providerIntentRecorded}
-              onClick={() => props.onProviderIntent(post._id, providerIntentType)}
+              onClick={() => props.onProviderIntent(item, providerIntentType)}
               type="button"
             >
               <Ban size={14} />
@@ -1316,10 +1463,21 @@ function AgendaItem(props: {
               )}
             </>
           )}
-          {props.devMode && retryableAttempt && (
+          {showLiveBuffer && retryableAttempt && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+              disabled={props.bufferLiveBusy}
+              onClick={() => props.onRetry(item)}
+              type="button"
+            >
+              <RotateCcw size={14} />
+              Retry Buffer submit
+            </button>
+          )}
+          {showSimulate && retryableAttempt && (
             <button
               className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-2.5 py-1.5 text-xs font-medium text-[#15616d] hover:bg-[#15616d]/10"
-              onClick={() => props.onRetry(post._id)}
+              onClick={() => props.onRetry(item)}
               type="button"
             >
               <RotateCcw size={14} />
@@ -1352,7 +1510,7 @@ function AgendaItem(props: {
           <KeyValue label="Pull request" value={existingPrUrl} />
         )}
       </dl>
-      {props.devMode && item.attemptCount > 0 && (
+      {(props.devMode || showLiveBuffer) && item.attemptCount > 0 && (
         <p className="mt-2 text-xs text-gray-500">
           Attempts: {item.attemptCount}; last result: {item.lastAttempt?.status ?? "unknown"}
         </p>
@@ -1364,6 +1522,9 @@ function AgendaItem(props: {
 type DetailPanelTab = "compose" | "preview";
 
 function PublishingDetailDrawer(props: {
+  bufferLiveBusy: boolean;
+  bufferLiveEnabled: boolean;
+  bufferLiveGateResolved: boolean;
   devMode: boolean;
   item: PersistedCalendarItem;
   openingPr?: boolean;
@@ -1373,10 +1534,10 @@ function PublishingDetailDrawer(props: {
   onCreatePr: (snapshot: BlogPublishSnapshot | null) => void;
   onDelete: (postId: Id<"v2Posts">, title: string) => void;
   onProviderIntent: (
-    postId: Id<"v2Posts">,
+    item: PersistedCalendarItem,
     intentType: "cancel" | "unpublish"
   ) => void;
-  onRetry: (postId: Id<"v2Posts">) => void;
+  onRetry: (item: PersistedCalendarItem) => void;
   onSaveComposer: (values: {
     title: string;
     content: string;
@@ -1393,7 +1554,7 @@ function PublishingDetailDrawer(props: {
       heroImageStorageId?: Id<"_storage">;
     };
   }) => void;
-  onSubmit: (postId: Id<"v2Posts">) => void;
+  onSubmit: (item: PersistedCalendarItem) => void;
 }) {
   const { item } = props;
   const post = item.post;
@@ -1406,11 +1567,19 @@ function PublishingDetailDrawer(props: {
   const retryableAttempt =
     item.lastAttempt?.status === "retryable-failure" ||
     item.lastAttempt?.status === "ambiguous";
+  const isLinkedIn = post.channelId === "linkedin";
+  const showLiveBuffer = isLinkedIn && props.bufferLiveEnabled;
+  const showSimulate =
+    props.devMode &&
+    (!isLinkedIn || (props.bufferLiveGateResolved && !props.bufferLiveEnabled));
+  const liveCancelAvailable = showLiveBuffer && hasLiveBufferProviderPost(providerState);
   const submitDisabled =
     !approved ||
     !intent?.scheduledDate ||
     providerState?.status === "submitted" ||
-    providerIntentRecorded;
+    providerIntentRecorded ||
+    props.bufferLiveBusy ||
+    (showLiveBuffer && !brandHasBufferLinkedInMapping(post.brandId));
   const [activeTab, setActiveTab] = useState<DetailPanelTab>("compose");
   const [publishSnapshot, setPublishSnapshot] = useState<BlogPublishSnapshot | null>(
     null
@@ -1494,7 +1663,7 @@ function PublishingDetailDrawer(props: {
               </div>
             )}
 
-            {providerState?.lastResponseSummary && props.devMode && (
+            {providerState?.lastResponseSummary && (props.devMode || showLiveBuffer) && (
               <div className="mb-4 rounded-md border border-black/10 bg-black/[0.02] p-3 text-sm text-gray-700">
                 {providerState.lastResponseSummary}
               </div>
@@ -1639,11 +1808,23 @@ function PublishingDetailDrawer(props: {
             <CheckCircle2 size={15} />
             Approve
           </button>
-          {props.devMode && (
+          {showLiveBuffer && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md bg-[#15616d] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0f4a53] disabled:opacity-50"
+              disabled={submitDisabled}
+              onClick={() => props.onSubmit(item)}
+              title={!approved ? "Approval is required before Buffer submission." : undefined}
+              type="button"
+            >
+              <Send size={15} />
+              Submit to Buffer
+            </button>
+          )}
+          {showSimulate && (
             <button
               className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
               disabled={submitDisabled}
-              onClick={() => props.onSubmit(post._id)}
+              onClick={() => props.onSubmit(item)}
               title={
                 !approved ? "Approval is required before simulating submission." : undefined
               }
@@ -1653,11 +1834,24 @@ function PublishingDetailDrawer(props: {
               Simulate submission
             </button>
           )}
-          {props.devMode && (
+          {showLiveBuffer && liveCancelAvailable && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+              disabled={providerIntentRecorded || props.bufferLiveBusy}
+              onClick={() => props.onProviderIntent(item, providerIntentType)}
+              type="button"
+            >
+              <Ban size={15} />
+              {providerIntentType === "unpublish"
+                ? "Unpublish in Buffer"
+                : "Cancel in Buffer"}
+            </button>
+          )}
+          {showSimulate && (
             <button
               className="inline-flex items-center gap-1 rounded-md border border-[#7a3b00]/25 px-3 py-2 text-sm font-medium text-[#7a3b00] hover:bg-[#ff7d00]/10 disabled:opacity-50"
               disabled={providerIntentRecorded}
-              onClick={() => props.onProviderIntent(post._id, providerIntentType)}
+              onClick={() => props.onProviderIntent(item, providerIntentType)}
               type="button"
             >
               <Ban size={15} />
@@ -1700,10 +1894,21 @@ function PublishingDetailDrawer(props: {
               )}
             </>
           )}
-          {props.devMode && retryableAttempt && (
+          {showLiveBuffer && retryableAttempt && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10 disabled:opacity-50"
+              disabled={props.bufferLiveBusy}
+              onClick={() => props.onRetry(item)}
+              type="button"
+            >
+              <RotateCcw size={15} />
+              Retry Buffer submit
+            </button>
+          )}
+          {showSimulate && retryableAttempt && (
             <button
               className="inline-flex items-center gap-1 rounded-md border border-[#15616d]/25 px-3 py-2 text-sm font-medium text-[#15616d] hover:bg-[#15616d]/10"
-              onClick={() => props.onRetry(post._id)}
+              onClick={() => props.onRetry(item)}
               type="button"
             >
               <RotateCcw size={15} />
