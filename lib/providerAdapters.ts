@@ -4,7 +4,8 @@ import type {
   ProviderAttemptStatus,
   ProviderId,
   ProviderStateStatus,
-} from "@/lib/domain";
+} from "./domain";
+import { brandHasBufferLinkedInMapping } from "./domain";
 
 export type ProviderSubmission = {
   postId: string;
@@ -233,6 +234,8 @@ const BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND: Partial<Record<BrandId, string>> = 
   "lower-db": "the-lower-db",
 };
 
+export { brandHasBufferLinkedInMapping };
+
 export function scheduleToUtcIso(input: {
   scheduledDate: string;
   scheduledTime?: string;
@@ -421,6 +424,13 @@ async function resolveBufferLinkedInChannelId(
   | { ok: true; channelId: string; channelName: string }
   | { ok: false; reason: string; sanitizedResponse: Record<string, unknown> }
 > {
+  if (!brandHasBufferLinkedInMapping(brandId)) {
+    return {
+      ok: false,
+      reason: `No Buffer LinkedIn channel mapping exists for brand ${brandId}.`,
+      sanitizedResponse: { brandId, mapped: false },
+    };
+  }
   const expectedName = BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND[brandId];
   if (!expectedName) {
     return {
@@ -1177,7 +1187,7 @@ export const bufferProviderAdapter: ProviderAdapter = {
       return {
         ok: false,
         status: "permanent-failure",
-        providerStateStatus: "cancel-intent-recorded",
+        providerStateStatus: "failed",
         reason: "Buffer cancel requires providerPostId from a prior submission.",
         sanitizedResponse: {
           providerId,
@@ -1211,7 +1221,8 @@ export const bufferProviderAdapter: ProviderAdapter = {
           status: deleteResult.response.status,
           message: String(reason),
         }),
-        providerStateStatus: "cancel-intent-recorded",
+        // Keep cancel retryable: do not latch cancel-intent-recorded on failure.
+        providerStateStatus: "failed",
         reason: String(reason),
         sanitizedResponse: sanitizeProviderPayload({
           providerId,

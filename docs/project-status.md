@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/06/2026 13:48:29 PDT
+Last updated: 08/06/2026 14:03:41 PDT
 
 ## State
 
@@ -8,33 +8,30 @@ Resonate is a working content operations app with active surfaces for calendar p
 
 ## Current Task
 
-Maintain the living documentation and preserve a handoff-quality snapshot of the repo state.
+Ship PR #60 Buffer live LinkedIn submit onto main after #46.
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Rebased Buffer live onto post-#46 main and verified unit tests.
 
 ## Last Completed Task
 
-- 3adb64c chore: re-trigger CI on publish-gate tip with E2E bypass fix
+- 59ef392 fix: land Buffer live LinkedIn submit on post-#46 main
 
 ## Recent Commits
 
-- 3adb64c chore: re-trigger CI on publish-gate tip with E2E bypass fix
-- d023f9c test: cover E2E bypass Convex auth provider path
-- eb50fa1 fix: make E2E auth bypass prerender research and calendar
-- a604eb1 chore: re-trigger CI for publish-gate review fixes
-- 6972612 chore: drop unused publish route helpers after gate rewrite
+- 59ef392 fix: land Buffer live LinkedIn submit on post-#46 main
+- 952579b Wire Convex Buffer live submit/cancel with approval-gated bookkeeping.
+- 9895fbd Merge pull request #46 from jakebutler/fix/publish-gate-and-failclosed
 
 ## Local Working Tree
 
-- M  .github/workflows/test.yml
+- clean
 
 ## Next Agent Pickup
 
-- Start by checking the living docs against the current code before making assumptions.
-- If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
+- After merge: confirm Vercel + Convex prod deploy; Jake flips `BUFFER_LIVE_SUBMISSION=approved` for live Buffer proof.
 
 ## Branch
 
-- fix/publish-gate-and-failclosed
+- feat/buffer-live-submit

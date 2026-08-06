@@ -55,6 +55,7 @@ const v2ProviderStateStatus = v.union(
 );
 
 const v2AttemptStatus = v.union(
+  v.literal("pending"),
   v.literal("success"),
   v.literal("retryable-failure"),
   v.literal("permanent-failure"),
@@ -221,6 +222,8 @@ export default defineSchema({
     sourceIdeaId: v.optional(v.string()),
     sourceResearchBriefId: v.optional(v.string()),
     contentFingerprint: v.string(),
+    /** In-flight Buffer submit claim; patched on the intent doc so concurrent claims serialize. */
+    activeBufferClaimKey: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

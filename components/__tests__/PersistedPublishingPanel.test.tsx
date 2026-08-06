@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { PersistedPublishingPanel } from "@/components/PersistedPublishingPanel";
 
 vi.mock("convex/react", () => ({
+  useAction: vi.fn(),
   useMutation: vi.fn(),
   useQuery: vi.fn(),
   // The panel skips its queries until Convex has the Clerk token, so the
@@ -28,9 +29,14 @@ vi.mock("@/convex/_generated/api", () => ({
       updateBlogMetadata: "publishing:updateBlogMetadata",
       submitMockProvider: "publishing:submitMockProvider",
       recordProviderIntent: "publishing:recordProviderIntent",
+      bufferLiveSubmissionEnabled: "publishing:bufferLiveSubmissionEnabled",
       recordGithubPr: "publishing:recordGithubPr",
       recordBlogPrStatus: "publishing:recordBlogPrStatus",
       deletePost: "publishing:deletePost",
+    },
+    bufferLive: {
+      submit: "bufferLive:submit",
+      cancelOrUnpublish: "bufferLive:cancelOrUnpublish",
     },
     posts: {
       generateUploadUrl: "posts:generateUploadUrl",
@@ -51,6 +57,18 @@ const submitMockProviderMock = vi.fn().mockResolvedValue({
   submitted: true,
   attemptId: "attempt_1",
 });
+const submitBufferLiveMock = vi.fn().mockResolvedValue({
+  submitted: true,
+  liveGateOff: false,
+  attemptId: "attempt_buffer_1",
+  providerPostId: "buffer-1",
+});
+const cancelBufferLiveMock = vi.fn().mockResolvedValue({
+  recorded: true,
+  ok: true,
+  liveGateOff: false,
+});
+let bufferLiveEnabledMock = false;
 const recordProviderIntentMock = vi.fn().mockResolvedValue({
   recorded: true,
   intentType: "cancel",
@@ -227,6 +245,7 @@ const blogItemWithPr = {
 describe("PersistedPublishingPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    bufferLiveEnabledMock = false;
     vi.stubGlobal("fetch", vi.fn());
     vi.mocked(useQuery).mockImplementation((reference) => {
       if (reference === "publishing:listBrands") {
@@ -240,7 +259,20 @@ describe("PersistedPublishingPanel", () => {
       if (reference === "publishing:listCalendarItems") {
         return [unapprovedItem, approvedItem, retryableItem, blogItem];
       }
+      if (reference === "publishing:bufferLiveSubmissionEnabled") {
+        return { enabled: bufferLiveEnabledMock };
+      }
       return undefined;
+    });
+    vi.mocked(useAction).mockImplementation((reference) => {
+      switch (reference) {
+        case "bufferLive:submit":
+          return submitBufferLiveMock;
+        case "bufferLive:cancelOrUnpublish":
+          return cancelBufferLiveMock;
+        default:
+          throw new Error(`Unexpected action reference: ${String(reference)}`);
+      }
     });
     vi.mocked(useMutation).mockImplementation((reference) => {
       switch (reference) {
@@ -310,7 +342,7 @@ describe("PersistedPublishingPanel", () => {
   it("passes brand, platform, and status filters to the calendar query", () => {
     render(<PersistedPublishingPanel />);
 
-    expect(useQuery).toHaveBeenLastCalledWith("publishing:listCalendarItems", {
+    expect(useQuery).toHaveBeenCalledWith("publishing:listCalendarItems", {
       brandIds: ["corvo"],
       platformIds: ["linkedin", "reddit", "corvo-blog"],
       statuses: ["draft", "scheduled", "submitted", "needs-review"],
@@ -320,11 +352,17 @@ describe("PersistedPublishingPanel", () => {
     fireEvent.click(screen.getByText("YouTube"));
     fireEvent.click(screen.getByText("Published"));
 
-    expect(useQuery).toHaveBeenLastCalledWith("publishing:listCalendarItems", {
-      brandIds: ["corvo", "freshproof"],
-      platformIds: ["linkedin", "reddit", "corvo-blog", "youtube"],
-      statuses: ["draft", "scheduled", "submitted", "needs-review", "published"],
-    });
+    const calendarCalls = vi
+      .mocked(useQuery)
+      .mock.calls.filter((call) => call[0] === "publishing:listCalendarItems");
+    expect(calendarCalls.at(-1)).toEqual([
+      "publishing:listCalendarItems",
+      {
+        brandIds: ["corvo", "freshproof"],
+        platformIds: ["linkedin", "reddit", "corvo-blog", "youtube"],
+        statuses: ["draft", "scheduled", "submitted", "needs-review", "published"],
+      },
+    ]);
   });
 
   it("creates blank posts from the zero-state actions", async () => {
@@ -925,6 +963,9 @@ describe("PersistedPublishingPanel", () => {
         ];
       }
       if (query === "publishing:listCalendarItems") return [isoItem];
+      if (query === "publishing:bufferLiveSubmissionEnabled") {
+        return { enabled: bufferLiveEnabledMock };
+      }
       return undefined;
     });
 
@@ -932,6 +973,145 @@ describe("PersistedPublishingPanel", () => {
     expect(await screen.findByRole("button", { name: "Inspect Scheduled LinkedIn validation item" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Inspect Scheduled LinkedIn validation item" }));
     expect(screen.getByLabelText("Date")).toHaveValue("2026-06-12");
+  });
+
+  it("uses labeled simulate path when Buffer live gate is off", async () => {
+    render(<PersistedPublishingPanel devMode />);
+    expect(screen.queryByRole("button", { name: /submit to buffer/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /simulate submission/i }).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /simulate submission/i })[1]);
+    await waitFor(() =>
+      expect(submitMockProviderMock).toHaveBeenCalledWith({
+        postId: "post_2",
+        mode: "success",
+      })
+    );
+    expect(submitBufferLiveMock).not.toHaveBeenCalled();
+  });
+
+  it("submits approved LinkedIn posts through Buffer when live gate is on", async () => {
+    bufferLiveEnabledMock = true;
+    const approvedLinkedIn = {
+      ...unapprovedItem,
+      post: {
+        ...unapprovedItem.post,
+        _id: "post_li_live",
+        title: "Approved LinkedIn live item",
+        approvalState: "approved",
+        status: "scheduled",
+      },
+      intent: {
+        ...unapprovedItem.intent,
+        _id: "intent_li_live",
+      },
+    };
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") {
+        return [{ brandId: "corvo", name: "Corvo Labs" }];
+      }
+      if (reference === "publishing:listCalendarItems") {
+        return [approvedLinkedIn];
+      }
+      if (reference === "publishing:bufferLiveSubmissionEnabled") {
+        return { enabled: true };
+      }
+      return undefined;
+    });
+
+    render(<PersistedPublishingPanel />);
+    expect(screen.queryByRole("button", { name: /simulate submission/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /submit to buffer/i }));
+    await waitFor(() =>
+      expect(submitBufferLiveMock).toHaveBeenCalledWith({ postId: "post_li_live" })
+    );
+    expect(submitMockProviderMock).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText("Submitted to Buffer queue for LinkedIn.")
+    ).toBeInTheDocument();
+  });
+
+  it("cancels LinkedIn posts through Buffer when live gate is on", async () => {
+    bufferLiveEnabledMock = true;
+    const submittedLinkedIn = {
+      ...unapprovedItem,
+      post: {
+        ...unapprovedItem.post,
+        _id: "post_li_cancel",
+        title: "Submitted LinkedIn live item",
+        approvalState: "approved",
+        status: "submitted",
+      },
+      providerState: {
+        providerId: "buffer",
+        status: "submitted",
+        providerPostId: "buffer-xyz",
+        simulated: false,
+      },
+    };
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") {
+        return [{ brandId: "corvo", name: "Corvo Labs" }];
+      }
+      if (reference === "publishing:listCalendarItems") {
+        return [submittedLinkedIn];
+      }
+      if (reference === "publishing:bufferLiveSubmissionEnabled") {
+        return { enabled: true };
+      }
+      return undefined;
+    });
+
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: /cancel in buffer/i }));
+    await waitFor(() =>
+      expect(cancelBufferLiveMock).toHaveBeenCalledWith({
+        postId: "post_li_cancel",
+        intentType: "cancel",
+      })
+    );
+    expect(recordProviderIntentMock).not.toHaveBeenCalled();
+  });
+
+  it("disables Submit to Buffer for unapproved LinkedIn when live gate is on", async () => {
+    bufferLiveEnabledMock = true;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") {
+        return [{ brandId: "corvo", name: "Corvo Labs" }];
+      }
+      if (reference === "publishing:listCalendarItems") {
+        return [unapprovedItem];
+      }
+      if (reference === "publishing:bufferLiveSubmissionEnabled") {
+        return { enabled: true };
+      }
+      return undefined;
+    });
+
+    render(<PersistedPublishingPanel />);
+    const submit = screen.getByRole("button", { name: /submit to buffer/i });
+    expect(submit).toBeDisabled();
+    expect(submitBufferLiveMock).not.toHaveBeenCalled();
+  });
+
+  it("hides LinkedIn simulate controls while Buffer gate query is loading", async () => {
+    bufferLiveEnabledMock = false;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") {
+        return [{ brandId: "corvo", name: "Corvo Labs" }];
+      }
+      if (reference === "publishing:listCalendarItems") {
+        return [unapprovedItem];
+      }
+      if (reference === "publishing:bufferLiveSubmissionEnabled") {
+        return undefined;
+      }
+      return undefined;
+    });
+
+    render(<PersistedPublishingPanel devMode />);
+    expect(screen.queryByRole("button", { name: /submit to buffer/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /simulate submission/i })).not.toBeInTheDocument();
   });
 
 });

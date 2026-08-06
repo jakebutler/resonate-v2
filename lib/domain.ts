@@ -43,11 +43,19 @@ export type ProviderStateStatus =
   | "cancel-intent-recorded";
 
 export type ProviderAttemptStatus =
+  | "pending"
   | "success"
   | "retryable-failure"
   | "permanent-failure"
   | "ambiguous"
   | "unavailable";
+
+/** Brands with a configured Buffer LinkedIn channel name in the adapter. */
+export const BUFFER_LINKEDIN_MAPPED_BRANDS = ["corvo", "lower-db"] as const satisfies readonly BrandId[];
+
+export function brandHasBufferLinkedInMapping(brandId: BrandId): boolean {
+  return (BUFFER_LINKEDIN_MAPPED_BRANDS as readonly BrandId[]).includes(brandId);
+}
 
 export type IdeaEntry = {
   id: string;
