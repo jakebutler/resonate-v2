@@ -157,4 +157,16 @@ describe('Button', () => {
     expect(button).toBeDisabled()
     expect(button).toHaveAttribute('tabindex', '-1')
   })
+
+  it('does not set the disabled attribute on slotted anchors', () => {
+    render(
+      <Button asChild loading>
+        <a href="https://example.com">Continue</a>
+      </Button>
+    )
+    const link = screen.getByRole('link', { name: /Continue/i })
+    expect(link).not.toHaveAttribute('disabled')
+    expect(link).toHaveAttribute('aria-disabled', 'true')
+    expect(link).toHaveAttribute('tabindex', '-1')
+  })
 })

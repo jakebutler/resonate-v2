@@ -115,6 +115,7 @@ function Button({
 
   if (asChild) {
     const slotted = resolveAsChildElement(children)
+    const hostIsNativeButton = slotted.type === "button"
     return (
       <Slot.Root
         data-slot="button"
@@ -124,7 +125,9 @@ function Button({
         {...props}
       >
         {React.cloneElement(slotted, {
-          disabled: isDisabled ? true : slotted.props.disabled,
+          ...(hostIsNativeButton
+            ? { disabled: isDisabled ? true : slotted.props.disabled }
+            : {}),
           "aria-disabled": isDisabled
             ? true
             : (ariaDisabled ?? slotted.props["aria-disabled"]),

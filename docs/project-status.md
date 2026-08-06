@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/05/2026 23:57:54 PDT
+Last updated: 08/06/2026 00:30:54 PDT
 
 ## State
 
@@ -12,25 +12,25 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- b31ca39 fix: harden Button loading and per-post Open PR in-flight state
+- da5e35b fix: tighten asChild Button semantics and Open PR loading coverage
 
 ## Recent Commits
 
+- da5e35b fix: tighten asChild Button semantics and Open PR loading coverage
 - b31ca39 fix: harden Button loading and per-post Open PR in-flight state
 - 79a4ad8 fix: add Button loading state for Open PR actions
 - 41c6515 fix: show why Open PR is disabled when tags are missing
 - 0da864a fix: open blog PRs using composer tags and metadata
-- 5df9e32 docs: sync handoff after preview seed commit
 
 ## Local Working Tree
 
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
 - M  components/ui/__tests__/Button.test.tsx
 - M  components/ui/button.tsx
+- M  docs/project-status.md
 
 ## Next Agent Pickup
 
