@@ -524,21 +524,13 @@ describe("PersistedPublishingPanel", () => {
     );
     expect(publishPayload).toMatchObject({
       postId: "post_4",
-      title: "Approved Corvo Blog PR item",
-      scheduledDate: "2026-06-12",
-      scheduledTime: "09:00",
-      timezone: "America/Los_Angeles",
       scheduleTrigger: "pr-body",
       status: "draft",
-      excerpt: "A concise summary for the Corvo Labs blog.",
-      author: "Jake Butler",
-      category: "strategy",
-      tags: ["Corvo Labs", "Publishing"],
+      coverImageAlt: "Cover image for Approved Corvo Blog PR item",
     });
-    expect(publishPayload.images[0]).toMatchObject({
-      sourceUrl: "https://cdn.example/hero.jpg",
-      isCover: true,
-    });
+    expect(publishPayload).not.toHaveProperty("title");
+    expect(publishPayload).not.toHaveProperty("excerpt");
+    expect(publishPayload).not.toHaveProperty("tags");
 
     await waitFor(() =>
       expect(recordGithubPrMock).toHaveBeenCalledWith({

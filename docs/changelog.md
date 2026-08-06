@@ -2800,3 +2800,62 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/button-loading-open-pr
+
+## 08/06/2026 12:33:41 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	app/api/__tests__/e2e-mvp-flow.test.ts
+- M	app/api/claim-map/__tests__/route.test.ts
+- M	app/api/long-form-draft/__tests__/route.test.ts
+- M	app/api/publish/__tests__/route.test.ts
+- M	app/api/publish/route.ts
+- M	app/api/research-brief/__tests__/route.test.ts
+- M	app/layout.tsx
+- M	components/BlogPostEditor/BlogPostEditor.tsx
+- M	components/FullScreenEditor/FullScreenEditor.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/ResearchApp.tsx
+- M	components/SocialConnectionsPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/shell/Shell.tsx
+- M	convex/__tests__/publishing.test.ts
+- M	convex/publishing.ts
+- M	docs/preview-seed.md
+- M	lib/pioneerAiRoute.ts
+- M	next.config.ts
+- M	proxy.ts
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  app/api/__tests__/e2e-mvp-flow.test.ts
+- M  app/api/claim-map/__tests__/route.test.ts
+- M  app/api/long-form-draft/__tests__/route.test.ts
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+- M  app/api/research-brief/__tests__/route.test.ts
+- M  app/layout.tsx
+- M  components/BlogPostEditor/BlogPostEditor.tsx
+- M  components/FullScreenEditor/FullScreenEditor.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/ResearchApp.tsx
+- M  components/SocialConnectionsPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/shell/Shell.tsx
+- M  convex/__tests__/publishing.test.ts
+- M  convex/publishing.ts
+- M  docs/preview-seed.md
+- M  lib/pioneerAiRoute.ts
+- M  next.config.ts
+- M  proxy.ts
+
+### Branch
+
+- fix/publish-gate-and-failclosed

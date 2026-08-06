@@ -65,12 +65,25 @@ async function resolvePrimaryEmail(
   userId: string,
   sessionClaims: Record<string, unknown> | null | undefined
 ): Promise<string | null> {
-  // Preferred path: a session-token claim. Costs nothing. Requires the Clerk
-  // session token to be customized to include the email (see docs/ops-runbook).
-  for (const key of ["email", "primary_email_address", "email_address"]) {
-    const value = sessionClaims?.[key];
-    if (typeof value === "string" && value.trim()) {
-      return value.trim().toLowerCase();
+  // Prefer a verified session-token claim (no network call). Clerk's documented
+  // claim name is `primaryEmail`; keep legacy aliases too. Only trust the claim
+  // when verification is asserted — an unverified allowlisted address must not
+  // satisfy the gate.
+  const claimVerified =
+    sessionClaims?.email_verified === true ||
+    sessionClaims?.primary_email_address_verified === true ||
+    sessionClaims?.primaryEmailVerified === true;
+  if (claimVerified) {
+    for (const key of [
+      "primaryEmail",
+      "email",
+      "primary_email_address",
+      "email_address",
+    ]) {
+      const value = sessionClaims?.[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim().toLowerCase();
+      }
     }
   }
 
@@ -85,8 +98,13 @@ async function resolvePrimaryEmail(
     const user = await client.users.getUser(userId);
     const primaryId = user.primaryEmailAddressId;
     const primary =
-      user.emailAddresses.find((entry) => entry.id === primaryId) ?? user.emailAddresses[0];
-    return primary?.emailAddress?.trim().toLowerCase() ?? null;
+      user.emailAddresses.find((entry) => entry.id === primaryId) ??
+      user.emailAddresses.find((entry) => entry.verification?.status === "verified") ??
+      null;
+    if (!primary || primary.verification?.status !== "verified") {
+      return null;
+    }
+    return primary.emailAddress?.trim().toLowerCase() ?? null;
   } catch (error) {
     console.error(
       "[proxy] Failed to resolve user email for allowlist check. Available session claim keys:",

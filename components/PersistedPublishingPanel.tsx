@@ -366,7 +366,8 @@ export function PersistedPublishingPanel({
   // Convex queries must wait for the Clerk token to reach the Convex client.
   // Firing them before that makes requireUserId throw "Unauthorized" server-side,
   // which surfaces as a client error on the calendar right after sign-in.
-  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } =
+    useConvexAuth();
 
   const brands = useQuery(
     api.publishing.listBrands,
@@ -650,20 +651,25 @@ export function PersistedPublishingPanel({
       return;
     }
 
-    const excerpt = snapshot?.excerpt?.trim() || item.post.blogExcerpt?.trim();
-    const author = snapshot?.author?.trim() || item.post.blogAuthor?.trim();
-    const category = snapshot?.category?.trim() || item.post.blogCategory?.trim();
-    const tags = snapshot?.tags?.length ? snapshot.tags : item.post.blogTags ?? [];
-    const heroSourceUrl =
-      snapshot?.heroImageUrl?.trim() || item.post.heroImageUrl?.trim();
-    if (!heroSourceUrl) {
-      setMessage("Hero image URL is required before opening a PR.");
-      return;
-    }
-
     if (openingPrPostIdsRef.current.has(item.post._id)) {
       return;
     }
+
+    const snapshotDiffers =
+      Boolean(snapshot) &&
+      ((snapshot?.excerpt?.trim() || "") !== (item.post.blogExcerpt?.trim() || "") ||
+        (snapshot?.author?.trim() || "") !== (item.post.blogAuthor?.trim() || "") ||
+        (snapshot?.category?.trim() || "") !== (item.post.blogCategory?.trim() || "") ||
+        JSON.stringify(snapshot?.tags ?? []) !== JSON.stringify(item.post.blogTags ?? []) ||
+        (snapshot?.slug?.trim() || "") !== (item.post.blogSlug?.trim() || "") ||
+        (snapshot?.heroImageUrl?.trim() || "") !== (item.post.heroImageUrl?.trim() || ""));
+    if (snapshotDiffers) {
+      setMessage(
+        "Save blog metadata and re-approve the post before opening a PR. Unsaved composer changes are not sent to publish."
+      );
+      return;
+    }
+
     openingPrPostIdsRef.current.add(item.post._id);
     setOpeningPrPostIds(new Set(openingPrPostIdsRef.current));
     setMessage("Opening Corvo Blog pull request...");
@@ -673,27 +679,9 @@ export function PersistedPublishingPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           postId: item.post._id,
-          title: item.post.title,
-          content: item.post.content,
-          scheduledDate: item.intent?.scheduledDate ?? item.post.scheduledDate ?? nextFridayDate(),
-          scheduledTime: item.intent?.scheduledTime ?? item.post.scheduledTime ?? "09:00",
-          timezone: item.intent?.timezone ?? item.post.timezone ?? "America/Los_Angeles",
           scheduleTrigger: "pr-body",
           status: "draft",
-          excerpt,
-          author,
-          tags,
-          category,
-          slug: snapshot?.slug?.trim() || item.post.blogSlug?.trim(),
-          featured: false,
           coverImageAlt: `Cover image for ${item.post.title}`,
-          images: [
-            {
-              sourceUrl: heroSourceUrl,
-              alt: `Cover image for ${item.post.title}`,
-              isCover: true,
-            },
-          ],
         }),
       });
       const data = await response.json();
@@ -897,11 +885,22 @@ export function PersistedPublishingPanel({
               </div>
             </div>
 
-            {loading && (
+            {isConvexAuthLoading && (
+              <p className="p-4 text-sm text-gray-600">Connecting to your workspace...</p>
+            )}
+
+            {!isConvexAuthLoading && !isConvexAuthenticated && (
+              <p className="p-4 text-sm text-red-700">
+                Convex authentication failed. Sign in again, or check that the Clerk Convex JWT
+                template and CLERK_JWT_ISSUER_DOMAIN are configured.
+              </p>
+            )}
+
+            {isConvexAuthenticated && loading && (
               <p className="p-4 text-sm text-gray-600">Loading your publishing calendar...</p>
             )}
 
-            {!loading && visibleItems.length === 0 && (
+            {isConvexAuthenticated && !loading && visibleItems.length === 0 && (
               <div className="p-8 text-center">
                 <h3 className="text-lg font-semibold text-gray-900">Your calendar is empty</h3>
                 <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">
@@ -940,7 +939,7 @@ export function PersistedPublishingPanel({
               </div>
             )}
 
-            {!loading && visibleItems.length > 0 && (
+            {isConvexAuthenticated && !loading && visibleItems.length > 0 && (
               <>
                 <div className="grid grid-cols-7 border-b border-black/10 bg-black/[0.02] text-center text-[11px] font-semibold uppercase text-gray-500">
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
@@ -1039,6 +1038,7 @@ export function PersistedPublishingPanel({
         {selectedItem && (
           <div className="order-1 min-w-0 lg:order-2">
             <PublishingDetailDrawer
+              key={selectedItem.post._id}
               devMode={devMode}
               item={selectedItem}
               openingPr={openingPrPostIds.has(selectedItem.post._id)}
@@ -1288,8 +1288,7 @@ function AgendaItem(props: {
                   !approved
                     ? "Approve the post before opening a PR."
                     : !blogPrReady(post)
-                      ? blogPrBlockedReason(post) ??
-                        "Complete blog metadata (including tags) before opening a PR."
+                      ? blogPrBlockedReason(post) ?? undefined
                       : existingPrUrl
                         ? "Pull request already exists."
                         : undefined

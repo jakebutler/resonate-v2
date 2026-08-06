@@ -136,7 +136,8 @@ export function SocialConnectionsPanel() {
                       {typeof platform.sanitizedResponse.status === "number"
                         ? `Upstream HTTP ${platform.sanitizedResponse.status}. `
                         : ""}
-                      {Array.isArray(platform.sanitizedResponse.errors)
+                      {Array.isArray(platform.sanitizedResponse.errors) &&
+                      platform.sanitizedResponse.errors.length > 0
                         ? "Check Buffer/Zernio credentials or account access."
                         : null}
                     </p>

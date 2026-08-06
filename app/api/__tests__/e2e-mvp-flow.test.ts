@@ -35,7 +35,11 @@ describe("MVP flow: full research pipeline (mock mode)", () => {
 
   afterEach(() => {
     process.env.PIONEER_API_KEY = originalKey;
-    process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
+    if (originalAllowMock === undefined) {
+      delete process.env.RESONATE_ALLOW_MOCK_AI;
+    } else {
+      process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
+    }
   });
 
   it("completes source discovery → claim map → outline → long-form draft in sequence", async () => {
@@ -139,7 +143,11 @@ describe("MVP flow: Corvo Labs idea → blog draft (mock mode)", () => {
 
   afterEach(() => {
     process.env.PIONEER_API_KEY = originalKey;
-    process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
+    if (originalAllowMock === undefined) {
+      delete process.env.RESONATE_ALLOW_MOCK_AI;
+    } else {
+      process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
+    }
   });
 
   const corvoIdea = {

@@ -313,10 +313,25 @@ async function seedBrandsAndChannels(
   }
 }
 
-function formatYmdFromOffset(dayOffset: number, now = Date.now()) {
-  const date = new Date(now);
-  date.setUTCDate(date.getUTCDate() + dayOffset);
-  return date.toISOString().slice(0, 10);
+function formatYmdFromOffset(
+  dayOffset: number,
+  now = Date.now(),
+  timeZone = "America/Los_Angeles"
+) {
+  // Derive the civil calendar day in the post timezone first, then apply the
+  // offset. Using UTC alone drifts one day after LA's UTC midnight rollover.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(now));
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const day = Number(parts.find((part) => part.type === "day")?.value);
+  const base = new Date(Date.UTC(year, month - 1, day, 12));
+  base.setUTCDate(base.getUTCDate() + dayOffset);
+  return base.toISOString().slice(0, 10);
 }
 
 async function previewSeedRecordExists(
@@ -324,13 +339,13 @@ async function previewSeedRecordExists(
   userId: string,
   legacyId: string
 ) {
-  const record = await ctx.db
+  const records = await ctx.db
     .query("v2MigrationRecords")
     .withIndex("by_legacy", (q) =>
       q.eq("legacyTable", "previewSeed").eq("legacyId", legacyId)
     )
-    .first();
-  return record?.userId === userId;
+    .collect();
+  return records.some((record) => record.userId === userId);
 }
 
 async function recordPreviewSeed(
@@ -364,6 +379,18 @@ export const seedMvpWorkspace = mutation({
 export const seedPreviewWorkspace = mutation({
   args: { dryRun: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
+    if (process.env.ALLOW_PREVIEW_SEED !== "1") {
+      throw new Error(
+        "seedPreviewWorkspace is disabled. Set ALLOW_PREVIEW_SEED=1 on the Convex *dev* deployment only."
+      );
+    }
+    const cloudUrl = process.env.CONVEX_CLOUD_URL ?? "";
+    if (cloudUrl.includes("healthy-platypus-553")) {
+      throw new Error(
+        "seedPreviewWorkspace cannot run against the production Convex deployment."
+      );
+    }
+
     const userId = await requireUserId(ctx);
     const now = Date.now();
     const dryRun = args.dryRun ?? false;
@@ -375,7 +402,9 @@ export const seedPreviewWorkspace = mutation({
       skipped: 0,
     };
 
-    await seedBrandsAndChannels(ctx, userId, now);
+    if (!dryRun) {
+      await seedBrandsAndChannels(ctx, userId, now);
+    }
 
     for (const idea of previewSeedIdeas) {
       if (await previewSeedRecordExists(ctx, userId, idea.legacyId)) {

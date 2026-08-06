@@ -21,19 +21,26 @@ export const metadata: Metadata = {
 const CLERK_BUILD_PLACEHOLDER_KEY = "pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA==";
 const CONVEX_BUILD_PLACEHOLDER_URL = "https://convex.test";
 
+const vercelEnv = process.env.VERCEL_ENV?.trim();
+const isVercelProduction = vercelEnv === "production";
+const isNonProductionRuntime =
+  !isVercelProduction && process.env.NODE_ENV !== "production";
+const preferDevClerkKeys =
+  vercelEnv === "preview" || vercelEnv === "development" || isNonProductionRuntime;
+
 const configuredClerkPublishableKey =
-  (process.env.VERCEL_ENV === "production"
-    ? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-    : process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_DEV ??
+  (preferDevClerkKeys
+    ? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_DEV ??
       process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+    : process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
   )?.trim() || undefined;
 const clerkPublishableKey =
   configuredClerkPublishableKey ??
-  (process.env.VERCEL_ENV === "production" ? undefined : CLERK_BUILD_PLACEHOLDER_KEY);
+  (isNonProductionRuntime ? CLERK_BUILD_PLACEHOLDER_KEY : undefined);
 const configuredConvexUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.trim() || undefined;
 const convexUrl =
   configuredConvexUrl ??
-  (process.env.VERCEL_ENV === "production" ? undefined : CONVEX_BUILD_PLACEHOLDER_URL);
+  (isNonProductionRuntime ? CONVEX_BUILD_PLACEHOLDER_URL : undefined);
 const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
 
 export default function RootLayout({

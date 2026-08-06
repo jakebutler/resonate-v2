@@ -10,20 +10,17 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
-function coalesceString(
-  server: string | undefined,
-  client: string | undefined
-): string | undefined {
-  const normalizedServer = server?.trim();
-  if (normalizedServer) return normalizedServer;
-  const normalizedClient = client?.trim();
-  return normalizedClient || server;
+function asTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
 }
 
-function coalesceTags(server: string[] | undefined, client: string[] | undefined): string[] {
-  if (server && server.length > 0) return server;
-  if (client && client.length > 0) return client;
-  return server ?? client ?? [];
+function normalizeBlogSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function isImageAssetArray(
@@ -93,6 +90,16 @@ function coverImagesFromPost(post: Doc<"v2Posts">) {
   ];
 }
 
+function missingServerPublishFields(post: Doc<"v2Posts">): string[] {
+  const missing: string[] = [];
+  if (!post.blogExcerpt?.trim()) missing.push("excerpt");
+  if (!post.blogAuthor?.trim()) missing.push("author");
+  if (!post.blogCategory?.trim()) missing.push("category");
+  if (!(post.blogTags?.length ?? 0)) missing.push("tags");
+  if (!post.heroImageUrl?.trim() && !post.heroImageStorageId) missing.push("hero image");
+  return missing;
+}
+
 export async function POST(req: NextRequest) {
   if (process.env.E2E_BYPASS_AUTH !== "1") {
     const { userId } = await auth();
@@ -103,90 +110,77 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const {
-    postId,
-    title: clientTitle,
-    content: clientContent,
+    postId: rawPostId,
     scheduledDate: clientScheduledDate,
     scheduledTime: clientScheduledTime,
     timezone: clientTimezone,
     scheduleTrigger,
     status,
     subtitle,
-    excerpt: clientExcerpt,
-    author: clientAuthor,
-    tags: clientTags,
-    category: clientCategory,
-    slug: clientSlug,
     featured,
     coverImageAlt: clientCoverImageAlt,
-    images: clientImages,
   } = body;
 
-  let title = clientTitle;
-  let content = clientContent;
-  let scheduledDate = clientScheduledDate;
-  let scheduledTime = clientScheduledTime;
-  let timezone = clientTimezone;
-  let excerpt = clientExcerpt;
-  let author = clientAuthor;
-  let tags = clientTags;
-  let category = clientCategory;
-  let slug = clientSlug;
-  let coverImageAlt = clientCoverImageAlt;
-  let images = clientImages;
-
-  if (typeof postId === "string" && postId.trim()) {
-    const gate = await loadApprovedPostForPublish(postId.trim());
-    if ("error" in gate) {
-      return NextResponse.json({ error: gate.error }, { status: gate.status });
-    }
-
-    const post = gate.post;
-    title = post.title;
-    content = post.content;
-    scheduledDate = post.scheduledDate ?? scheduledDate;
-    scheduledTime = post.scheduledTime ?? scheduledTime;
-    timezone = post.timezone ?? timezone;
-    excerpt = coalesceString(post.blogExcerpt, excerpt);
-    author = coalesceString(post.blogAuthor, author);
-    tags = coalesceTags(post.blogTags, tags);
-    category = coalesceString(post.blogCategory, category);
-    slug = coalesceString(post.blogSlug, slug);
-    const postImages = coverImagesFromPost(post);
-    if (postImages) {
-      images = postImages;
-      coverImageAlt = coverImageAlt ?? `Cover image for ${post.title}`;
-    }
-  } else if (postId !== undefined && postId !== null) {
-    return NextResponse.json({ error: "postId must be a string when provided." }, { status: 400 });
-  } else {
-    console.warn(
-      "[/api/publish] Ungated publish: no postId provided; using client-supplied title/content."
+  const postId = asTrimmedString(rawPostId);
+  if (!postId) {
+    return NextResponse.json(
+      {
+        error:
+          "postId is required. Blog PRs can only be opened for an approved calendar post.",
+      },
+      { status: 400 }
     );
   }
 
-  if (!title || !content) {
-    return NextResponse.json({ error: "title and content are required" }, { status: 400 });
+  const gate = await loadApprovedPostForPublish(postId);
+  if ("error" in gate) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
+
+  const post = gate.post;
+  const missingFields = missingServerPublishFields(post);
+  if (missingFields.length > 0) {
+    return NextResponse.json(
+      {
+        error: `Approved post is missing required blog metadata: ${missingFields.join(", ")}.`,
+      },
+      { status: 400 }
+    );
+  }
+
+  const title = post.title;
+  const content = post.content;
+  const scheduledDate = post.scheduledDate ?? clientScheduledDate;
+  const scheduledTime = post.scheduledTime ?? clientScheduledTime;
+  const timezone = post.timezone ?? clientTimezone;
+  const excerpt = post.blogExcerpt!.trim();
+  const author = post.blogAuthor!.trim();
+  const tags = post.blogTags ?? [];
+  const category = post.blogCategory!.trim();
+  const rawSlug = post.blogSlug?.trim();
+  const slug = rawSlug ? normalizeBlogSlug(rawSlug) : undefined;
+  if (rawSlug && !slug) {
+    return NextResponse.json(
+      { error: "blogSlug must contain at least one URL-safe alphanumeric character." },
+      { status: 400 }
+    );
+  }
+  const images = coverImagesFromPost(post);
+  const coverImageAlt =
+    asTrimmedString(clientCoverImageAlt) ?? `Cover image for ${post.title}`;
 
   if (
     (subtitle !== undefined && typeof subtitle !== "string") ||
-    (excerpt !== undefined && typeof excerpt !== "string") ||
-    (author !== undefined && typeof author !== "string") ||
     (scheduledTime !== undefined && typeof scheduledTime !== "string") ||
     (timezone !== undefined && typeof timezone !== "string") ||
     (scheduleTrigger !== undefined && !isScheduleTrigger(scheduleTrigger)) ||
-    (tags !== undefined && !isStringArray(tags)) ||
-    (category !== undefined && typeof category !== "string") ||
-    (slug !== undefined && typeof slug !== "string") ||
     (featured !== undefined && typeof featured !== "boolean") ||
-    (coverImageAlt !== undefined && typeof coverImageAlt !== "string") ||
-    (images !== undefined && !isImageAssetArray(images))
+    (clientCoverImageAlt !== undefined && typeof clientCoverImageAlt !== "string")
   ) {
     return NextResponse.json(
       {
         error:
-          "Optional publish metadata must use strings, booleans, string arrays, and image asset objects.",
+          "Optional publish metadata must use strings, booleans, and schedule trigger values.",
       },
       { status: 400 }
     );

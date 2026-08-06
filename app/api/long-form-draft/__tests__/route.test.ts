@@ -65,8 +65,16 @@ describe("POST /api/long-form-draft", () => {
   });
 
   afterEach(() => {
-    process.env.PIONEER_API_KEY = originalApiKey;
-    process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
+    if (originalApiKey === undefined) {
+      delete process.env.PIONEER_API_KEY;
+    } else {
+      process.env.PIONEER_API_KEY = originalApiKey;
+    }
+    if (originalAllowMock === undefined) {
+      delete process.env.RESONATE_ALLOW_MOCK_AI;
+    } else {
+      process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
+    }
     vi.unstubAllGlobals();
   });
 

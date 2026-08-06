@@ -23,14 +23,16 @@ Idempotency uses `v2MigrationRecords` with `legacyTable: "previewSeed"`. Re-runn
 npx convex dev   # or deploy once with CONVEX_DEPLOY_KEY for preview
 
 # 2. Seed while authenticated as your Clerk dev user
+# Replace user_YOUR_CLERK_ID with your Preview/dev Clerk user id.
 npx convex run publishing:seedPreviewWorkspace "$(node scripts/seed-preview.mjs)" \
-  --identity '{"subject":"user_3ATLtcH9lcXKLMfIj9AxHXvpAR9"}'
+  --identity '{"subject":"user_YOUR_CLERK_ID"}'
 
-# Dry-run counts only
+# Dry-run counts only (read-only — does not create brands/channels/posts)
 npx convex run publishing:seedPreviewWorkspace "$(node scripts/seed-preview.mjs --dry-run)" \
-  --identity '{"subject":"user_3ATLtcH9lcXKLMfIj9AxHXvpAR9"}'
+  --identity '{"subject":"user_YOUR_CLERK_ID"}'
 ```
 
+Set `ALLOW_PREVIEW_SEED=1` on the **dev** Convex deployment before running. Do not set it on production.
 Or paste `{ "dryRun": false }` into the Convex dashboard → `publishing.seedPreviewWorkspace`.
 
 ## Env pairing

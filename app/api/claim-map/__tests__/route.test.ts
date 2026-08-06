@@ -38,7 +38,11 @@ describe("POST /api/claim-map", () => {
 
   afterEach(() => {
     process.env.PIONEER_API_KEY = originalApiKey;
-    process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
+    if (originalAllowMock === undefined) {
+      delete process.env.RESONATE_ALLOW_MOCK_AI;
+    } else {
+      process.env.RESONATE_ALLOW_MOCK_AI = originalAllowMock;
+    }
     vi.unstubAllGlobals();
   });
 

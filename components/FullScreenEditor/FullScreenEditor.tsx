@@ -503,6 +503,9 @@ export function FullScreenEditor({ postId, initialDate }: FullScreenEditorProps)
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          // Legacy fullscreen editor cannot open ungated PRs. Publish through the
+          // approved calendar Corvo Blog flow (`PersistedPublishingPanel`).
+          postId: undefined,
           title,
           content: markdown,
           scheduledDate,
@@ -517,7 +520,14 @@ export function FullScreenEditor({ postId, initialDate }: FullScreenEditorProps)
           images: publishImages,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(
+          typeof payload?.error === "string"
+            ? payload.error
+            : "Publish requires an approved calendar blog post. Use the calendar Open PR action."
+        );
+      }
       const { prUrl } = await res.json();
       setGithubPrUrl(prUrl);
 

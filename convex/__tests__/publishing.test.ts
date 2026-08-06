@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { api } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
@@ -362,6 +362,20 @@ describe("publishing cross-brand authorization", () => {
 });
 
 describe("seedPreviewWorkspace", () => {
+  const originalAllow = process.env.ALLOW_PREVIEW_SEED;
+
+  beforeEach(() => {
+    process.env.ALLOW_PREVIEW_SEED = "1";
+  });
+
+  afterEach(() => {
+    if (originalAllow === undefined) {
+      delete process.env.ALLOW_PREVIEW_SEED;
+    } else {
+      process.env.ALLOW_PREVIEW_SEED = originalAllow;
+    }
+  });
+
   it("seeds preview fixtures idempotently", async () => {
     const t = createTestHarness();
     const asUser = t.withIdentity(CORVO_ONLY_USER);

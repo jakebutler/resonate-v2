@@ -146,7 +146,14 @@ export function BlogPostEditor({ open, postId, initialDate, onClose, onSaved }: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content, scheduledDate, status: "published" }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(
+          typeof payload?.error === "string"
+            ? payload.error
+            : "Publish requires an approved calendar blog post. Use the calendar Open PR action."
+        );
+      }
       const { prUrl } = await res.json();
       setGithubPrUrl(prUrl);
 

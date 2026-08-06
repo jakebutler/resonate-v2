@@ -82,6 +82,7 @@ const approvedPost = {
   blogAuthor: "Server Author",
   blogTags: ["server-tag"],
   blogCategory: "server-category",
+  blogSlug: "My Cool Post!!",
   heroImageUrl: "https://cdn.example.com/server-hero.jpg",
 }
 
@@ -98,22 +99,24 @@ describe("POST /api/publish", () => {
 
   it("returns 401 when not authenticated", async () => {
     vi.mocked(auth).mockResolvedValueOnce({ userId: null } as Awaited<ReturnType<typeof auth>>)
-    const res = await POST(makeRequest({ title: "T", content: "C" }))
+    const res = await POST(makeRequest({ postId: "post_approved" }))
     expect(res.status).toBe(401)
   })
 
-  it("returns 400 when title is missing", async () => {
-    const res = await POST(makeRequest({ content: "Body" }))
+  it("returns 400 when postId is missing", async () => {
+    const res = await POST(makeRequest({ title: "T", content: "C" }))
     expect(res.status).toBe(400)
-  })
-
-  it("returns 400 when content is missing", async () => {
-    const res = await POST(makeRequest({ title: "Title" }))
-    expect(res.status).toBe(400)
+    expect(createBlogPostPR).not.toHaveBeenCalled()
   })
 
   it("returns 200 with prUrl and branchName on success", async () => {
-    const res = await POST(makeRequest({ title: "Hello", content: "World", scheduledDate: "2026-03-04", status: "scheduled" }))
+    const res = await POST(
+      makeRequest({
+        postId: "post_approved",
+        scheduleTrigger: "pr-body",
+        status: "scheduled",
+      })
+    )
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.prUrl).toBe("https://github.com/org/repo/pull/1")
@@ -125,77 +128,78 @@ describe("POST /api/publish", () => {
     })
   })
 
-  it("calls createBlogPostPR with correct params", async () => {
-    await POST(makeRequest({ title: "My Post", content: "Content here", scheduledDate: "2026-05-01", scheduledTime: "09:00", timezone: "America/Los_Angeles", scheduleTrigger: "pr-body", status: "scheduled" }))
-    expect(createBlogPostPR).toHaveBeenCalledWith({
-      title: "My Post",
-      content: "Content here",
-      scheduledDate: "2026-05-01",
-      scheduledTime: "09:00",
-      timezone: "America/Los_Angeles",
-      scheduleTrigger: "pr-body",
-      status: "scheduled",
-    })
+  it("calls createBlogPostPR with server fields and normalized slug", async () => {
+    await POST(
+      makeRequest({
+        postId: "post_approved",
+        scheduleTrigger: "pr-body",
+        status: "scheduled",
+      })
+    )
+    expect(createBlogPostPR).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Server Title",
+        content: "Server Content",
+        scheduledDate: "2026-06-01",
+        scheduledTime: "10:00",
+        timezone: "America/New_York",
+        scheduleTrigger: "pr-body",
+        status: "scheduled",
+        excerpt: "Server excerpt",
+        author: "Server Author",
+        tags: ["server-tag"],
+        category: "server-category",
+        slug: "my-cool-post",
+      })
+    )
   })
 
-  it("forwards repo-specific publish metadata", async () => {
-    await POST(makeRequest({
-      title: "My Post",
-      content: "Content here",
-      scheduledDate: "2026-05-01",
-      scheduledTime: "13:45",
-      timezone: "America/New_York",
-      scheduleTrigger: "frontmatter",
-      status: "scheduled",
-      subtitle: "A subtitle",
-      excerpt: "SEO",
-      author: "Jake Butler",
-      tags: ["ai"],
-      category: "strategy",
-      featured: true,
-      coverImageAlt: "A descriptive cover image caption.",
-      images: [
-        {
-          sourceUrl: "https://cdn.example.com/hero.webp",
-          alt: "A descriptive cover image caption.",
-          isCover: true,
-        },
-      ],
-    }))
+  it("forwards optional schedule/feature metadata without accepting client blog fields", async () => {
+    await POST(
+      makeRequest({
+        postId: "post_approved",
+        scheduleTrigger: "frontmatter",
+        status: "scheduled",
+        subtitle: "A subtitle",
+        excerpt: "Client SEO",
+        author: "Client Author",
+        tags: ["client-tag"],
+        category: "client-category",
+        featured: true,
+        coverImageAlt: "A descriptive cover image caption.",
+      })
+    )
 
-    expect(createBlogPostPR).toHaveBeenCalledWith({
-      title: "My Post",
-      content: "Content here",
-      scheduledDate: "2026-05-01",
-      scheduledTime: "13:45",
-      timezone: "America/New_York",
-      scheduleTrigger: "frontmatter",
-      status: "scheduled",
-      subtitle: "A subtitle",
-      excerpt: "SEO",
-      author: "Jake Butler",
-      tags: ["ai"],
-      category: "strategy",
-      featured: true,
-      coverImageAlt: "A descriptive cover image caption.",
-      images: [
-        {
-          sourceUrl: "https://cdn.example.com/hero.webp",
-          alt: "A descriptive cover image caption.",
-          isCover: true,
-        },
-      ],
-    })
+    expect(createBlogPostPR).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Server Title",
+        content: "Server Content",
+        scheduleTrigger: "frontmatter",
+        status: "scheduled",
+        subtitle: "A subtitle",
+        excerpt: "Server excerpt",
+        author: "Server Author",
+        tags: ["server-tag"],
+        category: "server-category",
+        featured: true,
+        coverImageAlt: "A descriptive cover image caption.",
+        images: [
+          expect.objectContaining({
+            sourceUrl: "https://cdn.example.com/server-hero.jpg",
+            isCover: true,
+          }),
+        ],
+      })
+    )
     expect(enrichPublishImageAlts).toHaveBeenCalledWith({
-      title: "My Post",
-      excerpt: "SEO",
+      title: "Server Title",
+      excerpt: "Server excerpt",
       coverImageAlt: "A descriptive cover image caption.",
       images: [
-        {
-          sourceUrl: "https://cdn.example.com/hero.webp",
-          alt: "A descriptive cover image caption.",
+        expect.objectContaining({
+          sourceUrl: "https://cdn.example.com/server-hero.jpg",
           isCover: true,
-        },
+        }),
       ],
     })
   })
@@ -203,10 +207,7 @@ describe("POST /api/publish", () => {
   it("returns 400 when optional metadata has the wrong shape", async () => {
     const res = await POST(
       makeRequest({
-        title: "My Post",
-        content: "Content here",
-        images: [{ sourceUrl: 123 }],
-        tags: "ai",
+        postId: "post_approved",
         featured: "true",
         scheduleTrigger: "auto-merge",
       })
@@ -216,7 +217,7 @@ describe("POST /api/publish", () => {
     expect(createBlogPostPR).not.toHaveBeenCalled()
   })
 
-  it("uses client tags when the approved post has an empty tag array", async () => {
+  it("rejects incomplete server metadata instead of filling from the client", async () => {
     mockConvexQuery.mockResolvedValueOnce({ ...approvedPost, blogTags: [] })
 
     const res = await POST(
@@ -226,12 +227,10 @@ describe("POST /api/publish", () => {
       })
     )
 
-    expect(res.status).toBe(200)
-    expect(createBlogPostPR).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tags: ["corvo-labs", "strategy"],
-      })
-    )
+    expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.error).toMatch(/tags/)
+    expect(createBlogPostPR).not.toHaveBeenCalled()
   })
 
   it("returns 400 with contract issues for BlogPostContractError", async () => {
@@ -239,7 +238,7 @@ describe("POST /api/publish", () => {
       new BlogPostContractError(["Frontmatter `tags` must contain at least one tag."])
     )
 
-    const res = await POST(makeRequest({ title: "T", content: "C", tags: [] }))
+    const res = await POST(makeRequest({ postId: "post_approved" }))
     expect(res.status).toBe(400)
     const data = await res.json()
     expect(data.issues).toEqual(["Frontmatter `tags` must contain at least one tag."])
@@ -247,7 +246,7 @@ describe("POST /api/publish", () => {
 
   it("returns 500 when createBlogPostPR throws", async () => {
     vi.mocked(createBlogPostPR).mockRejectedValueOnce(new Error("GitHub API down"))
-    const res = await POST(makeRequest({ title: "T", content: "C" }))
+    const res = await POST(makeRequest({ postId: "post_approved" }))
     expect(res.status).toBe(500)
   })
 
@@ -266,7 +265,7 @@ describe("POST /api/publish", () => {
     expect(createBlogPostPR).not.toHaveBeenCalled()
   })
 
-  it("uses server-side post fields when postId is approved", async () => {
+  it("ignores client title/content overrides for approved posts", async () => {
     const res = await POST(
       makeRequest({
         postId: "post_approved",

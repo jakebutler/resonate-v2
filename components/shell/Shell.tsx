@@ -10,6 +10,8 @@ type ShellProps = {
   children: React.ReactNode;
 };
 
+const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
+
 function navLinkClass(active: boolean) {
   return cn(
     "rounded-md px-2 py-1 text-sm transition-colors",
@@ -52,10 +54,23 @@ export function Shell({ activeSurface, children }: ShellProps) {
             </Link>
           </div>
           <div className="ml-auto flex items-center">
-            <UserButton
-              afterSignOutUrl="/sign-in"
-              appearance={{ elements: { avatarBox: "h-7 w-7" } }}
-            />
+            {bypassAuthForE2E ? (
+              <span
+                aria-label="Signed in (E2E bypass)"
+                className={cn(
+                  "inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold",
+                  tokens.accentBg,
+                  tokens.accent
+                )}
+              >
+                E2E
+              </span>
+            ) : (
+              <UserButton
+                afterSignOutUrl="/sign-in"
+                appearance={{ elements: { avatarBox: "h-7 w-7" } }}
+              />
+            )}
           </div>
         </div>
       </nav>
