@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
+import { Loader2 } from "lucide-react"
 import { Slot } from "radix-ui"
 
 import { cn } from "@/lib/utils"
@@ -47,27 +48,131 @@ const buttonVariants = cva(
   }
 )
 
+function LoadingSpinner() {
+  return (
+    <Loader2
+      aria-hidden="true"
+      className="animate-spin"
+      data-testid="button-loading-spinner"
+    />
+  )
+}
+
+type SlottedChildProps = {
+  children?: React.ReactNode
+  onClick?: React.MouseEventHandler
+  disabled?: boolean
+  tabIndex?: number
+  "aria-busy"?: boolean | "true" | "false"
+  "aria-disabled"?: boolean | "true" | "false"
+}
+
+type ButtonProps = React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean
+    loading?: boolean
+  }
+
+function isFragmentElement(element: React.ReactElement): boolean {
+  return element.type === React.Fragment
+}
+
+/** Validates the asChild host element; exported for unit tests. */
+function resolveAsChildElement(
+  children: React.ReactNode
+): React.ReactElement<SlottedChildProps> {
+  if (!React.isValidElement<SlottedChildProps>(children)) {
+    throw new Error("Button asChild expects a single React element child.")
+  }
+  if (isFragmentElement(children)) {
+    throw new Error(
+      "Button asChild does not support React.Fragment. Pass a single host element (e.g. <a> or <button>)."
+    )
+  }
+  return children
+}
+
 function Button({
   className,
   variant = "primary",
   size = "default",
   asChild = false,
+  loading = false,
+  disabled,
+  children,
+  onClick,
+  "aria-busy": ariaBusy,
+  "aria-disabled": ariaDisabled,
   ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot.Root : "button"
+}: ButtonProps) {
+  const isDisabled = Boolean(disabled || loading)
+  const resolvedAriaBusy = loading ? true : ariaBusy
+  const resolvedAriaDisabled = isDisabled ? true : ariaDisabled
+  const classes = cn(
+    buttonVariants({ variant, size, className }),
+    asChild && isDisabled && "pointer-events-none opacity-50"
+  )
+
+  if (asChild) {
+    const slotted = resolveAsChildElement(children)
+    const hostIsNativeButton = slotted.type === "button"
+    return (
+      <Slot.Root
+        data-slot="button"
+        data-size={size}
+        data-variant={variant}
+        className={classes}
+        {...props}
+      >
+        {React.cloneElement(slotted, {
+          ...(hostIsNativeButton
+            ? { disabled: isDisabled ? true : slotted.props.disabled }
+            : {}),
+          "aria-disabled": isDisabled
+            ? true
+            : (ariaDisabled ?? slotted.props["aria-disabled"]),
+          "aria-busy": loading
+            ? true
+            : (ariaBusy ?? slotted.props["aria-busy"]),
+          tabIndex: isDisabled ? -1 : slotted.props.tabIndex,
+          onClick: (event: React.MouseEvent) => {
+            if (isDisabled) {
+              event.preventDefault()
+              event.stopPropagation()
+              return
+            }
+            slotted.props.onClick?.(event)
+            onClick?.(event as React.MouseEvent<HTMLButtonElement>)
+          },
+          children: loading ? (
+            <>
+              <LoadingSpinner />
+              {slotted.props.children}
+            </>
+          ) : (
+            slotted.props.children
+          ),
+        })}
+      </Slot.Root>
+    )
+  }
 
   return (
-    <Comp
+    <button
       data-slot="button"
       data-size={size}
       data-variant={variant}
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={classes}
       {...props}
-    />
+      disabled={isDisabled}
+      aria-busy={resolvedAriaBusy}
+      aria-disabled={resolvedAriaDisabled}
+      onClick={onClick}
+    >
+      {loading ? <LoadingSpinner /> : null}
+      {children}
+    </button>
   )
 }
 
-export { Button, buttonVariants }
+export { Button, buttonVariants, resolveAsChildElement }
