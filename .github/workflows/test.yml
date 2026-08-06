@@ -139,7 +139,7 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     env:
       # Current Playwright coverage only exercises unauthenticated smoke paths,
       # so placeholder values are sufficient to boot the production app in CI.

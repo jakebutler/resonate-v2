@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/06/2026 12:44:59 PDT
+Last updated: 08/06/2026 13:48:29 PDT
 
 ## State
 
@@ -16,19 +16,19 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- eb50fa1 fix: make E2E auth bypass prerender research and calendar
+- 3adb64c chore: re-trigger CI on publish-gate tip with E2E bypass fix
 
 ## Recent Commits
 
+- 3adb64c chore: re-trigger CI on publish-gate tip with E2E bypass fix
+- d023f9c test: cover E2E bypass Convex auth provider path
 - eb50fa1 fix: make E2E auth bypass prerender research and calendar
 - a604eb1 chore: re-trigger CI for publish-gate review fixes
 - 6972612 chore: drop unused publish route helpers after gate rewrite
-- c361863 fix: address cubic review on publish gate and fail-closed auth
-- 67cbbef Merge pull request #48 from jakebutler/fix/button-loading-open-pr
 
 ## Local Working Tree
 
-- M  components/__tests__/ConvexClientProvider.test.tsx
+- M  .github/workflows/test.yml
 
 ## Next Agent Pickup
 
