@@ -48,6 +48,22 @@ const buttonVariants = cva(
   }
 )
 
+function LoadingSpinner() {
+  return (
+    <Loader2
+      aria-hidden="true"
+      className="animate-spin"
+      data-testid="button-loading-spinner"
+    />
+  )
+}
+
+type ButtonProps = React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean
+    loading?: boolean
+  }
+
 function Button({
   className,
   variant = "primary",
@@ -56,34 +72,70 @@ function Button({
   loading = false,
   disabled,
   children,
+  onClick,
+  "aria-busy": ariaBusy,
   ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-    loading?: boolean
-  }) {
-  const Comp = asChild ? Slot.Root : "button"
+}: ButtonProps) {
   const isDisabled = Boolean(disabled || loading)
+  const resolvedAriaBusy = loading ? true : ariaBusy
+  const classes = cn(
+    buttonVariants({ variant, size, className }),
+    asChild && isDisabled && "pointer-events-none opacity-50"
+  )
+
+  if (asChild) {
+    if (!React.isValidElement<{ children?: React.ReactNode; onClick?: React.MouseEventHandler }>(children)) {
+      throw new Error("Button asChild expects a single React element child.")
+    }
+
+    const slotted = children
+    return (
+      <Slot.Root
+        data-slot="button"
+        data-size={size}
+        data-variant={variant}
+        className={classes}
+        {...props}
+        aria-disabled={isDisabled || undefined}
+        aria-busy={resolvedAriaBusy}
+      >
+        {React.cloneElement(slotted, {
+          onClick: (event: React.MouseEvent) => {
+            if (isDisabled) {
+              event.preventDefault()
+              event.stopPropagation()
+              return
+            }
+            slotted.props.onClick?.(event)
+            onClick?.(event as React.MouseEvent<HTMLButtonElement>)
+          },
+          children: loading ? (
+            <>
+              <LoadingSpinner />
+              {slotted.props.children}
+            </>
+          ) : (
+            slotted.props.children
+          ),
+        })}
+      </Slot.Root>
+    )
+  }
 
   return (
-    <Comp
+    <button
       data-slot="button"
       data-size={size}
       data-variant={variant}
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={classes}
       {...props}
       disabled={isDisabled}
-      aria-busy={loading || undefined}
+      aria-busy={resolvedAriaBusy}
+      onClick={onClick}
     >
-      {loading && !asChild ? (
-        <Loader2
-          aria-hidden="true"
-          className="animate-spin"
-          data-testid="button-loading-spinner"
-        />
-      ) : null}
+      {loading ? <LoadingSpinner /> : null}
       {children}
-    </Comp>
+    </button>
   )
 }
 

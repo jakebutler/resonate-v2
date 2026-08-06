@@ -71,4 +71,43 @@ describe('Button', () => {
     render(<Button>Open PR</Button>)
     expect(screen.queryByTestId('button-loading-spinner')).not.toBeInTheDocument()
   })
+
+  it('preserves caller aria-busy when not loading', () => {
+    render(
+      <Button aria-busy={true}>Save</Button>
+    )
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute(
+      'aria-busy',
+      'true'
+    )
+  })
+
+  it('forces aria-busy when loading even if caller passes false', () => {
+    render(
+      <Button aria-busy={false} loading>
+        Save
+      </Button>
+    )
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute(
+      'aria-busy',
+      'true'
+    )
+  })
+
+  it('blocks slotted child clicks and shows spinner when loading with asChild', () => {
+    const handler = vi.fn()
+    render(
+      <Button asChild loading>
+        <a href="https://example.com" onClick={handler}>
+          Continue
+        </a>
+      </Button>
+    )
+    const link = screen.getByRole('link', { name: /Continue/i })
+    expect(link).toHaveAttribute('aria-busy', 'true')
+    expect(link).toHaveAttribute('aria-disabled', 'true')
+    expect(link).toContainElement(screen.getByTestId('button-loading-spinner'))
+    fireEvent.click(link)
+    expect(handler).not.toHaveBeenCalled()
+  })
 })

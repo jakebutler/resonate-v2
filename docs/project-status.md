@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/05/2026 22:59:19 PDT
+Last updated: 08/05/2026 23:13:34 PDT
 
 ## State
 
@@ -16,15 +16,15 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 41c6515 fix: show why Open PR is disabled when tags are missing
+- 79a4ad8 fix: add Button loading state for Open PR actions
 
 ## Recent Commits
 
+- 79a4ad8 fix: add Button loading state for Open PR actions
 - 41c6515 fix: show why Open PR is disabled when tags are missing
 - 0da864a fix: open blog PRs using composer tags and metadata
 - 5df9e32 docs: sync handoff after preview seed commit
 - ea0a522 feat: add minimal preview sandbox seed for dev Convex
-- 64bc205 fix: improve calendar split view and markdown preview rendering
 
 ## Local Working Tree
 

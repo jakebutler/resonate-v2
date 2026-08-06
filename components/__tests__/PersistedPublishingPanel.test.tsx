@@ -604,6 +604,110 @@ describe("PersistedPublishingPanel", () => {
         "Opened Corvo Blog PR: https://github.com/jakebutler/corvo-labs-dot-com/pull/42"
       )
     ).toBeInTheDocument();
+
+    await waitFor(() => {
+      const openPrButton = within(detail).getByRole("button", { name: "Open PR" });
+      expect(openPrButton).not.toBeDisabled();
+      expect(openPrButton).not.toHaveAttribute("aria-busy");
+    });
+  });
+
+  it("keeps Open PR loading per post when a second blog PR is started", async () => {
+    const secondBlogItem = {
+      ...blogItem,
+      post: {
+        ...blogItem.post,
+        _id: "post_4b",
+        title: "Second Corvo Blog PR item",
+        blogSlug: "second-corvo-blog-pr-item",
+      },
+      intent: { ...blogItem.intent, _id: "intent_4b" },
+    };
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") {
+        return [{ brandId: "corvo", name: "Corvo Labs" }];
+      }
+      if (reference === "publishing:listCalendarItems") {
+        return [blogItem, secondBlogItem];
+      }
+      return undefined;
+    });
+
+    const resolvers: Array<(value: Response) => void> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolvers.push(resolve);
+          })
+      )
+    );
+
+    render(<PersistedPublishingPanel devMode />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    fireEvent.click(
+      within(screen.getByLabelText("Publishing item detail")).getByRole("button", {
+        name: "Open PR",
+      })
+    );
+    await waitFor(() =>
+      expect(
+        within(screen.getByLabelText("Publishing item detail")).getByRole("button", {
+          name: /Opening/i,
+        })
+      ).toBeDisabled()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Details Second Corvo Blog PR item" }));
+    const secondDetail = screen.getByLabelText("Publishing item detail");
+    fireEvent.click(within(secondDetail).getByRole("button", { name: "Open PR" }));
+    await waitFor(() =>
+      expect(within(secondDetail).getByRole("button", { name: /Opening/i })).toBeDisabled()
+    );
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    resolvers[0]?.(
+      new Response(
+        JSON.stringify({
+          prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/42",
+          branchName: "resonate/blog-a",
+          sanitizedResponse: { number: 42, state: "open" },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Opened Corvo Blog PR: https://github.com/jakebutler/corvo-labs-dot-com/pull/42"
+        )
+      ).toBeInTheDocument()
+    );
+
+    expect(within(secondDetail).getByRole("button", { name: /Opening/i })).toBeDisabled();
+
+    resolvers[1]?.(
+      new Response(
+        JSON.stringify({
+          prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/43",
+          branchName: "resonate/blog-b",
+          sanitizedResponse: { number: 43, state: "open" },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Opened Corvo Blog PR: https://github.com/jakebutler/corvo-labs-dot-com/pull/43"
+        )
+      ).toBeInTheDocument()
+    );
   });
 
   it("checks blog PR status and records it in Convex", async () => {

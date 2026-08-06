@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
@@ -358,9 +358,10 @@ export function PersistedPublishingPanel({
     Id<"v2Posts"> | null | undefined
   >(undefined);
   const [message, setMessage] = useState<string | null>(null);
-  const [openingPrPostId, setOpeningPrPostId] = useState<Id<"v2Posts"> | null>(
-    null
+  const [openingPrPostIds, setOpeningPrPostIds] = useState<ReadonlySet<string>>(
+    () => new Set()
   );
+  const openingPrPostIdsRef = useRef<Set<string>>(new Set());
 
   // Convex queries must wait for the Clerk token to reach the Convex client.
   // Firing them before that makes requireUserId throw "Unauthorized" server-side,
@@ -660,7 +661,11 @@ export function PersistedPublishingPanel({
       return;
     }
 
-    setOpeningPrPostId(item.post._id);
+    if (openingPrPostIdsRef.current.has(item.post._id)) {
+      return;
+    }
+    openingPrPostIdsRef.current.add(item.post._id);
+    setOpeningPrPostIds(new Set(openingPrPostIdsRef.current));
     setMessage("Opening Corvo Blog pull request...");
     try {
       const response = await fetch("/api/publish", {
@@ -735,7 +740,8 @@ export function PersistedPublishingPanel({
       });
       setMessage(`Opened Corvo Blog PR: ${data.prUrl}`);
     } finally {
-      setOpeningPrPostId(null);
+      openingPrPostIdsRef.current.delete(item.post._id);
+      setOpeningPrPostIds(new Set(openingPrPostIdsRef.current));
     }
   }
 
@@ -1013,7 +1019,7 @@ export function PersistedPublishingPanel({
                           devMode={devMode}
                           item={item}
                           key={item.post._id}
-                          openingPr={openingPrPostId === item.post._id}
+                          openingPr={openingPrPostIds.has(item.post._id)}
                           onApprove={handleApprove}
                           onCheckPrStatus={() => void handleCheckPrStatus(item)}
                           onCreatePr={(snapshot) => void handleCreatePr(item, snapshot)}
@@ -1035,7 +1041,7 @@ export function PersistedPublishingPanel({
             <PublishingDetailDrawer
               devMode={devMode}
               item={selectedItem}
-              openingPr={openingPrPostId === selectedItem.post._id}
+              openingPr={openingPrPostIds.has(selectedItem.post._id)}
               onApprove={handleApprove}
               onCheckPrStatus={() => void handleCheckPrStatus(selectedItem)}
               onClose={() => setManualSelectedPostId(null)}
@@ -1147,6 +1153,37 @@ function CalendarItemChip({
   );
 }
 
+function OpenPrButton(props: {
+  disabled: boolean;
+  existingPrUrl?: string;
+  iconSize?: number;
+  loading: boolean;
+  onClick: () => void;
+  size?: "sm" | "default";
+  title?: string;
+}) {
+  const iconSize = props.iconSize ?? 15;
+  return (
+    <Button
+      className="border-[#15616d]/25 text-[#15616d] hover:bg-[#15616d]/10"
+      disabled={props.disabled}
+      loading={props.loading}
+      onClick={props.onClick}
+      size={props.size}
+      title={props.title}
+      type="button"
+      variant="outline"
+    >
+      {!props.loading ? <FileText size={iconSize} /> : null}
+      {props.loading
+        ? "Opening…"
+        : props.existingPrUrl
+          ? "PR opened"
+          : "Open PR"}
+    </Button>
+  );
+}
+
 function AgendaItem(props: {
   devMode: boolean;
   item: PersistedCalendarItem;
@@ -1240,9 +1277,10 @@ function AgendaItem(props: {
           )}
           {post.channelId === "corvo-blog" && (
             <>
-              <Button
-                className="border-[#15616d]/25 text-[#15616d] hover:bg-[#15616d]/10"
+              <OpenPrButton
                 disabled={openPrDisabled}
+                existingPrUrl={existingPrUrl}
+                iconSize={14}
                 loading={Boolean(props.openingPr)}
                 onClick={() => props.onCreatePr(null)}
                 size="sm"
@@ -1256,16 +1294,7 @@ function AgendaItem(props: {
                         ? "Pull request already exists."
                         : undefined
                 }
-                type="button"
-                variant="outline"
-              >
-                {!props.openingPr ? <FileText size={14} /> : null}
-                {props.openingPr
-                  ? "Opening…"
-                  : existingPrUrl
-                    ? "PR opened"
-                    : "Open PR"}
-              </Button>
+              />
               {existingPrUrl && (
                 <>
                   <a
@@ -1640,22 +1669,13 @@ function PublishingDetailDrawer(props: {
           )}
           {post.channelId === "corvo-blog" && (
             <>
-              <Button
-                className="border-[#15616d]/25 text-[#15616d] hover:bg-[#15616d]/10"
+              <OpenPrButton
                 disabled={openPrDisabled}
+                existingPrUrl={existingPrUrl}
                 loading={Boolean(props.openingPr)}
                 onClick={() => props.onCreatePr(publishSnapshot)}
                 title={openPrBlockedReason ?? undefined}
-                type="button"
-                variant="outline"
-              >
-                {!props.openingPr ? <FileText size={15} /> : null}
-                {props.openingPr
-                  ? "Opening…"
-                  : existingPrUrl
-                    ? "PR opened"
-                    : "Open PR"}
-              </Button>
+              />
               {openPrDisabled && openPrBlockedReason && !existingPrUrl && (
                 <p className="w-full text-xs text-amber-800">{openPrBlockedReason}</p>
               )}

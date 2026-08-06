@@ -2732,3 +2732,27 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/button-loading-open-pr
+
+## 08/05/2026 23:13:34 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/ui/__tests__/Button.test.tsx
+- M	components/ui/button.tsx
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/ui/__tests__/Button.test.tsx
+- M  components/ui/button.tsx
+
+### Branch
+
+- fix/button-loading-open-pr
