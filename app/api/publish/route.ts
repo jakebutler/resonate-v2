@@ -6,10 +6,6 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
-}
-
 function asTrimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -21,29 +17,6 @@ function normalizeBlogSlug(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-}
-
-function isImageAssetArray(
-  value: unknown
-): value is Array<{ sourceUrl: string; alt?: string; isCover?: boolean }> {
-  return (
-    Array.isArray(value) &&
-    value.every((entry) => {
-      if (!entry || typeof entry !== "object") return false;
-
-      const candidate = entry as {
-        sourceUrl?: unknown;
-        alt?: unknown;
-        isCover?: unknown;
-      };
-
-      return (
-        typeof candidate.sourceUrl === "string" &&
-        (candidate.alt === undefined || typeof candidate.alt === "string") &&
-        (candidate.isCover === undefined || typeof candidate.isCover === "boolean")
-      );
-    })
-  );
 }
 
 function isScheduleTrigger(value: unknown): value is "frontmatter" | "pr-body" {
