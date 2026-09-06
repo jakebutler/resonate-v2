@@ -3032,3 +3032,21 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - main
+
+## 09/06/2026 11:50:47 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	docs/eval/2026-08-06-parity-run.md
+
+### Working Tree Snapshot
+
+- A  docs/eval/2026-08-06-parity-run.md
+
+### Branch
+
+- main
