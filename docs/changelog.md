@@ -3013,3 +3013,22 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/buffer-live-submit
+
+## 09/06/2026 11:50:47 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	convex/_generated/api.d.ts
+
+### Working Tree Snapshot
+
+- M  convex/_generated/api.d.ts
+- ?? docs/eval/2026-08-06-parity-run.md
+
+### Branch
+
+- main

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 08/06/2026 14:03:41 PDT
+Last updated: 09/06/2026 11:50:47 PDT
 
 ## State
 
@@ -8,30 +8,34 @@ Resonate is a working content operations app with active surfaces for calendar p
 
 ## Current Task
 
-Ship PR #60 Buffer live LinkedIn submit onto main after #46.
+Maintain the living documentation and preserve a handoff-quality snapshot of the repo state.
 
 ## Session Focus
 
-- Rebased Buffer live onto post-#46 main and verified unit tests.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- 59ef392 fix: land Buffer live LinkedIn submit on post-#46 main
+- 7b189a3 chore: trigger main push deploy after #46 and #60 merges
 
 ## Recent Commits
 
+- 7b189a3 chore: trigger main push deploy after #46 and #60 merges
+- 75b2a2e Merge pull request #60 from jakebutler/feat/buffer-live-submit
+- f4f7ef7 docs: sync handoff before merging Buffer live to main
 - 59ef392 fix: land Buffer live LinkedIn submit on post-#46 main
 - 952579b Wire Convex Buffer live submit/cancel with approval-gated bookkeeping.
-- 9895fbd Merge pull request #46 from jakebutler/fix/publish-gate-and-failclosed
 
 ## Local Working Tree
 
-- clean
+- M  convex/_generated/api.d.ts
+- ?? docs/eval/2026-08-06-parity-run.md
 
 ## Next Agent Pickup
 
-- After merge: confirm Vercel + Convex prod deploy; Jake flips `BUFFER_LIVE_SUBMISSION=approved` for live Buffer proof.
+- Start by checking the living docs against the current code before making assumptions.
+- If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
 
 ## Branch
 
-- feat/buffer-live-submit
+- main

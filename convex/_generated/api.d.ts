@@ -14,6 +14,7 @@ import type * as bufferLive from "../bufferLive.js";
 import type * as githubPrSync from "../githubPrSync.js";
 import type * as ideas from "../ideas.js";
 import type * as posts from "../posts.js";
+import type * as previewSeedData from "../previewSeedData.js";
 import type * as publishing from "../publishing.js";
 import type * as research from "../research.js";
 import type * as settings from "../settings.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   githubPrSync: typeof githubPrSync;
   ideas: typeof ideas;
   posts: typeof posts;
+  previewSeedData: typeof previewSeedData;
   publishing: typeof publishing;
   research: typeof research;
   settings: typeof settings;
