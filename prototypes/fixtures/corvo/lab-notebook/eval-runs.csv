@@ -1,0 +1,11 @@
+run_id,date,suite,cases,passed,failed,notes
+R-001,2026-04-14,draft-facts,12,9,3,baseline mega-prompt before split
+R-002,2026-04-14,draft-tone,5,4,1,baseline mega-prompt before split
+R-003,2026-04-15,draft-facts,12,11,1,per-component gate iteration 1
+R-004,2026-04-16,draft-facts,12,12,0,per-component gate iteration 2
+R-005,2026-04-16,draft-tone,5,5,0,per-component gate iteration 2
+R-006,2026-04-17,draft-format,9,9,0,per-component gate iteration 2
+R-007,2026-04-18,draft-facts,12,11,1,regression caught: EXP-014 case 7
+R-008,2026-05-06,review-conversion,18,16,2,two cross-cutting style comments not convertible
+R-009,2026-05-13,review-conversion,6,6,0,week three batch
+R-010,2026-05-27,cohesion-checklist,0,0,0,not yet run — hand-apply first per EXP-020
