@@ -3051,38 +3051,20 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 - main
 
-## 09/06/2026 12:02:21 PDT
+## 09/06/2026 11:53:36 PDT
 
 ### Summary
 
-- Refreshed documentation for the current repository state.
+- Updated repository documentation and handoff records.
 
 ### Staged Changes
 
-- A	prototypes/fixtures/corvo/README.md
-- A	prototypes/fixtures/corvo/lab-notebook/2026-04-14-eval-harness-v0.md
-- A	prototypes/fixtures/corvo/lab-notebook/2026-04-21-approval-gate-telemetry.md
-- A	prototypes/fixtures/corvo/lab-notebook/2026-05-05-worktree-observability.md
-- A	prototypes/fixtures/corvo/lab-notebook/2026-05-12-hitl-review-loop.md
-- A	prototypes/fixtures/corvo/lab-notebook/2026-05-26-cohesion-gate.md
-- A	prototypes/fixtures/corvo/lab-notebook/board-sync-scratch.ipynb
-- A	prototypes/fixtures/corvo/lab-notebook/eval-runs.csv
-- A	prototypes/fixtures/corvo/lab-notebook/experiments.json
-- A	prototypes/fixtures/corvo/paper/react-synergizing-reasoning-acting-2210.03629.pdf
+- A	docs/marketing-director/2026-08-06-revised-proposal.md
 
 ### Working Tree Snapshot
 
-- A  prototypes/fixtures/corvo/README.md
-- A  prototypes/fixtures/corvo/lab-notebook/2026-04-14-eval-harness-v0.md
-- A  prototypes/fixtures/corvo/lab-notebook/2026-04-21-approval-gate-telemetry.md
-- A  prototypes/fixtures/corvo/lab-notebook/2026-05-05-worktree-observability.md
-- A  prototypes/fixtures/corvo/lab-notebook/2026-05-12-hitl-review-loop.md
-- A  prototypes/fixtures/corvo/lab-notebook/2026-05-26-cohesion-gate.md
-- A  prototypes/fixtures/corvo/lab-notebook/board-sync-scratch.ipynb
-- A  prototypes/fixtures/corvo/lab-notebook/eval-runs.csv
-- A  prototypes/fixtures/corvo/lab-notebook/experiments.json
-- A  prototypes/fixtures/corvo/paper/react-synergizing-reasoning-acting-2210.03629.pdf
+- A  docs/marketing-director/2026-08-06-revised-proposal.md
 
 ### Branch
 
-- wayfinder/corvo-proof-fixtures
+- docs/marketing-director-revised-proposal
