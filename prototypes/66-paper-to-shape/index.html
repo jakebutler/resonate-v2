@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Resonate · Campaigns — prototype #66 (paper → ideas → shape)</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Forum&display=swap");
+
+  :root {
+    --ink-black: #001524;
+    --stormy-teal: #15616d;
+    --stormy-teal-soft: #e3eef0;
+    --papaya-whip: #ffecd1;
+    --vivid-tangerine: #ff7d00;
+    --vivid-tangerine-soft: #fff1e0;
+    --brandy: #78290f;
+    --paper: #fbf9f6;
+    --card: #ffffff;
+    --border: #e6e1d8;
+    --muted: #6b6a66;
+    --ok: #2e7d32;
+    --warn-bg: #fff7e6;
+    --warn-border: #e8b45a;
+    --radius: 10px;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Geist", "Inter", -apple-system, "Segoe UI", sans-serif;
+    background: var(--paper);
+    color: var(--ink-black);
+  }
+  h1, h2, .display { font-family: "Forum", Georgia, serif; font-weight: 400; }
+
+  header.topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 20px; background: var(--card);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 40;
+  }
+  .logo { font-family: "Forum", serif; font-size: 1.35rem; letter-spacing: .02em; }
+  .crumb { color: var(--muted); font-size: .85rem; }
+  .crumb b { color: var(--ink-black); font-weight: 600; }
+  .brand-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 12px; font-size: .82rem; background: var(--papaya-whip);
+  }
+  .brand-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stormy-teal); }
+  .brand-pill .other { color: var(--muted); }
+  .prototype-banner {
+    background: var(--vivid-tangerine-soft); border-bottom: 1px solid var(--border);
+    color: var(--brandy); font-size: .8rem; padding: 6px 20px;
+    display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  }
+  .stepper {
+    display: flex; gap: 0; margin-left: auto; font-size: .8rem;
+  }
+  .step {
+    display: flex; align-items: center; gap: 7px; padding: 6px 14px;
+    color: var(--muted); border-left: 1px solid var(--border);
+  }
+  .step .n {
+    width: 20px; height: 20px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; font-size: .7rem;
+    border: 1.5px solid var(--border); background: var(--card);
+  }
+  .step.active { color: var(--ink-black); font-weight: 600; }
+  .step.active .n { background: var(--stormy-teal); border-color: var(--stormy-teal); color: #fff; }
+  .step.done .n { background: var(--papaya-whip); border-color: var(--stormy-teal); color: var(--stormy-teal); }
+  .step.locked { opacity: .45; }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 26px 22px 90px; }
+  .stage { display: none; }
+  .stage.active { display: block; }
+
+  .stage-head { margin-bottom: 18px; }
+  .stage-head h1 { font-size: 1.9rem; margin: 0 0 6px; }
+  .stage-head p { margin: 0; color: var(--muted); max-width: 640px; }
+
+  .btn {
+    border: 1px solid var(--ink-black); background: var(--ink-black); color: #fff;
+    border-radius: var(--radius); padding: 9px 18px; font-size: .88rem; font-weight: 600;
+    cursor: pointer; transition: transform .05s ease, opacity .15s;
+  }
+  .btn:hover { opacity: .9; }
+  .btn:active { transform: translateY(1px); }
+  .btn.secondary { background: var(--card); color: var(--ink-black); border-color: var(--border); }
+  .btn.ghost { background: transparent; border-color: var(--border); color: var(--muted); }
+  .btn.accent { background: var(--vivid-tangerine); border-color: var(--vivid-tangerine); color: #fff; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--border); background: var(--paper);
+    border-radius: 999px; padding: 2px 10px; font-size: .72rem; color: var(--muted);
+  }
+  .chip.teal { background: var(--stormy-teal-soft); color: var(--stormy-teal); border-color: transparent; font-weight: 600; }
+  .chip.tangerine { background: var(--vivid-tangerine-soft); color: var(--brandy); border-color: transparent; font-weight: 600; }
+  .chip.role { background: var(--papaya-whip); color: var(--brandy); border-color: transparent; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: .65rem; }
+  .cite { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .7rem; color: var(--stormy-teal); background: var(--stormy-teal-soft); border-radius: 5px; padding: 2px 6px; white-space: nowrap; }
+
+  .footer-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
+    background: var(--card); border-top: 1px solid var(--border);
+    padding: 12px 22px; display: flex; align-items: center; gap: 14px;
+    justify-content: flex-end; max-width: none;
+  }
+  .footer-bar .hint { color: var(--muted); font-size: .82rem; margin-right: auto; }
+  .footer-bar .hint b { color: var(--brandy); }
+
+  .toast {
+    position: fixed; bottom: 74px; right: 22px; z-index: 60;
+    background: var(--ink-black); color: var(--papaya-whip);
+    padding: 12px 18px; border-radius: var(--radius); font-size: .85rem;
+    box-shadow: 0 8px 24px rgba(0,21,36,.25); opacity: 0; pointer-events: none;
+    transition: opacity .25s, transform .25s; transform: translateY(8px);
+    max-width: 380px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .progress { height: 6px; background: var(--stormy-teal-soft); border-radius: 999px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--stormy-teal); width: 0%; transition: width .4s ease; }
+
+  .excerpt { padding: 14px 16px; border-top: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; }
+  .excerpt:first-of-type { border-top: none; }
+  .excerpt.unusable { background: #fdf3f0; }
+  .excerpt .quote { font-size: .86rem; line-height: 1.5; color: #333; }
+  .excerpt .meta { display: flex; gap: 8px; align-items: center; margin-top: 7px; flex-wrap: wrap; }
+  .excerpt input[type="checkbox"] { width: 17px; height: 17px; margin-top: 3px; accent-color: var(--stormy-teal); }
+  select, input[type="text"], textarea {
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+    font: inherit; font-size: .85rem; background: var(--card); color: var(--ink-black);
+  }
+  textarea { width: 100%; resize: vertical; }
+  select:focus, input:focus, textarea:focus { outline: 2px solid var(--stormy-teal); outline-offset: 1px; }
+
+  .columns { display: grid; grid-template-columns: 300px 1fr 300px; gap: 18px; align-items: start; }
+  @media (max-width: 1000px) { .columns { grid-template-columns: 1fr; } }
+  .panel-title {
+    font-size: .78rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); font-weight: 700; padding: 13px 16px 9px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .corpus-badge { padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--papaya-whip); font-size: .78rem; color: var(--brandy); }
+  .corpus-badge b { display: block; font-size: .84rem; color: var(--ink-black); }
+  .excerpt-mini { padding: 10px 16px; border-top: 1px solid var(--border); font-size: .8rem; }
+  .excerpt-mini .quote { color: #444; line-height: 1.45; }
+  .excerpt-mini .meta { margin-top: 5px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .idea {
+    padding: 14px 16px; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .idea .head { display: flex; align-items: center; gap: 8px; }
+  .idea .text { font-size: .9rem; line-height: 1.5; }
+  .idea .actions { display: flex; gap: 8px; }
+  .idea.in-other-campaign { background: var(--paper); }
+  .idea .already { font-size: .74rem; color: var(--muted); }
+  .mini-btn {
+    border: 1px solid var(--border); background: var(--card); color: var(--ink-black);
+    border-radius: 8px; padding: 5px 12px; font-size: .78rem; font-weight: 600; cursor: pointer;
+  }
+  .mini-btn.primary { background: var(--stormy-teal); border-color: var(--stormy-teal); color: #fff; }
+  .mini-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .working-chip {
+    display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px;
+    border-top: 1px solid var(--border); font-size: .82rem;
+  }
+  .working-chip .x {
+    margin-left: auto; cursor: pointer; color: var(--muted); border: none; background: none;
+    font-size: .9rem; padding: 0 2px;
+  }
+  .working-chip .x:hover { color: var(--brandy); }
+  .empty-note { padding: 16px; color: var(--muted); font-size: .82rem; text-align: center; }
+
+  .preset-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0 20px; }
+  @media (max-width: 860px) { .preset-cards { grid-template-columns: 1fr; } }
+  .preset {
+    text-align: left; padding: 14px 16px; cursor: pointer; background: var(--card);
+    border: 1.5px solid var(--border); border-radius: var(--radius);
+  }
+  .preset.active { border-color: var(--stormy-teal); background: var(--stormy-teal-soft); }
+  .preset b { font-family: "Forum", serif; font-size: 1.05rem; display: block; margin-bottom: 3px; }
+  .preset .desc { font-size: .76rem; color: var(--muted); line-height: 1.45; }
+  .preset .count { font-size: .72rem; color: var(--stormy-teal); font-weight: 700; }
+
+  .slot {
+    display: grid; grid-template-columns: 34px 1fr 210px; gap: 12px; align-items: start;
+    padding: 13px 16px; border-top: 1px solid var(--border);
+  }
+  .slot .order {
+    font-family: "Forum", serif; font-size: 1.15rem; color: var(--stormy-teal);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .slot .order .mover { cursor: pointer; color: var(--muted); font-size: .62rem; border: none; background: none; line-height: 1; }
+  .slot .order .mover:hover { color: var(--ink-black); }
+  .slot .main { display: flex; flex-direction: column; gap: 7px; }
+  .slot .main input { font-size: .88rem; font-weight: 600; }
+  .slot .roleline { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+  .slot .angle { font-size: .78rem; color: var(--muted); width: 100%; }
+  .slot.incomplete { background: var(--warn-bg); }
+  .slot .incomplete-tag {
+    font-size: .7rem; font-weight: 700; color: var(--brandy);
+    background: #ffe3d3; padding: 2px 8px; border-radius: 5px;
+  }
+  .slot aside { font-size: .78rem; color: var(--muted); display: flex; flex-direction: column; gap: 5px; }
+  .slot aside select { width: 100%; font-size: .76rem; }
+
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,21,36,.45); z-index: 70;
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 14px; padding: 26px; width: 430px; max-width: 92vw;
+    box-shadow: 0 20px 60px rgba(0,21,36,.3);
+  }
+  .modal h2 { margin: 0 0 6px; font-size: 1.45rem; }
+  .modal p { color: var(--muted); font-size: .85rem; margin: 0 0 16px; }
+  .modal input { width: 100%; font-size: .95rem; }
+  .modal .row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+  .shimmer { color: var(--muted); font-size: .85rem; padding: 26px; text-align: center; }
+  .shimmer .dotline span { animation: blink 1.2s infinite; display: inline-block; }
+  .shimmer .dotline span:nth-child(2) { animation-delay: .2s; }
+  .shimmer .dotline span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
+
+  .accept-view { text-align: center; padding: 46px 20px; }
+  .accept-view .check {
+    width: 54px; height: 54px; border-radius: 50%; background: var(--papaya-whip);
+    color: var(--brandy); display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.6rem; margin-bottom: 14px;
+  }
+  .accept-view h1 { font-size: 1.7rem; margin: 0 0 8px; }
+  .accept-view p { color: var(--muted); max-width: 560px; margin: 0 auto 6px; line-height: 1.55; }
+  .next-stub {
+    margin: 26px auto 0; max-width: 560px; text-align: left;
+    border: 1.5px dashed var(--border); border-radius: var(--radius);
+    padding: 16px 18px; background: var(--paper); opacity: .75;
+  }
+  .next-stub b { display: block; margin-bottom: 4px; }
+  .next-stub .stage-tag { color: var(--stormy-teal); font-weight: 700; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; }
+  .next-stub ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: .82rem; }
+  .feedback-q {
+    margin: 26px auto 0; max-width: 640px; text-align: left;
+    background: var(--stormy-teal-soft); border-radius: var(--radius); padding: 16px 20px;
+  }
+  .feedback-q b { font-size: .86rem; }
+  .feedback-q ol { margin: 8px 0 0; padding-left: 20px; font-size: .82rem; color: #223; line-height: 1.6; }
+
+  .flag-form { margin-top: 10px; display: none; }
+  .flag-form.show { display: block; }
+  .sens-select { font-size: .72rem; padding: 3px 6px; }
+  .hard-block-note { font-size: .74rem; color: var(--brandy); font-weight: 600; }
+  .one-way-note { font-size: .72rem; color: var(--muted); line-height: 1.5; padding: 10px 14px; }
+  .order-note { font-size: .74rem; color: var(--muted); margin: 4px 0 14px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="logo">Resonate</span>
+  <span class="crumb">Campaigns / <b id="crumb-campaign">New campaign</b></span>
+  <span class="brand-pill" title="Proof brand locked by the map (#61)"><span class="dot"></span> Corvo Labs <span class="other">· FreshProof, the lower dB out of proof set</span></span>
+  <nav class="stepper" id="stepper">
+    <span class="step active" data-step="1"><span class="n">1</span> Ingest paper</span>
+    <span class="step" data-step="2"><span class="n">2</span> Campaign session</span>
+    <span class="step" data-step="3"><span class="n">3</span> Propose shape</span>
+    <span class="step locked" data-step="4" title="Prototype #68"><span class="n">4</span> Placeholders</span>
+  </nav>
+</header>
+<div class="prototype-banner">
+  <span><b>Throwaway prototype #66</b> — fake AI, scripted content, nothing saved or submitted anywhere. Real excerpts from the ReAct paper fixture.</span>
+  <a href="../fixtures/corvo/README.md" style="color:var(--brandy)">fixture README ↗</a>
+</div>
+
+<main>
+
+  <!-- ============ STAGE 1: INGEST ============ -->
+  <section class="stage active" id="stage-1">
+    <div class="stage-head">
+      <h1>Ingest a paper into the brand corpus</h1>
+      <p>Per the ingest rituals (#64): documents land in the <b>brand corpus</b> first — campaign attachment happens later, in the session. One ingest becomes one immutable corpus version.</p>
+    </div>
+
+    <div class="card" style="padding:16px 18px; margin-bottom:16px;">
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <div style="font-size:1.6rem">📄</div>
+        <div style="flex:1; min-width:220px;">
+          <b style="font-size:.92rem;">react-synergizing-reasoning-acting-2210.03629.pdf</b>
+          <div style="font-size:.78rem; color:var(--muted);">Uploaded from fixtures · 33 pages · 619 KB · extracted via fake parser</div>
+        </div>
+        <span class="chip tangerine">In-app happy path (upload)</span>
+      </div>
+      <div class="progress" style="margin-top:12px;"><div id="extract-bar"></div></div>
+      <div id="extract-status" style="font-size:.78rem; color:var(--muted); margin-top:6px;">Waiting…</div>
+    </div>
+
+    <div id="excerpt-review" style="display:none;">
+      <div class="card">
+        <div class="panel-title">
+          <span>Review extracted excerpts — only checked, usable excerpts are saved</span>
+          <span class="chip">Corvo Labs corpus · brand-scoped</span>
+        </div>
+        <div id="excerpt-list"></div>
+      </div>
+      <div style="margin-top:14px; display:flex; align-items:center; gap:12px;">
+        <span class="hard-block-note" id="hardblock-note" style="display:none;">A flagged unusable extract blocks saving until flagged &amp; fixed or unchecked.</span>
+        <span style="margin-left:auto;"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STAGE 2: CAMPAIGN SESSION ============ -->
+  <section class="stage" id="stage-2">
+    <div class="stage-head">
+      <h1 id="session-title">Campaign session</h1>
+      <p>Ideas only — opinions, insights, and thoughts are Idea flavors, never a separate Stance type (map decision 5). Every idea cites corpus excerpts.</p>
+    </div>
+
+    <div class="columns">
+      <div class="card">
+        <div class="panel-title"><span>Paper &amp; excerpts</span><span class="chip" id="corpus-version-chip">corpus v1</span></div>
+        <div class="corpus-badge">
+          <b>ReAct — Synergizing Reasoning and Acting in Language Models</b>
+          Yao et al., arXiv:2210.03629 · attached as campaign working set
+        </div>
+        <div id="corpus-excerpt-list"></div>
+        <div class="one-way-note">Brand corpora are shared across campaigns. This campaign holds a working set — removing an idea from a slot never detaches the corpus.</div>
+      </div>
+
+      <div class="card">
+        <div class="panel-title">
+          <span>Suggested ideas <span class="chip tangerine">fake AI</span></span>
+          <span style="display:flex; gap:6px; align-items:center;">
+            <input type="text" id="idea-search" placeholder="Search research inbox…" style="font-size:.76rem; padding:5px 9px; width:170px;" />
+          </span>
+        </div>
+        <div id="idea-list"></div>
+        <div id="inbox-results" style="display:none;">
+          <div class="panel-title" style="border-top:1px solid var(--border);"><span>From your research inbox (one-offs)</span></div>
+          <div id="inbox-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="panel-title"><span>Campaign working set</span><span class="chip teal" id="working-count">0 ideas</span></div>
+        <div id="working-set"><div class="empty-note">No ideas yet. Accept suggestions or search the inbox.<br/><br/>Accepting here makes the idea <b>campaign-primary</b>; the idea stays discoverable in research with a soft “in campaign” hint.</div></div>
+        <div class="one-way-note" style="border-top:1px solid var(--border);">Slot ↔ membership is <b>one-way</b>: linking an idea to a shape slot never removes it from this set, and removing it from the working set detaches it from any slot.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STAGE 3: PROPOSE SHAPE ============ -->
+  <section class="stage" id="stage-3">
+    <div class="stage-head">
+      <h1>Propose the campaign shape</h1>
+      <p>A shape is a durable plan of <b>slots</b> — channel × format × role — with optional title, angle, linked ideas, and a narrative order. Order is story sequence, <b>not a publish schedule</b>.</p>
+    </div>
+
+    <div class="preset-cards" id="preset-cards"></div>
+    <div class="order-note">Presets are Corvo Labs default compositions (#63). Switching presets re-proposes the shape; your working set is untouched.</div>
+
+    <div class="card" id="shape-card" style="display:none;">
+      <div class="panel-title">
+        <span>Proposed shape — <span id="shape-slot-count"></span></span>
+        <span class="chip tangerine">fake AI proposal · editable</span>
+      </div>
+      <div id="shimmer" class="shimmer" style="display:none;">Proposing shape from your working set<span class="dotline"><span>.</span><span>.</span><span>.</span></span></div>
+      <div id="slot-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ STAGE 4: ACCEPTED (END STATE) ============ -->
+  <section class="stage" id="stage-4">
+    <div class="accept-view">
+      <div class="check">✓</div>
+      <h1>Shape accepted</h1>
+      <p><b id="accepted-summary"></b></p>
+      <p>In the real product this hands off through the existing materialize path: <b>scheduled-but-unapproved posts</b> appear in the composer/calendar. Nothing is auto-approved and nothing is ever submitted to a provider by the campaign itself.</p>
+      <div class="next-stub">
+        <span class="stage-tag">Next prototype · #68</span>
+        <b>Shape accept → cohesive placeholders</b>
+        This is where the batch would get per-slot placeholder drafts, a set-level cohesion pass, and the SEO / humanizer product stages — all as placeholder UX first, skill implementation later.
+        <ul>
+          <li>Per-slot placeholder copy generated as a set, not per-post</li>
+          <li>Cohesion gate: one pillar, one CTA, no repeated framing openers</li>
+          <li>Everything lands as scheduled-but-unapproved in the existing calendar</li>
+        </ul>
+      </div>
+      <div class="feedback-q">
+        <b>Feedback prompts for this prototype (#66)</b>
+        <ol>
+          <li>Does the title-only campaign confirm feel right, or do you want a goal/audience check this early?</li>
+          <li>Do excerpt citations make ideas feel trustworthy — or is it noise at this stage?</li>
+          <li>Are the Seed / Standard / Deep compositions close to what you'd actually run for Corvo?</li>
+          <li>Is “narrative order ≠ publish schedule” clear enough in the slot list?</li>
+          <li>Does blocking accept on incomplete slots feel safe, or should it warn instead?</li>
+          <li>Anything missing before this hands off to #68 (placeholders + cohesion)?</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- footer action bars -->
+<div class="footer-bar" id="footer-1" style="display:none;">
+  <span class="hint" id="footer-1-hint"></span>
+  <button class="btn secondary" id="btn-flag-focus">Flag &amp; fix demo</button>
+  <button class="btn" id="btn-save-corpus" disabled>Save to Corvo Labs corpus</button>
+</div>
+<div class="footer-bar" id="footer-2" style="display:none;">
+  <span class="hint" id="footer-2-hint"></span>
+  <button class="btn" id="btn-propose-shape" disabled>Propose shape</button>
+</div>
+<div class="footer-bar" id="footer-3" style="display:none;">
+  <span class="hint" id="footer-3-hint"></span>
+  <button class="btn accent" id="btn-accept-shape" disabled>Accept shape</button>
+</div>
+<div class="footer-bar" id="footer-4" style="display:none;">
+  <span class="hint">End of prototype #66 — continue with prototype #67 (lab corpus path) for the second source journey.</span>
+  <button class="btn secondary" onclick="location.reload()">Restart prototype</button>
+</div>
+
+<!-- start-campaign modal (title-only light confirm) -->
+<div class="modal-backdrop" id="modal-start">
+  <div class="modal">
+    <h2>Start a campaign</h2>
+    <p>Title-only for now — the brief fills itself in later. You can rename any time.</p>
+    <input type="text" id="campaign-title-input" value="Reasoning + acting for editorial pipelines" />
+    <div class="row">
+      <button class="btn ghost" id="btn-cancel-start">Cancel</button>
+      <button class="btn" id="btn-confirm-start">Start campaign</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const EXCERPTS = [
+  { id: "excerpt-1", page: "p.1 · Abstract", unusable: false,
+    text: "…question answering, fact verification, and interactive decision making. We explore the use of large language models (LLMs) to generate both reasoning traces and task-specific actions in an interleaved manner, allowing the model to induce, track, and update high-level plans for handling exceptions…" },
+  { id: "excerpt-2", page: "p.2 · §2", unusable: false,
+    text: "…on the two tasks, reasoning traces help the model induce, track, and update high-level plans for handling exceptions, while actions allow it to interface with external sources of information to gather supporting information…" },
+  { id: "excerpt-3", page: "p.6 · HotpotQA results", unusable: false,
+    text: "…ReAct outperforms the strongest imitation-learning baseline on HotpotQA, and error analysis shows that grounding in retrieved evidence reduces hallucination relative to reasoning-only chains of thought…" },
+  { id: "excerpt-4", page: "p.7 · ALFWorld & WebShop", unusable: false,
+    text: "…combining ReAct with PaLM-540B achieves the best of both worlds: the model benefits from the reasoning of CoT and the grounding of interactive actions, outperforming either alone across ALFWorld and WebShop tasks…" },
+  { id: "excerpt-5", page: "p.9 · Limitations", unusable: false,
+    text: "…ReAct's performance is limited by in-context examples; the model may diverge between reasoning and actions, and research on when reasoning helps versus hurts remains open…" },
+  { id: "excerpt-6", page: "p.8 · Table 2", unusable: true,
+    text: "…34.2 | 35.1 || 61.0 | [ARTIFACT] | NaN | — suc. rate %═ … mangled numeric table, extraction lost column headers and row semantics…" },
+];
+
+const CORPUS_ID = "corpus://corvo/react-paper-2210.03629/v1";
+
+const SUGGESTED_IDEAS = [
+  { id: "idea-1", flavor: "Opinion",
+    text: "An approval gate without observation is acting without ReAct. Our reviewers approve or reject, but nothing shows them what changed since the draft — that's an action step with no observation feeding the next reasoning step.",
+    cites: ["excerpt-1", "excerpt-2"], inOtherCampaign: null },
+  { id: "idea-2", flavor: "Insight",
+    text: "Traces are eval fixtures waiting to be promoted. ReAct treats every trajectory as inspectable evidence; our agent runs should too — a failed run's trace should become a test case with one copy command.",
+    cites: ["excerpt-2"], inOtherCampaign: null },
+  { id: "idea-3", flavor: "Opinion",
+    text: "Prompt roulette is action without reasoning. Iterating a mega-prompt by feel is all acting, no trace — which is exactly the failure mode ReAct was built to kill.",
+    cites: ["excerpt-1", "excerpt-3"], inOtherCampaign: null },
+  { id: "idea-4", flavor: "Insight",
+    text: "Hallucination shrinks when the model must ground every claim in an observed result. Excerpt-first drafting is our version: no claim without a corpus pointer.",
+    cites: ["excerpt-3"], inOtherCampaign: null },
+  { id: "idea-5", flavor: "Thought",
+    text: "\"Best of both worlds\" for humans: our review loop is the same trade ReAct solved for models — act fast on drafts, reason slow at the approval gate.",
+    cites: ["excerpt-4"], inOtherCampaign: null },
+  { id: "idea-6", flavor: "Opinion",
+    text: "Every AI claim in public content needs a visible receipt. ReAct cut hallucination by grounding in evidence; the audience-facing version of that is inline citations on anything model-generated.",
+    cites: ["excerpt-3", "excerpt-5"], inOtherCampaign: "Fact Drift launch" },
+];
+
+const INBOX_IDEAS = [
+  { id: "inbox-1", flavor: "Thought",
+    text: "Could a weekly review digest replace standup for the content team? Unclear — park until the digest milestone.",
+    cites: [], usedHint: null },
+  { id: "inbox-2", flavor: "Insight",
+    text: "Board-sync notes keep dying in .ipynb scratch files; the ingest skip-and-warn ritual fixed exactly that.",
+    cites: [], usedHint: "corpus: lower-db lab notebook" },
+];
+
+const PRESETS = [
+  { key: "seed", name: "Seed", desc: "Minimal proof: one pillar to anchor the thesis, one satellite to carry it socially, one CTA. The CTA slot starts unlinked — incomplete slots block materialize.", count: 3,
+    slots: [
+      { role: "pillar", channel: "Corvo Blog", format: "blog article", title: "Acting without observation: what ReAct teaches editorial pipelines", idea: "idea-1" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "Traces are eval fixtures waiting to be promoted", idea: "idea-2" },
+      { role: "cta", channel: "LinkedIn", format: "LI post", title: "", idea: null },
+    ] },
+  { key: "standard", name: "Standard", desc: "The Corvo workhorse: pillar + hook + two satellites + recap. Every slot links a working-set idea by default.", count: 5,
+    slots: [
+      { role: "pillar", channel: "Corvo Blog", format: "blog article", title: "Acting without observation: what ReAct teaches editorial pipelines", idea: "idea-1" },
+      { role: "hook", channel: "X", format: "X post", title: "Prompt roulette is action without reasoning", idea: "idea-3" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "Traces are eval fixtures waiting to be promoted", idea: "idea-2" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "No claim without a corpus pointer", idea: "idea-4" },
+      { role: "recap", channel: "LinkedIn", format: "LI post", title: "Act fast, reason slow: the best of both worlds", idea: "idea-5" },
+    ] },
+  { key: "deep", name: "Deep", desc: "Full arc: adds an essay satellite and a YouTube script for the long argument. Heaviest lift; strongest narrative.", count: 7,
+    slots: [
+      { role: "pillar", channel: "Corvo Blog", format: "blog article", title: "Acting without observation: what ReAct teaches editorial pipelines", idea: "idea-1" },
+      { role: "hook", channel: "X", format: "X post", title: "Prompt roulette is action without reasoning", idea: "idea-3" },
+      { role: "satellite", channel: "LinkedIn", format: "essay", title: "Grounding: no claim without a corpus pointer", idea: "idea-4" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "Traces are eval fixtures waiting to be promoted", idea: "idea-2" },
+      { role: "satellite", channel: "YouTube", format: "YT script", title: "Walkthrough: ReAct applied to a publish pipeline", idea: "idea-5" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "Receipts on every AI claim", idea: "idea-6" },
+      { role: "cta", channel: "LinkedIn", format: "LI post", title: "Follow the build — Corvo Labs", idea: null },
+    ] },
+];
+
+const state = {
+  stage: 1,
+  selectedExcerpts: new Set(),
+  flaggedFixed: false,
+  corpusSaved: false,
+  campaignTitle: "New campaign",
+  workingSet: [],
+  inboxAdded: [],
+  preset: "standard",
+  slots: [],
+  shapeProposed: false,
+  accepted: false,
+};
+
+const $ = (s) => document.querySelector(s);
+const cite = (id) => `<span class="cite">${CORPUS_ID}#${id}</span>`;
+const flavorChip = (f) => `<span class="chip ${f === "Opinion" ? "tangerine" : f === "Insight" ? "teal" : ""}">${f}</span>`;
+
+function toast(msg) {
+  const t = $("#toast");
+  t.innerHTML = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 3400);
+}
+
+function setStepper(n) {
+  document.querySelectorAll(".step").forEach((el) => {
+    const s = +el.dataset.step;
+    el.classList.toggle("active", s === n && n < 4);
+    el.classList.toggle("done", s < n || (n === 4 && s === 3));
+  });
+}
+function goto(stage) {
+  state.stage = stage;
+  document.querySelectorAll(".stage").forEach((el) => el.classList.remove("active"));
+  $("#stage-" + stage).classList.add("active");
+  setStepper(stage);
+  ["footer-1", "footer-2", "footer-3", "footer-4"].forEach((id) => $("#" + id).style.display = "none");
+  if (stage <= 3) $("#footer-" + stage).style.display = "flex";
+  window.scrollTo({ top: 0 });
+}
+
+/* ---------- Stage 1 ---------- */
+function startExtraction() {
+  const bar = $("#extract-bar"), status = $("#extract-status");
+  let p = 0;
+  const iv = setInterval(() => {
+    p += Math.random() * 22;
+    bar.style.width = Math.min(p, 100) + "%";
+    status.textContent = p < 35 ? "Parsing PDF…" : p < 70 ? "Segmenting pages into excerpt candidates…" : p < 100 ? "Assigning corpus pointers…" : "Extraction complete — 6 candidates.";
+    if (p >= 100) { clearInterval(iv); renderExcerptReview(); }
+  }, 420);
+}
+
+function renderExcerptReview() {
+  $("#excerpt-review").style.display = "block";
+  $("#excerpt-list").innerHTML = EXCERPTS.map((e) => `
+    <div class="excerpt ${e.unusable ? "unusable" : ""}" data-id="${e.id}">
+      <input type="checkbox" ${e.unusable ? "disabled" : "checked"} data-ex="${e.id}" />
+      <div style="flex:1">
+        <div class="quote">${e.text}</div>
+        <div class="meta">
+          <span class="chip">${e.page}</span>
+          ${cite(e.id)}
+          <span class="chip">sensitivity:
+            <select class="sens-select" onchange="toast('Sensitivity updated — default stays <b>unreviewed</b> per #64.')">
+              <option>unreviewed</option><option>internal-only</option><option>public-safe</option>
+            </select>
+          </span>
+          ${e.unusable ? `<span class="chip" style="background:#fde8e2;color:var(--brandy);font-weight:700;">unusable extract</span>
+            <button class="mini-btn" onclick="toggleFlagForm('${e.id}')">Flag &amp; fix</button>` : ""}
+        </div>
+        ${e.unusable ? `
+        <div class="flag-form" id="flag-${e.id}">
+          <div class="one-way-note" style="padding:8px 0 4px;">Hard-blocked from saving (#64). Captured corrections become parser feedback — the extract itself is never silently saved.</div>
+          <textarea rows="2" placeholder="What should this be? e.g. 'This is Table 2 — success rates by task. Column headers lost in extraction.'"></textarea>
+          <div style="margin-top:8px; display:flex; gap:8px;">
+            <button class="mini-btn primary" onclick="fixFlag('${e.id}')">Capture correction &amp; keep blocked</button>
+            <button class="mini-btn" onclick="toggleFlagForm('${e.id}')">Close</button>
+          </div>
+        </div>` : ""}
+      </div>
+    </div>`).join("");
+  document.querySelectorAll("input[data-ex]").forEach((cb) => {
+    cb.addEventListener("change", updateSaveState);
+  });
+  updateSaveState();
+}
+
+function toggleFlagForm(id) { $("#flag-" + id).classList.toggle("show"); }
+function fixFlag(id) {
+  state.flaggedFixed = true;
+  $("#flag-" + id).classList.remove("show");
+  toast("Correction captured as parser feedback. Extract stays <b>blocked</b> — uncheck it to save the corpus.");
+  updateSaveState();
+}
+
+function updateSaveState() {
+  const checked = [...document.querySelectorAll("input[data-ex]:checked")];
+  state.selectedExcerpts = new Set(checked.map((cb) => cb.dataset.ex));
+  const flaggedOpen = document.querySelector(".flag-form.show") !== null && !state.flaggedFixed;
+  const blocked = state.selectedExcerpts.size === 0;
+  $("#btn-save-corpus").disabled = blocked;
+  $("#footer-1-hint").innerHTML = state.selectedExcerpts.size === 0
+    ? "<b>Select at least one usable excerpt.</b>"
+    : `${state.selectedExcerpts.size} excerpt${state.selectedExcerpts.size > 1 ? "s" : ""} selected — saving creates <b>corpus v1 (immutable)</b>.${flaggedOpen ? " A flagged extract is open." : ""}`;
+}
+
+$("#btn-save-corpus").addEventListener("click", () => {
+  state.corpusSaved = true;
+  toast("Saved to <b>Corvo Labs corpus · v1 (immutable)</b>. Campaign attachment happens in the session — per #64.");
+  $("#btn-save-corpus").textContent = "Saved ✓";
+  $("#btn-save-corpus").disabled = true;
+  setTimeout(openStartModal, 700);
+});
+
+/* ---------- Start campaign modal ---------- */
+function openStartModal() {
+  $("#modal-start").classList.add("show");
+  $("#campaign-title-input").focus();
+}
+$("#btn-cancel-start").addEventListener("click", () => $("#modal-start").classList.remove("show"));
+$("#btn-confirm-start").addEventListener("click", () => {
+  state.campaignTitle = $("#campaign-title-input").value.trim() || "Untitled campaign";
+  $("#crumb-campaign").textContent = state.campaignTitle;
+  $("#session-title").textContent = state.campaignTitle;
+  $("#modal-start").classList.remove("show");
+  renderCorpusPanel(); renderIdeas(); renderWorkingSet();
+  goto(2);
+  toast("Campaign started — title-only, light confirm. Brief fields fill in later.");
+});
+$("#campaign-title-input").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#btn-confirm-start").click(); });
+
+/* ---------- Stage 2 ---------- */
+function renderCorpusPanel() {
+  $("#corpus-excerpt-list").innerHTML = EXCERPTS.filter((e) => state.selectedExcerpts.has(e.id)).map((e) => `
+    <div class="excerpt-mini">
+      <div class="quote">${e.text.slice(0, 130)}…</div>
+      <div class="meta"><span class="chip">${e.page}</span>${cite(e.id)}</div>
+    </div>`).join("");
+}
+
+function ideaCard(i, ctx) {
+  const already = i.inOtherCampaign
+    ? `<span class="already">· already in <b>${i.inOtherCampaign}</b> — joining links it, nothing moves</span>`
+    : "";
+  const added = state.workingSet.includes(i.id);
+  return `
+    <div class="idea ${i.inOtherCampaign ? "in-other-campaign" : ""}" data-idea="${i.id}">
+      <div class="head">${flavorChip(i.flavor)} ${already}</div>
+      <div class="text">${i.text}</div>
+      <div class="head" style="flex-wrap:wrap;">${i.cites.map(cite).join("")}${i.cites.length === 0 ? '<span class="already">no citations — inbox capture</span>' : ""}</div>
+      <div class="actions">
+        <button class="mini-btn primary" ${added ? "disabled" : ""} onclick="acceptIdea('${i.id}')">${added ? "In working set ✓" : "Add to campaign"}</button>
+        ${ctx === "suggested" ? `<button class="mini-btn" onclick="rejectIdea('${i.id}')">Not useful</button>` : ""}
+      </div>
+    </div>`;
+}
+
+function renderIdeas() {
+  $("#idea-list").innerHTML = SUGGESTED_IDEAS.map((i) => ideaCard(i, "suggested")).join("");
+}
+function renderInbox() {
+  const q = ($("#idea-search").value || "").toLowerCase();
+  $("#inbox-results").style.display = "block";
+  const filtered = INBOX_IDEAS.filter((i) => !q || i.text.toLowerCase().includes(q));
+  $("#inbox-list").innerHTML = filtered.length
+    ? filtered.map((i) => ideaCard(i, "inbox")).join("")
+    : `<div class="empty-note">No one-off ideas match “${q}”.</div>`;
+  INBOX_IDEAS.forEach((i) => {
+    if (state.workingSet.includes(i.id) && i.usedHint === null) {
+      i.usedHint = "soft hint: in campaign “" + state.campaignTitle + "”";
+    }
+  });
+}
+$("#idea-search").addEventListener("input", renderInbox);
+
+function acceptIdea(id) {
+  const all = [...SUGGESTED_IDEAS, ...INBOX_IDEAS];
+  const idea = all.find((i) => i.id === id);
+  if (!state.workingSet.includes(id)) state.workingSet.push(id);
+  if (idea.inOtherCampaign) {
+    toast(`“${idea.flavor}” linked — still in <b>${idea.inOtherCampaign}</b> too. Many-to-many, nothing moved.`);
+  } else {
+    toast(`Added to campaign — <b>campaign-primary</b>. It stays in research with a soft “in campaign” hint.`);
+  }
+  renderWorkingSet(); renderIdeas(); if ($("#inbox-results").style.display !== "none") renderInbox();
+  updateProposeState();
+}
+function rejectIdea(id) {
+  const el = document.querySelector(`[data-idea="${id}"]`);
+  if (el) { el.style.opacity = ".35"; el.querySelectorAll("button").forEach((b) => (b.disabled = true)); }
+  toast("Marked not useful — it stays in research, just not suggested here.");
+}
+
+function renderWorkingSet() {
+  const all = [...SUGGESTED_IDEAS, ...INBOX_IDEAS];
+  $("#working-count").textContent = state.workingSet.length + " ideas";
+  $("#working-set").innerHTML = state.workingSet.length
+    ? state.workingSet.map((id) => {
+        const i = all.find((x) => x.id === id);
+        return `<div class="working-chip">${flavorChip(i.flavor)}<span style="flex:1">${i.text.slice(0, 90)}…</span>
+          <button class="x" title="Remove from working set" onclick="removeFromWorkingSet('${id}')">✕</button></div>`;
+      }).join("")
+    : `<div class="empty-note">No ideas yet. Accept suggestions or search the inbox.</div>`;
+}
+function removeFromWorkingSet(id) {
+  state.workingSet = state.workingSet.filter((x) => x !== id);
+  state.slots.forEach((s) => { if (s.idea === id) s.idea = null; });
+  renderWorkingSet(); renderIdeas(); renderSlots();
+  toast("Removed from working set — also detached from any shape slot (one-way membership).");
+  updateProposeState(); updateAcceptState();
+}
+
+function updateProposeState() {
+  const ok = state.workingSet.length >= 2;
+  $("#btn-propose-shape").disabled = !ok;
+  $("#footer-2-hint").innerHTML = ok
+    ? `${state.workingSet.length} ideas in the working set.`
+    : "<b>Accept at least 2 ideas</b> to propose a shape.";
+}
+
+$("#btn-propose-shape").addEventListener("click", () => {
+  renderPresets();
+  goto(3);
+  $("#shape-card").style.display = "block";
+  proposeShape(state.preset);
+});
+
+/* ---------- Stage 3 ---------- */
+function renderPresets() {
+  $("#preset-cards").innerHTML = PRESETS.map((p) => `
+    <button class="preset ${p.key === state.preset ? "active" : ""}" data-preset="${p.key}">
+      <b>${p.name}</b>
+      <span class="count">${p.count} slots</span>
+      <div class="desc">${p.desc}</div>
+    </button>`).join("");
+  document.querySelectorAll(".preset").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.preset = el.dataset.preset;
+      renderPresets();
+      proposeShape(state.preset);
+    });
+  });
+}
+
+function proposeShape(key) {
+  const p = PRESETS.find((x) => x.key === key);
+  state.shapeProposed = false;
+  $("#shimmer").style.display = "block";
+  $("#slot-list").style.display = "none";
+  setTimeout(() => {
+    state.slots = p.slots.map((s) => ({
+      ...s,
+      idea: s.idea && state.workingSet.includes(s.idea) ? s.idea : null,
+    }));
+    state.shapeProposed = true;
+    $("#shimmer").style.display = "none";
+    $("#slot-list").style.display = "block";
+    $("#shape-slot-count").textContent = `${p.count} slots · ${p.name} preset`;
+    renderSlots();
+  }, 900);
+}
+
+function renderSlots() {
+  const all = [...SUGGESTED_IDEAS, ...INBOX_IDEAS];
+  const options = state.workingSet
+    .map((id) => all.find((x) => x.id === id))
+    .map((i) => `<option value="${i.id}">${i.flavor}: ${i.text.slice(0, 46)}…</option>`)
+    .join("");
+  $("#slot-list").innerHTML = state.slots.map((s, idx) => {
+    const incomplete = !s.idea;
+    return `
+    <div class="slot ${incomplete ? "incomplete" : ""}" data-slot="${idx}">
+      <div class="order">
+        <button class="mover" onclick="moveSlot(${idx}, -1)" ${idx === 0 ? "disabled" : ""}>▲</button>
+        ${idx + 1}
+        <button class="mover" onclick="moveSlot(${idx}, 1)" ${idx === state.slots.length - 1 ? "disabled" : ""}>▼</button>
+      </div>
+      <div class="main">
+        <div class="roleline">
+          <span class="chip role">${s.role}</span>
+          <span class="chip teal">${s.channel}</span>
+          <span class="chip">${s.format}</span>
+          ${incomplete ? `<span class="incomplete-tag">incomplete — no idea linked</span>` : ""}
+        </div>
+        <input type="text" value="${s.title}" placeholder="Slot title (optional — AI fills later)" oninput="state.slots[${idx}].title = this.value" />
+        <input class="angle" type="text" placeholder="Angle (optional)" oninput="state.slots[${idx}].angle = this.value" />
+      </div>
+      <aside>
+        <label style="font-size:.7rem; text-transform:uppercase; letter-spacing:.05em;">Linked idea</label>
+        <select onchange="linkIdea(${idx}, this.value)">
+          <option value="">— none (incomplete) —</option>
+          ${state.workingSet.map((id) => {
+            const i = all.find((x) => x.id === id);
+            return `<option value="${id}" ${s.idea === id ? "selected" : ""}>${i.flavor}: ${i.text.slice(0, 40)}…</option>`;
+          }).join("")}
+          ${options && !state.workingSet.length ? options : ""}
+        </select>
+        <span class="already">one-way: linking never removes the idea from the campaign.</span>
+        <span class="already">order = narrative, <b>not publish schedule</b></span>
+      </aside>
+    </div>`;
+  }).join("");
+  updateAcceptState();
+}
+
+function linkIdea(idx, id) {
+  state.slots[idx].idea = id || null;
+  renderSlots();
+  if (id) toast("Idea linked to slot. Membership is one-way — it stays in the working set.");
+}
+function moveSlot(idx, dir) {
+  const t = state.slots[idx];
+  state.slots[idx] = state.slots[idx + dir];
+  state.slots[idx + dir] = t;
+  renderSlots();
+}
+
+function updateAcceptState() {
+  if (!state.shapeProposed) return;
+  const incomplete = state.slots.filter((s) => !s.idea).length;
+  $("#btn-accept-shape").disabled = incomplete > 0;
+  $("#footer-3-hint").innerHTML = incomplete > 0
+    ? `<b>${incomplete} slot${incomplete > 1 ? "s" : ""} incomplete</b> — every slot needs a linked idea before the shape can be accepted (empty = incomplete, block materialize).`
+    : "All slots linked. Accepting materializes <b>scheduled-but-unapproved</b> posts — nothing auto-approves, nothing submits.";
+}
+
+$("#btn-accept-shape").addEventListener("click", () => {
+  state.accepted = true;
+  const filled = state.slots.filter((s) => s.idea).length;
+  $("#accepted-summary").textContent = `${state.campaignTitle} — ${filled} slots (narrative order, not schedule). Shape saved as a durable plan.`;
+  goto(4);
+});
+
+/* boot */
+goto(1);
+startExtraction();
+</script>
+</body>
+</html>
