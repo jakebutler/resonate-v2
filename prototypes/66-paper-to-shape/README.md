@@ -15,8 +15,8 @@ Works from `file://` (plain inline JS only). Best viewed ≥1000px wide.
 ## The flow
 
 1. **Ingest paper** — the ReAct paper fixture "uploads" and "extracts" automatically. Review excerpts, flip sensitivity, and try **Flag & fix** on the deliberately mangled Table 2 extract: unusable extracts are hard-blocked from saving and corrections are captured as parser feedback (#64). Saving creates **corpus v1 (immutable)** on the Corvo Labs brand corpus.
-2. **Campaign session** — title-only light confirm starts the campaign (#62). Fake AI suggests ideas (Opinion / Insight / Thought flavors — never a Stance type), each citing `corpus://` excerpts. Accept ideas into the working set (sticky toast), including one already in another campaign (many-to-many). Search the research inbox for one-offs with soft used-hints.
-3. **Propose shape** — pick a preset (**Seed 3 / Standard 5 / Deep 7 slots**, Corvo default compositions, #63). Slots are channel × format × role with editable title/angle and linked ideas. Reorder = **narrative order, not a publish schedule**. Any slot without a linked idea is **incomplete and blocks accepting** (#62: empty = incomplete, block materialize).
+2. **Campaign session** — title-only light confirm starts the campaign; goal and audience are confirmed later, on the Propose shape step. Fake AI suggests ideas (Opinion / Insight / Thought flavors — never a Stance type), each citing `corpus://` excerpts. Accept ideas into the working set (sticky toast), including one already in another campaign (many-to-many). Search the research inbox for one-offs with soft used-hints.
+3. **Propose shape** — goal/audience check-in, then pick a preset (**Seed 3 / Standard 5 / Deep 7 slots**, Corvo default compositions, #63). Slots are channel × format × role with inline pencil-edit title/angle, brand icons (simpleicons.org), a role legend, and custom linked-idea dropdowns. The slot number is the **publishing sequence** (1 → n); dates/times are the **publishing schedule**, owned by the calendar (renamed from "narrative order" after feedback). Switching presets **keeps your edits** (slots matched by role + channel). Any slot without a linked idea is **incomplete and blocks accepting**. Rejected ideas can be undone.
 4. **Accept** — ends at the handoff boundary: scheduled-but-unapproved posts via the existing materialize path. Cohesive placeholders / SEO / humanizer are stubbed as **prototype #68**.
 
 ## Locked decisions exercised
@@ -28,7 +28,7 @@ Works from `file://` (plain inline JS only). Best viewed ≥1000px wide.
 | Ideas only — Opinion/Insight/Thought flavors citing excerpts | Stage 2 (map decision 5) |
 | Hybrid membership: campaign-primary chips, sticky toast, already-in marked, one-offs stay with soft hint | Stage 2 (#62) |
 | Slot → membership one-way | Stage 2/3 (#62) |
-| Shape = slots (channel × format × role), presets Seed/Standard/Deep, narrative order ≠ publish schedule | Stage 3 (#63) |
+| Shape = slots (channel × format × role), presets Seed/Standard/Deep, publishing sequence ≠ schedule (renamed from narrative order) | Stage 3 (#63) |
 | Empty slot = incomplete, blocks materialize | Stage 3 (#62) |
 | Accept → scheduled-but-unapproved only; never auto-approve/submit | Stage 4 (map decision 9) |
 | Cohesive/SEO/humanizer as placeholder stage | Stage 4 stub (#68) |
@@ -36,7 +36,7 @@ Works from `file://` (plain inline JS only). Best viewed ≥1000px wide.
 
 ## What's faked
 
-- PDF extraction, AI idea suggestions, AI shape proposal (all pre-scripted)
+- PDF extraction, AI idea suggestions, AI shape proposal (all pre-scripted); nothing persists across reload
 - The other campaign ("Fact Drift launch") and research-inbox one-offs
 - Corpus versioning, persistence (state dies on reload — the page is the state)
 
@@ -49,8 +49,10 @@ Real ReAct excerpts are quoted from the public paper fixture at
 2. Do excerpt citations make ideas feel trustworthy — or is it noise at this stage?
 3. Are the Seed / Standard / Deep compositions close to what you'd actually run for Corvo?
 4. Is "narrative order ≠ publish schedule" clear enough in the slot list?
-5. Does blocking accept on incomplete slots feel safe, or should it warn instead?
+5. Does the tangerine-on-minimal color direction land (vibrant pops vs scandi-minimal)?
 6. Anything missing before this hands off to #68 (placeholders + cohesion)?
+
+Answered from the first pass: excerpt granularity (open question on #61/#66), blocking on incomplete slots (confirmed correct), goal/audience check (wanted — now on this step).
 
 ## Sibling prototype
 
