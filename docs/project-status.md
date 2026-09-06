@@ -1,40 +1,39 @@
 # Project Status
 
-Last updated: 09/06/2026 12:15 PDT
+Last updated: 09/06/2026 12:30:59 PDT
 
 ## State
 
-Resonate is a working content operations app with active surfaces for calendar planning, content editing, workflow review, and idea capture. Main is stable: typecheck clean, 503/503 unit tests passing, E2E green in CI, prod (resonate.corvolabs.com) healthy and auth-gated.
+Resonate is a working content operations app with active surfaces for calendar planning, content editing, workflow review, and idea capture.
 
 ## Current Task
 
-Wayfinder campaign-assistant map (#61): fixtures resolved (#65 closed via #70); next is the prototype tickets #66 and #67.
+Maintain the living documentation and preserve a handoff-quality snapshot of the repo state.
 
 ## Session Focus
 
-- Repo stability audit after a long gap: committed loose ends, merged stale docs PR #58 (rebased docs-only onto post-#46 main, dropped superseded layout.tsx change), verified prod + CI, assembled Corvo proof fixtures (#65 → PR #70, merged).
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- #70 merged — Corvo proof fixtures (ReAct paper PDF + synthetic lab-notebook corpus under `prototypes/fixtures/corvo/`), resolution record posted on #65.
+- 4d4ea81 docs: sync session handoff — fixtures resolved, prototypes #66/#67 unblocked
 
 ## Recent Commits
 
-- #70 merge: Corvo proof fixtures
-- #58 merge: Marketing Director revised proposal (docs-only, prior/decision record for #61/#69)
-- 32e75b4 docs: record 2026-08-06 reviewable parity eval pass (12/12)
-- fe2fbab chore: sync generated Convex api with previewSeedData module
+- 4d4ea81 docs: sync session handoff — fixtures resolved, prototypes #66/#67 unblocked
+- 1323675 Merge pull request #70 from jakebutler/wayfinder/corvo-proof-fixtures
+- 8e70040 merge: resolve docs snapshots against post-#58 main
+- e708b57 feat: assemble Corvo proof fixtures for campaign-shape prototypes
+- f9e554a Merge pull request #58 from jakebutler/docs/marketing-director-revised-proposal
 
 ## Local Working Tree
 
-- clean
+- A  docs/smoke-runs/2026-09-06-buffer-live-proof.md
 
 ## Next Agent Pickup
 
-- Wayfinder #66 "Prototype: Corvo paper → ideas → shape" and #67 "Prototype: Corvo lab corpus → ideas → shape" are now unblocked; fixtures at `prototypes/fixtures/corvo/` (see its README for paths, sensitivity, and the deliberate `.ipynb` skip case).
-- Open map questions still unresolved per #61: prototype hosting (static HTML vs app route), composer chrome in prototypes.
-- Jake ops follow-up: confirm Vercel + Convex prod deploy after #60 and flip `BUFFER_LIVE_SUBMISSION=approved` for the live Buffer proof.
-- #69 remains the closer: rewrite #45 and settle M0–M8 disposition once prototypes land.
+- Start by checking the living docs against the current code before making assumptions.
+- If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
 
 ## Branch
 
