@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/06/2026 11:50:47 PDT
+Last updated: 09/06/2026 11:53:36 PDT
 
 ## State
 
@@ -16,19 +16,19 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- fe2fbab chore: sync generated Convex api with previewSeedData module
+- 32e75b4 docs: record 2026-08-06 reviewable parity eval pass (12/12)
 
 ## Recent Commits
 
+- 32e75b4 docs: record 2026-08-06 reviewable parity eval pass (12/12)
 - fe2fbab chore: sync generated Convex api with previewSeedData module
 - 7b189a3 chore: trigger main push deploy after #46 and #60 merges
 - 75b2a2e Merge pull request #60 from jakebutler/feat/buffer-live-submit
 - f4f7ef7 docs: sync handoff before merging Buffer live to main
-- 59ef392 fix: land Buffer live LinkedIn submit on post-#46 main
 
 ## Local Working Tree
 
-- A  docs/eval/2026-08-06-parity-run.md
+- A  docs/marketing-director/2026-08-06-revised-proposal.md
 
 ## Next Agent Pickup
 
@@ -37,4 +37,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- main
+- docs/marketing-director-revised-proposal
