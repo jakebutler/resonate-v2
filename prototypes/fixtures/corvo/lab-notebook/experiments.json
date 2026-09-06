@@ -1,0 +1,52 @@
+{
+  "corpus": "corvo-agent-content-pipeline",
+  "description": "Synthetic experiment index for the Corvo Labs proof fixture corpus. Entries mirror the markdown notebook entries in this folder.",
+  "sensitivityDefault": "unreviewed",
+  "experiments": [
+    {
+      "id": "EXP-014",
+      "date": "2026-04-14",
+      "title": "Eval harness v0 — gates beat prompt iteration",
+      "hypothesis": "Per-component eval gates hold regression rate flat while iteration speed stays constant.",
+      "status": "completed",
+      "result": "Regression rate 4/10 to 1/10; failures became explainable.",
+      "labels": ["experiment-result", "author-judgment"]
+    },
+    {
+      "id": "EXP-015",
+      "date": "2026-04-21",
+      "title": "Approval-gate telemetry — what reviewers actually catch",
+      "hypothesis": "Reviewers mostly catch factual drift, not tone, so approval UIs should foreground claim lineage.",
+      "status": "completed",
+      "result": "fact-drift was the top reason tag (21 of 47); decision time doubled without inline sources.",
+      "labels": ["experiment-result"]
+    },
+    {
+      "id": "EXP-017",
+      "date": "2026-05-05",
+      "title": "Worktree-local tracing makes agent runs debuggable",
+      "hypothesis": "Per-worktree trace files beat a shared trace store for debuggability.",
+      "status": "completed",
+      "result": "6/6 root causes found inside the worktree; 2 traces promoted to eval fixtures.",
+      "labels": ["experiment-result", "author-judgment"]
+    },
+    {
+      "id": "EXP-018",
+      "date": "2026-05-12",
+      "title": "Review comments convert cleanly into regression evals",
+      "hypothesis": "Checkable review comments convert to eval cases in under 10 minutes and drive repeat mistakes toward zero.",
+      "status": "completed",
+      "result": "16/18 converted at 9-minute median; repeat-mistake rate 1-in-3 to 1-in-8.",
+      "labels": ["experiment-result", "author-judgment"]
+    },
+    {
+      "id": "EXP-020",
+      "date": "2026-05-26",
+      "title": "Campaign-shaped batches need a cohesion gate",
+      "hypothesis": "Set-level cohesion checks catch what per-post review cannot.",
+      "status": "planned",
+      "result": null,
+      "labels": ["hypothesis", "open-question"]
+    }
+  ]
+}
