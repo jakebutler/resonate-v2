@@ -3378,3 +3378,43 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/c3-campaign-session
+
+## 09/07/2026 00:40:29 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	app/campaigns/[campaignId]/shape/page.tsx
+- A	components/__tests__/CampaignShapeBuilder.test.tsx
+- M	components/campaigns/CampaignSession.tsx
+- A	components/campaigns/CampaignShapeBuilder.tsx
+- A	components/campaigns/ChannelIcon.tsx
+- A	convex/__tests__/campaignShape.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/campaignAccess.ts
+- M	convex/campaigns.ts
+- A	convex/shapes.ts
+- A	lib/__tests__/campaignShapes.test.ts
+- A	lib/campaignShapes.ts
+
+### Working Tree Snapshot
+
+- A  app/campaigns/[campaignId]/shape/page.tsx
+- A  components/__tests__/CampaignShapeBuilder.test.tsx
+- M  components/campaigns/CampaignSession.tsx
+- A  components/campaigns/CampaignShapeBuilder.tsx
+- A  components/campaigns/ChannelIcon.tsx
+- A  convex/__tests__/campaignShape.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/campaignAccess.ts
+- M  convex/campaigns.ts
+- A  convex/shapes.ts
+- A  lib/__tests__/campaignShapes.test.ts
+- A  lib/campaignShapes.ts
+
+### Branch
+
+- feat/c4-campaign-shape
