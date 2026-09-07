@@ -14,6 +14,10 @@ vi.mock("@/convex/_generated/api", () => ({
       getDraftSet: "draftSet:getDraftSet",
       generateDraftSet: "draftSet:generateDraftSet",
     },
+    cohesion: {
+      getReviewPasses: "cohesion:getReviewPasses",
+      runCohesionGate: "cohesion:runCohesionGate",
+    },
   },
 }));
 
@@ -61,6 +65,7 @@ describe("DraftSetView", () => {
     vi.clearAllMocks();
     useQueryMock.mockImplementation((reference: unknown) => {
       if (reference === "draftSet:getDraftSet") return generatedView;
+      if (reference === "cohesion:getReviewPasses") return null;
       return undefined;
     });
     useMutationMock.mockReturnValue(vi.fn().mockResolvedValue({ draftCount: 5 }));
@@ -103,6 +108,7 @@ describe("DraftSetView", () => {
   it("shows the empty state before generation", () => {
     useQueryMock.mockImplementation((reference: unknown) => {
       if (reference === "draftSet:getDraftSet") return emptyView;
+      if (reference === "cohesion:getReviewPasses") return null;
       return undefined;
     });
     render(<DraftSetView campaignId="campaign_1" />);

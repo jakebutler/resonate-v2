@@ -13,6 +13,7 @@ import type * as backfill from "../backfill.js";
 import type * as bufferLive from "../bufferLive.js";
 import type * as campaignAccess from "../campaignAccess.js";
 import type * as campaigns from "../campaigns.js";
+import type * as cohesion from "../cohesion.js";
 import type * as corpora from "../corpora.js";
 import type * as draftSet from "../draftSet.js";
 import type * as githubPrSync from "../githubPrSync.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   bufferLive: typeof bufferLive;
   campaignAccess: typeof campaignAccess;
   campaigns: typeof campaigns;
+  cohesion: typeof cohesion;
   corpora: typeof corpora;
   draftSet: typeof draftSet;
   githubPrSync: typeof githubPrSync;
