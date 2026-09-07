@@ -158,6 +158,7 @@
   textarea { width: 100%; resize: vertical; }
   input:focus, textarea:focus { outline: 2px solid var(--stormy-teal); outline-offset: 1px; }
 
+  .csel.disabled { opacity: .45; pointer-events: none; }
   .csel { position: relative; display: inline-block; }
   .csel-btn {
     display: inline-flex; align-items: center; gap: 7px;
@@ -201,10 +202,10 @@
   .idea.in-other-campaign { background: var(--paper); }
   .idea.rejected { opacity: .45; }
   .idea .already { font-size: .74rem; color: var(--muted); }
-  .flavor { display: inline-flex; padding: 2px 10px; border-radius: 999px; font-size: .7rem; font-weight: 700; letter-spacing: .02em; }
-  .flavor.Opinion { background: var(--vivid-tangerine); color: #fff; }
-  .flavor.Insight { background: var(--stormy-teal); color: #fff; }
-  .flavor.Thought { background: var(--role-recap); color: #fff; }
+  .flavor { display: inline-flex; padding: 2px 10px; border-radius: 999px; font-size: .72rem; font-weight: 400; }
+  .flavor.Opinion { background: #fff1e0; color: #b25400; }
+  .flavor.Insight { background: #e2eff1; color: #0e4a54; }
+  .flavor.Thought { background: #efeafb; color: #4a3591; }
   .mini-btn {
     border: 1px solid var(--border); background: var(--card); color: var(--ink-black);
     border-radius: 8px; padding: 5px 12px; font-size: .78rem; font-weight: 600; cursor: pointer;
@@ -255,8 +256,8 @@
   .slot .roleline { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
   .role-chip {
     display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px;
-    border-radius: 999px; font-size: .66rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: .05em; color: #fff; cursor: help;
+    border-radius: 999px; font-size: .68rem; font-weight: 500;
+    text-transform: uppercase; letter-spacing: .04em; cursor: help;
   }
   .chip-row { display: inline-flex; align-items: center; gap: 6px; font-size: .76rem; color: var(--ink-black); font-weight: 500; }
   .chip-row svg { width: 14px; height: 14px; }
@@ -391,13 +392,13 @@
       <div class="card">
         <div class="panel-title">
           <span>Suggested ideas <span class="chip tangerine">fake AI</span></span>
-          <input type="text" id="idea-search" placeholder="Search research inbox…" style="font-size:.76rem; padding:5px 9px; width:170px;" />
         </div>
         <div id="idea-list"></div>
-        <div id="inbox-results" style="display:none;">
-          <div class="panel-title" style="border-top:1px solid var(--border);"><span>From your research inbox (one-offs)</span></div>
-          <div id="inbox-list"></div>
+        <div class="panel-title" style="border-top:1px solid var(--border);">
+          <span>From your research inbox (one-offs)</span>
+          <input type="text" id="idea-search" placeholder="Search your inbox…" style="font-size:.76rem; padding:5px 9px; width:170px;" />
         </div>
+        <div id="inbox-list"></div>
       </div>
 
       <div class="card">
@@ -521,7 +522,13 @@ const ICONS = {
   "YouTube": `<svg viewBox="0 0 24 24" fill="#FF0000"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>`,
 };
 
-const ROLE_COLORS = { pillar: "var(--role-pillar)", hook: "var(--role-hook)", satellite: "var(--role-satellite)", cta: "var(--role-cta)", recap: "var(--role-recap)" };
+const ROLE_COLORS = {
+  pillar: { tint: "#ffefdd", text: "#b25400" },
+  hook: { tint: "#fde5ee", text: "#a11441" },
+  satellite: { tint: "#e2eff1", text: "#0e4a54" },
+  cta: { tint: "#e2f2e6", text: "#1d5c31" },
+  recap: { tint: "#efeafb", text: "#4a3591" },
+};
 const ROLE_HELP = {
   pillar: "Anchors the thesis — the long-form anchor piece",
   hook: "Grabs attention — the short attention-grabber",
@@ -529,6 +536,7 @@ const ROLE_HELP = {
   cta: "Makes the ask — drives the campaign's conversion action",
   recap: "Closes the loop — wraps the set's argument",
 };
+const MEDIA_LABEL = { "blog article": "article", "LI post": "post", "X post": "post", "essay": "essay", "YT script": "script" };
 
 const EXCERPTS = [
   { id: "excerpt-1", page: "p.1 · Abstract", unusable: false,
@@ -630,8 +638,8 @@ const citeChip = (id) => {
   const n = id.replace("excerpt-", "");
   return `<span class="cite" data-cite="${id}">①${n} · ${e.page.split("·")[0].trim()}<span class="pop">${e.text}<span class="uri">${citeTail(id)}</span></span></span>`;
 };
-const roleChip = (role) => `<span class="role-chip" style="background:${ROLE_COLORS[role]}" title="${ROLE_HELP[role]}">${role}</span>`;
-const channelChip = (ch) => `<span class="chip-row">${ICONS[ch] || ""} ${ch}</span>`;
+const roleChip = (role) => `<span class="role-chip" style="background:${ROLE_COLORS[role].tint};color:${ROLE_COLORS[role].text}" title="${ROLE_HELP[role]}">${role}</span>`;
+const channelChip = (ch, format) => `<span class="chip-row" title="${ch}">${ICONS[ch] || ""}<span>${MEDIA_LABEL[format] || format}</span></span>`;
 
 function toast(msg) {
   const t = $("#toast");
@@ -683,7 +691,9 @@ function csel(id, options, current, onpick) {
 }
 window._cselHandlers = {};
 function toggleMenu(id) {
-  const menu = document.querySelector("#" + id + " .csel-menu");
+  const cselEl = document.getElementById(id);
+  if (!cselEl || cselEl.classList.contains("disabled")) return;
+  const menu = cselEl.querySelector(".csel-menu");
   const open = menu.classList.contains("show");
   document.querySelectorAll(".csel-menu.show").forEach((m) => m.classList.remove("show"));
   if (!open) menu.classList.add("show");
@@ -717,11 +727,13 @@ function renderExcerptReview() {
           <span class="chip">${e.page}</span>
           <span class="cite" data-cite="${e.id}">${citeTail(e.id)}</span>
           <span class="chip" style="gap:7px;">sensitivity
+            <span class="sens-wrap" data-for="${e.id}" style="display:inline-flex;">
             ${csel("sens-" + e.id, [
               { value: "unreviewed", label: "unreviewed", dot: "#c9a227" },
               { value: "internal-only", label: "internal-only", dot: "#d81e5b" },
               { value: "public-safe", label: "public-safe", dot: "#1d7a3e" },
             ], "unreviewed", (v) => toast(`Sensitivity set to <b>${v}</b> — default stays <b>unreviewed</b> per #64.`))}
+            </span>
           </span>
           ${e.unusable ? `<span class="chip" style="background:#fde8e2;color:var(--brandy);font-weight:700;">unusable extract</span>
             <button class="mini-btn" onclick="toggleFlagForm('${e.id}')">Flag &amp; fix</button>` : ""}
@@ -737,9 +749,17 @@ function renderExcerptReview() {
         </div>` : ""}
       </div>
     </div>`).join("");
-  document.querySelectorAll("input[data-ex]").forEach((cb) => cb.addEventListener("change", updateSaveState));
-  EXCERPTS.forEach((e) => { window._cselHandlers["sens-" + e.id] = (v) => { toast(`Sensitivity set to <b>${v}</b> — default stays <b>unreviewed</b> per #64.`); rerenderSens(e.id, v); }; });
+  document.querySelectorAll("input[data-ex]").forEach((cb) => cb.addEventListener("change", () => { syncSensState(cb.dataset.ex, cb.checked); updateSaveState(); }));
+  EXCERPTS.forEach((e) => {
+    window._cselHandlers["sens-" + e.id] = (v) => { toast(`Sensitivity set to <b>${v}</b> — default stays <b>unreviewed</b> per #64.`); rerenderSens(e.id, v); };
+    const cb = document.querySelector(`input[data-ex="${e.id}"]`);
+    if (cb) syncSensState(e.id, cb.checked);
+  });
   updateSaveState();
+}
+function syncSensState(id, checked) {
+  const wrap = document.querySelector(`.sens-wrap[data-for="${id}"] .csel`);
+  if (wrap) wrap.classList.toggle("disabled", !checked);
 }
 function rerenderSens(id, v) {
   const opts = { "unreviewed": "#c9a227", "internal-only": "#d81e5b", "public-safe": "#1d7a3e" };
@@ -784,7 +804,7 @@ $("#btn-confirm-start").addEventListener("click", () => {
   $("#crumb-campaign").textContent = state.campaignTitle;
   $("#session-title").textContent = state.campaignTitle;
   $("#modal-start").classList.remove("show");
-  renderCorpusPanel(); renderIdeas(); renderWorkingSet();
+  renderCorpusPanel(); renderIdeas(); renderWorkingSet(); renderInbox();
   goto(2);
   toast("Campaign started — title-only, light confirm. Goal & audience land on the Propose shape step.");
 });
@@ -829,7 +849,6 @@ function renderIdeas() {
 }
 function renderInbox() {
   const q = ($("#idea-search").value || "").toLowerCase();
-  $("#inbox-results").style.display = "block";
   const filtered = INBOX_IDEAS.filter((i) => !q || i.text.toLowerCase().includes(q));
   $("#inbox-list").innerHTML = filtered.length
     ? filtered.map((i) => ideaCard(i, "inbox")).join("")
@@ -847,7 +866,7 @@ function acceptIdea(id) {
   } else {
     toast(`Added to campaign — <b>campaign-primary</b>. It stays in research with a soft “in campaign” hint.`);
   }
-  renderWorkingSet(); renderIdeas(); if ($("#inbox-results").style.display !== "none") renderInbox();
+  renderWorkingSet(); renderIdeas(); renderInbox();
   updateProposeState();
 }
 function rejectIdea(id) {
@@ -962,8 +981,7 @@ function renderSlots() {
       <div class="main">
         <div class="roleline">
           ${roleChip(s.role)}
-          ${channelChip(s.channel)}
-          <span class="chip">${s.format}</span>
+          ${channelChip(s.channel, s.format)}
           ${incomplete ? `<span class="incomplete-tag">incomplete — no idea linked</span>` : ""}
         </div>
         <div class="titleline">
