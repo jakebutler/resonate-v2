@@ -3516,3 +3516,78 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/c7-approval-queue
+
+## 09/07/2026 01:18:29 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	components/__tests__/CorpusExcerptReview.test.tsx
+- M	components/campaigns/CampaignsHome.tsx
+- A	components/campaigns/CorpusExcerptReview.tsx
+- A	convex/__tests__/labImport.test.ts
+- M	convex/corpora.ts
+- M	convex/schema.ts
+- A	lib/__tests__/labImport.test.ts
+- A	lib/labImport.ts
+- A	scripts/corpus-import.mjs
+
+### Working Tree Snapshot
+
+- A  components/__tests__/CorpusExcerptReview.test.tsx
+- M  components/campaigns/CampaignsHome.tsx
+- A  components/campaigns/CorpusExcerptReview.tsx
+- A  convex/__tests__/labImport.test.ts
+- M  convex/corpora.ts
+- M  convex/schema.ts
+- A  lib/__tests__/labImport.test.ts
+- A  lib/labImport.ts
+- A  scripts/corpus-import.mjs
+
+### Branch
+
+- feat/c7-approval-queue
+
+## 09/07/2026 01:27:15 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	e2e/campaign-loop.spec.ts
+
+### Working Tree Snapshot
+
+-  M docs/project-status.md
+-  M docs/spec.md
+- A  e2e/campaign-loop.spec.ts
+- ?? docs/smoke-runs/2026-09-07-campaign-loop-c1-c8.md
+
+### Branch
+
+- feat/c8-lab-journey
+
+## 09/07/2026 01:31:55 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	docs/smoke-runs/2026-09-07-campaign-loop-c1-c8.md
+- M	e2e/campaign-loop.spec.ts
+
+### Working Tree Snapshot
+
+- A  docs/smoke-runs/2026-09-07-campaign-loop-c1-c8.md
+- M  e2e/campaign-loop.spec.ts
+
+### Branch
+
+- feat/c8-lab-journey

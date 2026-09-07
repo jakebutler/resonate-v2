@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/07/2026 01:08:02 PDT
+Last updated: 09/07/2026 01:31:55 PDT
 
 ## State
 
@@ -12,29 +12,24 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- 9da593c feat: C6 review passes — EXP-020 cohesion gate with auto-resolve + block, SEO/AEO and humanizer placeholder surfaces
+- 71bca81 test: E2E coverage for campaign loop surfaces
 
 ## Recent Commits
 
+- 71bca81 test: E2E coverage for campaign loop surfaces
+- 78c2965 feat: C8 lab journey — CLI dry-run/import with secret-scan hard fail, skip+warn for unsupported files, post-import excerpt review
+- d7d5268 feat: C7 calendar approval queue — gate-blocked materialize to scheduled-but-unapproved, sequence-aware inline review, long-form composer routing
 - 9da593c feat: C6 review passes — EXP-020 cohesion gate with auto-resolve + block, SEO/AEO and humanizer placeholder surfaces
 - 8f2c26a feat: C5 draft set — set-level gated mock generation with placeholder tokens, inline unapproved badges, campaign provenance
-- 8b6ded8 feat: C4 campaign shape — Seed/Standard/Deep presets with edit-preserving switches, slot editing, publishing sequence, accept-blocks-on-incomplete
-- a36ee48 feat: C3 campaign session — suggested ideas with excerpt citations, working set with D5/D7 membership rules, inbox search
-- 9ec830c feat: C2 document ingest — upload/paste/link to excerpt review, immutable corpus v1, /campaigns surface
 
 ## Local Working Tree
 
-- A  app/campaigns/[campaignId]/queue/page.tsx
-- A  components/__tests__/ApprovalQueue.test.tsx
-- A  components/campaigns/ApprovalQueue.tsx
-- M  components/campaigns/DraftSetView.tsx
-- A  convex/__tests__/queue.test.ts
-- M  convex/_generated/api.d.ts
-- A  convex/queue.ts
+- A  docs/smoke-runs/2026-09-07-campaign-loop-c1-c8.md
+- M  e2e/campaign-loop.spec.ts
 
 ## Next Agent Pickup
 
@@ -43,4 +38,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/c7-approval-queue
+- feat/c8-lab-journey
