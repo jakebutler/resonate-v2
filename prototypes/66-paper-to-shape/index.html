@@ -125,6 +125,13 @@
   .cite .pop .uri { display: block; margin-top: 8px; font-family: ui-monospace, Menlo, monospace; font-size: .68rem; color: #9fc3cb; }
   .cite:hover .pop, .cite.open .pop { display: block; }
 
+.panel-help { padding: 0 16px 10px; color: var(--muted); font-size: .8rem; }
+.ex-header { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; }
+.ex-num { font-weight: 600; font-size: .85rem; }
+.ex-src { color: var(--muted); font-size: .76rem; }
+.ex-unusable { font-size: .7rem; font-weight: 600; color: var(--brandy); background: #fde8e2; padding: 2px 8px; border-radius: 6px; }
+.ex-foot { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.ex-sens { display: inline-flex; align-items: center; gap: 8px; font-size: .76rem; color: var(--muted); }
   .footer-bar {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
     background: var(--card); border-top: 1px solid var(--border);
@@ -161,10 +168,11 @@
   .csel.disabled { opacity: .45; pointer-events: none; }
   .csel { position: relative; display: inline-block; }
   .csel-btn {
-    display: inline-flex; align-items: center; gap: 7px;
+    display: inline-flex; align-items: center; gap: 7px; text-align: left;
     border: 1px solid var(--border); background: var(--card); color: var(--ink-black);
     border-radius: 8px; padding: 4px 10px; font-size: .74rem; cursor: pointer;
   }
+  .csel-btn > span:first-child { flex: 1; text-align: left; }
   .csel-btn:hover { border-color: var(--stormy-teal); }
   .csel-btn .dot { width: 7px; height: 7px; border-radius: 50%; }
   .csel-btn .chev { color: var(--muted); font-size: .6rem; }
@@ -362,9 +370,10 @@
     <div id="excerpt-review" style="display:none;">
       <div class="card">
         <div class="panel-title">
-          <span>Review extracted excerpts — only checked, usable excerpts are saved</span>
+          <span>Imported excerpts</span>
           <span class="chip">Corvo Labs corpus · brand-scoped</span>
         </div>
+        <div class="panel-help">Review all excerpts. Only checked items are saved.</div>
         <div id="excerpt-list"></div>
       </div>
       <div style="margin-top:12px;" class="hard-block-note" id="hardblock-note"></div>
@@ -722,11 +731,10 @@ function renderExcerptReview() {
     <div class="excerpt ${e.unusable ? "unusable" : ""}" data-id="${e.id}">
       <input type="checkbox" ${e.unusable ? "disabled" : "checked"} data-ex="${e.id}" />
       <div style="flex:1">
+        <div class="ex-header"><span class="ex-num">#${EXCERPTS.indexOf(e) + 1}</span><span class="ex-src">${e.page}</span>${e.unusable ? `<span class="ex-unusable">unusable extract</span>` : ""}</div>
         <div class="quote">${e.text}</div>
-        <div class="meta">
-          <span class="chip">${e.page}</span>
-          <span class="cite" data-cite="${e.id}">${citeTail(e.id)}</span>
-          <span class="chip" style="gap:7px;">sensitivity
+        <div class="ex-foot">
+          <span class="ex-sens">Sensitivity
             <span class="sens-wrap" data-for="${e.id}" style="display:inline-flex;">
             ${csel("sens-" + e.id, [
               { value: "unreviewed", label: "unreviewed", dot: "#c9a227" },
@@ -735,8 +743,7 @@ function renderExcerptReview() {
             ], "unreviewed", (v) => toast(`Sensitivity set to <b>${v}</b> — default stays <b>unreviewed</b> per #64.`))}
             </span>
           </span>
-          ${e.unusable ? `<span class="chip" style="background:#fde8e2;color:var(--brandy);font-weight:700;">unusable extract</span>
-            <button class="mini-btn" onclick="toggleFlagForm('${e.id}')">Flag &amp; fix</button>` : ""}
+          ${e.unusable ? `<button class="mini-btn" onclick="toggleFlagForm('${e.id}')">Flag &amp; fix</button>` : ""}
         </div>
         ${e.unusable ? `
         <div class="flag-form" id="flag-${e.id}">
@@ -815,7 +822,7 @@ function renderCorpusPanel() {
   $("#corpus-excerpt-list").innerHTML = EXCERPTS.filter((e) => state.selectedExcerpts.has(e.id)).map((e) => `
     <div class="excerpt-mini">
       <div class="quote">${e.text.slice(0, 130)}…</div>
-      <div class="meta"><span class="chip">${e.page}</span><span class="cite" data-cite="${e.id}">${citeTail(e.id)}</span></div>
+      <div class="ex-header" style="margin:0 0 4px;"><span class="ex-num">#${EXCERPTS.indexOf(e) + 1}</span><span class="ex-src">${e.page}</span></div>
     </div>`).join("");
 }
 

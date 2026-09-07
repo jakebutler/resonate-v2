@@ -3164,3 +3164,23 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - wayfinder/prototype-67-lab-corpus
+
+## 09/06/2026 20:29:47 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	prototypes/66-paper-to-shape/index.html
+- M	prototypes/67-lab-corpus-to-shape/index.html
+
+### Working Tree Snapshot
+
+- M  prototypes/66-paper-to-shape/index.html
+- M  prototypes/67-lab-corpus-to-shape/index.html
+
+### Branch
+
+- wayfinder/prototype-66-67-excerpt-metadata
