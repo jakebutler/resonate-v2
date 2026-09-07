@@ -3516,3 +3516,37 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/c7-approval-queue
+
+## 09/07/2026 01:18:29 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	components/__tests__/CorpusExcerptReview.test.tsx
+- M	components/campaigns/CampaignsHome.tsx
+- A	components/campaigns/CorpusExcerptReview.tsx
+- A	convex/__tests__/labImport.test.ts
+- M	convex/corpora.ts
+- M	convex/schema.ts
+- A	lib/__tests__/labImport.test.ts
+- A	lib/labImport.ts
+- A	scripts/corpus-import.mjs
+
+### Working Tree Snapshot
+
+- A  components/__tests__/CorpusExcerptReview.test.tsx
+- M  components/campaigns/CampaignsHome.tsx
+- A  components/campaigns/CorpusExcerptReview.tsx
+- A  convex/__tests__/labImport.test.ts
+- M  convex/corpora.ts
+- M  convex/schema.ts
+- A  lib/__tests__/labImport.test.ts
+- A  lib/labImport.ts
+- A  scripts/corpus-import.mjs
+
+### Branch
+
+- feat/c7-approval-queue

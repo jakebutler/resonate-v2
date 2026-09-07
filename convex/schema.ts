@@ -146,7 +146,8 @@ const excerptSensitivity = v.union(
 
 const excerptReviewState = v.union(
   v.literal("accepted"),
-  v.literal("flagged")
+  v.literal("flagged"),
+  v.literal("excluded")
 );
 
 const campaignPreset = v.union(

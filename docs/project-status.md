@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/07/2026 01:08:02 PDT
+Last updated: 09/07/2026 01:18:29 PDT
 
 ## State
 
@@ -16,25 +16,27 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 9da593c feat: C6 review passes — EXP-020 cohesion gate with auto-resolve + block, SEO/AEO and humanizer placeholder surfaces
+- d7d5268 feat: C7 calendar approval queue — gate-blocked materialize to scheduled-but-unapproved, sequence-aware inline review, long-form composer routing
 
 ## Recent Commits
 
+- d7d5268 feat: C7 calendar approval queue — gate-blocked materialize to scheduled-but-unapproved, sequence-aware inline review, long-form composer routing
 - 9da593c feat: C6 review passes — EXP-020 cohesion gate with auto-resolve + block, SEO/AEO and humanizer placeholder surfaces
 - 8f2c26a feat: C5 draft set — set-level gated mock generation with placeholder tokens, inline unapproved badges, campaign provenance
 - 8b6ded8 feat: C4 campaign shape — Seed/Standard/Deep presets with edit-preserving switches, slot editing, publishing sequence, accept-blocks-on-incomplete
 - a36ee48 feat: C3 campaign session — suggested ideas with excerpt citations, working set with D5/D7 membership rules, inbox search
-- 9ec830c feat: C2 document ingest — upload/paste/link to excerpt review, immutable corpus v1, /campaigns surface
 
 ## Local Working Tree
 
-- A  app/campaigns/[campaignId]/queue/page.tsx
-- A  components/__tests__/ApprovalQueue.test.tsx
-- A  components/campaigns/ApprovalQueue.tsx
-- M  components/campaigns/DraftSetView.tsx
-- A  convex/__tests__/queue.test.ts
-- M  convex/_generated/api.d.ts
-- A  convex/queue.ts
+- A  components/__tests__/CorpusExcerptReview.test.tsx
+- M  components/campaigns/CampaignsHome.tsx
+- A  components/campaigns/CorpusExcerptReview.tsx
+- A  convex/__tests__/labImport.test.ts
+- M  convex/corpora.ts
+- M  convex/schema.ts
+- A  lib/__tests__/labImport.test.ts
+- A  lib/labImport.ts
+- A  scripts/corpus-import.mjs
 
 ## Next Agent Pickup
 

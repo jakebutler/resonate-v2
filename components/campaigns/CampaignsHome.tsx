@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { IngestDocumentFlow } from "@/components/campaigns/IngestDocumentFlow";
 import { StartCampaignDialog } from "@/components/campaigns/StartCampaignDialog";
+import { CorpusExcerptReview } from "@/components/campaigns/CorpusExcerptReview";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 import { BRANDS, type BrandId } from "@/lib/domain";
@@ -43,6 +44,7 @@ export function CampaignsHome() {
   const [ingestOpen, setIngestOpen] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [openCorpusId, setOpenCorpusId] = useState<string | null>(null);
 
   const campaigns = useQuery(api.campaigns.listCampaigns, {}) as
     | CampaignSummary[]
@@ -125,19 +127,36 @@ export function CampaignsHome() {
               <li
                 key={corpus._id}
                 className={cn(
-                  "flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+                  "rounded-lg border text-sm",
                   tokens.border
                 )}
               >
-                <span className="font-medium">
-                  {brandLabel(corpus.brandId)} corpus · v{corpus.version}
-                </span>
-                <span className="rounded-full bg-[#ffefe0] px-2 py-0.5 text-[11px] font-normal text-[#8a4b00]">
-                  {corpus.origin}
-                </span>
-                <span className={cn("ml-auto text-xs", tokens.textMuted)}>
-                  {formatDate(corpus.createdAt)}
-                </span>
+                <button
+                  type="button"
+                  className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left"
+                  onClick={() =>
+                    setOpenCorpusId(openCorpusId === corpus._id ? null : corpus._id)
+                  }
+                  aria-expanded={openCorpusId === corpus._id}
+                >
+                  <span className="font-medium">
+                    {brandLabel(corpus.brandId)} corpus · v{corpus.version}
+                  </span>
+                  <span className="rounded-full bg-[#ffefe0] px-2 py-0.5 text-[11px] font-normal text-[#8a4b00]">
+                    {corpus.origin}
+                  </span>
+                  <span className={cn("ml-auto text-xs", tokens.textMuted)}>
+                    {formatDate(corpus.createdAt)}
+                  </span>
+                  <span className="text-xs text-[#15616d]">
+                    {openCorpusId === corpus._id ? "▴" : "Review excerpts ▾"}
+                  </span>
+                </button>
+                {openCorpusId === corpus._id ? (
+                  <div className="border-t" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+                    <CorpusExcerptReview brandId={brandId} corpusId={corpus._id} />
+                  </div>
+                ) : null}
               </li>
             ))}
             {corpora && corpora.length === 0 ? (
