@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/06/2026 23:51:11 PDT
+Last updated: 09/07/2026 00:09:52 PDT
 
 ## State
 
@@ -16,26 +16,33 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 87c4933 docs: sync handoff — campaign loop spec delivered (#69)
+- 86d7675 Merge pull request #80 from jakebutler/feat/c1-campaign-foundation
 
 ## Recent Commits
 
+- 86d7675 Merge pull request #80 from jakebutler/feat/c1-campaign-foundation
+- 8465d22 feat: C1 campaign foundation — clean-name corpus/campaign schema, fail-closed grounding gate, shared corpus insert helper
 - 87c4933 docs: sync handoff — campaign loop spec delivered (#69)
 - 2f1e2f1 Merge pull request #79 from jakebutler/wayfinder/69-campaign-loop-spec
 - 7c360c3 docs: campaign loop product spec (#69) — supersedes #45, settles M0-M8
-- cbe74fc docs: sync handoff — #68 feedback pass merged, spec inputs recorded
-- 3b95a8d Merge pull request #78 from jakebutler/wayfinder/prototype-68-feedback-pass
 
 ## Local Working Tree
 
-- A  convex/__tests__/campaigns.test.ts
-- M  convex/_generated/api.d.ts
-- A  convex/campaignAccess.ts
-- A  convex/campaigns.ts
-- A  convex/corpora.ts
-- M  convex/schema.ts
-- A  lib/__tests__/campaignGrounding.test.ts
-- A  lib/campaignGrounding.ts
+- A  app/api/campaigns/ingest-document/__tests__/route.test.ts
+- A  app/api/campaigns/ingest-document/route.ts
+- A  app/campaigns/page.tsx
+- A  components/__tests__/CampaignsHome.test.tsx
+- A  components/__tests__/ExcerptReviewList.test.tsx
+- A  components/campaigns/CampaignsHome.tsx
+- A  components/campaigns/ExcerptReviewList.tsx
+- A  components/campaigns/IngestDocumentFlow.tsx
+- A  components/campaigns/StartCampaignDialog.tsx
+- M  components/shell/Shell.tsx
+- M  convex/corpora.ts
+- A  lib/__tests__/corpusExtract.test.ts
+- A  lib/corpusExtract.ts
+- M  package-lock.json
+- M  package.json
 
 ## Next Agent Pickup
 
@@ -44,4 +51,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/c1-campaign-foundation
+- feat/c2-document-ingest

@@ -3298,3 +3298,49 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/c1-campaign-foundation
+
+## 09/07/2026 00:09:52 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	app/api/campaigns/ingest-document/__tests__/route.test.ts
+- A	app/api/campaigns/ingest-document/route.ts
+- A	app/campaigns/page.tsx
+- A	components/__tests__/CampaignsHome.test.tsx
+- A	components/__tests__/ExcerptReviewList.test.tsx
+- A	components/campaigns/CampaignsHome.tsx
+- A	components/campaigns/ExcerptReviewList.tsx
+- A	components/campaigns/IngestDocumentFlow.tsx
+- A	components/campaigns/StartCampaignDialog.tsx
+- M	components/shell/Shell.tsx
+- M	convex/corpora.ts
+- A	lib/__tests__/corpusExtract.test.ts
+- A	lib/corpusExtract.ts
+- M	package-lock.json
+- M	package.json
+
+### Working Tree Snapshot
+
+- A  app/api/campaigns/ingest-document/__tests__/route.test.ts
+- A  app/api/campaigns/ingest-document/route.ts
+- A  app/campaigns/page.tsx
+- A  components/__tests__/CampaignsHome.test.tsx
+- A  components/__tests__/ExcerptReviewList.test.tsx
+- A  components/campaigns/CampaignsHome.tsx
+- A  components/campaigns/ExcerptReviewList.tsx
+- A  components/campaigns/IngestDocumentFlow.tsx
+- A  components/campaigns/StartCampaignDialog.tsx
+- M  components/shell/Shell.tsx
+- M  convex/corpora.ts
+- A  lib/__tests__/corpusExtract.test.ts
+- A  lib/corpusExtract.ts
+- M  package-lock.json
+- M  package.json
+
+### Branch
+
+- feat/c2-document-ingest
