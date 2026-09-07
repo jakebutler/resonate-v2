@@ -21,6 +21,7 @@ import type * as ideas from "../ideas.js";
 import type * as posts from "../posts.js";
 import type * as previewSeedData from "../previewSeedData.js";
 import type * as publishing from "../publishing.js";
+import type * as queue from "../queue.js";
 import type * as research from "../research.js";
 import type * as settings from "../settings.js";
 import type * as shapes from "../shapes.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   posts: typeof posts;
   previewSeedData: typeof previewSeedData;
   publishing: typeof publishing;
+  queue: typeof queue;
   research: typeof research;
   settings: typeof settings;
   shapes: typeof shapes;

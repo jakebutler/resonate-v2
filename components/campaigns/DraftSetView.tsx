@@ -113,7 +113,14 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
         <Button variant="ghost" size="sm" asChild>
           <Link href={`/campaigns/${campaignId}/shape`}>Back to shape</Link>
         </Button>
-        <div className="ml-auto flex items-center gap-2">
+        {view.materialization ? (
+          <Button variant="accent" size="sm" className="ml-auto" asChild>
+            <Link href={`/campaigns/${campaignId}/queue`} data-testid="queue-link">
+              Approval queue
+            </Link>
+          </Button>
+        ) : null}
+        <div className={cn("flex items-center gap-2", !view?.materialization && "ml-auto")}>
           <span className="rounded-full bg-[#fff1e0] px-2.5 py-0.5 text-[11px] font-normal text-[#b25400]">
             mock AI
           </span>
