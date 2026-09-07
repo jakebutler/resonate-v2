@@ -132,8 +132,9 @@
   .recap-slot { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
   .recap-slot .roleline { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
   .recap-slot .t { font-family: "Forum", serif; font-size: .92rem; line-height: 1.3; }
+  .recap-seq { font-family: "Forum", serif; font-size: 1.05rem; color: var(--stormy-teal); margin-bottom: 4px; }
 
-  .draft { padding: 16px 18px; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 190px; gap: 16px; }
+  .draft { padding: 16px 18px; border-top: 1px solid var(--border); }
   .draft:first-of-type { border-top: none; }
   .draft .roleline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
   .draft .titletext { font-family: "Forum", serif; font-size: 1.15rem; line-height: 1.3; margin-bottom: 6px; }
@@ -163,8 +164,19 @@
   .meter .bar { width: 90px; height: 6px; border-radius: 999px; background: var(--stormy-teal-soft); overflow: hidden; display: inline-block; }
   .meter .bar > i { display: block; height: 100%; background: var(--vivid-tangerine); }
 
-  .cal-row { display: grid; grid-template-columns: 130px 90px 1fr 150px; gap: 12px; align-items: center; padding: 11px 16px; border-top: 1px solid var(--border); font-size: .84rem; }
-  .cal-row:first-of-type { border-top: none; }
+  .cal-item { border-top: 1px solid var(--border); }
+  .cal-item:first-of-type { border-top: none; }
+  .cal-row { display: grid; grid-template-columns: 110px 80px 1fr auto; gap: 12px; align-items: center; padding: 11px 16px; font-size: .84rem; cursor: pointer; }
+  .cal-row:hover { background: var(--paper); }
+  .cal-side { display: inline-flex; gap: 8px; align-items: center; justify-content: flex-end; }
+  .badge.approved { background: #e2f2e6; color: var(--ok); border-color: #bfe0c8; }
+  .cal-expand { padding: 2px 16px 14px 34px; }
+  .cal-expand .body { font-size: .86rem; color: #3a3936; background: var(--paper); border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px; line-height: 1.55; }
+  .cal-expand .body .tok { color: var(--stormy-teal); font-family: ui-monospace, Menlo, monospace; font-size: .76rem; }
+  .expand-actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .longform { font-size: .76rem; color: var(--muted); }
+  .approved-note { font-size: .8rem; color: var(--ok); font-weight: 600; }
+  .autonote { color: var(--muted); font-size: .76rem; font-style: italic; margin-top: 4px; }
   .cal-row .day { font-weight: 600; font-size: .8rem; }
   .cal-row .badge {
     display: inline-flex; padding: 2px 9px; border-radius: 5px; font-size: .64rem;
@@ -210,6 +222,7 @@
     <div class="stage-head">
       <h1>Shape accepted</h1>
       <p><b>Reasoning + acting for editorial pipelines</b> · Standard preset · 5 slots · paper corpus <span class="chip">ReAct — arXiv:2210.03629</span></p>
+      <p style="margin-top:6px; font-size:.82rem;">Slots are numbered in <b>publishing sequence</b> (1 → n). Dates and times come later, on the calendar.</p>
     </div>
     <div class="recap-grid" id="recap-grid"></div>
     <div class="card" style="padding:16px 18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
@@ -274,9 +287,10 @@
         <span style="font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); font-weight:600;">This week — Corvo Labs</span>
         <span class="chip" id="cal-count"></span>
       </div>
+      <div id="cal-banner"></div>
       <div id="cal-list"></div>
     </div>
-    <div class="cal-note">Approval happens per post in the existing composer — open a draft to review grounding and lineage, then approve. Nothing submits to providers from the campaign, and an unapproved post is never eligible for submission.</div>
+    <div class="cal-note">Review and approve inline here, or open the composer for the full editing surface. Long-form articles can stay in the composer. Nothing submits to providers from the campaign — approval only unblocks the post; sending is always yours.</div>
     <div class="feedback-q">
       <b>Feedback prompts for this prototype (#68)</b>
       <ol>
@@ -376,13 +390,16 @@ function goto(stage) {
   setStepper();
   ["footer-1","footer-2","footer-3","footer-4"].forEach((id) => $("#" + id).style.display = "none");
   $("#footer-" + stage).style.display = "flex";
+  if (stage === 2 && state.drafts.length) renderDrafts();
+  if (stage === 4 && state.materialized) renderCalendar();
   window.scrollTo({ top: 0 });
 }
 
 /* stage 1 */
 function renderRecap() {
-  $("#recap-grid").innerHTML = SHAPE.map((s) => `
+  $("#recap-grid").innerHTML = SHAPE.map((s, i) => `
     <div class="recap-slot">
+      <div class="recap-seq">#${i + 1}</div>
       <div class="roleline">${roleChip(s.role)} ${channelChip(s.channel, s.format)}</div>
       <div class="t">${s.title}</div>
     </div>`).join("");
@@ -406,48 +423,46 @@ $("#btn-generate").addEventListener("click", () => {
 function renderDrafts() {
   $("#draft-list").innerHTML = state.drafts.map((d, i) => `
     <div class="draft" data-draft="${i}">
-      <div>
-        <div class="roleline">${roleChip(d.role)} ${channelChip(d.channel, d.format)} <span class="chip">${d.day} · ${d.time}</span></div>
-        <div class="titletext">${d.title}</div>
-        <div class="body">${d.body.replace(/\[(.+?)\]/g, `<span class="tok">[$1]</span>`)}</div>
-      </div>
-      <aside>
-        <span class="label">Placeholder status</span>
-        <span>copy: placeholder-grade</span>
-        <span>approval: <b>unapproved</b></span>
-        <span>provider: — (gated)</span>
-        <div class="fixrow"></div>
-      </aside>
+      <div class="roleline">${roleChip(d.role)} ${channelChip(d.channel, d.format)} <span class="chip">${d.day} · ${d.time}</span> <span class="badge">unapproved</span></div>
+      <div class="titletext">${d.title}</div>
+      <div class="body">${d.body.replace(/\[(.+?)\]/g, `<span class="tok">[$1]</span>`)}</div>
     </div>`).join("");
   updateReviewState();
 }
 
 /* stage 3 */
+function findDupes() {
+  const openers = state.drafts.map((d, i) => ({ i, o: d.openers[0] }));
+  return openers.filter((x, i) => openers.some((y, j) => i !== j && y.o === x.o));
+}
 function renderCohesion() {
+  const notes = [];
+  if (state.drafts.filter((d) => d.role === "cta").length !== 1) {
+    state.drafts.push({ ...CTA_SLOT });
+    notes.push("CTA slot — not in initial generation; created automatically on the second attempt.");
+  }
+  const dupes = findDupes();
+  if (dupes.length) {
+    const i = dupes[0].i;
+    const other = dupes.find((x) => x.i !== i).i;
+    state.drafts[i].openers = ["grounding beats vibes"];
+    state.drafts[i].body = state.drafts[i].body.replace(/^Prompt roulette is what most teams call drafting without grounding\./, "Grounding beats vibes: no claim goes out without a corpus pointer.");
+    notes.push(`Opener for draft #${i + 1} regenerated automatically — it repeated draft #${other + 1}'s framing.`);
+  }
+  if (notes.length) renderDrafts();
+
   const pillars = state.drafts.filter((d) => d.role === "pillar").length;
   const ctas = state.drafts.filter((d) => d.role === "cta").length;
-  const openers = state.drafts.map((d, i) => ({ i, o: d.openers[0] }));
-  const dupes = openers.filter((x, i) => openers.some((y, j) => i !== j && y.o === x.o));
-  const satRef = true;
-
-  const rows = [];
-  rows.push({ ok: pillars === 1, text: pillars === 1 ? "Exactly one pillar anchors the set." : "Set needs exactly one pillar." });
-  rows.push({
-    ok: ctas === 1,
-    text: ctas === 1 ? "Exactly one CTA makes the ask." : `No CTA in the set — the Standard composition ships without one. Add a CTA slot to pass.`,
-    fix: ctas !== 1 ? `<button class="mini-btn primary" onclick="addCta()">Add CTA slot</button>` : "",
-  });
-  rows.push({
-    ok: dupes.length === 0,
-    text: dupes.length === 0 ? "No repeated framing openers across drafts." : `Repeated framing opener: drafts #${dupes.map((d) => d.i + 1).join(", #")} open with the same pattern.`,
-    fix: dupes.length ? `<button class="mini-btn" onclick="regenOpener(${dupes[0].i})">Regenerate opener on draft #${dupes[0].i + 1}</button>` : "",
-  });
-  rows.push({ ok: satRef, text: "Satellites reference the pillar's core claim." });
-
+  const rows = [
+    { ok: pillars === 1, text: pillars === 1 ? "Exactly one pillar anchors the set." : "Set needs exactly one pillar." },
+    { ok: ctas === 1, text: "Exactly one CTA makes the ask.", note: notes.find((n) => n.startsWith("CTA")) },
+    { ok: findDupes().length === 0, text: "No repeated framing openers across drafts.", note: notes.find((n) => n.startsWith("Opener")) },
+    { ok: true, text: "Satellites reference the pillar's core claim." },
+  ];
   $("#cohesion-list").innerHTML = rows.map((r) => `
     <div class="check-row">
       <span class="check-ico ${r.ok ? "pass" : "warn"}">${r.ok ? "✓" : "!"}</span>
-      <div style="flex:1;">${r.text}${r.fix ? `<div class="fixarea">${r.fix}</div>` : ""}</div>
+      <div style="flex:1;">${r.text}${r.note ? `<div class="autonote">${r.note}</div>` : ""}</div>
     </div>`).join("");
   state.cohesionDone = rows.every((r) => r.ok);
   updateMaterializeState();
@@ -478,18 +493,6 @@ function renderHuman() {
   }).join("");
 }
 
-function addCta() {
-  state.drafts.push({ ...CTA_SLOT });
-  $("#draft-count").textContent = `${state.drafts.length} drafts · generated as one set`;
-  renderDrafts(); renderCohesion(); renderSeo(); renderHuman();
-  toast("CTA slot added to the set with a placeholder draft — re-checking cohesion.");
-}
-function regenOpener(i) {
-  state.drafts[i].openers = ["grounding beats vibes"];
-  state.drafts[i].body = state.drafts[i].body.replace(/^Prompt roulette is what most teams call drafting without grounding\./, "Grounding beats vibes: no claim goes out without a corpus pointer.");
-  renderDrafts(); renderCohesion();
-  toast(`Opener regenerated on draft #${i + 1} — re-running the cohesion check.`);
-}
 
 function updateReviewState() {
   const ok = state.drafts.length > 0;
@@ -513,19 +516,60 @@ $("#btn-review").addEventListener("click", () => {
 $("#btn-materialize").addEventListener("click", () => {
   state.materialized = true;
   goto(4);
-  $("#cal-count").textContent = `${state.drafts.length} posts · all unapproved`;
-  $("#cal-list").innerHTML = state.drafts.map((d) => `
-    <div class="cal-row">
-      <span class="day">${d.day}</span>
-      <span class="chip">${d.time}</span>
-      <span>${d.title}</span>
-      <span style="display:inline-flex; gap:8px; align-items:center; justify-content:flex-end;">
-        <span class="badge">unapproved</span>
-        <span class="lock" title="Schedule is not approval — submission stays gated in the composer">🔒</span>
-      </span>
-    </div>`).join("");
-  toast("Materialized: <b>scheduled-but-unapproved</b>. Approve per post in the composer — nothing submits from here.");
+  renderCalendar();
+  toast("Materialized: <b>scheduled-but-unapproved</b>. Click any row to review; approve inline to unblock.");
 });
+
+function approvedCount() { return state.drafts.filter((d) => d.approved).length; }
+function renderCalendar() {
+  $("#cal-count").textContent = `${approvedCount()} of ${state.drafts.length} approved`;
+  $("#cal-banner").innerHTML = bannerHtml();
+  $("#cal-list").innerHTML = state.drafts.map((d, i) => `
+    <div class="cal-item" data-cal="${i}">
+      <div class="cal-row" onclick="toggleCal(${i})">
+        <span class="day">${d.day}</span>
+        <span class="chip">${d.time}</span>
+        <span>${d.title}</span>
+        <span class="cal-side">
+          <span class="badge ${d.approved ? "approved" : ""}">${d.approved ? "approved" : "unapproved"}</span>
+          <button class="mini-btn" onclick="event.stopPropagation(); toggleCal(${i})">${d.approved ? "Reviewed ✓" : "Review ▾"}</button>
+        </span>
+      </div>
+      <div class="cal-expand" id="calx-${i}" hidden>
+        <div class="body">${d.body.replace(/\[(.+?)\]/g, `<span class="tok">[$1]</span>`)}</div>
+        <div class="expand-actions">
+          ${d.role === "pillar" ? `<span class="longform">Long-form — the composer is the better review surface for the full article.</span> <button class="mini-btn" onclick="event.stopPropagation(); toast('Placeholder link — opens the existing composer in the real product.')">Open in composer ↗</button>` : ""}
+          ${d.approved
+            ? `<span class="approved-note">✓ Approved — this post is unblocked. Submission still happens in the composer, by you.</span>`
+            : `<button class="mini-btn primary" onclick="approveDraft(${i})">Approve draft</button>`}
+        </div>
+      </div>
+    </div>`).join("");
+}
+function bannerHtml() {
+  const n = approvedCount(), total = state.drafts.length;
+  const next = state.drafts.findIndex((d) => !d.approved);
+  if (total && next === -1) return `<div class="cal-note" style="margin:0 16px 14px;">✓ Campaign fully approved — ready to schedule. Nothing submits automatically; sending stays in your hands in the composer.</div>`;
+  if (n > 0) return `<div class="cal-note" style="margin:0 16px 14px;">${n} of ${total} approved · next in publishing sequence: <b>#${next + 1} ${state.drafts[next].title}</b></div>`;
+  return "";
+}
+function toggleCal(i) {
+  const el = document.getElementById("calx-" + i);
+  if (el) el.hidden = !el.hidden;
+}
+function approveDraft(i) {
+  state.drafts[i].approved = true;
+  renderCalendar();
+  const n = approvedCount(), total = state.drafts.length;
+  const next = state.drafts.findIndex((d) => !d.approved);
+  if (next === -1) {
+    toast("Campaign fully approved — ready to schedule. Nothing submits automatically.");
+  } else {
+    toast(`Approved — ${n} of ${total}. Next in sequence: <b>#${next + 1} ${state.drafts[next].title}</b> — opening it now.`);
+    toggleCal(next);
+    document.querySelector(`[data-cal="${next}"]`).scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
 
 /* boot */
 goto(1);

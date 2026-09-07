@@ -12,13 +12,13 @@ Works from `file://` (plain inline JS only).
 
 ## The flow
 
-1. **Shape accepted** — recap of the 5-slot Standard shape from #66 (role chips, channel icons, media types). One button: **Generate draft set**.
-2. **Draft set** — placeholders generated **as a set**, one pass over the whole shape. Copy is visibly placeholder-grade: bracketed tokens (`[THESIS: …]`, `[EVIDENCE: …]`) mark what the real skill pack would fill. Every draft shows `approval: unapproved · provider: — (gated)`.
+1. **Shape accepted** — recap of the 5-slot Standard shape from #66 (role chips, channel icons, media types), **numbered in publishing sequence (1 → n)**. One button: **Generate draft set**.
+2. **Draft set** — placeholders generated **as a set**, one pass over the whole shape. Copy is visibly placeholder-grade: bracketed tokens (`[THESIS: …]`, `[EVIDENCE: …]`) mark what the real skill pack would fill. Each card carries a single inline `unapproved` badge — no status sidebar.
 3. **Review passes** — three set-level surfaces:
-   - **Cohesion gate** (can block) — the EXP-020 checklist: exactly one pillar, exactly one CTA, no repeated framing openers, satellites reference the pillar claim. Two violations are seeded: the **Standard composition ships without a CTA** (fix: *Add CTA slot* — surfacing a real preset-vs-gate tension for the spec) and a **duplicate framing opener** between the hook and a satellite (fix: *Regenerate opener*). The gate blocks materialize until both resolve.
+   - **Cohesion gate** (can block) — the EXP-020 checklist: exactly one pillar, exactly one CTA, no repeated framing openers, satellites reference the pillar claim. Two violations are seeded and **auto-resolved** (no manual clicks): the CTA is added and the duplicated opener regenerated, each with helper text noting it was "created automatically on the second attempt". Auto-fixes surface a real preset-vs-gate tension for the spec. The gate blocks materialize until clean.
    - **SEO/AEO pass** — placeholder surface only: answerable questions + extractable answers per draft. No skill pack wired.
    - **Humanizer pass** — placeholder bot-likelihood meter per draft; in the real product this is a bounded editor loop (#45 L9).
-4. **Calendar** — the batch materialized through the existing path: a week list where every row wears an **UNAPPROVED** badge and a lock. Schedule ≠ approval: dates are placeholder placements, approval happens per post in the composer, and nothing submits to providers from the campaign.
+4. **Calendar** — the batch materialized through the existing path as an **expandable, reviewable list**. Each row has a clear **Review ▾** CTA; expanding shows the placeholder copy with **Approve draft** inline (long-form articles point to the composer instead). Approving flips the badge and auto-opens the **next draft in publishing sequence** ("2 of 6 approved · next: …"), so the campaign reads as a queue, not a dead end. When all are approved: "ready to schedule — nothing submits automatically." Schedule ≠ approval throughout.
 
 ## Decisions exercised
 
@@ -37,7 +37,7 @@ The **Standard preset composition (pillar + hook + 2 satellites + recap) contain
 ## Feedback prompts (also in-app at the end)
 
 1. Does "generate as a set" (vs per-post) read clearly in the output?
-2. Is the cohesion gate worth its blocking power — and does the add-CTA fix feel right?
+2. Is the cohesion gate worth its blocking power — and does auto-resolution (with helper notes) feel right vs manual fixes?
 3. Are the SEO/AEO and humanizer placeholder surfaces enough to react to, or skippable until the skill pack exists?
-4. Is the calendar handoff legible as "scheduled-but-unapproved" — or do you want the composer drawer in this prototype too?
+4. Does the inline review → approve → next-draft queue flow match how you'd actually clear a campaign batch?
 5. Anything missing before the #69 spec rewrite?
