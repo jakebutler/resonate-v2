@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Resonate · Campaigns — prototype #68 (shape accept → cohesive placeholders)</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Forum&display=swap");
+
+  :root {
+    --ink-black: #001524;
+    --stormy-teal: #15616d;
+    --stormy-teal-deep: #0e4a54;
+    --stormy-teal-soft: #e2eff1;
+    --papaya-whip: #ffecd1;
+    --vivid-tangerine: #ff7d00;
+    --vivid-tangerine-soft: #fff1e0;
+    --brandy: #78290f;
+    --paper: #faf8f4;
+    --card: #ffffff;
+    --border: #e7e2d9;
+    --muted: #6f6d67;
+    --ok: #1d7a3e;
+    --radius: 10px;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Geist", "Inter", -apple-system, "Segoe UI", sans-serif;
+    background: var(--paper);
+    color: var(--ink-black);
+    line-height: 1.5;
+  }
+  h1, h2, .display { font-family: "Forum", Georgia, serif; font-weight: 400; }
+
+  header.topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 20px; background: var(--card);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 40;
+  }
+  .logo { font-family: "Forum", serif; font-size: 1.35rem; letter-spacing: .02em; }
+  .crumb { color: var(--muted); font-size: .85rem; }
+  .crumb b { color: var(--ink-black); font-weight: 600; }
+  .brand-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 12px; font-size: .82rem; background: var(--papaya-whip);
+  }
+  .brand-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stormy-teal); }
+  .brand-pill .other { color: var(--muted); }
+  .prototype-banner {
+    background: var(--vivid-tangerine-soft); border-bottom: 1px solid var(--border);
+    color: var(--brandy); font-size: .8rem; padding: 6px 20px;
+    display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  }
+  .stepper { display: flex; gap: 0; margin-left: auto; font-size: .8rem; }
+  .step { display: flex; align-items: center; gap: 7px; padding: 6px 14px; color: var(--muted); border-left: 1px solid var(--border); }
+  .step .n {
+    width: 20px; height: 20px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; font-size: .7rem;
+    border: 1.5px solid var(--border); background: var(--card);
+  }
+  .step.active { color: var(--ink-black); font-weight: 600; }
+  .step.active .n { background: var(--stormy-teal); border-color: var(--stormy-teal); color: #fff; }
+  .step.done .n { background: var(--papaya-whip); border-color: var(--stormy-teal); color: var(--stormy-teal); }
+  .step.visited { cursor: pointer; }
+  .step.visited:hover { color: var(--stormy-teal); }
+
+  main { max-width: 1080px; margin: 0 auto; padding: 26px 22px 90px; }
+  .stage { display: none; }
+  .stage.active { display: block; }
+  .stage-head { margin-bottom: 18px; }
+  .stage-head h1 { font-size: 1.9rem; margin: 0 0 6px; }
+  .stage-head p { margin: 0; color: var(--muted); max-width: 680px; }
+
+  .btn {
+    border: 1px solid var(--ink-black); background: var(--ink-black); color: #fff;
+    border-radius: var(--radius); padding: 9px 18px; font-size: .88rem; font-weight: 600; cursor: pointer;
+  }
+  .btn:hover { opacity: .9; }
+  .btn.secondary { background: var(--card); color: var(--ink-black); border-color: var(--border); }
+  .btn.accent { background: var(--vivid-tangerine); border-color: var(--vivid-tangerine); color: #fff; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .mini-btn {
+    border: 1px solid var(--border); background: var(--card); color: var(--ink-black);
+    border-radius: 8px; padding: 5px 12px; font-size: .78rem; font-weight: 600; cursor: pointer;
+  }
+  .mini-btn.primary { background: var(--stormy-teal); border-color: var(--stormy-teal); color: #fff; }
+  .mini-btn:hover:not(:disabled) { border-color: var(--stormy-teal); color: var(--stormy-teal); }
+  .mini-btn.primary:hover:not(:disabled) { background: var(--stormy-teal-deep); color: #fff; }
+  .mini-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--border); background: var(--paper);
+    border-radius: 999px; padding: 2px 10px; font-size: .72rem; color: var(--muted);
+  }
+  .chip.teal { background: var(--stormy-teal-soft); color: var(--stormy-teal); border-color: transparent; font-weight: 600; }
+  .chip.tangerine { background: var(--vivid-tangerine-soft); color: var(--brandy); border-color: transparent; font-weight: 600; }
+  .label { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
+  .chip-row { display: inline-flex; align-items: center; gap: 6px; font-size: .76rem; color: var(--ink-black); font-weight: 500; }
+  .chip-row svg { width: 14px; height: 14px; }
+
+  .role-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px;
+    border-radius: 999px; font-size: .68rem; font-weight: 500;
+    text-transform: uppercase; letter-spacing: .04em; cursor: help;
+  }
+
+  .footer-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
+    background: var(--card); border-top: 1px solid var(--border);
+    padding: 12px 22px; display: flex; align-items: center; gap: 14px; justify-content: flex-end;
+  }
+  .footer-bar .hint { color: var(--muted); font-size: .82rem; margin-right: auto; }
+  .footer-bar .hint b { color: var(--brandy); }
+
+  .toast {
+    position: fixed; bottom: 74px; right: 22px; z-index: 60;
+    background: var(--ink-black); color: var(--papaya-whip);
+    padding: 12px 18px; border-radius: var(--radius); font-size: .85rem;
+    box-shadow: 0 8px 24px rgba(0,21,36,.25); opacity: 0; pointer-events: none;
+    transition: opacity .25s, transform .25s; transform: translateY(8px); max-width: 400px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .recap-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 18px 0; }
+  @media (max-width: 860px) { .recap-grid { grid-template-columns: 1fr 1fr; } }
+  .recap-slot { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+  .recap-slot .roleline { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .recap-slot .t { font-family: "Forum", serif; font-size: .92rem; line-height: 1.3; }
+
+  .draft { padding: 16px 18px; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 190px; gap: 16px; }
+  .draft:first-of-type { border-top: none; }
+  .draft .roleline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .draft .titletext { font-family: "Forum", serif; font-size: 1.15rem; line-height: 1.3; margin-bottom: 6px; }
+  .draft .body {
+    font-size: .86rem; color: #3a3936; background: var(--paper);
+    border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px; line-height: 1.55;
+  }
+  .draft .body .tok { color: var(--stormy-teal); font-family: ui-monospace, Menlo, monospace; font-size: .76rem; }
+  .draft aside { display: flex; flex-direction: column; gap: 8px; font-size: .76rem; color: var(--muted); }
+  .draft aside .fixrow { display: flex; flex-direction: column; gap: 6px; }
+
+  .pass-panel { margin-bottom: 16px; }
+  .pass-panel .panel-head {
+    display: flex; align-items: center; gap: 10px; padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pass-panel .panel-head b { font-size: .9rem; }
+  .pass-note { padding: 8px 16px; font-size: .76rem; color: var(--muted); background: var(--paper); border-bottom: 1px solid var(--border); }
+  .check-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--border); font-size: .84rem; }
+  .check-row:first-of-type { border-top: none; }
+  .check-ico { width: 18px; height: 18px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: .68rem; margin-top: 1px; }
+  .check-ico.pass { background: #e2f2e6; color: var(--ok); }
+  .check-ico.warn { background: #ffe3d3; color: var(--brandy); }
+  .check-row .fixarea { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .kw-chip { display: inline-flex; border: 1px solid var(--border); background: var(--paper); border-radius: 6px; padding: 2px 8px; font-size: .72rem; color: var(--muted); margin: 2px 4px 2px 0; }
+  .meter { display: inline-flex; align-items: center; gap: 8px; }
+  .meter .bar { width: 90px; height: 6px; border-radius: 999px; background: var(--stormy-teal-soft); overflow: hidden; display: inline-block; }
+  .meter .bar > i { display: block; height: 100%; background: var(--vivid-tangerine); }
+
+  .cal-row { display: grid; grid-template-columns: 130px 90px 1fr 150px; gap: 12px; align-items: center; padding: 11px 16px; border-top: 1px solid var(--border); font-size: .84rem; }
+  .cal-row:first-of-type { border-top: none; }
+  .cal-row .day { font-weight: 600; font-size: .8rem; }
+  .cal-row .badge {
+    display: inline-flex; padding: 2px 9px; border-radius: 5px; font-size: .64rem;
+    font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    background: var(--papaya-whip); color: var(--brandy); border: 1px solid #ecd2a8;
+  }
+  .cal-row .lock { color: var(--muted); font-size: .74rem; }
+  .cal-note { padding: 12px 16px; font-size: .78rem; color: var(--muted); background: var(--stormy-teal-soft); border-radius: var(--radius); margin-top: 14px; }
+
+  .shimmer { color: var(--muted); font-size: .85rem; padding: 26px; text-align: center; }
+  .shimmer .dotline span { animation: blink 1.2s infinite; display: inline-block; }
+  .shimmer .dotline span:nth-child(2) { animation-delay: .2s; }
+  .shimmer .dotline span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
+
+  .feedback-q { margin: 22px 0 0; background: var(--stormy-teal-soft); border-radius: var(--radius); padding: 16px 20px; }
+  .feedback-q b { font-size: .86rem; }
+  .feedback-q ol { margin: 8px 0 0; padding-left: 20px; font-size: .82rem; color: #223; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="logo">Resonate</span>
+  <span class="crumb">Campaigns / <b>Reasoning + acting for editorial pipelines</b></span>
+  <span class="brand-pill" title="Proof brand locked by the map (#61)"><span class="dot"></span> Corvo Labs <span class="other">· FreshProof, the lower dB out of proof set</span></span>
+  <nav class="stepper" id="stepper">
+    <span class="step active" data-step="1"><span class="n">1</span> Shape accepted</span>
+    <span class="step" data-step="2"><span class="n">2</span> Draft set</span>
+    <span class="step" data-step="3"><span class="n">3</span> Review passes</span>
+    <span class="step" data-step="4"><span class="n">4</span> Calendar</span>
+  </nav>
+</header>
+<div class="prototype-banner">
+  <span><b>Throwaway prototype #68</b> — continues #66's accepted shape. Fake AI, placeholder copy, nothing saved or submitted anywhere.</span>
+  <a href="../66-paper-to-shape/index.html" style="color:var(--brandy)">#66 prototype ↗</a>
+</div>
+
+<main>
+
+  <!-- STAGE 1: SHAPE ACCEPTED -->
+  <section class="stage active" id="stage-1">
+    <div class="stage-head">
+      <h1>Shape accepted</h1>
+      <p><b>Reasoning + acting for editorial pipelines</b> · Standard preset · 5 slots · paper corpus <span class="chip">ReAct — arXiv:2210.03629</span></p>
+    </div>
+    <div class="recap-grid" id="recap-grid"></div>
+    <div class="card" style="padding:16px 18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:260px;">
+        <b style="font-size:.92rem;">Generate the draft set</b>
+        <div style="font-size:.8rem; color:var(--muted);">Placeholders are generated <b>as a set</b> — one pass over the whole shape, not per-post. Everything stays <b>scheduled-but-unapproved</b>: nothing auto-approves, nothing submits.</div>
+      </div>
+      <button class="btn accent" id="btn-generate">Generate draft set</button>
+    </div>
+  </section>
+
+  <!-- STAGE 2: DRAFT SET -->
+  <section class="stage" id="stage-2">
+    <div class="stage-head">
+      <h1>Draft set — placeholders</h1>
+      <p>Set-level generation: every draft knows its role in the batch. Copy is <b>placeholder-grade</b> — bracketed tokens mark what the real skill pack would fill.</p>
+    </div>
+    <div class="card" id="draft-card" style="display:none;">
+      <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; padding:13px 16px; border-bottom:1px solid var(--border);">
+        <span style="font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); font-weight:600;">Draft set — <span id="draft-count"></span></span>
+        <span class="chip tangerine">fake AI · placeholder-grade</span>
+      </div>
+      <div id="shimmer" class="shimmer" style="display:none;">Generating the set — one pass, all slots<span class="dotline"><span>.</span><span>.</span><span>.</span></span></div>
+      <div id="draft-list"></div>
+    </div>
+  </section>
+
+  <!-- STAGE 3: REVIEW PASSES -->
+  <section class="stage" id="stage-3">
+    <div class="stage-head">
+      <h1>Review passes</h1>
+      <p>Three set-level passes over the draft batch. The <b>cohesion gate</b> can block; SEO/AEO and humanizer are <b>placeholder surfaces</b> — the skill pack comes later.</p>
+    </div>
+
+    <div class="card pass-panel" id="cohesion-panel">
+      <div class="panel-head"><b>Cohesion gate</b><span class="chip tangerine">set-level · can block</span></div>
+      <div class="pass-note">EXP-020 checklist from the lab notebook: the set must read as one argument, not five strangers.</div>
+      <div id="cohesion-list"></div>
+    </div>
+
+    <div class="card pass-panel">
+      <div class="panel-head"><b>SEO / AEO pass</b><span class="chip">placeholder surface</span></div>
+      <div class="pass-note">No skill pack wired — this shows the review surface only: answerable questions and extractable answers per draft.</div>
+      <div id="seo-list"></div>
+    </div>
+
+    <div class="card pass-panel">
+      <div class="panel-head"><b>Humanizer pass</b><span class="chip">placeholder surface</span></div>
+      <div class="pass-note">Placeholder bot-likelihood per draft. In the real product this is a bounded editor loop (#45 L9) — shown here as a review surface only.</div>
+      <div id="human-list"></div>
+    </div>
+  </section>
+
+  <!-- STAGE 4: CALENDAR -->
+  <section class="stage" id="stage-4">
+    <div class="stage-head">
+      <h1>Materialized to the calendar</h1>
+      <p>The batch landed through the existing materialize path as <b>scheduled-but-unapproved</b> posts. Dates below are placeholder placements — <b>schedule ≠ approval</b>.</p>
+    </div>
+    <div class="card">
+      <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; padding:13px 16px; border-bottom:1px solid var(--border);">
+        <span style="font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); font-weight:600;">This week — Corvo Labs</span>
+        <span class="chip" id="cal-count"></span>
+      </div>
+      <div id="cal-list"></div>
+    </div>
+    <div class="cal-note">Approval happens per post in the existing composer — open a draft to review grounding and lineage, then approve. Nothing submits to providers from the campaign, and an unapproved post is never eligible for submission.</div>
+    <div class="feedback-q">
+      <b>Feedback prompts for this prototype (#68)</b>
+      <ol>
+        <li>Does "generate as a set" (vs per-post) read clearly in the output?</li>
+        <li>Is the cohesion gate worth its blocking power — and does the add-CTA fix feel right for the Standard composition's missing CTA?</li>
+        <li>Are the SEO/AEO and humanizer placeholder surfaces enough to react to, or skippable until the skill pack exists?</li>
+        <li>Is the calendar handoff legible as "scheduled-but-unapproved" — or do you want the composer drawer in this prototype too?</li>
+        <li>Anything missing before the #69 spec rewrite?</li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<div class="footer-bar" id="footer-1" style="display:none;"></div>
+<div class="footer-bar" id="footer-2" style="display:none;">
+  <span class="hint" id="footer-2-hint"></span>
+  <button class="btn" id="btn-review" disabled>Review passes</button>
+</div>
+<div class="footer-bar" id="footer-3" style="display:none;">
+  <span class="hint" id="footer-3-hint"></span>
+  <button class="btn accent" id="btn-materialize" disabled>Materialize to calendar</button>
+</div>
+<div class="footer-bar" id="footer-4" style="display:none;">
+  <span class="hint">End of prototype #68 — the campaign loop is fully prototyped: source → ideas → shape → placeholders → calendar.</span>
+  <button class="btn secondary" onclick="location.reload()">Restart prototype</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ICONS = {
+  "Corvo Blog": `<svg viewBox="0 0 24 24" fill="none" stroke="#15616d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
+  "X": `<svg viewBox="0 0 24 24" fill="#001524"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>`,
+  "LinkedIn": `<svg viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`,
+};
+const ROLE_COLORS = {
+  pillar: { tint: "#ffefdd", text: "#b25400" },
+  hook: { tint: "#fde5ee", text: "#a11441" },
+  satellite: { tint: "#e2eff1", text: "#0e4a54" },
+  cta: { tint: "#e2f2e6", text: "#1d5c31" },
+  recap: { tint: "#efeafb", text: "#4a3591" },
+};
+const ROLE_HELP = {
+  pillar: "Anchors the thesis", hook: "Grabs attention", satellite: "Supporting angle",
+  cta: "Makes the ask", recap: "Closes the loop",
+};
+
+const SHAPE = [
+  { role: "pillar", channel: "Corvo Blog", format: "article", title: "Acting without observation: what ReAct teaches editorial pipelines",
+    body: `Most editorial AI fails the way ReAct's ablations do: all action, no observation. [THESIS: map reasoning→plan, act→draft, observe→review telemetry onto the publish pipeline.] The teams that win don't iterate prompts — they instrument the loop. [EVIDENCE: cite corpus #1, #2 — reasoning traces + external grounding.]`,
+    day: "Wed 10", time: "09:00", openers: ["most editorial ai fails"] },
+  { role: "hook", channel: "X", format: "post", title: "Prompt roulette is action without reasoning.",
+    body: `Prompt roulette is action without reasoning. [ANGLE: 4-in-10 regressions fell to 1-in-10 once drafts were gated per component.] Iterate feel → get shrugs. Gates get named failures.`,
+    day: "Wed 10", time: "13:00", openers: ["prompt roulette is"] },
+  { role: "satellite", channel: "LinkedIn", format: "post", title: "Traces are eval fixtures waiting to be promoted",
+    body: `A failed agent run is a test case you haven't copied yet. [ANGLE: worktree-local traces, 6-for-6 root causes, two traces promoted with one copy command.] Ephemeral by default is right for traces, wrong for evals.`,
+    day: "Thu 11", time: "09:30", openers: ["a failed agent run is"] },
+  { role: "satellite", channel: "LinkedIn", format: "post", title: "No claim without a corpus pointer",
+    body: `Prompt roulette is what most teams call drafting without grounding. [ANGLE: hallucination drops when every claim must cite an observed result — excerpt-first drafting is the editorial version.] Receipts or it didn't happen.`,
+    day: "Thu 11", time: "15:00", openers: ["prompt roulette is"] },
+  { role: "recap", channel: "LinkedIn", format: "post", title: "Act fast, reason slow: the best of both worlds",
+    body: `ReAct's "best of both worlds" is a human loop too: act fast on drafts, reason slow at the approval gate. [ANGLE: recap the pillar claim + the three satellite angles in one pass.]`,
+    day: "Fri 12", time: "10:00", openers: ["react's \"best of both worlds\""] },
+];
+const CTA_SLOT = { role: "cta", channel: "LinkedIn", format: "post", title: "Follow the build — Corvo Labs",
+  body: `We're building eval-first editorial in the open. [CTA: waitlist/follow — one ask, last slot, never the opener.]`,
+  day: "Fri 12", time: "16:00", openers: ["we're building eval-first"] };
+
+const state = { stage: 1, maxStage: 1, drafts: [], cohesionDone: false, materialized: false };
+
+const $ = (s) => document.querySelector(s);
+const roleChip = (role) => `<span class="role-chip" style="background:${ROLE_COLORS[role].tint};color:${ROLE_COLORS[role].text}" title="${ROLE_HELP[role]}">${role}</span>`;
+const channelChip = (ch, format) => `<span class="chip-row" title="${ch}">${ICONS[ch] || ""}<span>${format}</span></span>`;
+
+function toast(msg) {
+  const t = $("#toast");
+  t.innerHTML = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 3600);
+}
+
+function setStepper() {
+  document.querySelectorAll(".step").forEach((el) => {
+    const s = +el.dataset.step;
+    el.classList.toggle("active", s === state.stage);
+    el.classList.toggle("done", s < state.stage);
+    el.classList.toggle("visited", s <= state.maxStage && s !== state.stage);
+    el.onclick = () => { if (+el.dataset.step <= state.maxStage) goto(+el.dataset.step); };
+  });
+}
+function goto(stage) {
+  state.stage = stage;
+  state.maxStage = Math.max(state.maxStage, stage);
+  document.querySelectorAll(".stage").forEach((el) => el.classList.remove("active"));
+  $("#stage-" + stage).classList.add("active");
+  setStepper();
+  ["footer-1","footer-2","footer-3","footer-4"].forEach((id) => $("#" + id).style.display = "none");
+  $("#footer-" + stage).style.display = "flex";
+  window.scrollTo({ top: 0 });
+}
+
+/* stage 1 */
+function renderRecap() {
+  $("#recap-grid").innerHTML = SHAPE.map((s) => `
+    <div class="recap-slot">
+      <div class="roleline">${roleChip(s.role)} ${channelChip(s.channel, s.format)}</div>
+      <div class="t">${s.title}</div>
+    </div>`).join("");
+}
+
+$("#btn-generate").addEventListener("click", () => {
+  goto(2);
+  $("#draft-card").style.display = "block";
+  $("#shimmer").style.display = "block";
+  $("#draft-list").style.display = "none";
+  setTimeout(() => {
+    state.drafts = SHAPE.map((s) => ({ ...s }));
+    $("#shimmer").style.display = "none";
+    $("#draft-list").style.display = "block";
+    $("#draft-count").textContent = `${state.drafts.length} drafts · generated as one set`;
+    renderDrafts();
+  }, 1100);
+});
+
+/* stage 2 */
+function renderDrafts() {
+  $("#draft-list").innerHTML = state.drafts.map((d, i) => `
+    <div class="draft" data-draft="${i}">
+      <div>
+        <div class="roleline">${roleChip(d.role)} ${channelChip(d.channel, d.format)} <span class="chip">${d.day} · ${d.time}</span></div>
+        <div class="titletext">${d.title}</div>
+        <div class="body">${d.body.replace(/\[(.+?)\]/g, `<span class="tok">[$1]</span>`)}</div>
+      </div>
+      <aside>
+        <span class="label">Placeholder status</span>
+        <span>copy: placeholder-grade</span>
+        <span>approval: <b>unapproved</b></span>
+        <span>provider: — (gated)</span>
+        <div class="fixrow"></div>
+      </aside>
+    </div>`).join("");
+  updateReviewState();
+}
+
+/* stage 3 */
+function renderCohesion() {
+  const pillars = state.drafts.filter((d) => d.role === "pillar").length;
+  const ctas = state.drafts.filter((d) => d.role === "cta").length;
+  const openers = state.drafts.map((d, i) => ({ i, o: d.openers[0] }));
+  const dupes = openers.filter((x, i) => openers.some((y, j) => i !== j && y.o === x.o));
+  const satRef = true;
+
+  const rows = [];
+  rows.push({ ok: pillars === 1, text: pillars === 1 ? "Exactly one pillar anchors the set." : "Set needs exactly one pillar." });
+  rows.push({
+    ok: ctas === 1,
+    text: ctas === 1 ? "Exactly one CTA makes the ask." : `No CTA in the set — the Standard composition ships without one. Add a CTA slot to pass.`,
+    fix: ctas !== 1 ? `<button class="mini-btn primary" onclick="addCta()">Add CTA slot</button>` : "",
+  });
+  rows.push({
+    ok: dupes.length === 0,
+    text: dupes.length === 0 ? "No repeated framing openers across drafts." : `Repeated framing opener: drafts #${dupes.map((d) => d.i + 1).join(", #")} open with the same pattern.`,
+    fix: dupes.length ? `<button class="mini-btn" onclick="regenOpener(${dupes[0].i})">Regenerate opener on draft #${dupes[0].i + 1}</button>` : "",
+  });
+  rows.push({ ok: satRef, text: "Satellites reference the pillar's core claim." });
+
+  $("#cohesion-list").innerHTML = rows.map((r) => `
+    <div class="check-row">
+      <span class="check-ico ${r.ok ? "pass" : "warn"}">${r.ok ? "✓" : "!"}</span>
+      <div style="flex:1;">${r.text}${r.fix ? `<div class="fixarea">${r.fix}</div>` : ""}</div>
+    </div>`).join("");
+  state.cohesionDone = rows.every((r) => r.ok);
+  updateMaterializeState();
+}
+
+function renderSeo() {
+  $("#seo-list").innerHTML = state.drafts.map((d, i) => `
+    <div class="check-row">
+      <span class="check-ico pass">S</span>
+      <div style="flex:1;"><b>#${i + 1} ${d.title}</b><br/>
+        <span style="color:var(--muted); font-size:.78rem;">answerable questions:</span>
+        <span class="kw-chip">what is ${d.role === "pillar" ? "action-without-observation" : "excerpt-first drafting"}?</span>
+        <span class="kw-chip">how do editorial teams ${d.role === "cta" ? "follow corvo labs" : "ground ai drafts"}?</span>
+      </div>
+    </div>`).join("");
+}
+function renderHuman() {
+  $("#human-list").innerHTML = state.drafts.map((d, i) => {
+    const pct = d.role === "hook" ? 62 : 28 + (i * 9) % 30;
+    return `
+    <div class="check-row">
+      <span class="check-ico ${pct > 60 ? "warn" : "pass"}">${pct > 60 ? "~" : "✓"}</span>
+      <div style="flex:1; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <b>#${i + 1}</b> <span class="meter"><span class="bar"><i style="width:${pct}%"></i></span> ${pct}% placeholder bot-likelihood</span>
+        ${pct > 60 ? `<button class="mini-btn" onclick="toast('Placeholder action — the real humanizer loop is a bounded editor pass (later milestone).')">Soften opener</button>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function addCta() {
+  state.drafts.push({ ...CTA_SLOT });
+  $("#draft-count").textContent = `${state.drafts.length} drafts · generated as one set`;
+  renderDrafts(); renderCohesion(); renderSeo(); renderHuman();
+  toast("CTA slot added to the set with a placeholder draft — re-checking cohesion.");
+}
+function regenOpener(i) {
+  state.drafts[i].openers = ["grounding beats vibes"];
+  state.drafts[i].body = state.drafts[i].body.replace(/^Prompt roulette is what most teams call drafting without grounding\./, "Grounding beats vibes: no claim goes out without a corpus pointer.");
+  renderDrafts(); renderCohesion();
+  toast(`Opener regenerated on draft #${i + 1} — re-running the cohesion check.`);
+}
+
+function updateReviewState() {
+  const ok = state.drafts.length > 0;
+  $("#btn-review").disabled = !ok;
+  $("#footer-2-hint").innerHTML = ok
+    ? `${state.drafts.length} placeholder drafts in the set.`
+    : "<b>Generate the draft set first.</b>";
+}
+function updateMaterializeState() {
+  const ok = state.cohesionDone;
+  $("#btn-materialize").disabled = !ok;
+  $("#footer-3-hint").innerHTML = ok
+    ? "Cohesion passing. Materializing creates scheduled-but-unapproved posts — nothing auto-approves."
+    : "<b>Cohesion gate is blocking</b> — resolve the warnings to materialize.";
+}
+
+$("#btn-review").addEventListener("click", () => {
+  goto(3);
+  renderCohesion(); renderSeo(); renderHuman();
+});
+$("#btn-materialize").addEventListener("click", () => {
+  state.materialized = true;
+  goto(4);
+  $("#cal-count").textContent = `${state.drafts.length} posts · all unapproved`;
+  $("#cal-list").innerHTML = state.drafts.map((d) => `
+    <div class="cal-row">
+      <span class="day">${d.day}</span>
+      <span class="chip">${d.time}</span>
+      <span>${d.title}</span>
+      <span style="display:inline-flex; gap:8px; align-items:center; justify-content:flex-end;">
+        <span class="badge">unapproved</span>
+        <span class="lock" title="Schedule is not approval — submission stays gated in the composer">🔒</span>
+      </span>
+    </div>`).join("");
+  toast("Materialized: <b>scheduled-but-unapproved</b>. Approve per post in the composer — nothing submits from here.");
+});
+
+/* boot */
+goto(1);
+renderRecap();
+</script>
+</body>
+</html>

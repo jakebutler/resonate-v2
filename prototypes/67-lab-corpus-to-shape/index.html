@@ -828,8 +828,8 @@ $("#campaign-title-input").addEventListener("keydown", (e) => { if (e.key === "E
 function renderCorpusPanel() {
   $("#corpus-excerpt-list").innerHTML = EXCERPTS.filter((e) => state.selectedExcerpts.has(e.id)).map((e) => `
     <div class="excerpt-mini">
-      <div class="quote">${e.text.slice(0, 130)}…</div>
       <div class="ex-header" style="margin:0 0 4px;"><span class="ex-num">#${EXCERPTS.indexOf(e) + 1}</span><span class="ex-src">${e.page}</span></div>
+      <div class="quote">${e.text.slice(0, 130)}…</div>
     </div>`).join("");
 }
 

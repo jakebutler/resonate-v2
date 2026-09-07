@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/06/2026 20:29:47 PDT
+Last updated: 09/06/2026 21:57:17 PDT
 
 ## State
 
@@ -16,21 +16,22 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- #75 merged — excerpt metadata redesign applied to both prototypes (third feedback pass)
+- 78c3c32 docs: sync handoff — excerpt metadata redesign merged
 
 ## Recent Commits
 
-- #75 merge: excerpt metadata redesign (#66 + #67)
+- 78c3c32 docs: sync handoff — excerpt metadata redesign merged
+- 11bd0ec Merge pull request #75 from jakebutler/wayfinder/prototype-66-67-excerpt-metadata
+- 20efeb6 feat: redesign excerpt metadata in prototypes #66 and #67
 - 88b47c0 docs: sync handoff — prototype #67 merged, both source journeys covered
 - 090a749 Merge pull request #74 from jakebutler/wayfinder/prototype-67-lab-corpus
-- 020f33a feat: prototype #67 — lab corpus → campaign session → ideas → shape
-- 7cd2a07 Merge pull request #73 from jakebutler/wayfinder/prototype-66-feedback-pass-2
-- 4a9226b feat: prototype #66 revision 2 — affordance clarity + proximity fixes
 
 ## Local Working Tree
 
 - M  prototypes/66-paper-to-shape/index.html
 - M  prototypes/67-lab-corpus-to-shape/index.html
+- A  prototypes/68-shape-accept-placeholders/README.md
+- A  prototypes/68-shape-accept-placeholders/index.html
 
 ## Next Agent Pickup
 
@@ -39,4 +40,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- wayfinder/prototype-66-67-excerpt-metadata
+- wayfinder/prototype-68-placeholders
