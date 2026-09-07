@@ -16,10 +16,11 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 88b47c0 docs: sync handoff — prototype #67 merged, both source journeys covered
+- #75 merged — excerpt metadata redesign applied to both prototypes (third feedback pass)
 
 ## Recent Commits
 
+- #75 merge: excerpt metadata redesign (#66 + #67)
 - 88b47c0 docs: sync handoff — prototype #67 merged, both source journeys covered
 - 090a749 Merge pull request #74 from jakebutler/wayfinder/prototype-67-lab-corpus
 - 020f33a feat: prototype #67 — lab corpus → campaign session → ideas → shape
