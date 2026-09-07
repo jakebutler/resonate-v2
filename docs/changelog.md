@@ -3452,3 +3452,37 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/c5-draft-set
+
+## 09/07/2026 00:59:02 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/__tests__/DraftSetView.test.tsx
+- A	components/__tests__/ReviewPassesPanel.test.tsx
+- M	components/campaigns/DraftSetView.tsx
+- A	components/campaigns/ReviewPassesPanel.tsx
+- A	convex/__tests__/cohesion.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/cohesion.ts
+- A	lib/__tests__/cohesion.test.ts
+- A	lib/cohesion.ts
+
+### Working Tree Snapshot
+
+- M  components/__tests__/DraftSetView.test.tsx
+- A  components/__tests__/ReviewPassesPanel.test.tsx
+- M  components/campaigns/DraftSetView.tsx
+- A  components/campaigns/ReviewPassesPanel.tsx
+- A  convex/__tests__/cohesion.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/cohesion.ts
+- A  lib/__tests__/cohesion.test.ts
+- A  lib/cohesion.ts
+
+### Branch
+
+- feat/c6-review-passes

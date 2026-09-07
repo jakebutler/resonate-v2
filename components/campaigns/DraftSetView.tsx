@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { ChannelIcon } from "@/components/campaigns/ChannelIcon";
+import { ReviewPassesPanel } from "@/components/campaigns/ReviewPassesPanel";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 import {
@@ -217,6 +218,8 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
           </article>
         ))}
       </div>
+
+      <ReviewPassesPanel campaignId={campaignId} />
 
       {toast ? (
         <div
