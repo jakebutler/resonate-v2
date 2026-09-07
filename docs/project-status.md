@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/06/2026 21:57:17 PDT
+Last updated: 09/06/2026 22:04:13 PDT
 
 ## State
 
@@ -16,22 +16,19 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 78c3c32 docs: sync handoff — excerpt metadata redesign merged
+- 1c791f5 Merge pull request #76 from jakebutler/wayfinder/prototype-68-placeholders
 
 ## Recent Commits
 
+- 1c791f5 Merge pull request #76 from jakebutler/wayfinder/prototype-68-placeholders
+- 5eb7c84 feat: prototype #68 — shape accept → cohesive placeholders → calendar
 - 78c3c32 docs: sync handoff — excerpt metadata redesign merged
 - 11bd0ec Merge pull request #75 from jakebutler/wayfinder/prototype-66-67-excerpt-metadata
 - 20efeb6 feat: redesign excerpt metadata in prototypes #66 and #67
-- 88b47c0 docs: sync handoff — prototype #67 merged, both source journeys covered
-- 090a749 Merge pull request #74 from jakebutler/wayfinder/prototype-67-lab-corpus
 
 ## Local Working Tree
 
-- M  prototypes/66-paper-to-shape/index.html
-- M  prototypes/67-lab-corpus-to-shape/index.html
-- A  prototypes/68-shape-accept-placeholders/README.md
-- A  prototypes/68-shape-accept-placeholders/index.html
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
 
 ## Next Agent Pickup
 
@@ -40,4 +37,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- wayfinder/prototype-68-placeholders
+- fix/flaky-open-pr-test-timeout

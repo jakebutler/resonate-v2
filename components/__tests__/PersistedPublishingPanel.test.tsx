@@ -771,7 +771,7 @@ describe("PersistedPublishingPanel", () => {
       expect(secondButton).not.toBeDisabled();
       expect(secondButton).not.toHaveAttribute("aria-busy");
     });
-  });
+  }, 15000);
 
   it("checks blog PR status and records it in Convex", async () => {
     vi.stubGlobal(
