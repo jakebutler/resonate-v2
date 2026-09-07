@@ -59,6 +59,31 @@ This spec stays high-level on purpose. It covers the current product shape and t
 - LinkedIn posts stay in-app and do not publish through `/api/publish`.
 - Workflow AI remains synchronous prompt execution on the current record, not background processing.
 
+### Campaigns
+
+- `/campaigns` is the primary surface for the campaign loop
+  (`docs/campaigns/2026-09-06-campaign-loop-spec.md`): brand corpus →
+  campaign session → campaign shape → draft set → review passes → calendar
+  approval queue.
+- Ingest (upload/paste/https link) lands in the **brand corpus** as an
+  immutable version first; campaign attachment is separate. Excerpt review
+  (numbered, plain-text provenance, sensitivity, hard-blocked unusable
+  extracts with Flag & fix) precedes the save.
+- The session suggests ideas (gated mock AI) that always cite
+  `corpus://…#excerpt-N`; ideas are Opinion/Insight/Thought flavors. Working
+  set membership is many-to-many across campaigns; slot membership is one-way.
+- The shape fixes the publishing sequence (1 → n); the calendar owns the
+  publishing schedule. Presets (Seed/Standard/Deep) preserve operator edits on
+  switch; acceptance blocks while any slot lacks a linked idea.
+- Draft sets generate in one pass with visible `[TOKEN:]` placeholders and
+  land scheduled-but-unapproved only after the blocking cohesion gate
+  (exactly one pillar/CTA, unique openers, satellites reference the pillar)
+  passes. The approval queue reviews inline; approval only unblocks — nothing
+  submits to providers from the campaign.
+- Lab-folder ingest is a CLI journey (`scripts/corpus-import.mjs`): dry-run
+  first, unsupported files skip with a warning, secret findings hard-fail, and
+  the server-side mutation re-validates everything behind `V2_OPS_SECRET`.
+
 ## System Boundaries
 
 ### Frontend
@@ -165,13 +190,20 @@ These power the kanban workflow.
 ## Current Route Inventory
 
 - `/`
+- `/campaigns`
+- `/campaigns/[campaignId]`
+- `/campaigns/[campaignId]/shape`
+- `/campaigns/[campaignId]/drafts`
+- `/campaigns/[campaignId]/queue`
 - `/editor/[id]`
 - `/setup`
 - `/ideas`
+- `/research`
 - `/sign-in/[[...sign-in]]`
 - `/sign-up/[[...sign-up]]`
 - `/api/llm`
 - `/api/publish`
+- `/api/campaigns/ingest-document`
 
 ## Current Direction
 

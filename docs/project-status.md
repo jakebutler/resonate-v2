@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/07/2026 01:18:29 PDT
+Last updated: 09/07/2026 01:27:15 PDT
 
 ## State
 
@@ -12,31 +12,26 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- d7d5268 feat: C7 calendar approval queue — gate-blocked materialize to scheduled-but-unapproved, sequence-aware inline review, long-form composer routing
+- 78c2965 feat: C8 lab journey — CLI dry-run/import with secret-scan hard fail, skip+warn for unsupported files, post-import excerpt review
 
 ## Recent Commits
 
+- 78c2965 feat: C8 lab journey — CLI dry-run/import with secret-scan hard fail, skip+warn for unsupported files, post-import excerpt review
 - d7d5268 feat: C7 calendar approval queue — gate-blocked materialize to scheduled-but-unapproved, sequence-aware inline review, long-form composer routing
 - 9da593c feat: C6 review passes — EXP-020 cohesion gate with auto-resolve + block, SEO/AEO and humanizer placeholder surfaces
 - 8f2c26a feat: C5 draft set — set-level gated mock generation with placeholder tokens, inline unapproved badges, campaign provenance
 - 8b6ded8 feat: C4 campaign shape — Seed/Standard/Deep presets with edit-preserving switches, slot editing, publishing sequence, accept-blocks-on-incomplete
-- a36ee48 feat: C3 campaign session — suggested ideas with excerpt citations, working set with D5/D7 membership rules, inbox search
 
 ## Local Working Tree
 
-- A  components/__tests__/CorpusExcerptReview.test.tsx
-- M  components/campaigns/CampaignsHome.tsx
-- A  components/campaigns/CorpusExcerptReview.tsx
-- A  convex/__tests__/labImport.test.ts
-- M  convex/corpora.ts
-- M  convex/schema.ts
-- A  lib/__tests__/labImport.test.ts
-- A  lib/labImport.ts
-- A  scripts/corpus-import.mjs
+-  M docs/project-status.md
+-  M docs/spec.md
+- A  e2e/campaign-loop.spec.ts
+- ?? docs/smoke-runs/2026-09-07-campaign-loop-c1-c8.md
 
 ## Next Agent Pickup
 
@@ -45,4 +40,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/c7-approval-queue
+- feat/c8-lab-journey
