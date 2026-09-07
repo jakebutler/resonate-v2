@@ -14,6 +14,7 @@ import type * as bufferLive from "../bufferLive.js";
 import type * as campaignAccess from "../campaignAccess.js";
 import type * as campaigns from "../campaigns.js";
 import type * as corpora from "../corpora.js";
+import type * as draftSet from "../draftSet.js";
 import type * as githubPrSync from "../githubPrSync.js";
 import type * as ideas from "../ideas.js";
 import type * as posts from "../posts.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   campaignAccess: typeof campaignAccess;
   campaigns: typeof campaigns;
   corpora: typeof corpora;
+  draftSet: typeof draftSet;
   githubPrSync: typeof githubPrSync;
   ideas: typeof ideas;
   posts: typeof posts;

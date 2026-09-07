@@ -472,7 +472,7 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
         </span>
         {isAccepted ? (
           <Button variant="primary" asChild>
-            <Link href={`/campaigns/${campaignId}`}>Back to session</Link>
+            <Link href={`/campaigns/${campaignId}/drafts`}>Go to draft set</Link>
           </Button>
         ) : (
           <Button

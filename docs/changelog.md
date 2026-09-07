@@ -3418,3 +3418,37 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/c4-campaign-shape
+
+## 09/07/2026 00:48:45 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	app/campaigns/[campaignId]/drafts/page.tsx
+- A	components/__tests__/DraftSetView.test.tsx
+- M	components/campaigns/CampaignShapeBuilder.tsx
+- A	components/campaigns/DraftSetView.tsx
+- A	convex/__tests__/draftSet.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/draftSet.ts
+- A	lib/__tests__/campaignDrafts.test.ts
+- A	lib/campaignDrafts.ts
+
+### Working Tree Snapshot
+
+- A  app/campaigns/[campaignId]/drafts/page.tsx
+- A  components/__tests__/DraftSetView.test.tsx
+- M  components/campaigns/CampaignShapeBuilder.tsx
+- A  components/campaigns/DraftSetView.tsx
+- A  convex/__tests__/draftSet.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/draftSet.ts
+- A  lib/__tests__/campaignDrafts.test.ts
+- A  lib/campaignDrafts.ts
+
+### Branch
+
+- feat/c5-draft-set
