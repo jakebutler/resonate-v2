@@ -150,3 +150,20 @@ A credential read only in server, worker, Convex, or host secret scope. Provider
 ### Explicit Live-Provider Approval
 
 The user's manual go-ahead to call real provider APIs. Until this is granted for a provider, all validation must remain behind Mock Provider behavior.
+
+## Campaign Loop Terms (locked 2026-09-06, wayfinder #61/#69)
+
+Defined by `docs/campaigns/2026-09-06-campaign-loop-spec.md`. These are product terms; no `v2` prefix.
+
+- **Brand corpus.** Brand-scoped collection of immutable corpus versions shared across campaigns. Ingest lands here first; campaign attachment is separate.
+- **Corpus version.** One immutable snapshot produced by a single ingest (document upload or CLI import). Never mutated after save.
+- **Excerpt.** A complete semantic unit (one or more whole thoughts/facts/arguments) inside a corpus version, with provenance, sensitivity (default `unreviewed`), and a stable number. Never a raw chunk. Cited by ideas as `corpus://…#excerpt-N`.
+- **Campaign.** Brand-scoped arc from source material to published batch. Created title-only; goal/audience arrive at the shape step.
+- **Idea flavors.** Opinion / Insight / Thought. There is no separate Stance type.
+- **Working set.** The ideas accepted into a campaign (campaign-primary). Many-to-many with campaigns; slot membership is one-way.
+- **Campaign shape.** The durable slot plan accepted by the operator: numbered slots in publishing sequence.
+- **Slot.** One planned item in a shape: channel × media type × role, optional title/angle, linked idea. Roles: pillar / hook / satellite / cta / recap. Media types: post / article / essay / script.
+- **Publishing sequence vs publishing schedule.** The shape fixes sequence (1 → n); the calendar owns schedule (dates/times).
+- **Draft set.** Placeholders generated as one set from an accepted shape; every draft is scheduled-but-unapproved.
+- **Cohesion gate.** Blocking set-level check before materialization: exactly one pillar, exactly one CTA, no repeated framing openers, satellites reference the pillar claim. Mechanical violations auto-resolve with explanatory notes.
+- **Approval queue.** The calendar presentation of materialized drafts: expandable rows, inline approve for posts, composer routing for long-form, sequence-aware next-draft flow. Approve ≠ submit.
