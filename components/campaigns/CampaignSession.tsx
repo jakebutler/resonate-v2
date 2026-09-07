@@ -228,11 +228,11 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
     <main className={cn(tokens.maxWidth)}>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-xl font-semibold">{session.campaign.title}</h1>
-        {session.acceptedShape ? (
-          <Button variant="primary" size="sm" asChild>
-            <Link href={`/campaigns/${campaignId}/shape`}>Open shape</Link>
-          </Button>
-        ) : null}
+        <Button variant="primary" size="sm" asChild>
+          <Link href={`/campaigns/${campaignId}/shape`}>
+            {session.acceptedShape ? "Open shape" : "Propose shape"}
+          </Link>
+        </Button>
       </div>
       <p className={cn("mt-1 text-sm", tokens.textMuted)}>
         Ideas only — opinions, insights, and thoughts are idea flavors. Every

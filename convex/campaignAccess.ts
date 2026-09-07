@@ -33,6 +33,21 @@ export async function requireBrandAccess(
   return membership;
 }
 
+export async function getOwnedCampaign(
+  ctx: QueryCtx | MutationCtx,
+  userId: string,
+  campaignId: string
+): Promise<Doc<"campaigns">> {
+  const normalized = ctx.db.normalizeId("campaigns", campaignId);
+  if (!normalized) throw new Error("Campaign not found");
+  const campaign = await ctx.db.get(normalized);
+  if (!campaign || campaign.userId !== userId) {
+    throw new Error("Campaign not found");
+  }
+  await requireBrandAccess(ctx, userId, campaign.brandId);
+  return campaign;
+}
+
 export async function audit(
   ctx: MutationCtx,
   params: {

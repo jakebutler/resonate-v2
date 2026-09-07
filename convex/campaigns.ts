@@ -9,9 +9,9 @@ import {
 import {
   audit,
   brandIdValidator,
+  getOwnedCampaign,
   requireBrandAccess,
   requireUserId,
-  type BrandId,
 } from "./campaignAccess";
 import {
   assertGroundingAllowed,
@@ -91,29 +91,13 @@ export const getCampaign = query({
     const campaign = await ctx.db.get(campaignId);
     if (!campaign || campaign.userId !== userId) return null;
     try {
-      await requireBrandAccess(ctx, userId, campaign.brandId as BrandId);
+      await requireBrandAccess(ctx, userId, campaign.brandId);
     } catch {
       return null;
     }
     return campaign;
   },
 });
-
-async function getOwnedCampaign(
-  ctx: QueryCtx | MutationCtx,
-  userId: string,
-  campaignId: string
-): Promise<Doc<"campaigns">> {
-  const normalized = ctx.db.normalizeId("campaigns", campaignId);
-  if (!normalized) throw new Error("Campaign not found");
-  const campaign = await ctx.db.get(normalized);
-  if (!campaign || campaign.userId !== userId) {
-    throw new Error("Campaign not found");
-  }
-  await requireBrandAccess(ctx, userId, campaign.brandId as BrandId);
-  return campaign;
-}
-
 export const attachCorpus = mutation({
   args: {
     campaignId: v.id("campaigns"),
