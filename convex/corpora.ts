@@ -121,6 +121,38 @@ export const createCorpusVersion = mutation({
   },
 });
 
+export const recordExcerptCorrection = mutation({
+  args: {
+    brandId: brandIdValidator,
+    documentName: v.string(),
+    excerptPreview: v.string(),
+    correction: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireBrandAccess(ctx, userId, args.brandId);
+
+    const correction = args.correction.trim();
+    if (!correction) {
+      throw new Error("A correction note is required.");
+    }
+
+    await audit(ctx, {
+      userId,
+      brandId: args.brandId,
+      action: "corpus.excerpt_correction",
+      summary: `Captured parser correction for an unusable extract from "${args.documentName}". The extract stays blocked from the corpus.`,
+      metadata: {
+        documentName: args.documentName,
+        excerptPreview: args.excerptPreview.slice(0, 280),
+        correction,
+      },
+    });
+
+    return { recorded: true };
+  },
+});
+
 export const listCorpora = query({
   args: { brandId: brandIdValidator },
   handler: async (ctx, args) => {
