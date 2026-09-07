@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Campaign loop surfaces", () => {
   test("nav exposes Campaigns and the campaigns home boots", async ({ page }) => {
     await page.goto("/campaigns");
-    await expect(page.getByRole("heading", { name: "Campaigns" })).toBeVisible();
+    await expect(page.locator("h1", { hasText: "Campaigns" })).toBeVisible();
     await expect(
       page.getByText(/Nothing auto-approves and nothing submits automatically/i)
     ).toBeVisible();
