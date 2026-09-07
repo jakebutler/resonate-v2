@@ -1,41 +1,40 @@
 # Project Status
 
-Last updated: 09/06/2026 23:02:26 PDT
+Last updated: 09/06/2026 23:10 PDT
 
 ## State
 
-Resonate is a working content operations app with active surfaces for calendar planning, content editing, workflow review, and idea capture.
+Resonate is a working content operations app with active surfaces for calendar planning, content editing, workflow review, and idea capture. Main is stable: 503/503 unit tests, E2E green, prod healthy.
 
 ## Current Task
 
-Maintain the living documentation and preserve a handoff-quality snapshot of the repo state.
+Wayfinder complete: campaign loop spec delivered (`docs/campaigns/2026-09-06-campaign-loop-spec.md`, #79) — supersedes #45, settles M0–M8, defines implementation milestones C1–C8. Awaiting Jake's spec review; then C1 (foundation schema) starts.
 
 ## Session Focus
 
-- Updated repository documentation and handoff records.
+- Full session: repo stability audit → Buffer gate config + smoke template → wayfinder prototypes #66/#67/#68 with three feedback passes → campaign loop spec (#69). Flaky Open PR test timeout fixed (#77).
 
 ## Last Completed Task
 
-- cbe74fc docs: sync handoff — #68 feedback pass merged, spec inputs recorded
+- #79 merged — campaign loop product spec (#69 deliverable): 21 locked decisions (D-1…D-21), both ingest journeys, clean-name data model, milestones C1–C8 replacing M0–M8, deferred agent-layer backlog, open questions for Jake.
 
 ## Recent Commits
 
-- cbe74fc docs: sync handoff — #68 feedback pass merged, spec inputs recorded
-- 3b95a8d Merge pull request #78 from jakebutler/wayfinder/prototype-68-feedback-pass
-- 82a2ebb feat: prototype #68 feedback pass — sequence numbering, decluttered drafts, auto-fixing cohesion gate, inline approval queue
-- 4e4d07c docs: sync handoff — all three campaign prototypes merged, #69 is next
-- 1cfef6c Merge pull request #77 from jakebutler/fix/flaky-open-pr-test-timeout
+- #79 merge: campaign loop product spec (#69)
+- #78 merge: prototype #68 feedback pass (approval queue)
+- #77 merge: flaky test timeout fix
+- #76 merge: prototype #68 (shape accept → cohesive placeholders → calendar)
 
 ## Local Working Tree
 
-- A  docs/campaigns/2026-09-06-campaign-loop-spec.md
-- M  docs/glossary.md
+- clean
 
 ## Next Agent Pickup
 
-- Start by checking the living docs against the current code before making assumptions.
-- If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
+- Jake reviews the spec (`docs/campaigns/2026-09-06-campaign-loop-spec.md`) → on approval: close #69, close #45 as superseded, start **C1 foundation schema** (spec §5).
+- Spec §9 open questions need Jake's calls — CTA/preset tension first (recommendation: keep gate auto-add).
+- Buffer live proof deferred: run `docs/smoke-runs/2026-09-06-buffer-live-proof.md` later (env configured on Convex prod).
 
 ## Branch
 
-- wayfinder/69-campaign-loop-spec
+- main
