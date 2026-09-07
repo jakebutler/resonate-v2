@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Resonate · Campaigns — prototype #67 (lab corpus → ideas → shape)</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Forum&display=swap");
+
+  :root {
+    --ink-black: #001524;
+    --stormy-teal: #15616d;
+    --stormy-teal-deep: #0e4a54;
+    --stormy-teal-soft: #e2eff1;
+    --papaya-whip: #ffecd1;
+    --vivid-tangerine: #ff7d00;
+    --vivid-tangerine-soft: #fff1e0;
+    --brandy: #78290f;
+    --paper: #faf8f4;
+    --card: #ffffff;
+    --border: #e7e2d9;
+    --muted: #6f6d67;
+    --ok: #1d7a3e;
+    --role-pillar: #ff7d00;
+    --role-hook: #d81e5b;
+    --role-satellite: #15616d;
+    --role-cta: #1d7a3e;
+    --role-recap: #6d4fc4;
+    --radius: 10px;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Geist", "Inter", -apple-system, "Segoe UI", sans-serif;
+    background: var(--paper);
+    color: var(--ink-black);
+    line-height: 1.5;
+  }
+  h1, h2, .display { font-family: "Forum", Georgia, serif; font-weight: 400; }
+
+  header.topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 20px; background: var(--card);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 40;
+  }
+  .logo { font-family: "Forum", serif; font-size: 1.35rem; letter-spacing: .02em; }
+  .crumb { color: var(--muted); font-size: .85rem; }
+  .crumb b { color: var(--ink-black); font-weight: 600; }
+  .brand-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 12px; font-size: .82rem; background: var(--papaya-whip);
+  }
+  .brand-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stormy-teal); }
+  .brand-pill .other { color: var(--muted); }
+  .prototype-banner {
+    background: var(--vivid-tangerine-soft); border-bottom: 1px solid var(--border);
+    color: var(--brandy); font-size: .8rem; padding: 6px 20px;
+    display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  }
+  .stepper { display: flex; gap: 0; margin-left: auto; font-size: .8rem; }
+  .step {
+    display: flex; align-items: center; gap: 7px; padding: 6px 14px;
+    color: var(--muted); border-left: 1px solid var(--border);
+  }
+  .step .n {
+    width: 20px; height: 20px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; font-size: .7rem;
+    border: 1.5px solid var(--border); background: var(--card);
+  }
+  .step.active { color: var(--ink-black); font-weight: 600; }
+  .step.active .n { background: var(--stormy-teal); border-color: var(--stormy-teal); color: #fff; }
+  .step.done .n { background: var(--papaya-whip); border-color: var(--stormy-teal); color: var(--stormy-teal); }
+  .step.locked { opacity: .45; }
+  .step.visited { cursor: pointer; }
+  .step.visited:hover { color: var(--stormy-teal); }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 26px 22px 90px; }
+  .stage { display: none; }
+  .stage.active { display: block; }
+
+  .stage-head { margin-bottom: 18px; }
+  .stage-head h1 { font-size: 1.9rem; margin: 0 0 6px; }
+  .stage-head p { margin: 0; color: var(--muted); max-width: 680px; }
+
+  .btn {
+    border: 1px solid var(--ink-black); background: var(--ink-black); color: #fff;
+    border-radius: var(--radius); padding: 9px 18px; font-size: .88rem; font-weight: 600;
+    cursor: pointer; transition: transform .05s ease, opacity .15s;
+  }
+  .btn:hover { opacity: .9; }
+  .btn:active { transform: translateY(1px); }
+  .btn.secondary { background: var(--card); color: var(--ink-black); border-color: var(--border); }
+  .btn.ghost { background: transparent; border-color: var(--border); color: var(--muted); }
+  .btn.accent { background: var(--vivid-tangerine); border-color: var(--vivid-tangerine); color: #fff; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--border); background: var(--paper);
+    border-radius: 999px; padding: 2px 10px; font-size: .72rem; color: var(--muted);
+  }
+  .chip.teal { background: var(--stormy-teal-soft); color: var(--stormy-teal); border-color: transparent; font-weight: 600; }
+  .chip.tangerine { background: var(--vivid-tangerine-soft); color: var(--brandy); border-color: transparent; font-weight: 600; }
+  .label {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); font-weight: 600;
+  }
+
+  .cite {
+    position: relative; display: inline-flex; align-items: center; gap: 5px;
+    font-size: .72rem; color: var(--stormy-teal-deep);
+    background: var(--stormy-teal-soft); border-radius: 5px; padding: 2px 8px;
+    cursor: default; border-bottom: 1.5px dotted var(--stormy-teal);
+  }
+  .cite .pop {
+    display: none; position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 65;
+    width: 320px; background: var(--ink-black); color: var(--papaya-whip);
+    border-radius: 8px; padding: 12px 14px; font-size: .78rem; line-height: 1.5;
+    box-shadow: 0 10px 30px rgba(0,21,36,.3); cursor: default;
+  }
+  .cite .pop .uri { display: block; margin-top: 8px; font-family: ui-monospace, Menlo, monospace; font-size: .68rem; color: #9fc3cb; }
+  .cite:hover .pop, .cite.open .pop { display: block; }
+
+  .footer-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
+    background: var(--card); border-top: 1px solid var(--border);
+    padding: 12px 22px; display: flex; align-items: center; gap: 14px; justify-content: flex-end;
+  }
+  .footer-bar .hint { color: var(--muted); font-size: .82rem; margin-right: auto; }
+  .footer-bar .hint b { color: var(--brandy); }
+
+  .toast {
+    position: fixed; bottom: 74px; right: 22px; z-index: 60;
+    background: var(--ink-black); color: var(--papaya-whip);
+    padding: 12px 18px; border-radius: var(--radius); font-size: .85rem;
+    box-shadow: 0 8px 24px rgba(0,21,36,.25); opacity: 0; pointer-events: none;
+    transition: opacity .25s, transform .25s; transform: translateY(8px); max-width: 380px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .progress { height: 6px; background: var(--stormy-teal-soft); border-radius: 999px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--vivid-tangerine); width: 0%; transition: width .4s ease; }
+
+  .excerpt { padding: 14px 16px; border-top: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; }
+  .excerpt:first-of-type { border-top: none; }
+  .excerpt.unusable { background: #fdf3f0; }
+  .excerpt .quote { font-size: .88rem; line-height: 1.55; color: #2c2c2a; }
+  .excerpt .meta { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .excerpt input[type="checkbox"] { width: 17px; height: 17px; margin-top: 3px; accent-color: var(--stormy-teal); }
+  input[type="text"], textarea {
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+    font: inherit; font-size: .85rem; background: var(--card); color: var(--ink-black);
+  }
+  textarea { width: 100%; resize: vertical; }
+  input:focus, textarea:focus { outline: 2px solid var(--stormy-teal); outline-offset: 1px; }
+
+  .csel.disabled { opacity: .45; pointer-events: none; }
+  .csel { position: relative; display: inline-block; }
+  .csel-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--border); background: var(--card); color: var(--ink-black);
+    border-radius: 8px; padding: 4px 10px; font-size: .74rem; cursor: pointer;
+  }
+  .csel-btn:hover { border-color: var(--stormy-teal); }
+  .csel-btn .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .csel-btn .chev { color: var(--muted); font-size: .6rem; }
+  .csel-menu {
+    display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 66;
+    min-width: 160px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: 0 12px 32px rgba(0,21,36,.18); overflow: hidden; padding: 4px;
+  }
+  .csel-menu.show { display: block; }
+  .csel-opt {
+    display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+    font-size: .78rem; cursor: pointer; border-radius: 7px; white-space: nowrap;
+  }
+  .csel-opt:hover { background: var(--stormy-teal-soft); }
+  .csel-opt .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .csel-opt.sel { background: var(--papaya-whip); font-weight: 600; }
+
+  .columns { display: grid; grid-template-columns: 300px 1fr 300px; gap: 18px; align-items: start; }
+  @media (max-width: 1000px) { .columns { grid-template-columns: 1fr; } }
+  .panel-title {
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); font-weight: 600; padding: 13px 16px 9px;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .corpus-badge { padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--papaya-whip); font-size: .78rem; color: var(--brandy); }
+  .corpus-badge b { display: block; font-size: .84rem; color: var(--ink-black); }
+  .excerpt-mini { padding: 10px 16px; border-top: 1px solid var(--border); font-size: .8rem; }
+  .excerpt-mini .quote { color: #444; line-height: 1.45; }
+  .excerpt-mini .meta { margin-top: 5px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .idea { padding: 14px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .idea .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .idea .text { font-size: .9rem; line-height: 1.55; }
+  .idea .actions { display: flex; gap: 8px; align-items: center; }
+  .idea.in-other-campaign { background: var(--paper); }
+  .idea.rejected { opacity: .45; }
+  .idea .already { font-size: .74rem; color: var(--muted); }
+  .flavor { display: inline-flex; padding: 2px 10px; border-radius: 999px; font-size: .72rem; font-weight: 400; }
+  .flavor.Opinion { background: #fff1e0; color: #b25400; }
+  .flavor.Insight { background: #e2eff1; color: #0e4a54; }
+  .flavor.Thought { background: #efeafb; color: #4a3591; }
+  .mini-btn {
+    border: 1px solid var(--border); background: var(--card); color: var(--ink-black);
+    border-radius: 8px; padding: 5px 12px; font-size: .78rem; font-weight: 600; cursor: pointer;
+  }
+  .mini-btn.primary { background: var(--stormy-teal); border-color: var(--stormy-teal); color: #fff; }
+  .mini-btn.ghosted { background: transparent; color: var(--muted); }
+  .mini-btn:hover:not(:disabled) { border-color: var(--stormy-teal); color: var(--stormy-teal); }
+  .mini-btn.primary:hover:not(:disabled) { color: #fff; border-color: var(--stormy-teal-deep); background: var(--stormy-teal-deep); }
+  .mini-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .working-chip { display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); font-size: .82rem; }
+  .working-chip .x { margin-left: auto; cursor: pointer; color: var(--muted); border: none; background: none; font-size: .9rem; padding: 0 2px; }
+  .working-chip .x:hover { color: var(--brandy); }
+  .empty-note { padding: 16px; color: var(--muted); font-size: .82rem; text-align: center; }
+
+  .brief-card { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px 16px; margin-bottom: 14px; }
+  .brief-card label { display: block; margin-bottom: 5px; }
+  .brief-card input { width: 100%; }
+
+  .preset-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0 6px; }
+  @media (max-width: 860px) { .preset-cards { grid-template-columns: 1fr; } }
+  .preset {
+    text-align: left; padding: 14px 16px; cursor: pointer; background: var(--card);
+    border: 1.5px solid var(--border); border-radius: var(--radius);
+  }
+  .preset.active { border-color: var(--vivid-tangerine); box-shadow: inset 0 0 0 1px var(--vivid-tangerine); }
+  .preset b { font-family: "Forum", serif; font-size: 1.05rem; display: block; margin-bottom: 3px; }
+  .preset.active b { color: var(--brandy); }
+  .preset .desc { font-size: .76rem; color: var(--muted); line-height: 1.45; }
+  .preset .count { font-size: .72rem; color: var(--brandy); font-weight: 700; }
+
+  .legend { font-size: .76rem; color: var(--muted); padding: 10px 16px; border-top: 1px solid var(--border); background: var(--paper); line-height: 1.6; }
+  .legend .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 3px 0 8px; }
+
+  .slot {
+    display: grid; grid-template-columns: 34px 1fr 230px; gap: 14px; align-items: start;
+    padding: 14px 16px; border-top: 1px solid var(--border);
+  }
+  .slot .order {
+    font-family: "Forum", serif; font-size: 1.2rem; color: var(--stormy-teal);
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+  }
+  .slot .order .seq { font-size: .58rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-family: inherit; }
+  .slot .order .mover { cursor: pointer; color: var(--muted); font-size: .6rem; border: none; background: none; line-height: 1; }
+  .slot .order .mover:hover { color: var(--vivid-tangerine); }
+  .slot.incomplete { background: #fffaf1; }
+  .slot .main { display: flex; flex-direction: column; gap: 6px; }
+  .slot .roleline { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+  .role-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px;
+    border-radius: 999px; font-size: .68rem; font-weight: 500;
+    text-transform: uppercase; letter-spacing: .04em; cursor: help;
+  }
+  .chip-row { display: inline-flex; align-items: center; gap: 6px; font-size: .76rem; color: var(--ink-black); font-weight: 500; }
+  .chip-row svg { width: 14px; height: 14px; }
+  .slot .titleline { display: flex; align-items: baseline; gap: 8px; }
+  .slot .titletext { font-family: "Forum", serif; font-size: 1.12rem; line-height: 1.3; }
+  .slot .titletext.empty { color: var(--muted); font-style: italic; font-size: .95rem; }
+  .slot .angleline { display: flex; align-items: baseline; gap: 8px; }
+  .slot .angletext { font-size: .84rem; color: var(--muted); }
+  .slot .angletext.empty { font-style: italic; }
+  .pencil {
+    border: none; background: none; cursor: pointer; color: var(--muted);
+    font-size: .8rem; padding: 0 2px; flex: none;
+  }
+  .pencil:hover { color: var(--vivid-tangerine); }
+  .slot .title-input, .slot .angle-input { font-size: .95rem; width: 100%; }
+  .incomplete-tag { font-size: .68rem; font-weight: 700; color: var(--brandy); background: #ffe3d3; padding: 2px 8px; border-radius: 5px; }
+  .slot aside { display: flex; flex-direction: column; gap: 6px; }
+  .slot aside .csel { width: 100%; }
+  .slot aside .csel-btn { width: 100%; justify-content: space-between; }
+
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,21,36,.45); z-index: 70; display: none; align-items: center; justify-content: center; }
+  .modal-backdrop.show { display: flex; }
+  .modal { background: var(--card); border-radius: 14px; padding: 26px; width: 430px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,21,36,.3); }
+  .modal h2 { margin: 0 0 6px; font-size: 1.45rem; }
+  .modal p { color: var(--muted); font-size: .85rem; margin: 0 0 16px; }
+  .modal input { width: 100%; font-size: .95rem; }
+  .modal .row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+  .shimmer { color: var(--muted); font-size: .85rem; padding: 26px; text-align: center; }
+  .shimmer .dotline span { animation: blink 1.2s infinite; display: inline-block; }
+  .shimmer .dotline span:nth-child(2) { animation-delay: .2s; }
+  .shimmer .dotline span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
+
+  .accept-wrap { max-width: 680px; margin: 0 auto; }
+  .accept-head { text-align: center; padding: 30px 0 8px; }
+  .accept-head .check {
+    width: 54px; height: 54px; border-radius: 50%; background: var(--papaya-whip);
+    color: var(--brandy); display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.6rem; margin-bottom: 14px;
+  }
+  .accept-head h1 { font-size: 1.7rem; margin: 0 0 8px; }
+  .accept-body { text-align: left; }
+  .accept-body p { color: #3a3936; margin: 0 0 6px; line-height: 1.6; }
+  .next-stub {
+    margin: 22px 0 0; border: 1.5px dashed var(--border); border-radius: var(--radius);
+    padding: 16px 18px; background: var(--paper);
+  }
+  .next-stub b { display: block; margin-bottom: 4px; }
+  .next-stub .stage-tag { color: var(--stormy-teal); font-weight: 700; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; }
+  .next-stub ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: .82rem; }
+  .feedback-q { margin: 22px 0 0; background: var(--stormy-teal-soft); border-radius: var(--radius); padding: 16px 20px; }
+  .feedback-q b { font-size: .86rem; }
+  .feedback-q ol { margin: 8px 0 0; padding-left: 20px; font-size: .82rem; color: #223; line-height: 1.6; }
+
+  .flag-form { margin-top: 10px; display: none; }
+  .flag-form.show { display: block; }
+  .hard-block-note { font-size: .74rem; color: var(--brandy); font-weight: 600; }
+  .one-way-note { font-size: .72rem; color: var(--muted); line-height: 1.5; padding: 10px 14px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="logo">Resonate</span>
+  <span class="crumb">Campaigns / <b id="crumb-campaign">New campaign</b></span>
+  <span class="brand-pill" title="Proof brand locked by the map (#61)"><span class="dot"></span> Corvo Labs <span class="other">· FreshProof, the lower dB out of proof set</span></span>
+  <nav class="stepper" id="stepper">
+    <span class="step active" data-step="1"><span class="n">1</span> Import corpus</span>
+    <span class="step" data-step="2"><span class="n">2</span> Campaign session</span>
+    <span class="step" data-step="3"><span class="n">3</span> Propose shape</span>
+    <span class="step locked" data-step="4" title="Prototype #68"><span class="n">4</span> Placeholders</span>
+  </nav>
+</header>
+<div class="prototype-banner">
+  <span><b>Throwaway prototype #67</b> — lab-corpus sibling of #66. Fake CLI/AI, scripted content, nothing saved anywhere. Content from the synthetic lab-notebook fixture.</span>
+  <a href="../fixtures/corvo/README.md" style="color:var(--brandy)">fixture README ↗</a>
+</div>
+
+<main>
+
+  <!-- ============ STAGE 1: INGEST ============ -->
+  <section class="stage active" id="stage-1">
+    <div class="stage-head">
+      <h1>Import the lab corpus (CLI)</h1>
+      <p>Lab folders use the CLI happy path (#64): <b>dry-run first</b>, secret scan hard-fails, unsupported files skip with a dirty warning. One import becomes one immutable corpus version on the brand.</p>
+    </div>
+
+    <div class="card" style="padding:0; margin-bottom:16px; overflow:hidden;">
+      <div style="background:var(--ink-black); color:#9fc3cb; font-family:ui-monospace, Menlo, monospace; font-size:.78rem; padding:14px 18px; line-height:1.7;">
+        <div style="color:#6f8f96;">$ resonate corpus import ./prototypes/fixtures/corvo/lab-notebook --brand corvo-labs --dry-run</div>
+        <div>Scanning folder… <b style="color:#ffecd1;">8 files found</b></div>
+        <div>&nbsp;&nbsp;<span style="color:#4caf6d;">✓</span> 2026-04-14-eval-harness-v0.md&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;md&nbsp;&nbsp;&nbsp;&nbsp;4 excerpt candidates</div>
+        <div>&nbsp;&nbsp;<span style="color:#4caf6d;">✓</span> 2026-04-21-approval-gate-telemetry.md&nbsp;md&nbsp;&nbsp;&nbsp;&nbsp;4 excerpt candidates</div>
+        <div>&nbsp;&nbsp;<span style="color:#4caf6d;">✓</span> 2026-05-05-worktree-observability.md&nbsp;&nbsp;md&nbsp;&nbsp;&nbsp;&nbsp;3 excerpt candidates</div>
+        <div>&nbsp;&nbsp;<span style="color:#4caf6d;">✓</span> 2026-05-12-hitl-review-loop.md&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;md&nbsp;&nbsp;&nbsp;&nbsp;4 excerpt candidates</div>
+        <div>&nbsp;&nbsp;<span style="color:#4caf6d;">✓</span> 2026-05-26-cohesion-gate.md&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;md&nbsp;&nbsp;&nbsp;&nbsp;3 excerpt candidates</div>
+        <div>&nbsp;&nbsp;<span style="color:#4caf6d;">✓</span> experiments.json&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;json&nbsp;&nbsp;&nbsp;experiment index (5)</div>
+        <div>&nbsp;&nbsp;<span style="color:#4caf6d;">✓</span> eval-runs.csv&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;csv&nbsp;&nbsp;&nbsp;&nbsp;10 runs</div>
+        <div>&nbsp;&nbsp;<span style="color:#ffb84d;">⚠</span> board-sync-scratch.ipynb&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b style="color:#ffb84d;">SKIPPED — unsupported format</b> (dirty warn per #64)</div>
+        <div>Secret scan………… <b style="color:#4caf6d;">0 findings</b> (hard-fail if any)</div>
+        <div>Sensitivity default unreviewed — editable per excerpt</div>
+      </div>
+      <div style="padding:12px 18px 4px;"><div class="progress"><div id="extract-bar"></div></div></div>
+      <div id="extract-status" style="font-size:.78rem; color:var(--muted); margin:0 18px; padding:4px 0 12px;">Waiting…</div>
+    </div>
+
+    <div id="excerpt-review" style="display:none;">
+      <div class="card">
+        <div class="panel-title">
+          <span>Review imported excerpts — only checked excerpts are saved</span>
+          <span class="chip">Corvo Labs corpus · brand-scoped</span>
+        </div>
+        <div id="excerpt-list"></div>
+      </div>
+      <div style="margin-top:12px;" class="hard-block-note" id="hardblock-note"></div>
+    </div>
+  </section>
+
+  <!-- ============ STAGE 2: CAMPAIGN SESSION ============ -->
+  <section class="stage" id="stage-2">
+    <div class="stage-head">
+      <h1 id="session-title">Campaign session</h1>
+      <p>Ideas only — opinions, insights, and thoughts are Idea flavors, never a separate Stance type (map decision 5). Every idea cites corpus excerpts; hover a source chip to read the excerpt.</p>
+    </div>
+
+    <div class="columns">
+      <div class="card">
+        <div class="panel-title"><span>Paper &amp; excerpts</span><span class="chip" id="corpus-version-chip">corpus v1</span></div>
+        <div class="corpus-badge">
+          <b>ReAct — Synergizing Reasoning and Acting in Language Models</b>
+          Yao et al., arXiv:2210.03629 · attached as campaign working set
+        </div>
+        <div id="corpus-excerpt-list"></div>
+        <div class="one-way-note">Brand corpora are shared across campaigns. This campaign holds a working set — removing an idea from a slot never detaches the corpus.</div>
+      </div>
+
+      <div class="card">
+        <div class="panel-title">
+          <span>Suggested ideas <span class="chip tangerine">fake AI</span></span>
+        </div>
+        <div id="idea-list"></div>
+        <div class="panel-title" style="border-top:1px solid var(--border);">
+          <span>From your research inbox (one-offs)</span>
+          <input type="text" id="idea-search" placeholder="Search your inbox…" style="font-size:.76rem; padding:5px 9px; width:170px;" />
+        </div>
+        <div id="inbox-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="panel-title"><span>Campaign working set</span><span class="chip teal" id="working-count">0 ideas</span></div>
+        <div id="working-set"><div class="empty-note">No ideas yet. Accept suggestions or search the inbox.<br/><br/>Accepting here makes the idea <b>campaign-primary</b>; the idea stays discoverable in research with a soft “in campaign” hint.</div></div>
+        <div class="one-way-note" style="border-top:1px solid var(--border);">Slot ↔ membership is <b>one-way</b>: linking an idea to a shape slot never removes it from this set, and removing it from the working set detaches it from any slot.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STAGE 3: PROPOSE SHAPE ============ -->
+  <section class="stage" id="stage-3">
+    <div class="stage-head">
+      <h1>Propose the campaign shape</h1>
+      <p>A shape is a durable plan of <b>slots</b> — channel × format × role — with optional title, angle, and linked ideas. The shape fixes the <b>publishing sequence</b> (1 → n); the calendar owns the <b>publishing schedule</b> (dates and times).</p>
+    </div>
+
+    <div class="card brief-card">
+      <div>
+        <label class="label" for="brief-goal">Campaign goal — rides with the shape into the brief</label>
+        <input type="text" id="brief-goal" value="Position excerpt-first drafting as Corvo's eval-friendly methodology" />
+      </div>
+      <div>
+        <label class="label" for="brief-audience">Primary audience</label>
+        <input type="text" id="brief-audience" value="Engineering leaders shipping agentic workflows" />
+      </div>
+    </div>
+
+    <div class="preset-cards" id="preset-cards"></div>
+    <div class="one-way-note" style="padding:4px 2px 10px;">Presets are Corvo Labs default compositions (#63). Switching presets re-proposes the shape and <b>keeps your edits</b> — slots are matched by role + channel; everything else fills from the preset. Your working set is untouched.</div>
+
+    <div class="card" id="shape-card" style="display:none;">
+      <div class="panel-title">
+        <span>Proposed shape — <span id="shape-slot-count"></span></span>
+        <span class="chip tangerine">fake AI proposal · editable</span>
+      </div>
+      <div class="legend" id="legend" style="border-top:none;">
+        <span class="swatch" style="background:var(--role-pillar)"></span><b>Pillar</b> anchors the thesis ·
+        <span class="swatch" style="background:var(--role-hook)"></span><b>Hook</b> grabs attention ·
+        <span class="swatch" style="background:var(--role-satellite)"></span><b>Satellite</b> carries a supporting angle ·
+        <span class="swatch" style="background:var(--role-cta)"></span><b>CTA</b> makes the ask ·
+        <span class="swatch" style="background:var(--role-recap)"></span><b>Recap</b> closes the loop.
+        Numbers on the left are the publishing sequence (1 → n); dates live on the calendar. Linking an idea to a slot never removes it from the campaign.
+      </div>
+      <div id="shimmer" class="shimmer" style="display:none;">Proposing shape from your working set<span class="dotline"><span>.</span><span>.</span><span>.</span></span></div>
+      <div id="slot-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ STAGE 4: ACCEPTED (END STATE) ============ -->
+  <section class="stage" id="stage-4">
+    <div class="accept-wrap">
+      <div class="accept-head">
+        <div class="check">✓</div>
+        <h1>Shape accepted</h1>
+      </div>
+      <div class="accept-body">
+        <p><b id="accepted-summary"></b></p>
+        <p>In the real product this hands off through the existing materialize path: <b>scheduled-but-unapproved posts</b> appear in the composer/calendar. Nothing is auto-approved and nothing is ever submitted to a provider by the campaign itself.</p>
+        <div class="next-stub">
+          <span class="stage-tag">Next prototype · #68</span>
+          <b>Shape accept → cohesive placeholders</b>
+          This is where the batch would get per-slot placeholder drafts, a set-level cohesion pass, and the SEO / humanizer product stages — all as placeholder UX first, skill implementation later.
+          <ul>
+            <li>Per-slot placeholder copy generated as a set, not per-post</li>
+            <li>Cohesion gate: one pillar, one CTA, no repeated framing openers</li>
+            <li>Everything lands as scheduled-but-unapproved in the existing calendar</li>
+          </ul>
+        </div>
+        <div class="feedback-q">
+          <b>Feedback prompts for this prototype (#67)</b>
+          <ol>
+            <li>Does the title-only campaign confirm feel right, now that goal/audience live on the Propose shape step?</li>
+            <li>Do excerpt citations (hover to reveal) make ideas feel trustworthy — or is it noise at this stage?</li>
+            <li>Are the Seed / Standard / Deep compositions close to what you'd actually run for Corvo?</li>
+            <li>Is “publishing sequence vs publishing schedule” clearer than “narrative order”?</li>
+            <li>Anything missing before this hands off to #68 (placeholders + cohesion)?</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="footer-bar" id="footer-1" style="display:none;">
+  <span class="hint" id="footer-1-hint"></span>
+  <button class="btn" id="btn-save-corpus" disabled title="Saves the checked excerpts as corpus v1 — an immutable version on the Corvo Labs brand corpus. Campaign attachment happens later, in the session.">Save to Corvo Labs corpus</button>
+</div>
+<div class="footer-bar" id="footer-2" style="display:none;">
+  <span class="hint" id="footer-2-hint"></span>
+  <button class="btn" id="btn-propose-shape" disabled>Propose shape</button>
+</div>
+<div class="footer-bar" id="footer-3" style="display:none;">
+  <span class="hint" id="footer-3-hint"></span>
+  <button class="btn accent" id="btn-accept-shape" disabled>Accept shape</button>
+</div>
+<div class="footer-bar" id="footer-4" style="display:none;">
+  <span class="hint">End of prototype #67 — you have now seen both source journeys (paper #66, lab #67). Next: spec rewrite (#69).</span>
+  <button class="btn secondary" onclick="location.reload()">Restart prototype</button>
+</div>
+
+<div class="modal-backdrop" id="modal-start">
+  <div class="modal">
+    <h2>Start a campaign</h2>
+    <p>Title-only for now — goal and audience are confirmed on the Propose shape step. You can rename any time.</p>
+    <input type="text" id="campaign-title-input" value="Eval-driven editorial: notebook to narrative" />
+    <div class="row">
+      <button class="btn ghost" id="btn-cancel-start">Cancel</button>
+      <button class="btn" id="btn-confirm-start">Start campaign</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ICONS = {
+  "Corvo Blog": `<svg viewBox="0 0 24 24" fill="none" stroke="#15616d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
+  "X": `<svg viewBox="0 0 24 24" fill="#001524"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>`,
+  "LinkedIn": `<svg viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`,
+  "YouTube": `<svg viewBox="0 0 24 24" fill="#FF0000"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>`,
+};
+
+const ROLE_COLORS = {
+  pillar: { tint: "#ffefdd", text: "#b25400" },
+  hook: { tint: "#fde5ee", text: "#a11441" },
+  satellite: { tint: "#e2eff1", text: "#0e4a54" },
+  cta: { tint: "#e2f2e6", text: "#1d5c31" },
+  recap: { tint: "#efeafb", text: "#4a3591" },
+};
+const ROLE_HELP = {
+  pillar: "Anchors the thesis — the long-form anchor piece",
+  hook: "Grabs attention — the short attention-grabber",
+  satellite: "Carries a supporting angle alongside the pillar",
+  cta: "Makes the ask — drives the campaign's conversion action",
+  recap: "Closes the loop — wraps the set's argument",
+};
+const MEDIA_LABEL = { "blog article": "article", "LI post": "post", "X post": "post", "essay": "essay", "YT script": "script" };
+
+const EXCERPTS = [
+  { id: "excerpt-1", page: "2026-04-14 · EXP-014", unusable: false,
+    text: "…Baseline (prompt roulette, 10 iterations): 4 of 10 outputs regressed a fact that an earlier iteration had right. With per-component gates: 1 of 10 regressed, and the harness named the failing case on every miss…" },
+  { id: "excerpt-2", page: "2026-04-14 · EXP-014 · judgment", unusable: false,
+    text: "…The win is not accuracy, it is explainability. When the harness fails, it points at a case; when the mega-prompt fails, we shrug. Treat AGENTS.md and review feedback as documentation that feeds the eval suite…" },
+  { id: "excerpt-3", page: "2026-04-21 · EXP-015", unusable: false,
+    text: "…47 approvals reviewed. fact-drift was the top reason (21), then wrong-channel (11), tone (8). Median time-to-decision doubled when the reviewer had to open a second tab to verify a claim…" },
+  { id: "excerpt-4", page: "2026-05-05 · EXP-017", unusable: false,
+    text: "…6 debugging sessions, 6 for 6 in finding root cause without leaving the worktree. Two of the six traces were immediately reusable as eval fixtures — the failing tool call became a test case…" },
+  { id: "excerpt-5", page: "2026-05-12 · EXP-018", unusable: false,
+    text: "…18 qualifying review comments in three weeks, 16 converted to eval cases. Median conversion cost: 9 minutes. Repeat-mistake rate across drafts dropped from roughly 1-in-3 to 1-in-8 by week three…" },
+  { id: "excerpt-6", page: "2026-05-26 · EXP-020 · hypothesis", unusable: false,
+    text: "…A batch of posts derived from one source reads as five strangers. A cohesion check that scores the set — repeated framing, missing narrative order, orphaned CTAs — will catch what per-post review structurally cannot…",
+  },
+];
+
+const CORPUS_ID = "corpus://corvo/lab-notebook-agent-content-pipeline/v1";
+const citeUri = (id) => CORPUS_ID + "#" + id;
+const citeTail = (id) => "…/v1#" + id;
+
+const SUGGESTED_IDEAS = [
+  { id: "idea-1", flavor: "Opinion",
+    text: "Approval UIs should foreground claim lineage, not tone. fact-drift was the top review reason and decision time doubled without inline sources — the review screen should show claims next to the approve button.",
+    cites: ["excerpt-3"], inOtherCampaign: null },
+  { id: "idea-2", flavor: "Insight",
+    text: "Every failed agent run is an eval fixture waiting to happen. 6 for 6 root causes found inside the worktree, and two traces became test cases with one copy command.",
+    cites: ["excerpt-4"], inOtherCampaign: null },
+  { id: "idea-3", flavor: "Opinion",
+    text: "Gates beat prompt roulette: regressions fell from 4-in-10 to 1-in-10 once draft generation was gated per component. The fix was not a better prompt, it was explainable failure.",
+    cites: ["excerpt-1", "excerpt-2"], inOtherCampaign: null },
+  { id: "idea-4", flavor: "Insight",
+    text: "Checkable review comments convert to evals in about 9 minutes. The bottleneck is noticing a comment is checkable — the review UI should ask \"is this checkable?\" before the reviewer types.",
+    cites: ["excerpt-5"], inOtherCampaign: null },
+  { id: "idea-5", flavor: "Thought",
+    text: "Hand-apply the cohesion checklist to the last shipped batch before building anything. If it catches nothing on a batch we already knew was weak, the idea is dead.",
+    cites: ["excerpt-6"], inOtherCampaign: null },
+  { id: "idea-6", flavor: "Opinion",
+    text: "A set-level cohesion gate — one pillar, one CTA, no repeated framing openers — catches what per-post review structurally cannot. Batch-first review, not per-post review.",
+    cites: ["excerpt-6"], inOtherCampaign: "Reasoning + acting for editorial pipelines" },
+];
+
+const INBOX_IDEAS = [
+  { id: "inbox-1", flavor: "Thought",
+    text: "Could a weekly review digest replace standup for the content team? Unclear — park until the digest milestone.",
+    cites: [], usedHint: null },
+  { id: "inbox-2", flavor: "Insight",
+    text: "Board-sync notes keep dying in .ipynb scratch files; the ingest skip-and-warn ritual fixed exactly that.",
+    cites: [], usedHint: "corpus: lower-db lab notebook" },
+];
+
+const PRESETS = [
+  { key: "seed", name: "Seed", desc: "Minimal proof: one pillar to anchor the thesis, one satellite to carry it socially, one CTA. The CTA slot starts unlinked — incomplete slots block materialize.", count: 3,
+    slots: [
+      { role: "pillar", channel: "Corvo Blog", format: "blog article", title: "Acting without observation: what ReAct teaches editorial pipelines", idea: "idea-1" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "Traces are eval fixtures waiting to be promoted", idea: "idea-2" },
+      { role: "cta", channel: "LinkedIn", format: "LI post", title: "", idea: null },
+    ] },
+  { key: "standard", name: "Standard", desc: "The Corvo workhorse: pillar + hook + two satellites + recap. Every slot links a working-set idea by default.", count: 5,
+    slots: [
+      { role: "pillar", channel: "Corvo Blog", format: "blog article", title: "Acting without observation: what ReAct teaches editorial pipelines", idea: "idea-1" },
+      { role: "hook", channel: "X", format: "X post", title: "Prompt roulette is action without reasoning", idea: "idea-3" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "Traces are eval fixtures waiting to be promoted", idea: "idea-2" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "No claim without a corpus pointer", idea: "idea-4" },
+      { role: "recap", channel: "LinkedIn", format: "LI post", title: "Act fast, reason slow: the best of both worlds", idea: "idea-5" },
+    ] },
+  { key: "deep", name: "Deep", desc: "Full arc: adds an essay satellite and a YouTube script for the long argument. Heaviest lift; strongest narrative.", count: 7,
+    slots: [
+      { role: "pillar", channel: "Corvo Blog", format: "blog article", title: "Acting without observation: what ReAct teaches editorial pipelines", idea: "idea-1" },
+      { role: "hook", channel: "X", format: "X post", title: "Prompt roulette is action without reasoning", idea: "idea-3" },
+      { role: "satellite", channel: "LinkedIn", format: "essay", title: "Grounding: no claim without a corpus pointer", idea: "idea-4" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "Traces are eval fixtures waiting to be promoted", idea: "idea-2" },
+      { role: "satellite", channel: "YouTube", format: "YT script", title: "Walkthrough: ReAct applied to a publish pipeline", idea: "idea-5" },
+      { role: "satellite", channel: "LinkedIn", format: "LI post", title: "Receipts on every AI claim", idea: "idea-6" },
+      { role: "cta", channel: "LinkedIn", format: "LI post", title: "Follow the build — Corvo Labs", idea: null },
+    ] },
+];
+
+const state = {
+  stage: 1,
+  maxStage: 1,
+  selectedExcerpts: new Set(),
+  flaggedFixed: false,
+  corpusSaved: false,
+  campaignTitle: "New campaign",
+  workingSet: [],
+  rejected: new Set(),
+  preset: "standard",
+  slots: [],
+  everProposed: false,
+  shapeProposed: false,
+  accepted: false,
+  editing: null,
+};
+
+const $ = (s) => document.querySelector(s);
+const flavorChip = (f) => `<span class="flavor ${f}">${f}</span>`;
+const citeChip = (id) => {
+  const e = EXCERPTS.find((x) => x.id === id);
+  const n = id.replace("excerpt-", "");
+  return `<span class="cite" data-cite="${id}">①${n} · ${e.page.split("·")[0].trim()}<span class="pop">${e.text}<span class="uri">${citeTail(id)}</span></span></span>`;
+};
+const roleChip = (role) => `<span class="role-chip" style="background:${ROLE_COLORS[role].tint};color:${ROLE_COLORS[role].text}" title="${ROLE_HELP[role]}">${role}</span>`;
+const channelChip = (ch, format) => `<span class="chip-row" title="${ch}">${ICONS[ch] || ""}<span>${MEDIA_LABEL[format] || format}</span></span>`;
+
+function toast(msg) {
+  const t = $("#toast");
+  t.innerHTML = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 3400);
+}
+
+function setStepper() {
+  document.querySelectorAll(".step").forEach((el) => {
+    const s = +el.dataset.step;
+    el.classList.toggle("active", s === state.stage && state.stage < 4);
+    el.classList.toggle("done", s < state.stage || (state.stage === 4 && s === 3));
+    el.classList.toggle("locked", s === 4 && !state.accepted);
+    el.classList.toggle("visited", s <= state.maxStage && s < 4 && s !== state.stage);
+    el.onclick = () => { if (+el.dataset.step <= state.maxStage && state.accepted ? true : +el.dataset.step <= state.maxStage && +el.dataset.step !== 4) { if (+el.dataset.step !== 4) goto(+el.dataset.step); } };
+  });
+}
+
+function goto(stage) {
+  state.stage = stage;
+  state.maxStage = Math.max(state.maxStage, stage);
+  document.querySelectorAll(".stage").forEach((el) => el.classList.remove("active"));
+  $("#stage-" + stage).classList.add("active");
+  setStepper();
+  ["footer-1", "footer-2", "footer-3", "footer-4"].forEach((id) => $("#" + id).style.display = "none");
+  if (stage <= 3) $("#footer-" + stage).style.display = "flex";
+  window.scrollTo({ top: 0 });
+}
+
+document.addEventListener("click", (e) => {
+  document.querySelectorAll(".csel-menu.show").forEach((m) => {
+    if (!m.parentElement.contains(e.target)) m.classList.remove("show");
+  });
+});
+
+function csel(id, options, current, onpick) {
+  const cur = options.find((o) => o.value === current);
+  return `<div class="csel" id="${id}">
+    <button type="button" class="csel-btn" onclick="toggleMenu('${id}')">
+      <span style="display:inline-flex;align-items:center;gap:7px;">${cur && cur.dot ? `<span class="dot" style="background:${cur.dot}"></span>` : ""}${cur ? cur.label : options[0].label}</span>
+      <span class="chev">▼</span>
+    </button>
+    <div class="csel-menu">
+      ${options.map((o) => `<div class="csel-opt ${o.value === current ? "sel" : ""}" data-val="${o.value}" onclick="pickMenu('${id}','${o.value}')">${o.dot ? `<span class="dot" style="background:${o.dot}"></span>` : ""}${o.label}</div>`).join("")}
+    </div>
+  </div>`;
+}
+window._cselHandlers = {};
+function toggleMenu(id) {
+  const cselEl = document.getElementById(id);
+  if (!cselEl || cselEl.classList.contains("disabled")) return;
+  const menu = cselEl.querySelector(".csel-menu");
+  const open = menu.classList.contains("show");
+  document.querySelectorAll(".csel-menu.show").forEach((m) => m.classList.remove("show"));
+  if (!open) menu.classList.add("show");
+}
+function pickMenu(id, val) {
+  document.querySelectorAll(".csel-menu.show").forEach((m) => m.classList.remove("show"));
+  const h = window._cselHandlers[id];
+  if (h) h(val);
+}
+
+/* ---------- Stage 1 ---------- */
+function startExtraction() {
+  const bar = $("#extract-bar"), status = $("#extract-status");
+  let p = 0;
+  const iv = setInterval(() => {
+    p += Math.random() * 22;
+    bar.style.width = Math.min(p, 100) + "%";
+    status.textContent = p < 35 ? "Parsing markdown + json + csv…" : p < 70 ? "Segmenting entries into excerpt candidates…" : p < 100 ? "Assigning corpus pointers…" : "Dry-run complete — 7/8 files accepted, 1 skipped with warning."
+    if (p >= 100) { clearInterval(iv); renderExcerptReview(); }
+  }, 420);
+}
+
+function renderExcerptReview() {
+  $("#excerpt-review").style.display = "block";
+  $("#excerpt-list").innerHTML = EXCERPTS.map((e) => `
+    <div class="excerpt ${e.unusable ? "unusable" : ""}" data-id="${e.id}">
+      <input type="checkbox" ${e.unusable ? "disabled" : "checked"} data-ex="${e.id}" />
+      <div style="flex:1">
+        <div class="quote">${e.text}</div>
+        <div class="meta">
+          <span class="chip">${e.page}</span>
+          <span class="cite" data-cite="${e.id}">${citeTail(e.id)}</span>
+          <span class="chip" style="gap:7px;">sensitivity
+            <span class="sens-wrap" data-for="${e.id}" style="display:inline-flex;">
+            ${csel("sens-" + e.id, [
+              { value: "unreviewed", label: "unreviewed", dot: "#c9a227" },
+              { value: "internal-only", label: "internal-only", dot: "#d81e5b" },
+              { value: "public-safe", label: "public-safe", dot: "#1d7a3e" },
+            ], "unreviewed", (v) => toast(`Sensitivity set to <b>${v}</b> — default stays <b>unreviewed</b> per #64.`))}
+            </span>
+          </span>
+          ${e.unusable ? `<span class="chip" style="background:#fde8e2;color:var(--brandy);font-weight:700;">unusable extract</span>
+            <button class="mini-btn" onclick="toggleFlagForm('${e.id}')">Flag &amp; fix</button>` : ""}
+        </div>
+        ${e.unusable ? `
+        <div class="flag-form" id="flag-${e.id}">
+          <div class="one-way-note" style="padding:8px 0 4px;">Hard-blocked from saving (#64). Captured corrections become parser feedback — the extract itself is never silently saved.</div>
+          <textarea rows="2" placeholder="What should this be? e.g. 'This is Table 2 — success rates by task. Column headers lost in extraction.'"></textarea>
+          <div style="margin-top:8px; display:flex; gap:8px;">
+            <button class="mini-btn primary" onclick="fixFlag('${e.id}')">Capture correction &amp; keep blocked</button>
+            <button class="mini-btn" onclick="toggleFlagForm('${e.id}')">Close</button>
+          </div>
+        </div>` : ""}
+      </div>
+    </div>`).join("");
+  document.querySelectorAll("input[data-ex]").forEach((cb) => cb.addEventListener("change", () => { syncSensState(cb.dataset.ex, cb.checked); updateSaveState(); }));
+  EXCERPTS.forEach((e) => {
+    window._cselHandlers["sens-" + e.id] = (v) => { toast(`Sensitivity set to <b>${v}</b> — default stays <b>unreviewed</b> per #64.`); rerenderSens(e.id, v); };
+    const cb = document.querySelector(`input[data-ex="${e.id}"]`);
+    if (cb) syncSensState(e.id, cb.checked);
+  });
+  updateSaveState();
+}
+function syncSensState(id, checked) {
+  const wrap = document.querySelector(`.sens-wrap[data-for="${id}"] .csel`);
+  if (wrap) wrap.classList.toggle("disabled", !checked);
+}
+function rerenderSens(id, v) {
+  const opts = { "unreviewed": "#c9a227", "internal-only": "#d81e5b", "public-safe": "#1d7a3e" };
+  const el = document.querySelector("#sens-" + id + " .csel-btn span");
+  if (el) el.innerHTML = `<span class="dot" style="background:${opts[v]};display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;"></span>${v}`;
+}
+
+function toggleFlagForm(id) { $("#flag-" + id).classList.toggle("show"); }
+function fixFlag(id) {
+  state.flaggedFixed = true;
+  $("#flag-" + id).classList.remove("show");
+  toast("Correction captured as parser feedback. Extract stays <b>blocked</b> — uncheck it to save the corpus.");
+  updateSaveState();
+}
+
+function updateSaveState() {
+  const checked = [...document.querySelectorAll("input[data-ex]:checked")];
+  state.selectedExcerpts = new Set(checked.map((cb) => cb.dataset.ex));
+  const flaggedOpen = document.querySelector(".flag-form.show") !== null && !state.flaggedFixed;
+  $("#btn-save-corpus").disabled = state.selectedExcerpts.size === 0;
+  $("#footer-1-hint").innerHTML = state.selectedExcerpts.size === 0
+    ? "<b>Select at least one usable excerpt.</b>"
+    : `${state.selectedExcerpts.size} excerpt${state.selectedExcerpts.size > 1 ? "s" : ""} selected — saving creates <b>corpus v1 (immutable)</b> on the brand corpus.${flaggedOpen ? " A flagged extract is open." : ""}`;
+}
+
+$("#btn-save-corpus").addEventListener("click", () => {
+  state.corpusSaved = true;
+  toast("Saved to <b>Corvo Labs corpus · v1 (immutable)</b>. Campaign attachment happens in the session — per #64.");
+  $("#btn-save-corpus").textContent = "Saved ✓";
+  $("#btn-save-corpus").disabled = true;
+  setTimeout(openStartModal, 700);
+});
+
+/* ---------- Start campaign modal ---------- */
+function openStartModal() {
+  $("#modal-start").classList.add("show");
+  $("#campaign-title-input").focus();
+}
+$("#btn-cancel-start").addEventListener("click", () => $("#modal-start").classList.remove("show"));
+$("#btn-confirm-start").addEventListener("click", () => {
+  state.campaignTitle = $("#campaign-title-input").value.trim() || "Untitled campaign";
+  $("#crumb-campaign").textContent = state.campaignTitle;
+  $("#session-title").textContent = state.campaignTitle;
+  $("#modal-start").classList.remove("show");
+  renderCorpusPanel(); renderIdeas(); renderWorkingSet(); renderInbox();
+  goto(2);
+  toast("Campaign started — title-only, light confirm. Goal & audience land on the Propose shape step.");
+});
+$("#campaign-title-input").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#btn-confirm-start").click(); });
+
+/* ---------- Stage 2 ---------- */
+function renderCorpusPanel() {
+  $("#corpus-excerpt-list").innerHTML = EXCERPTS.filter((e) => state.selectedExcerpts.has(e.id)).map((e) => `
+    <div class="excerpt-mini">
+      <div class="quote">${e.text.slice(0, 130)}…</div>
+      <div class="meta"><span class="chip">${e.page}</span><span class="cite" data-cite="${e.id}">${citeTail(e.id)}</span></div>
+    </div>`).join("");
+}
+
+function ideaCard(i, ctx) {
+  if (state.rejected.has(i.id)) {
+    return `
+    <div class="idea rejected" data-idea="${i.id}">
+      <div class="head">${flavorChip(i.flavor)}<span class="already">marked not useful</span></div>
+      <div class="text" style="text-decoration:line-through;">${i.text}</div>
+      <div class="actions"><button class="mini-btn ghosted" onclick="undoReject('${i.id}')">Undo</button></div>
+    </div>`;
+  }
+  const already = i.inOtherCampaign
+    ? `<span class="already">· already in <b>${i.inOtherCampaign}</b> — joining links it, nothing moves</span>`
+    : "";
+  const added = state.workingSet.includes(i.id);
+  return `
+    <div class="idea ${i.inOtherCampaign ? "in-other-campaign" : ""}" data-idea="${i.id}">
+      <div class="head">${flavorChip(i.flavor)} ${already}</div>
+      <div class="text">${i.text}</div>
+      <div class="head">${i.cites.map(citeChip).join("")}${i.cites.length === 0 ? '<span class="already">no citations — inbox capture</span>' : ""}</div>
+      <div class="actions">
+        <button class="mini-btn primary" ${added ? "disabled" : ""} onclick="acceptIdea('${i.id}')">${added ? "In working set ✓" : "Add to campaign"}</button>
+        ${ctx === "suggested" ? `<button class="mini-btn" onclick="rejectIdea('${i.id}')">Not useful</button>` : ""}
+      </div>
+    </div>`;
+}
+
+function renderIdeas() {
+  $("#idea-list").innerHTML = SUGGESTED_IDEAS.map((i) => ideaCard(i, "suggested")).join("");
+}
+function renderInbox() {
+  const q = ($("#idea-search").value || "").toLowerCase();
+  const filtered = INBOX_IDEAS.filter((i) => !q || i.text.toLowerCase().includes(q));
+  $("#inbox-list").innerHTML = filtered.length
+    ? filtered.map((i) => ideaCard(i, "inbox")).join("")
+    : `<div class="empty-note">No one-off ideas match “${q}”.</div>`;
+}
+$("#idea-search").addEventListener("input", renderInbox);
+
+function acceptIdea(id) {
+  const all = [...SUGGESTED_IDEAS, ...INBOX_IDEAS];
+  const idea = all.find((i) => i.id === id);
+  if (!state.workingSet.includes(id)) state.workingSet.push(id);
+  state.rejected.delete(id);
+  if (idea.inOtherCampaign) {
+    toast(`“${idea.flavor}” linked — still in <b>${idea.inOtherCampaign}</b> too. Many-to-many, nothing moved.`);
+  } else {
+    toast(`Added to campaign — <b>campaign-primary</b>. It stays in research with a soft “in campaign” hint.`);
+  }
+  renderWorkingSet(); renderIdeas(); renderInbox();
+  updateProposeState();
+}
+function rejectIdea(id) {
+  state.rejected.add(id);
+  renderIdeas();
+  toast("Marked not useful — undo any time. It stays in research.");
+}
+function undoReject(id) {
+  state.rejected.delete(id);
+  renderIdeas();
+  toast("Restored — back in the suggestion list.");
+}
+
+function renderWorkingSet() {
+  const all = [...SUGGESTED_IDEAS, ...INBOX_IDEAS];
+  $("#working-count").textContent = state.workingSet.length + " ideas";
+  $("#working-set").innerHTML = state.workingSet.length
+    ? state.workingSet.map((id) => {
+        const i = all.find((x) => x.id === id);
+        return `<div class="working-chip">${flavorChip(i.flavor)}<span style="flex:1">${i.text.slice(0, 90)}…</span>
+          <button class="x" title="Remove from working set" onclick="removeFromWorkingSet('${id}')">✕</button></div>`;
+      }).join("")
+    : `<div class="empty-note">No ideas yet. Accept suggestions or search the inbox.</div>`;
+}
+function removeFromWorkingSet(id) {
+  state.workingSet = state.workingSet.filter((x) => x !== id);
+  state.slots.forEach((s) => { if (s.idea === id) s.idea = null; });
+  renderWorkingSet(); renderIdeas(); renderSlots();
+  toast("Removed from working set — also detached from any shape slot (one-way membership).");
+  updateProposeState(); updateAcceptState();
+}
+
+function updateProposeState() {
+  const ok = state.workingSet.length >= 2;
+  $("#btn-propose-shape").disabled = !ok;
+  $("#footer-2-hint").innerHTML = ok
+    ? `${state.workingSet.length} ideas in the working set.`
+    : "<b>Accept at least 2 ideas</b> to propose a shape.";
+}
+
+$("#btn-propose-shape").addEventListener("click", () => {
+  renderPresets();
+  goto(3);
+  $("#shape-card").style.display = "block";
+  proposeShape(state.preset);
+});
+
+/* ---------- Stage 3 ---------- */
+function renderPresets() {
+  $("#preset-cards").innerHTML = PRESETS.map((p) => `
+    <button class="preset ${p.key === state.preset ? "active" : ""}" data-preset="${p.key}">
+      <b>${p.name}</b>
+      <span class="count">${p.count} slots</span>
+      <div class="desc">${p.desc}</div>
+    </button>`).join("");
+  document.querySelectorAll(".preset").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.preset = el.dataset.preset;
+      renderPresets();
+      proposeShape(state.preset);
+    });
+  });
+}
+
+function proposeShape(key) {
+  const p = PRESETS.find((x) => x.key === key);
+  const previous = state.everProposed && state.slots.length ? state.slots : [];
+  state.everProposed = true;
+  state.shapeProposed = false;
+  $("#shimmer").style.display = "block";
+  $("#slot-list").style.display = "none";
+  setTimeout(() => {
+    state.slots = p.slots.map((s) => {
+      const prior = previous.find((x) => x.role === s.role && x.channel === s.channel);
+      const inherited = prior || {};
+      const presetIdea = s.idea && state.workingSet.includes(s.idea) ? s.idea : null;
+      const keepIdea = inherited.idea && state.workingSet.includes(inherited.idea) ? inherited.idea : null;
+      return {
+        ...s,
+        title: inherited.title !== undefined ? inherited.title : s.title,
+        angle: inherited.angle !== undefined ? inherited.angle : s.angle,
+        idea: keepIdea !== null ? keepIdea : presetIdea,
+      };
+    });
+    state.shapeProposed = true;
+
+    $("#shimmer").style.display = "none";
+    $("#slot-list").style.display = "block";
+    $("#shape-slot-count").textContent = `${p.count} slots · ${p.name} preset`;
+    renderSlots();
+  }, 900);
+}
+
+function renderSlots() {
+  const all = [...SUGGESTED_IDEAS, ...INBOX_IDEAS];
+  $("#slot-list").innerHTML = state.slots.map((s, idx) => {
+    const incomplete = !s.idea;
+    const editing = state.editing === "title-" + idx ? "title" : state.editing === "angle-" + idx ? "angle" : null;
+    const opts = [{ value: "", label: "— none (incomplete) —" }]
+      .concat(state.workingSet.map((id) => {
+        const i = all.find((x) => x.id === id);
+        return { value: id, label: `${i.flavor}: ${i.text.slice(0, 42)}…` };
+      }));
+    return `
+    <div class="slot ${incomplete ? "incomplete" : ""}" data-slot="${idx}">
+      <div class="order">
+        <button class="mover" onclick="moveSlot(${idx}, -1)" ${idx === 0 ? "disabled" : ""}>▲</button>
+        ${idx + 1}
+        <button class="mover" onclick="moveSlot(${idx}, 1)" ${idx === state.slots.length - 1 ? "disabled" : ""}>▼</button>
+        <span class="seq">seq</span>
+      </div>
+      <div class="main">
+        <div class="roleline">
+          ${roleChip(s.role)}
+          ${channelChip(s.channel, s.format)}
+          ${incomplete ? `<span class="incomplete-tag">incomplete — no idea linked</span>` : ""}
+        </div>
+        <div class="titleline">
+          ${editing === "title"
+            ? `<input class="title-input" id="edit-title-${idx}" value="${s.title || ""}" onkeydown="if(event.key==='Enter')saveEdit('title',${idx},this.value)" />`
+            : `<span class="titletext ${s.title ? "" : "empty"}">${s.title || "No title yet"}</span><button class="pencil" title="Edit title" onclick="startEdit('title',${idx})">✎</button>`}
+        </div>
+        <div class="angleline">
+          ${editing === "angle"
+            ? `<input class="angle-input" id="edit-angle-${idx}" value="${s.angle || ""}" onkeydown="if(event.key==='Enter')saveEdit('angle',${idx},this.value)" />`
+            : `<span class="angletext ${s.angle ? "" : "empty"}">${s.angle || "Add an angle"}</span><button class="pencil" title="Edit angle" onclick="startEdit('angle',${idx})">✎</button>`}
+        </div>
+      </div>
+      <aside>
+        <span class="label">Linked idea</span>
+        ${csel("link-" + idx, opts, s.idea || "", (v) => linkIdea(idx, v))}
+      </aside>
+    </div>`;
+  }).join("");
+  state.slots.forEach((_, idx) => { window._cselHandlers["link-" + idx] = (v) => linkIdea(idx, v); });
+  updateAcceptState();
+}
+
+function startEdit(kind, idx) { state.editing = kind + "-" + idx; renderSlots(); const el = $(`#edit-${kind}-${idx}`); if (el) { el.focus(); el.select(); } }
+function saveEdit(kind, idx, val) {
+  state.slots[idx][kind] = val.trim();
+  state.editing = null;
+  renderSlots();
+}
+document.addEventListener("focusout", (e) => {
+  if (state.editing && e.target.id && e.target.id.startsWith("edit-")) {
+    const [kind, idx] = [e.target.id.split("-")[1], +e.target.id.split("-")[2]];
+    setTimeout(() => {
+      if (state.editing === kind + "-" + idx && document.activeElement !== e.target) saveEdit(kind, idx, e.target.value);
+    }, 120);
+  }
+});
+
+function linkIdea(idx, id) {
+  state.slots[idx].idea = id || null;
+  renderSlots();
+  if (id) toast("Idea linked to slot. Membership is one-way — it stays in the working set.");
+}
+function moveSlot(idx, dir) {
+  const t = state.slots[idx];
+  state.slots[idx] = state.slots[idx + dir];
+  state.slots[idx + dir] = t;
+  renderSlots();
+}
+
+function updateAcceptState() {
+  if (!state.shapeProposed) return;
+  const incomplete = state.slots.filter((s) => !s.idea).length;
+  $("#btn-accept-shape").disabled = incomplete > 0;
+  $("#footer-3-hint").innerHTML = incomplete > 0
+    ? `<b>${incomplete} slot${incomplete > 1 ? "s" : ""} incomplete</b> — every slot needs a linked idea before the shape can be accepted.`
+    : "All slots linked. Accepting materializes <b>scheduled-but-unapproved</b> posts in publishing sequence — nothing auto-approves, nothing submits. Dates stay on the calendar.";
+}
+
+$("#btn-accept-shape").addEventListener("click", () => {
+  state.accepted = true;
+  const filled = state.slots.filter((s) => s.idea).length;
+  $("#accepted-summary").textContent = `${state.campaignTitle} — ${filled} slots in publishing sequence (dates on the calendar). Shape saved as a durable plan.`;
+  goto(4);
+});
+
+/* boot */
+goto(1);
+startExtraction();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/06/2026 18:38:18 PDT
+Last updated: 09/06/2026 19:17:32 PDT
 
 ## State
 
@@ -16,19 +16,20 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- c25d5e7 docs: sync handoff — prototype #66 feedback pass 1 complete
+- 7cd2a07 Merge pull request #73 from jakebutler/wayfinder/prototype-66-feedback-pass-2
 
 ## Recent Commits
 
+- 7cd2a07 Merge pull request #73 from jakebutler/wayfinder/prototype-66-feedback-pass-2
+- 4a9226b feat: prototype #66 revision 2 — affordance clarity + proximity fixes
 - c25d5e7 docs: sync handoff — prototype #66 feedback pass 1 complete
 - 8b108c4 Merge pull request #72 from jakebutler/wayfinder/prototype-66-feedback-pass
 - 2edff32 feat: prototype #66 revision — first e2e feedback pass
-- 544cee3 Merge pull request #71 from jakebutler/wayfinder/prototype-66-paper-to-shape
-- 7389757 feat: add prototype #66 — paper → campaign session → ideas → shape
 
 ## Local Working Tree
 
-- M  prototypes/66-paper-to-shape/index.html
+- A  prototypes/67-lab-corpus-to-shape/README.md
+- A  prototypes/67-lab-corpus-to-shape/index.html
 
 ## Next Agent Pickup
 
@@ -37,4 +38,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- wayfinder/prototype-66-feedback-pass-2
+- wayfinder/prototype-67-lab-corpus

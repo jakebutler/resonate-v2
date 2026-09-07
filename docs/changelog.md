@@ -3144,3 +3144,23 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - wayfinder/prototype-66-feedback-pass-2
+
+## 09/06/2026 19:17:32 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	prototypes/67-lab-corpus-to-shape/README.md
+- A	prototypes/67-lab-corpus-to-shape/index.html
+
+### Working Tree Snapshot
+
+- A  prototypes/67-lab-corpus-to-shape/README.md
+- A  prototypes/67-lab-corpus-to-shape/index.html
+
+### Branch
+
+- wayfinder/prototype-67-lab-corpus
