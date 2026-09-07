@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/07/2026 00:09:52 PDT
+Last updated: 09/07/2026 00:22:55 PDT
 
 ## State
 
@@ -16,33 +16,27 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 86d7675 Merge pull request #80 from jakebutler/feat/c1-campaign-foundation
+- 9ec830c feat: C2 document ingest — upload/paste/link to excerpt review, immutable corpus v1, /campaigns surface
 
 ## Recent Commits
 
+- 9ec830c feat: C2 document ingest — upload/paste/link to excerpt review, immutable corpus v1, /campaigns surface
 - 86d7675 Merge pull request #80 from jakebutler/feat/c1-campaign-foundation
 - 8465d22 feat: C1 campaign foundation — clean-name corpus/campaign schema, fail-closed grounding gate, shared corpus insert helper
 - 87c4933 docs: sync handoff — campaign loop spec delivered (#69)
 - 2f1e2f1 Merge pull request #79 from jakebutler/wayfinder/69-campaign-loop-spec
-- 7c360c3 docs: campaign loop product spec (#69) — supersedes #45, settles M0-M8
 
 ## Local Working Tree
 
-- A  app/api/campaigns/ingest-document/__tests__/route.test.ts
-- A  app/api/campaigns/ingest-document/route.ts
-- A  app/campaigns/page.tsx
-- A  components/__tests__/CampaignsHome.test.tsx
-- A  components/__tests__/ExcerptReviewList.test.tsx
-- A  components/campaigns/CampaignsHome.tsx
-- A  components/campaigns/ExcerptReviewList.tsx
-- A  components/campaigns/IngestDocumentFlow.tsx
-- A  components/campaigns/StartCampaignDialog.tsx
-- M  components/shell/Shell.tsx
-- M  convex/corpora.ts
-- A  lib/__tests__/corpusExtract.test.ts
-- A  lib/corpusExtract.ts
-- M  package-lock.json
-- M  package.json
+- A  app/campaigns/[campaignId]/page.tsx
+- A  components/__tests__/CampaignSession.test.tsx
+- A  components/campaigns/CampaignSession.tsx
+- A  components/campaigns/CitationChip.tsx
+- A  convex/__tests__/campaignSession.test.ts
+- M  convex/campaigns.ts
+- M  convex/schema.ts
+- A  lib/__tests__/campaignSuggestions.test.ts
+- A  lib/campaignSuggestions.ts
 
 ## Next Agent Pickup
 
@@ -51,4 +45,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/c2-document-ingest
+- feat/c3-campaign-session

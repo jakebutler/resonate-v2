@@ -774,6 +774,11 @@ export default defineSchema({
     campaignId: v.id("campaigns"),
     ideaId: v.id("ideas"),
     primary: v.boolean(),
+    state: v.union(
+      v.literal("suggested"),
+      v.literal("member"),
+      v.literal("rejected")
+    ),
     addedAt: v.number(),
   })
     .index("by_campaign", ["campaignId"])
