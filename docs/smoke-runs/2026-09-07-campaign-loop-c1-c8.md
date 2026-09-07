@@ -49,6 +49,8 @@ Seeded-secret folder hard-fails with exit 1 (verified in session).
 
 ## Pending HITL validation with Jake (on prod)
 
+0. **Infra (done this session):** the `Deploy Convex Production` job had been failing since #80 because `CONVEX_DEPLOY_KEY` / `CLERK_JWT_ISSUER_DOMAIN` were empty in repo secrets — both set 2026-09-07 and the deploy re-run succeeded, so the campaign schema + functions are live on prod Convex. `V2_OPS_SECRET` was provisioned on the prod deployment (value also in the local `.env.local`) so the C8 CLI can import.
+
 1. **C2:** upload the ReAct paper fixture on https://resonate.corvolabs.com/campaigns → review excerpts → confirm the mangled-table candidate is blocked → Flag & fix capture → save corpus v1.
 2. **C3:** start campaign (title-only) → acknowledge mock mode → suggestions cite excerpts → accept/reject/undo → **reload → state intact**.
 3. **C4:** switch presets → edits preserved; accept blocked until all slots linked; brief goal/audience saved.

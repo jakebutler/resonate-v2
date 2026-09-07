@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/07/2026 01:31:55 PDT
+Last updated: 09/07/2026 01:44:22 PDT
 
 ## State
 
@@ -16,20 +16,19 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 71bca81 test: E2E coverage for campaign loop surfaces
+- b0d1b3e Merge pull request #87 from jakebutler/feat/c8-lab-journey
 
 ## Recent Commits
 
+- b0d1b3e Merge pull request #87 from jakebutler/feat/c8-lab-journey
+- 6577d3a test: disambiguate campaigns heading in E2E
 - 71bca81 test: E2E coverage for campaign loop surfaces
+- a403732 Merge pull request #86 from jakebutler/feat/c7-approval-queue
 - 78c2965 feat: C8 lab journey — CLI dry-run/import with secret-scan hard fail, skip+warn for unsupported files, post-import excerpt review
-- d7d5268 feat: C7 calendar approval queue — gate-blocked materialize to scheduled-but-unapproved, sequence-aware inline review, long-form composer routing
-- 9da593c feat: C6 review passes — EXP-020 cohesion gate with auto-resolve + block, SEO/AEO and humanizer placeholder surfaces
-- 8f2c26a feat: C5 draft set — set-level gated mock generation with placeholder tokens, inline unapproved badges, campaign provenance
 
 ## Local Working Tree
 
-- A  docs/smoke-runs/2026-09-07-campaign-loop-c1-c8.md
-- M  e2e/campaign-loop.spec.ts
+- M  docs/smoke-runs/2026-09-07-campaign-loop-c1-c8.md
 
 ## Next Agent Pickup
 
@@ -38,4 +37,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/c8-lab-journey
+- main
