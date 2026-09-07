@@ -3486,3 +3486,33 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/c6-review-passes
+
+## 09/07/2026 01:08:02 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	app/campaigns/[campaignId]/queue/page.tsx
+- A	components/__tests__/ApprovalQueue.test.tsx
+- A	components/campaigns/ApprovalQueue.tsx
+- M	components/campaigns/DraftSetView.tsx
+- A	convex/__tests__/queue.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/queue.ts
+
+### Working Tree Snapshot
+
+- A  app/campaigns/[campaignId]/queue/page.tsx
+- A  components/__tests__/ApprovalQueue.test.tsx
+- A  components/campaigns/ApprovalQueue.tsx
+- M  components/campaigns/DraftSetView.tsx
+- A  convex/__tests__/queue.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/queue.ts
+
+### Branch
+
+- feat/c7-approval-queue

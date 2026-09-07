@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/07/2026 00:59:02 PDT
+Last updated: 09/07/2026 01:08:02 PDT
 
 ## State
 
@@ -16,27 +16,25 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 8f2c26a feat: C5 draft set — set-level gated mock generation with placeholder tokens, inline unapproved badges, campaign provenance
+- 9da593c feat: C6 review passes — EXP-020 cohesion gate with auto-resolve + block, SEO/AEO and humanizer placeholder surfaces
 
 ## Recent Commits
 
+- 9da593c feat: C6 review passes — EXP-020 cohesion gate with auto-resolve + block, SEO/AEO and humanizer placeholder surfaces
 - 8f2c26a feat: C5 draft set — set-level gated mock generation with placeholder tokens, inline unapproved badges, campaign provenance
 - 8b6ded8 feat: C4 campaign shape — Seed/Standard/Deep presets with edit-preserving switches, slot editing, publishing sequence, accept-blocks-on-incomplete
 - a36ee48 feat: C3 campaign session — suggested ideas with excerpt citations, working set with D5/D7 membership rules, inbox search
 - 9ec830c feat: C2 document ingest — upload/paste/link to excerpt review, immutable corpus v1, /campaigns surface
-- 86d7675 Merge pull request #80 from jakebutler/feat/c1-campaign-foundation
 
 ## Local Working Tree
 
-- M  components/__tests__/DraftSetView.test.tsx
-- A  components/__tests__/ReviewPassesPanel.test.tsx
+- A  app/campaigns/[campaignId]/queue/page.tsx
+- A  components/__tests__/ApprovalQueue.test.tsx
+- A  components/campaigns/ApprovalQueue.tsx
 - M  components/campaigns/DraftSetView.tsx
-- A  components/campaigns/ReviewPassesPanel.tsx
-- A  convex/__tests__/cohesion.test.ts
+- A  convex/__tests__/queue.test.ts
 - M  convex/_generated/api.d.ts
-- A  convex/cohesion.ts
-- A  lib/__tests__/cohesion.test.ts
-- A  lib/cohesion.ts
+- A  convex/queue.ts
 
 ## Next Agent Pickup
 
@@ -45,4 +43,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/c6-review-passes
+- feat/c7-approval-queue
