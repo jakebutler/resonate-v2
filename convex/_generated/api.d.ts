@@ -11,6 +11,9 @@
 import type * as __tests___helpers_mockMutationCtx from "../__tests__/helpers/mockMutationCtx.js";
 import type * as backfill from "../backfill.js";
 import type * as bufferLive from "../bufferLive.js";
+import type * as campaignAccess from "../campaignAccess.js";
+import type * as campaigns from "../campaigns.js";
+import type * as corpora from "../corpora.js";
 import type * as githubPrSync from "../githubPrSync.js";
 import type * as ideas from "../ideas.js";
 import type * as posts from "../posts.js";
@@ -31,6 +34,9 @@ declare const fullApi: ApiFromModules<{
   "__tests__/helpers/mockMutationCtx": typeof __tests___helpers_mockMutationCtx;
   backfill: typeof backfill;
   bufferLive: typeof bufferLive;
+  campaignAccess: typeof campaignAccess;
+  campaigns: typeof campaigns;
+  corpora: typeof corpora;
   githubPrSync: typeof githubPrSync;
   ideas: typeof ideas;
   posts: typeof posts;

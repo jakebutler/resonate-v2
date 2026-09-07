@@ -3266,3 +3266,35 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - wayfinder/69-campaign-loop-spec
+
+## 09/06/2026 23:51:11 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	convex/__tests__/campaigns.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/campaignAccess.ts
+- A	convex/campaigns.ts
+- A	convex/corpora.ts
+- M	convex/schema.ts
+- A	lib/__tests__/campaignGrounding.test.ts
+- A	lib/campaignGrounding.ts
+
+### Working Tree Snapshot
+
+- A  convex/__tests__/campaigns.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/campaignAccess.ts
+- A  convex/campaigns.ts
+- A  convex/corpora.ts
+- M  convex/schema.ts
+- A  lib/__tests__/campaignGrounding.test.ts
+- A  lib/campaignGrounding.ts
+
+### Branch
+
+- feat/c1-campaign-foundation

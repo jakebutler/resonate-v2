@@ -124,6 +124,58 @@ const v2PlatformSettings = v.union(
   v2CorvoBlogPlatformSettings
 );
 
+const corpusOrigin = v.union(
+  v.literal("upload"),
+  v.literal("cli"),
+  v.literal("paste")
+);
+
+const corpusDocumentKind = v.union(
+  v.literal("md"),
+  v.literal("txt"),
+  v.literal("json"),
+  v.literal("csv"),
+  v.literal("pdf")
+);
+
+const excerptSensitivity = v.union(
+  v.literal("unreviewed"),
+  v.literal("internal-only"),
+  v.literal("public-safe")
+);
+
+const excerptReviewState = v.union(
+  v.literal("accepted"),
+  v.literal("flagged")
+);
+
+const campaignPreset = v.union(
+  v.literal("seed"),
+  v.literal("standard"),
+  v.literal("deep")
+);
+
+const slotRole = v.union(
+  v.literal("pillar"),
+  v.literal("hook"),
+  v.literal("satellite"),
+  v.literal("cta"),
+  v.literal("recap")
+);
+
+const slotMediaType = v.union(
+  v.literal("post"),
+  v.literal("article"),
+  v.literal("essay"),
+  v.literal("script")
+);
+
+const ideaFlavor = v.union(
+  v.literal("opinion"),
+  v.literal("insight"),
+  v.literal("thought")
+);
+
 export default defineSchema({
   v2Brands: defineTable({
     brandId: v2BrandId,
@@ -198,6 +250,9 @@ export default defineSchema({
         v.literal("rejected")
       )
     ),
+    sourceCampaignId: v.optional(v.id("campaigns")),
+    sourceSlotId: v.optional(v.id("campaignSlots")),
+    sourceExcerptIds: v.optional(v.array(v.string())),
     contentFingerprint: v.string(),
     platformSettings: v.optional(v2PlatformSettings),
     createdAt: v.number(),
@@ -559,6 +614,16 @@ export default defineSchema({
       v.literal("research"),
       v.literal("archived")
     ),
+    flavor: v.optional(ideaFlavor),
+    excerptCitations: v.optional(v.array(v.string())),
+    campaignHints: v.optional(
+      v.array(
+        v.object({
+          campaignId: v.id("campaigns"),
+          campaignTitle: v.string(),
+        })
+      )
+    ),
     researchObjective: v.optional(v.string()),
     researchNotes: v.optional(v.string()),
     researchModes: v.optional(
@@ -651,4 +716,121 @@ export default defineSchema({
     .index("by_user_id_and_stage", ["userId", "stage"])
     .index("by_user_id_and_idea_id", ["userId", "ideaId"])
     .index("by_user_id_and_post_id", ["userId", "postId"]),
+
+  corpora: defineTable({
+    brandId: v2BrandId,
+    origin: corpusOrigin,
+    version: v.number(),
+    status: v.union(v.literal("active")),
+    createdAt: v.number(),
+  })
+    .index("by_brand", ["brandId"])
+    .index("by_brand_and_version", ["brandId", "version"]),
+
+  corpusDocuments: defineTable({
+    corpusId: v.id("corpora"),
+    name: v.string(),
+    kind: corpusDocumentKind,
+    meta: v.optional(v.any()),
+  }).index("by_corpus", ["corpusId"]),
+
+  corpusExcerpts: defineTable({
+    corpusId: v.id("corpora"),
+    documentId: v.id("corpusDocuments"),
+    seq: v.number(),
+    text: v.string(),
+    provenance: v.string(),
+    sensitivity: excerptSensitivity,
+    labels: v.optional(v.array(v.string())),
+    reviewState: excerptReviewState,
+  })
+    .index("by_corpus", ["corpusId"])
+    .index("by_corpus_and_document", ["corpusId", "documentId"])
+    .index("by_corpus_and_seq", ["corpusId", "seq"]),
+
+  campaigns: defineTable({
+    userId: v.string(),
+    brandId: v2BrandId,
+    title: v.string(),
+    status: v.union(v.literal("active"), v.literal("completed")),
+    corpusIds: v.array(v.id("corpora")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_brand", ["brandId"])
+    .index("by_user", ["userId"]),
+
+  campaignBriefs: defineTable({
+    campaignId: v.id("campaigns"),
+    goal: v.optional(v.string()),
+    audience: v.optional(v.string()),
+    window: v.optional(v.string()),
+    cta: v.optional(v.string()),
+    metric: v.optional(v.string()),
+    constraints: v.optional(v.array(v.string())),
+  }).index("by_campaign", ["campaignId"]),
+
+  campaignIdeas: defineTable({
+    campaignId: v.id("campaigns"),
+    ideaId: v.id("ideas"),
+    primary: v.boolean(),
+    addedAt: v.number(),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_idea", ["ideaId"])
+    .index("by_campaign_and_idea", ["campaignId", "ideaId"]),
+
+  campaignShapes: defineTable({
+    campaignId: v.id("campaigns"),
+    preset: campaignPreset,
+    status: v.union(v.literal("proposed"), v.literal("accepted")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_campaign_and_status", ["campaignId", "status"]),
+
+  campaignSlots: defineTable({
+    shapeId: v.id("campaignShapes"),
+    seq: v.number(),
+    channel: v2ChannelId,
+    mediaType: slotMediaType,
+    role: slotRole,
+    title: v.optional(v.string()),
+    angle: v.optional(v.string()),
+    ideaId: v.optional(v.id("ideas")),
+  })
+    .index("by_shape", ["shapeId"])
+    .index("by_shape_and_seq", ["shapeId", "seq"]),
+
+  materializations: defineTable({
+    campaignId: v.id("campaigns"),
+    shapeId: v.id("campaignShapes"),
+    mode: v.union(v.literal("mock"), v.literal("live")),
+    mockAcknowledged: v.optional(v.boolean()),
+    createdAt: v.number(),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_shape", ["shapeId"]),
+
+  cohesionRuns: defineTable({
+    materializationId: v.id("materializations"),
+    checks: v.array(
+      v.object({
+        id: v.string(),
+        label: v.string(),
+        passed: v.boolean(),
+        blocking: v.boolean(),
+      })
+    ),
+    autoFixLog: v.array(
+      v.object({
+        checkId: v.string(),
+        note: v.string(),
+        fixedAt: v.number(),
+      })
+    ),
+    passed: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_materialization", ["materializationId"]),
 });
