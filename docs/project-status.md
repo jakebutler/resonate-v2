@@ -16,7 +16,12 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 4e4d07c docs: sync handoff — all three campaign prototypes merged, #69 is next
+- #78 merged — prototype #68 feedback pass: sequence numbering, decluttered draft cards, auto-resolving cohesion gate, calendar approval queue with next-draft flow.
+
+## Recent Commits
+
+- #78 merge: prototype #68 feedback pass (approval queue)
+- #77 merge: flaky test timeout fix
 
 ## Recent Commits
 
