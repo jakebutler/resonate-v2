@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/07/2026 00:40:29 PDT
+Last updated: 09/07/2026 00:48:45 PDT
 
 ## State
 
@@ -16,30 +16,27 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- a36ee48 feat: C3 campaign session — suggested ideas with excerpt citations, working set with D5/D7 membership rules, inbox search
+- 8b6ded8 feat: C4 campaign shape — Seed/Standard/Deep presets with edit-preserving switches, slot editing, publishing sequence, accept-blocks-on-incomplete
 
 ## Recent Commits
 
+- 8b6ded8 feat: C4 campaign shape — Seed/Standard/Deep presets with edit-preserving switches, slot editing, publishing sequence, accept-blocks-on-incomplete
 - a36ee48 feat: C3 campaign session — suggested ideas with excerpt citations, working set with D5/D7 membership rules, inbox search
 - 9ec830c feat: C2 document ingest — upload/paste/link to excerpt review, immutable corpus v1, /campaigns surface
 - 86d7675 Merge pull request #80 from jakebutler/feat/c1-campaign-foundation
 - 8465d22 feat: C1 campaign foundation — clean-name corpus/campaign schema, fail-closed grounding gate, shared corpus insert helper
-- 87c4933 docs: sync handoff — campaign loop spec delivered (#69)
 
 ## Local Working Tree
 
-- A  app/campaigns/[campaignId]/shape/page.tsx
-- A  components/__tests__/CampaignShapeBuilder.test.tsx
-- M  components/campaigns/CampaignSession.tsx
-- A  components/campaigns/CampaignShapeBuilder.tsx
-- A  components/campaigns/ChannelIcon.tsx
-- A  convex/__tests__/campaignShape.test.ts
+- A  app/campaigns/[campaignId]/drafts/page.tsx
+- A  components/__tests__/DraftSetView.test.tsx
+- M  components/campaigns/CampaignShapeBuilder.tsx
+- A  components/campaigns/DraftSetView.tsx
+- A  convex/__tests__/draftSet.test.ts
 - M  convex/_generated/api.d.ts
-- M  convex/campaignAccess.ts
-- M  convex/campaigns.ts
-- A  convex/shapes.ts
-- A  lib/__tests__/campaignShapes.test.ts
-- A  lib/campaignShapes.ts
+- A  convex/draftSet.ts
+- A  lib/__tests__/campaignDrafts.test.ts
+- A  lib/campaignDrafts.ts
 
 ## Next Agent Pickup
 
@@ -48,4 +45,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/c4-campaign-shape
+- feat/c5-draft-set
