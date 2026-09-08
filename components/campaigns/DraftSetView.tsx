@@ -9,6 +9,7 @@ import { ChannelIcon } from "@/components/campaigns/ChannelIcon";
 import { ReviewPassesPanel } from "@/components/campaigns/ReviewPassesPanel";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
+import { channelLabel } from "@/lib/campaignLabels";
 import {
   ROLE_LEGEND,
   ROLE_TINTS,
@@ -58,6 +59,9 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
   }) as DraftSetView;
 
   const generateDraftSet = useMutation(api.draftSet.generateDraftSet);
+  const requestMockAcknowledgment = useMutation(
+    api.mockAck.requestMockAcknowledgment
+  );
 
   const [mockConfirmOpen, setMockConfirmOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -71,9 +75,14 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
   async function handleGenerate() {
     setGenerating(true);
     try {
+      // D-21: the confirm dialog mints a server-issued acknowledgment token;
+      // the client never asserts acknowledgment on its own.
+      const ack = await requestMockAcknowledgment({
+        campaignId: typedCampaignId,
+      });
       const result = await generateDraftSet({
         campaignId: typedCampaignId,
-        mockAcknowledged: true,
+        mockAckToken: ack.token,
       });
       setMockConfirmOpen(false);
       showToast(
@@ -122,26 +131,26 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
         ) : null}
         <div className={cn("flex items-center gap-2", !view?.materialization && "ml-auto")}>
           <span className="rounded-full bg-[#fff1e0] px-2.5 py-0.5 text-[11px] font-normal text-[#b25400]">
-            mock AI
+            mock mode
           </span>
           <Button
-            variant="primary"
+            variant={view.materialization ? "secondary" : "primary"}
             size="sm"
-            disabled={generating || !view.materialization}
+            disabled={generating || Boolean(view.materialization)}
             onClick={() => setMockConfirmOpen(true)}
             data-testid="generate-draft-set"
           >
             {view.materialization
-              ? "Regenerate (coming with the agent layer)"
+              ? "Regenerate (coming soon)"
               : "Generate draft set"}
           </Button>
         </div>
       </div>
       <p className={cn("mt-1 text-sm", tokens.textMuted)}>
         Placeholders are generated <b>as one set</b> from the accepted shape —
-        never per-post. Bracketed tokens mark what the real skill pack would
-        fill. Everything lands <b>scheduled-but-unapproved</b> once materialized;
-        nothing auto-approves.
+        never per-post. Bracketed tokens mark where real generated copy would
+        go. Everything lands <b>scheduled-but-unapproved</b> once it is added
+        to the calendar; nothing auto-approves.
       </p>
 
       {mockConfirmOpen ? (
@@ -167,7 +176,7 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
 
       {view.materialization && view.drafts.length === 0 ? (
         <p className={cn("mt-6 text-sm", tokens.textMuted)}>
-          Draft set generated — hydrating…
+          Draft set ready — loading the drafts…
         </p>
       ) : null}
 
@@ -200,7 +209,7 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
               </span>
               <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
                 <ChannelIcon channel={entry.post.channelId} />
-                {entry.post.channelId === "corvo-blog" ? "Corvo Blog" : entry.post.channelId}
+                {channelLabel(entry.post.channelId)}
               </span>
               <span className="text-[13px]">{entry.slot.mediaType}</span>
               <span className={cn("text-xs", tokens.textMuted)}>

@@ -18,6 +18,8 @@ import type * as corpora from "../corpora.js";
 import type * as draftSet from "../draftSet.js";
 import type * as githubPrSync from "../githubPrSync.js";
 import type * as ideas from "../ideas.js";
+import type * as mockAck from "../mockAck.js";
+import type * as opsAudit from "../opsAudit.js";
 import type * as posts from "../posts.js";
 import type * as previewSeedData from "../previewSeedData.js";
 import type * as publishing from "../publishing.js";
@@ -45,6 +47,8 @@ declare const fullApi: ApiFromModules<{
   draftSet: typeof draftSet;
   githubPrSync: typeof githubPrSync;
   ideas: typeof ideas;
+  mockAck: typeof mockAck;
+  opsAudit: typeof opsAudit;
   posts: typeof posts;
   previewSeedData: typeof previewSeedData;
   publishing: typeof publishing;

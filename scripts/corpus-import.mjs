@@ -4,18 +4,20 @@
  *
  *   node scripts/corpus-import.mjs <folder> --brand <brandId> [--dry-run]
  *
- * Rituals (#64, D-18): dry-run first; md/txt/json/csv accepted; unsupported
- * files skip with a dirty warning; a secret-scan finding hard-fails the
- * import. One import becomes one immutable corpus version.
+ * Rituals (#64, D-18): dry-run first; md/txt/json/csv accepted (recursively —
+ * the lab corpus unit is the nested experiment directory); unsupported files
+ * skip with a dirty warning; a secret-scan finding hard-fails the import.
+ * One import becomes one immutable corpus version.
  *
- * The server-side mutation (corpora.importLabBundle) re-runs classification,
- * the secret scan, and segmentation authoritatively (lib/labImport.ts is the
- * source of truth for the patterns mirrored below).
+ * Transport: the CLI POSTs the scanned bundle to the app's
+ * /api/ops/lab-import route, which authenticates the ops bearer secret
+ * (timing-safe compare), rate-limits, audits rejections, and invokes the
+ * internal `corpora.importLabBundle` mutation. The mutation re-runs
+ * classification, the secret scan, and segmentation authoritatively
+ * (lib/labImport.ts is the source of truth for the patterns mirrored below).
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, basename } from "node:path";
-import { ConvexHttpClient } from "convex/browser";
-import { anyApi } from "convex/server";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 
 const ACCEPTED_EXTENSIONS = new Set([
   ".md",
@@ -25,13 +27,41 @@ const ACCEPTED_EXTENSIONS = new Set([
   ".csv",
 ]);
 
+// Mirrored from lib/labImport.ts (source of truth). Keyword anchors use
+// `(?<![A-Za-z0-9])` instead of `\b`: `_` is a word character, so `\b` never
+// matches inside names like OPENAI_API_KEY or AWS_SECRET_ACCESS_KEY.
 const SECRET_PATTERNS = [
   { kind: "private key block", pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  { kind: "api key assignment", pattern: /\b(api[_-]?key|apikey)\b\s*[:=]\s*["']?[A-Za-z0-9_\-]{12,}/i },
-  { kind: "bearer token", pattern: /\bBearer\s+[A-Za-z0-9_\-\.]{16,}/ },
-  { kind: "aws access key", pattern: /\bAKIA[0-9A-Z]{16}\b/ },
-  { kind: "password assignment", pattern: /\b(password|passwd|pwd)\b\s*[:=]\s*["']?[^\s"']{6,}/i },
-  { kind: "generic secret assignment", pattern: /\b(secret|token)\b\s*[:=]\s*["']?[A-Za-z0-9_\-]{16,}/i },
+  { kind: "openai api key", pattern: /(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{16,}/ },
+  { kind: "github token", pattern: /(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{16,}/ },
+  { kind: "slack token", pattern: /(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9-]{10,}/ },
+  { kind: "google api key", pattern: /(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{30,}/ },
+  {
+    kind: "jwt",
+    pattern: /(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/,
+  },
+  {
+    kind: "url credentials",
+    pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\s:@/]*:[^\s@/]*@/,
+  },
+  {
+    kind: "api key assignment",
+    pattern: /(?<![A-Za-z0-9])(api[_-]?key|apikey)(?![A-Za-z0-9])\s*[:=]\s*["']?[A-Za-z0-9_\-]{12,}/i,
+  },
+  { kind: "bearer token", pattern: /(?<![A-Za-z0-9])Bearer\s+[A-Za-z0-9_\-\.]{16,}/ },
+  { kind: "aws access key", pattern: /(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}(?![0-9A-Z])/ },
+  {
+    kind: "password assignment",
+    pattern: /(?<![A-Za-z0-9])(password|passwd|pwd)(?![A-Za-z0-9])\s*[:=]\s*["']?[^\s"']{6,}/i,
+  },
+  {
+    kind: "aws secret key assignment",
+    pattern: /(?<![A-Za-z0-9])(aws[_-]?)?secret[_-]?access[_-]?key(?![A-Za-z0-9])\s*[:=]\s*["']?[A-Za-z0-9/+=]{16,}/i,
+  },
+  {
+    kind: "generic secret assignment",
+    pattern: /(?<![A-Za-z0-9])(secret|token)(?![A-Za-z0-9])\s*[:=]\s*["']?[A-Za-z0-9_\-]{16,}/i,
+  },
 ];
 
 function parseArgs(argv) {
@@ -51,12 +81,20 @@ function parseArgs(argv) {
   return args;
 }
 
+/**
+ * Recurse into subdirectories: the lab corpus unit is the nested experiment
+ * directory, so a shallow listing sees zero files on a real import.
+ */
 function listFiles(folder) {
   const entries = [];
-  for (const entry of readdirSync(folder)) {
-    const full = join(folder, entry);
-    if (statSync(full).isFile()) entries.push(full);
-  }
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile()) entries.push(full);
+    }
+  };
+  walk(folder);
   return entries.sort();
 }
 
@@ -108,7 +146,9 @@ async function main() {
   let hardFail = null;
 
   for (const file of files) {
-    const name = basename(file);
+    // Nested experiment directories are the corpus unit — keep the relative
+    // path so same-named files in different folders stay distinguishable.
+    const name = relative(folder, file);
     const dot = name.lastIndexOf(".");
     const extension = dot >= 0 ? name.slice(dot).toLowerCase() : "";
     if (!ACCEPTED_EXTENSIONS.has(extension)) {
@@ -143,6 +183,13 @@ async function main() {
     process.exit(1);
   }
 
+  if (accepted.length === 0) {
+    console.error(
+      `\n✗ No importable files (md/markdown/txt/json/csv) found under "${folder}".\n  The lab corpus unit is the nested experiment directory — check the folder path.\n  Nothing was imported.`
+    );
+    process.exit(1);
+  }
+
   if (dryRun) {
     console.log(
       `\nDry-run complete — ${accepted.length}/${files.length} file(s) would import (${skipped} skipped). Re-run without --dry-run to import.`
@@ -150,24 +197,36 @@ async function main() {
     return;
   }
 
-  const convexUrl = readEnvValue("NEXT_PUBLIC_CONVEX_URL");
+  const appUrl = (
+    readEnvValue("RESONATE_APP_URL") ??
+    readEnvValue("NEXT_PUBLIC_APP_URL") ??
+    "http://localhost:3000"
+  ).replace(/\/+$/, "");
   const opsSecret = readEnvValue("V2_OPS_SECRET");
-  if (!convexUrl || !opsSecret) {
+  if (!opsSecret) {
     console.error(
-      "\n✗ NEXT_PUBLIC_CONVEX_URL and V2_OPS_SECRET are required (set them in .env.local, and on the Convex deployment via `npx convex env set V2_OPS_SECRET`)."
+      "\n✗ V2_OPS_SECRET is required (set it in .env.local, and on the deployment via `npx convex env set V2_OPS_SECRET`)."
     );
     process.exit(1);
   }
 
-  const client = new ConvexHttpClient(convexUrl);
   try {
-    const result = await client.mutation(anyApi.corpora.importLabBundle, {
-      brandId: brand,
-      opsSecret,
-      files: accepted,
+    const response = await fetch(`${appUrl}/api/ops/lab-import`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${opsSecret}`,
+      },
+      body: JSON.stringify({ brandId: brand, files: accepted }),
     });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        `${response.status} ${response.statusText}${payload?.error ? ` — ${payload.error}` : ""}`
+      );
+    }
     console.log(
-      `\n✓ Imported corpus v${result.version} — ${result.excerptCount} excerpt(s) saved as an immutable version on the ${brand} brand corpus.`
+      `\n✓ Imported corpus v${payload.version} — ${payload.excerptCount} excerpt(s) saved as an immutable version on the ${brand} brand corpus.`
     );
     console.log(
       "  Post-import excerpt review (sensitivity, include/exclude) happens on the Campaigns surface."

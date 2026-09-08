@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { CorpusExcerptReview } from "@/components/campaigns/CorpusExcerptReview"
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 import { BRANDS, type BrandId } from "@/lib/domain";
+import { campaignStatusLabel, corpusOriginLabel } from "@/lib/campaignLabels";
 
 type CampaignSummary = {
   _id: string;
@@ -99,7 +101,7 @@ export function CampaignsHome() {
               {brandLabel(brandId)} corpus
             </h2>
             <Button
-              variant="primary"
+              variant={ingestOpen ? "secondary" : "primary"}
               size="sm"
               onClick={() => setIngestOpen((open) => !open)}
               data-testid="toggle-ingest"
@@ -143,7 +145,7 @@ export function CampaignsHome() {
                     {brandLabel(corpus.brandId)} corpus · v{corpus.version}
                   </span>
                   <span className="rounded-full bg-[#ffefe0] px-2 py-0.5 text-[11px] font-normal text-[#8a4b00]">
-                    {corpus.origin}
+                    {corpusOriginLabel(corpus.origin)}
                   </span>
                   <span className={cn("ml-auto text-xs", tokens.textMuted)}>
                     {formatDate(corpus.createdAt)}
@@ -184,29 +186,35 @@ export function CampaignsHome() {
               <li
                 key={campaign._id}
                 className={cn(
-                  "flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+                  "rounded-lg border text-sm",
                   tokens.border
                 )}
               >
-                <span className="font-medium">{campaign.title}</span>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[11px] font-normal",
-                    tokens.accentBg,
-                    tokens.accent
-                  )}
+                <Link
+                  href={`/campaigns/${campaign._id}`}
+                  data-testid="campaign-link"
+                  className="flex flex-wrap items-center gap-2 px-3 py-2"
                 >
-                  {campaign.status}
-                </span>
-                {campaign.corpusIds.length > 0 ? (
-                  <span className={cn("text-[11px]", tokens.textMuted)}>
-                    {campaign.corpusIds.length} corpus version
-                    {campaign.corpusIds.length === 1 ? "" : "s"}
+                  <span className="font-medium">{campaign.title}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[11px] font-normal",
+                      tokens.accentBg,
+                      tokens.accent
+                    )}
+                  >
+                    {campaignStatusLabel(campaign.status)}
                   </span>
-                ) : null}
-                <span className={cn("ml-auto text-xs", tokens.textMuted)}>
-                  {formatDate(campaign.updatedAt)}
-                </span>
+                  {campaign.corpusIds.length > 0 ? (
+                    <span className={cn("text-[11px]", tokens.textMuted)}>
+                      {campaign.corpusIds.length} corpus version
+                      {campaign.corpusIds.length === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                  <span className={cn("ml-auto text-xs", tokens.textMuted)}>
+                    {formatDate(campaign.updatedAt)}
+                  </span>
+                </Link>
               </li>
             ))}
             {visibleCampaigns.length === 0 ? (

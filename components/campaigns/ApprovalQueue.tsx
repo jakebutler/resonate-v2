@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ChannelIcon } from "@/components/campaigns/ChannelIcon";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
+import { channelLabel } from "@/lib/campaignLabels";
 import {
   ROLE_LEGEND,
   ROLE_TINTS,
@@ -74,46 +75,52 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
     window.setTimeout(() => setToast(null), 4200);
   }
 
-  async function handleMaterialize() {
+  async function handleAddToCalendar() {
     setBusy(true);
     try {
       const result = await materialize({ campaignId: typedCampaignId });
       showToast(
         result.materialized
-          ? `Materialized: ${result.draftCount} drafts are now scheduled-but-unapproved on the calendar. Click any row to review; approve inline to unblock.`
+          ? `Added to the calendar: ${result.draftCount} drafts are now scheduled-but-unapproved. Click any row to review; approve inline to unblock.`
           : "This batch is already on the calendar."
       );
     } catch (caught) {
-      showToast(caught instanceof Error ? caught.message : "Materialize failed.");
+      showToast(caught instanceof Error ? caught.message : "Could not add the batch to the calendar.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleApprove(entry: QueueEntry) {
-    await setApproval({ postId: entry.postId as never, approvalState: "approved" });
+  async function handleApprove(entry: QueueEntry): Promise<boolean> {
+    try {
+      await setApproval({ postId: entry.postId as never, approvalState: "approved" });
+    } catch (caught) {
+      showToast(caught instanceof Error ? caught.message : "Could not approve this draft.");
+      return false;
+    }
     showToast(`Approved — this post is unblocked. Submission still happens in the composer, by you.`);
+    return true;
   }
 
-  function approveAndAdvance(entry: QueueEntry) {
-    void handleApprove(entry).then(() => {
-      const remaining = (view?.queue ?? []).filter(
-        (candidate) =>
-          candidate.seq !== entry.seq && candidate.approvalState !== "approved"
-      );
-      if (remaining.length === 0) {
-        showToast("Campaign fully approved — ready to schedule. Nothing submits automatically.");
-      } else {
-        const next = remaining[0]!;
-        setExpanded(next.postId);
-        showToast(
-          `Approved — ${view!.approvedCount + 1} of ${view!.totalCount}. Next in sequence: #${next.seq} ${next.title}`
-        );
-        window.setTimeout(() => {
-          nextRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }, 60);
-      }
-    });
+  async function approveAndAdvance(entry: QueueEntry) {
+    const approved = await handleApprove(entry);
+    if (!approved) return;
+    const remaining = (view?.queue ?? []).filter(
+      (candidate) =>
+        candidate.seq !== entry.seq && candidate.approvalState !== "approved"
+    );
+    if (remaining.length === 0) {
+      showToast("Campaign fully approved — ready to schedule. Nothing submits automatically.");
+      return;
+    }
+    const next = remaining[0]!;
+    setExpanded(next.postId);
+    showToast(
+      `Approved — ${view!.approvedCount + 1} of ${view!.totalCount}. Next in sequence: #${next.seq} ${next.title}`
+    );
+    window.setTimeout(() => {
+      nextRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
   }
 
   if (view === undefined) {
@@ -148,10 +155,10 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
           size="sm"
           className="ml-auto"
           disabled={busy || view.materialized}
-          onClick={() => void handleMaterialize()}
+          onClick={() => void handleAddToCalendar()}
           data-testid="materialize-button"
         >
-          {busy ? "Materializing…" : view.materialized ? "Materialized ✓" : "Materialize to calendar"}
+          {busy ? "Adding to calendar…" : view.materialized ? "On the calendar ✓" : "Add batch to calendar"}
         </Button>
       </div>
       <p className={cn("mt-1 text-sm", tokens.textMuted)}>
@@ -162,7 +169,7 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
 
       {!view.materialized ? (
         <div className={cn(tokens.noticeWarning, "mt-4")}>
-          Not on the calendar yet — the batch materializes after the cohesion
+          Not on the calendar yet — the batch is added after the cohesion
           gate passes (run it on the drafts page).
         </div>
       ) : null}
@@ -217,7 +224,7 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
                   <ChannelIcon channel={entry.channel} />
-                  {entry.channel === "corvo-blog" ? "Corvo Blog" : entry.channel}
+                  {channelLabel(entry.channel)}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">
                   {entry.title}
@@ -249,31 +256,31 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {isLongForm ? (
-                      <>
-                        <span className={cn("text-xs", tokens.textMuted)}>
-                          Long-form — the composer is the better review surface
-                          for the full article.
-                        </span>
-                        <Button variant="secondary" size="xs" asChild>
-                          <Link href={`/editor/${entry.postId}`}>Open in composer ↗</Link>
-                        </Button>
-                      </>
+                      <span className={cn("text-xs", tokens.textMuted)}>
+                        Long-form — open the composer for the full article, or
+                        approve inline if the excerpt reads right.
+                      </span>
+                    ) : null}
+                    {isLongForm && entry.approvalState !== "approved" ? (
+                      <Button variant="secondary" size="xs" asChild>
+                        <Link href={`/editor/${entry.postId}`}>Open in composer ↗</Link>
+                      </Button>
                     ) : null}
                     {entry.approvalState === "approved" ? (
                       <span className={cn("text-xs", tokens.textMuted)}>
                         ✓ Approved — this post is unblocked. Submission still
                         happens in the composer, by you.
                       </span>
-                    ) : !isLongForm ? (
+                    ) : (
                       <Button
                         variant="accent"
                         size="xs"
-                        onClick={() => approveAndAdvance(entry)}
+                        onClick={() => void approveAndAdvance(entry)}
                         data-testid="approve-draft"
                       >
                         Approve draft
                       </Button>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               ) : null}

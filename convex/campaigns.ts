@@ -17,11 +17,31 @@ import {
   assertGroundingAllowed,
   buildCorpusCitation,
 } from "@/lib/campaignGrounding";
+import { verifyMockAcknowledgment } from "./mockAck";
 import {
   suggestCampaignIdeas,
   type IdeaFlavor,
   type SuggestionExcerptInput,
 } from "@/lib/campaignSuggestions";
+
+/**
+ * Every campaign↔idea mutation must prove the idea belongs to the caller.
+ * Idea IDs are opaque but not secret — without this check any authenticated
+ * user can read (and write hints onto) another user's ideas.
+ */
+async function requireOwnedIdea(
+  ctx: QueryCtx | MutationCtx,
+  ideaId: string,
+  userId: string
+): Promise<Doc<"ideas">> {
+  const normalized = ctx.db.normalizeId("ideas", ideaId as never);
+  if (!normalized) throw new Error("Idea not found");
+  const idea = await ctx.db.get(normalized);
+  if (!idea || idea.userId !== userId) {
+    throw new Error("Idea not found");
+  }
+  return idea;
+}
 
 export const createCampaign = mutation({
   args: {
@@ -134,17 +154,22 @@ export const attachCorpus = mutation({
 export const suggestIdeas = mutation({
   args: {
     campaignId: v.id("campaigns"),
-    mockAcknowledged: v.boolean(),
+    mockAckToken: v.string(),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const campaign = await getOwnedCampaign(ctx, userId, args.campaignId);
 
-    // Fail-closed grounding (D-21): mock suggestions require the operator's
-    // explicit acknowledgment; live mode refuses until a provider is wired.
+    // Fail-closed grounding (D-21): mock suggestions require a server-issued,
+    // unexpired acknowledgment token — never a client-asserted boolean.
+    const mockAcknowledged = await verifyMockAcknowledgment(ctx, {
+      campaignId: campaign._id,
+      userId,
+      token: args.mockAckToken,
+    });
     assertGroundingAllowed({
       mode: "mock",
-      mockAcknowledged: args.mockAcknowledged,
+      mockAcknowledged,
       liveConfigured: false,
     });
 
@@ -168,6 +193,10 @@ export const suggestIdeas = mutation({
         .withIndex("by_corpus", (q) => q.eq("corpusId", corpusId))
         .collect();
       for (const excerpt of excerpts.sort((a, b) => a.seq - b.seq)) {
+        // D-17: internal-only excerpts are never quoted; only excerpts whose
+        // review state is accepted are quotable at all.
+        if (excerpt.sensitivity === "internal-only") continue;
+        if (excerpt.reviewState !== "accepted") continue;
         excerptInputs.push({
           seq: excerpt.seq,
           text: excerpt.text,
@@ -204,7 +233,6 @@ export const suggestIdeas = mutation({
       await ctx.db.insert("campaignIdeas", {
         campaignId: campaign._id,
         ideaId,
-        primary: false,
         state: "suggested",
         addedAt: now,
       });
@@ -217,7 +245,12 @@ export const suggestIdeas = mutation({
       brandId: campaign.brandId,
       action: "campaign.suggest_ideas",
       summary: `Generated ${created} suggested idea(s) in acknowledged mock mode for "${campaign.title}".`,
-      metadata: { campaignId: String(campaign._id), mode: "mock", created },
+      metadata: {
+        campaignId: String(campaign._id),
+        mode: "mock",
+        created,
+        acknowledged: mockAcknowledged,
+      },
     });
 
     return { created };
@@ -229,8 +262,7 @@ export const addIdeaToCampaign = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const campaign = await getOwnedCampaign(ctx, userId, args.campaignId);
-    const idea = await ctx.db.get(args.ideaId);
-    if (!idea) throw new Error("Idea not found");
+    const idea = await requireOwnedIdea(ctx, args.ideaId, userId);
 
     const existing = await ctx.db
       .query("campaignIdeas")
@@ -244,12 +276,11 @@ export const addIdeaToCampaign = mutation({
       if (existing.state === "member") {
         return { added: false, reason: "already in working set" };
       }
-      await ctx.db.patch(existing._id, { state: "member", primary: true });
+      await ctx.db.patch(existing._id, { state: "member" });
     } else {
       await ctx.db.insert("campaignIdeas", {
         campaignId: campaign._id,
         ideaId: args.ideaId,
-        primary: true,
         state: "member",
         addedAt: now,
       });
@@ -285,6 +316,7 @@ export const removeIdeaFromCampaign = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const campaign = await getOwnedCampaign(ctx, userId, args.campaignId);
+    await requireOwnedIdea(ctx, args.ideaId, userId);
 
     const join = await ctx.db
       .query("campaignIdeas")
@@ -296,7 +328,7 @@ export const removeIdeaFromCampaign = mutation({
       return { removed: false, reason: "not in working set" };
     }
 
-    await ctx.db.patch(join._id, { state: "suggested", primary: false });
+    await ctx.db.patch(join._id, { state: "suggested" });
 
     // D-7 one-way membership: removing from the working set detaches the idea
     // from any shape slot, and slot linking never removes working-set membership.
@@ -348,6 +380,7 @@ export const rejectIdea = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const campaign = await getOwnedCampaign(ctx, userId, args.campaignId);
+    await requireOwnedIdea(ctx, args.ideaId, userId);
 
     const join = await ctx.db
       .query("campaignIdeas")
@@ -368,7 +401,6 @@ export const rejectIdea = mutation({
       await ctx.db.insert("campaignIdeas", {
         campaignId: campaign._id,
         ideaId: args.ideaId,
-        primary: false,
         state: "rejected",
         addedAt: now,
       });
@@ -382,6 +414,7 @@ export const undoIdeaRejection = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const campaign = await getOwnedCampaign(ctx, userId, args.campaignId);
+    await requireOwnedIdea(ctx, args.ideaId, userId);
 
     const join = await ctx.db
       .query("campaignIdeas")

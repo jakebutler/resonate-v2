@@ -72,7 +72,7 @@ describe("assertGroundingAllowed", () => {
     ).not.toThrow();
   });
 
-  it("blocks materialization-side use identically (same gate, no bypass)", () => {
+  it("still refuses mock without acknowledgment even when a live provider is configured (same gate, no bypass)", () => {
     const attempt = () =>
       assertGroundingAllowed({
         mode: "mock",

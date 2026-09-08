@@ -28,7 +28,17 @@ type ExcerptReviewListProps = {
   documentName: string;
   excerpts: ReviewedExcerpt[];
   onSelectionChange?: (selectedIndexes: number[]) => void;
+  onSensitivityChange?: (
+    sensitivityByIndex: Record<number, "unreviewed" | "internal-only" | "public-safe">
+  ) => void;
   onCorrectionsRecorded?: () => void;
+  /**
+   * D-16: enables pre-save split/merge. Only the ingest review surface sets
+   * this — saved corpus versions are immutable, so post-save review surfaces
+   * must never offer it.
+   */
+  editable?: boolean;
+  onExcerptsChange?: (next: ReviewedExcerpt[]) => void;
 };
 
 const SENSITIVITY_OPTIONS = [
@@ -42,7 +52,10 @@ export function ExcerptReviewList({
   documentName,
   excerpts,
   onSelectionChange,
+  onSensitivityChange,
   onCorrectionsRecorded,
+  editable = false,
+  onExcerptsChange,
 }: ExcerptReviewListProps) {
   const [checked, setChecked] = useState<Set<number>>(
     () =>
@@ -52,13 +65,123 @@ export function ExcerptReviewList({
           .filter((index) => !excerpts[index].unusable)
       )
   );
-  const [sensitivity, setSensitivity] = useState<Record<number, string>>({});
+  const [sensitivity, setSensitivity] = useState<
+    Record<number, "unreviewed" | "internal-only" | "public-safe">
+  >({});
   const [flagOpen, setFlagOpen] = useState<Set<number>>(() => new Set());
   const [corrections, setCorrections] = useState<Record<number, string>>({});
   const [captured, setCaptured] = useState<Set<number>>(() => new Set());
+  const [splitIndex, setSplitIndex] = useState<number | null>(null);
+  const [splitDraft, setSplitDraft] = useState("");
+  const [mergeError, setMergeError] = useState<string | null>(null);
   const recordCorrection = useMutation(api.corpora.recordExcerptCorrection);
 
   const selected = useMemo(() => [...checked], [checked]);
+
+  /**
+   * Replaces a run of rows with new ones and remaps every index-keyed state
+   * (selection, sensitivity, correction flags) so nothing silently attaches
+   * to the wrong excerpt. The first replacement inherits the first replaced
+   * row's sensitivity; new rows default to checked when usable.
+   */
+  function commitExcerptEdit(
+    start: number,
+    removeCount: number,
+    replacements: ReviewedExcerpt[]
+  ) {
+    const next = [
+      ...excerpts.slice(0, start),
+      ...replacements,
+      ...excerpts.slice(start + removeCount),
+    ];
+    onExcerptsChange?.(next);
+
+    const nextChecked = new Set<number>();
+    const nextSensitivity: Record<number, "unreviewed" | "internal-only" | "public-safe"> = {};
+    const nextCaptured = new Set<number>();
+    const nextFlagOpen = new Set<number>();
+    for (let index = 0; index < start; index += 1) {
+      if (checked.has(index)) nextChecked.add(index);
+      if (sensitivity[index]) nextSensitivity[index] = sensitivity[index];
+      if (captured.has(index)) nextCaptured.add(index);
+      if (flagOpen.has(index)) nextFlagOpen.add(index);
+    }
+    replacements.forEach((replacement, offset) => {
+      if (!replacement.unusable) nextChecked.add(start + offset);
+    });
+    if (sensitivity[start] !== undefined && replacements[0] !== undefined) {
+      nextSensitivity[start] = sensitivity[start];
+    }
+    const shift = replacements.length - removeCount;
+    for (let index = start + removeCount; index < excerpts.length; index += 1) {
+      const target = index + shift;
+      if (checked.has(index)) nextChecked.add(target);
+      if (sensitivity[index]) nextSensitivity[target] = sensitivity[index];
+      if (captured.has(index)) nextCaptured.add(target);
+      if (flagOpen.has(index)) nextFlagOpen.add(target);
+    }
+    setChecked(nextChecked);
+    setSensitivity(nextSensitivity);
+    setCaptured(nextCaptured);
+    setFlagOpen(nextFlagOpen);
+    setSplitIndex(null);
+    setSplitDraft("");
+    setMergeError(null);
+    onSelectionChange?.([...nextChecked]);
+    onSensitivityChange?.(nextSensitivity);
+  }
+
+  const splitParts = useMemo(
+    () =>
+      splitDraft
+        .split(/\n\s*\n/)
+        .map((part) => part.trim())
+        .filter(Boolean),
+    [splitDraft]
+  );
+
+  function confirmSplit() {
+    if (splitIndex === null || splitParts.length < 2) return;
+    const source = excerpts[splitIndex];
+    commitExcerptEdit(
+      splitIndex,
+      1,
+      splitParts.map((part) => ({
+        text: part,
+        provenance: source.provenance,
+        unusable: false,
+      }))
+    );
+  }
+
+  /**
+   * Merge works on the currently checked rows, but only when they are
+   * consecutive — a merge across a gap would silently swallow an excluded
+   * excerpt the operator deliberately left out.
+   */
+  function mergeSelected() {
+    if (selected.length < 2) return;
+    const sorted = [...selected].sort((a, b) => a - b);
+    const contiguous = sorted.every(
+      (index, position) => position === 0 || index === sorted[position - 1] + 1
+    );
+    if (!contiguous) {
+      setMergeError("Select consecutive excerpts to merge — gaps would swallow excerpts you left out.");
+      return;
+    }
+    const first = excerpts[sorted[0]];
+    commitExcerptEdit(
+      sorted[0],
+      sorted.length,
+      [
+        {
+          text: sorted.map((index) => excerpts[index].text).join("\n\n"),
+          provenance: first.provenance,
+          unusable: false,
+        },
+      ]
+    );
+  }
 
   function reportSelection(next: Set<number>) {
     setChecked(next);
@@ -151,7 +274,7 @@ export function ExcerptReviewList({
                     {excerpt.provenance}
                   </span>
                   {excerpt.unusable ? (
-                    <span className="rounded-md bg-[#fde8e2] px-2 py-0.5 text-[11px] font-semibold text-[#78290f]">
+                    <span className="rounded-md bg-[#fde8e2] px-2 py-0.5 text-[11px] font-normal text-[#78290f]">
                       unusable extract
                     </span>
                   ) : null}
@@ -175,12 +298,17 @@ export function ExcerptReviewList({
                     <span className={cn(!isEnabled && "pointer-events-none opacity-45")}>
                       <Select
                         value={sensitivity[index] ?? "unreviewed"}
-                        onValueChange={(value) =>
-                          setSensitivity((previous) => ({
-                            ...previous,
-                            [index]: value,
-                          }))
-                        }
+                        onValueChange={(value) => {
+                          const chosen = value as
+                            | "unreviewed"
+                            | "internal-only"
+                            | "public-safe";
+                          setSensitivity((previous) => {
+                            const next = { ...previous, [index]: chosen };
+                            onSensitivityChange?.(next);
+                            return next;
+                          });
+                        }}
                       >
                         <SelectTrigger className="h-7 w-36 text-xs" aria-label={`Sensitivity for excerpt ${index + 1}`}>
                           <SelectValue />
@@ -199,7 +327,7 @@ export function ExcerptReviewList({
                     captured.has(index) ? (
                       <span
                         className={cn(
-                          "rounded-md px-2 py-0.5 text-[11px] font-semibold",
+                          "rounded-md px-2 py-0.5 text-[11px] font-normal",
                           tokens.accentBg,
                           tokens.accent
                         )}
@@ -215,8 +343,57 @@ export function ExcerptReviewList({
                         Flag &amp; fix
                       </Button>
                     )
+                  ) : editable ? (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        setSplitIndex(splitIndex === index ? null : index);
+                        setSplitDraft(excerpt.text);
+                        setMergeError(null);
+                      }}
+                      aria-expanded={splitIndex === index}
+                    >
+                      Split
+                    </Button>
                   ) : null}
                 </div>
+                {editable && splitIndex === index ? (
+                  <div className="mt-2.5 rounded-lg border border-dashed p-3" style={{ borderColor: "rgba(0,0,0,0.15)" }}>
+                    <p className={cn("text-xs", tokens.textMuted)}>
+                      Put a blank line where one excerpt ends and the next
+                      begins. All parts inherit this provenance.
+                    </p>
+                    <Textarea
+                      rows={4}
+                      className="mt-2 text-sm"
+                      aria-label={`Split editor for excerpt ${index + 1}`}
+                      value={splitDraft}
+                      onChange={(event) => setSplitDraft(event.target.value)}
+                    />
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button
+                        size="xs"
+                        disabled={splitParts.length < 2}
+                        onClick={confirmSplit}
+                      >
+                        {splitParts.length < 2
+                          ? "Split (needs a blank line)"
+                          : `Split into ${splitParts.length} excerpts`}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => {
+                          setSplitIndex(null);
+                          setSplitDraft("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 {excerpt.unusable && flagOpen.has(index) ? (
                   <div className="mt-2.5 rounded-lg border border-dashed p-3" style={{ borderColor: "rgba(0,0,0,0.15)" }}>
                     <p className={cn("text-xs", tokens.textMuted)}>
@@ -258,9 +435,29 @@ export function ExcerptReviewList({
           );
         })}
       </div>
-      <div className={cn("px-4 py-3 text-xs font-semibold", tokens.textMuted)} data-testid="excerpt-selection-count">
-        {selected.length} excerpt{selected.length === 1 ? "" : "s"} selected —
-        saving creates an immutable corpus version.
+      <div className={cn("flex flex-wrap items-center gap-3 px-4 py-3 text-xs font-semibold", tokens.textMuted)} data-testid="excerpt-selection-count">
+        <span>
+          {selected.length} excerpt{selected.length === 1 ? "" : "s"} selected —
+          saving creates an immutable corpus version.
+        </span>
+        {editable ? (
+          <>
+            <Button
+              variant="secondary"
+              size="xs"
+              disabled={selected.length < 2}
+              onClick={mergeSelected}
+              data-testid="merge-selected"
+            >
+              Merge selected
+            </Button>
+            {mergeError ? (
+              <span className="font-normal text-[#a11441]" role="alert">
+                {mergeError}
+              </span>
+            ) : null}
+          </>
+        ) : null}
       </div>
     </div>
   );

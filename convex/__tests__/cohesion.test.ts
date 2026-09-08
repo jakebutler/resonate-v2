@@ -46,6 +46,17 @@ type SetupOptions = {
   duplicateOpenerAtSeq?: number;
 };
 
+/** Drives the confirm flow: mints a server-issued acknowledgment token. */
+async function acknowledgeMock(
+  asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
+  campaignId: string
+) {
+  const { token } = await asUser.mutation(api.mockAck.requestMockAcknowledgment, {
+    campaignId: campaignId as never,
+  });
+  return token;
+}
+
 async function setupDraftSet(t: ReturnType<typeof convexTest>, options: SetupOptions = {}) {
   const asUser = t.withIdentity(JAKE);
   const { campaignId } = await asUser.mutation(api.campaigns.createCampaign, {
@@ -85,6 +96,12 @@ async function setupDraftSet(t: ReturnType<typeof convexTest>, options: SetupOpt
         })
       );
     });
+    // Working-set membership mirrors the real flow — the gate's auto-added
+    // CTA slot links a working-set idea (D-11 completeness at materialize).
+    await asUser.mutation(api.campaigns.addIdeaToCampaign, {
+      campaignId,
+      ideaId,
+    });
     await t.run(async (ctx) => {
       await ctx.db.insert("campaignSlots", {
         shapeId: shapeId as never,
@@ -100,7 +117,7 @@ async function setupDraftSet(t: ReturnType<typeof convexTest>, options: SetupOpt
 
   await asUser.mutation(api.draftSet.generateDraftSet, {
     campaignId,
-    mockAcknowledged: true,
+    mockAckToken: await acknowledgeMock(asUser, campaignId),
   });
 
   if (options.duplicateOpenerAtSeq) {
@@ -139,10 +156,12 @@ describe("cohesion gate", () => {
     await seedBrand(t);
   });
 
-  it("blocks materialization until the gate passes", async () => {
+  it("brings a CTA-less batch to passing via the one-cta auto-fix", async () => {
     const { asUser, campaignId } = await setupDraftSet(t);
 
     // Standard preset has no CTA — the §9.1 tension. First run auto-adds it.
+    // (End-to-end gate-blocks-then-releases materialize coverage lives in
+    // queue.test.ts; this test pins the gate's own pass mechanics.)
     const firstRun = await asUser.mutation(api.cohesion.runCohesionGate, {
       campaignId,
     });
@@ -163,6 +182,9 @@ describe("cohesion gate", () => {
     const ctaDrafts = view?.drafts.filter((entry) => entry.slot.role === "cta");
     expect(ctaDrafts).toHaveLength(1);
     expect(ctaDrafts![0]!.post.approvalState).toBe("unapproved");
+    // D-11: the auto-added slot links a working-set idea, so strict slot
+    // completeness holds at materialize without operator intervention.
+    expect(ctaDrafts![0]!.slot.ideaId).toBeDefined();
 
     const review = await asUser.query(api.cohesion.getReviewPasses, { campaignId });
     const ctaFix = review?.latestRun?.autoFixLog.find(
@@ -222,6 +244,63 @@ describe("cohesion gate", () => {
     const second = await asUser.mutation(api.cohesion.runCohesionGate, { campaignId });
     expect(second.runNumber).toBe(2);
     expect(second.passed).toBe(true);
+  });
+
+  it("does not report a pass when a mechanical fix reintroduces a violation (D-13 verification pass)", async () => {
+    // More duplicates than the regenerated-opener pool has entries: the pool
+    // exhausts and the `?? [0]` fallback reuses an opener already in the set.
+    const { asUser, campaignId } = await setupDraftSet(t, {
+      roles: [
+        "pillar",
+        "satellite",
+        "satellite",
+        "satellite",
+        "satellite",
+        "satellite",
+        "satellite",
+        "cta",
+      ],
+    });
+    const POOL_OPENER =
+      "Grounding beats vibes: every claim ships with a corpus pointer,";
+    await t.run(async (ctx) => {
+      const posts = await ctx.db.query("v2Posts").collect();
+      for (const post of posts) {
+        const rest = post.content
+          .split("\n")
+          .filter((line) => line.trim())
+          .slice(1)
+          .join("\n");
+        await ctx.db.patch(post._id, {
+          content: `${POOL_OPENER} supporting detail.\n${rest}`,
+        });
+      }
+    });
+
+    const run = await asUser.mutation(api.cohesion.runCohesionGate, {
+      campaignId,
+    });
+    // Fixes were attempted…
+    expect(
+      run.autoFixLog.filter((fix) => fix.checkId === "unique-openers").length
+    ).toBeGreaterThan(0);
+    // …but the run still blocks, because the verification pass found the
+    // duplicate openers the fix pool reintroduced.
+    expect(run.passed).toBe(false);
+    expect(
+      run.blockingFailures.map((failure) => failure.id)
+    ).toContain("unique-openers");
+
+    // The persisted run is the blocking one, not a false pass.
+    const review = await asUser.query(api.cohesion.getReviewPasses, {
+      campaignId,
+    });
+    expect(review?.latestRun?.passed).toBe(false);
+    expect(
+      review?.latestRun?.checks.find(
+        (check) => check.id === "unique-openers"
+      )?.passed
+    ).toBe(false);
   });
 
   it("refuses to run before a draft set exists and denies other users", async () => {

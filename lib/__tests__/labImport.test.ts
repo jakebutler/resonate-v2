@@ -29,6 +29,41 @@ describe("secretScan (D-18 hard fail)", () => {
       "# 2026-05-26 experiment\n\nThe cohesion gate catches repeated framing openers across the draft set. Approval telemetry shows fact-drift as the top review reason.";
     expect(secretScan(prose)).toHaveLength(0);
   });
+
+  it("catches the common real-world secret shapes that word-boundary regexes missed", () => {
+    const text = [
+      "OPENAI_API_KEY=sk-proj-abc123def456ghi789jkl",
+      "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+      "GITHUB_TOKEN=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
+      "SLACK_TOKEN=xoxb-fake-fixture-not-a-real-token",
+      "postgres://user:s3cret-pw@db.internal:5432/prod",
+    ].join("\n");
+    const kinds = secretScan(text).map((finding) => finding.kind);
+    expect(kinds).toContain("openai api key");
+    expect(kinds).toContain("aws secret key assignment");
+    expect(kinds).toContain("github token");
+    expect(kinds).toContain("slack token");
+    expect(kinds).toContain("url credentials");
+  });
+
+  it("catches prefixed credential literals even without a variable assignment", () => {
+    const findings = secretScan(
+      "the key was rotated to sk-live-abcdef1234567890abcdef yesterday"
+    );
+    expect(findings.some((finding) => finding.kind === "openai api key")).toBe(
+      true
+    );
+  });
+
+  it("catches JWTs and still flags prose-style password assignments", () => {
+    const text = [
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+      "Password: required for the login flow",
+    ].join("\n");
+    const kinds = secretScan(text).map((finding) => finding.kind);
+    expect(kinds).toContain("jwt");
+    expect(kinds).toContain("password assignment");
+  });
 });
 
 describe("frontMatterProvenance (#64)", () => {

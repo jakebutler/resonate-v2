@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { extractText, getDocumentProxy } from "unpdf";
+import dns from "node:dns";
+import {
+  BlockedUrlError,
+  isRedirectStatus,
+  resolveRedirectLocation,
+  validateRemoteUrl,
+} from "@/lib/urlGuard";
 import {
   kindForFileName,
   segmentDocument,
@@ -10,6 +17,7 @@ import {
 export const runtime = "nodejs";
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+const MAX_REDIRECT_HOPS = 5;
 
 type IngestDocument = {
   name: string;
@@ -22,20 +30,6 @@ type IngestDocument = {
     unusableReason?: string;
   }[];
 };
-
-function blockedUrlHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".local")) return true;
-  if (host === "::1" || host.startsWith("::")) return true;
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
-    const [a, b] = host.split(".").map(Number);
-    if (a === 127 || a === 10 || a === 0) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 169 && b === 254) return true;
-  }
-  return false;
-}
 
 async function extractPdf(
   bytes: Uint8Array,
@@ -59,36 +53,88 @@ async function extractPdf(
 async function fetchDocumentFromUrl(
   url: string
 ): Promise<{ name: string; kind: DocumentKind; bytes: Uint8Array | null; text: string | null; error?: string }> {
-  let parsed: URL;
+  // SSRF guard: https only, and every hop re-validated before it is fetched —
+  // hostname literals AND every address the hostname resolves to. Redirects
+  // are followed manually so a 302 cannot bypass the checks.
+  let currentUrl: string;
   try {
-    parsed = new URL(url);
-  } catch {
-    return { name: url, kind: "txt", bytes: null, text: null, error: "Invalid URL." };
-  }
-  if (parsed.protocol !== "https:") {
+    currentUrl = (await validateRemoteUrl(url, (hostname) =>
+      dns.promises.lookup(hostname, { all: true, verbatim: true })
+    )).url;
+  } catch (error) {
     return {
       name: url,
       kind: "txt",
       bytes: null,
       text: null,
-      error: "Only https URLs are supported.",
-    };
-  }
-  if (blockedUrlHost(parsed.hostname)) {
-    return {
-      name: url,
-      kind: "txt",
-      bytes: null,
-      text: null,
-      error: "That host is not reachable for ingest.",
+      error:
+        error instanceof BlockedUrlError
+          ? error.message
+          : "That host could not be resolved.",
     };
   }
 
-  const response = await fetch(parsed.toString(), {
-    redirect: "follow",
-    signal: AbortSignal.timeout(20_000),
-    headers: { "user-agent": "ResonateCorpusIngest/1.0" },
-  });
+  let response: Response | null = null;
+  for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop += 1) {
+    const hopResponse = await fetch(currentUrl, {
+      // Manual: automatic following would fetch the next hop without re-validation.
+      redirect: "manual",
+      signal: AbortSignal.timeout(20_000),
+      headers: { "user-agent": "ResonateCorpusIngest/1.0" },
+    });
+    if (isRedirectStatus(hopResponse.status)) {
+      const location = hopResponse.headers.get("location");
+      if (!location) {
+        return {
+          name: url,
+          kind: "txt",
+          bytes: null,
+          text: null,
+          error: "Fetch failed: redirect without a destination.",
+        };
+      }
+      const next = resolveRedirectLocation(location, currentUrl);
+      if (!next) {
+        return {
+          name: url,
+          kind: "txt",
+          bytes: null,
+          text: null,
+          error: "Only https redirect targets are supported.",
+        };
+      }
+      currentUrl = next;
+      try {
+        await validateRemoteUrl(currentUrl, (hostname) =>
+          dns.promises.lookup(hostname, { all: true, verbatim: true })
+        );
+      } catch (error) {
+        return {
+          name: url,
+          kind: "txt",
+          bytes: null,
+          text: null,
+          error:
+            error instanceof BlockedUrlError
+              ? error.message
+              : "That host could not be resolved.",
+        };
+      }
+      continue;
+    }
+    response = hopResponse;
+    break;
+  }
+
+  if (!response) {
+    return {
+      name: url,
+      kind: "txt",
+      bytes: null,
+      text: null,
+      error: "Fetch failed: too many redirects.",
+    };
+  }
   if (!response.ok) {
     return {
       name: url,
@@ -98,6 +144,7 @@ async function fetchDocumentFromUrl(
       error: `Fetch failed with status ${response.status}.`,
     };
   }
+  const parsed = new URL(currentUrl);
   const contentType = response.headers.get("content-type") ?? "";
   const buffer = new Uint8Array(await response.arrayBuffer());
   if (buffer.byteLength > MAX_UPLOAD_BYTES) {

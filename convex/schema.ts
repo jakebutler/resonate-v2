@@ -263,7 +263,8 @@ export default defineSchema({
     .index("by_brand", ["brandId"])
     .index("by_brand_and_status", ["brandId", "status"])
     .index("by_channel", ["channelId"])
-    .index("by_scheduled_date", ["scheduledDate"]),
+    .index("by_scheduled_date", ["scheduledDate"])
+    .index("by_user_and_campaign", ["userId", "sourceCampaignId"]),
 
   v2PublishingIntents: defineTable({
     postId: v.id("v2Posts"),
@@ -774,7 +775,6 @@ export default defineSchema({
   campaignIdeas: defineTable({
     campaignId: v.id("campaigns"),
     ideaId: v.id("ideas"),
-    primary: v.boolean(),
     state: v.union(
       v.literal("suggested"),
       v.literal("member"),
@@ -837,6 +837,15 @@ export default defineSchema({
       })
     ),
     passed: v.boolean(),
+    draftSetFingerprint: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_materialization", ["materializationId"]),
+
+  mockAcknowledgments: defineTable({
+    token: v.string(),
+    userId: v.string(),
+    campaignId: v.id("campaigns"),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  }).index("by_token", ["token"]),
 });

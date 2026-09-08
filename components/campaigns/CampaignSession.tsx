@@ -6,10 +6,22 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CitationChip } from "@/components/campaigns/CitationChip";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
+import { BRANDS } from "@/lib/domain";
 import { parseCorpusCitation } from "@/lib/campaignGrounding";
+
+function brandLabel(brandId: string) {
+  return BRANDS.find((brand) => brand.id === brandId)?.name ?? brandId;
+}
 
 type IdeaDoc = {
   _id: string;
@@ -21,16 +33,30 @@ type IdeaDoc = {
 };
 
 type SessionData = {
-  campaign: { _id: string; title: string; brandId: string; status: string };
+  campaign: {
+    _id: string;
+    title: string;
+    brandId: string;
+    status: string;
+    corpusIds: string[];
+  };
   brief: { goal?: string; audience?: string } | null;
   corpora: {
     corpus: { _id: string; version: number };
     excerpts: { seq: number; text: string; provenance: string }[];
   }[];
   suggested: { join: { state: string }; idea: IdeaDoc | null }[];
-  workingSet: { join: { primary: boolean }; idea: IdeaDoc | null }[];
+  workingSet: { join: { state: string }; idea: IdeaDoc | null }[];
   rejected: { idea: IdeaDoc | null }[];
   acceptedShape: { _id: string } | null;
+};
+
+type CorpusSummary = {
+  _id: string;
+  brandId: string;
+  origin: string;
+  version: number;
+  createdAt: number;
 };
 
 const FLAVOR_TINTS: Record<string, string> = {
@@ -54,20 +80,59 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
   const [inboxSearch, setInboxSearch] = useState("");
 
   const suggestIdeas = useMutation(api.campaigns.suggestIdeas);
+  const requestMockAcknowledgment = useMutation(
+    api.mockAck.requestMockAcknowledgment
+  );
   const addIdea = useMutation(api.campaigns.addIdeaToCampaign);
   const removeIdea = useMutation(api.campaigns.removeIdeaFromCampaign);
   const rejectIdea = useMutation(api.campaigns.rejectIdea);
   const undoRejection = useMutation(api.campaigns.undoIdeaRejection);
+  const attachCorpus = useMutation(api.campaigns.attachCorpus);
   const inboxResults = useQuery(
     api.campaigns.searchSessionIdeas,
     { campaignId: typedCampaignId, search: inboxSearch }
   ) as { idea: IdeaDoc; state: string | null }[] | undefined;
+  const brandCorpora = useQuery(
+    api.corpora.listCorpora,
+    session ? ({ brandId: session.campaign.brandId } as never) : "skip"
+  ) as CorpusSummary[] | undefined;
+
+  const [attachCorpusId, setAttachCorpusId] = useState<string>("");
+  const [attaching, setAttaching] = useState(false);
+
+  const attachableCorpora = useMemo(
+    () =>
+      (brandCorpora ?? []).filter(
+        (corpus) => !session?.campaign.corpusIds.includes(corpus._id)
+      ),
+    [brandCorpora, session?.campaign.corpusIds]
+  );
+
+  async function handleAttachCorpus() {
+    if (!attachCorpusId) return;
+    setAttaching(true);
+    try {
+      await attachCorpus({
+        campaignId: typedCampaignId,
+        corpusId: attachCorpusId as never,
+      });
+      setAttachCorpusId("");
+      showToast("Corpus version attached — suggestions cite its excerpts.");
+    } catch (caught) {
+      showToast(caught instanceof Error ? caught.message : "Attach failed.");
+    } finally {
+      setAttaching(false);
+    }
+  }
 
   const excerptLookup = useMemo(() => {
+    // C1: citations carry corpus://<brand>/<corpusId>#excerpt-N, and `seq`
+    // restarts per corpus version — keying by seq alone lets a second
+    // attached corpus overwrite the first and mis-resolve its chips.
     const map = new Map<string, { seq: number; text: string; provenance: string }>();
     for (const entry of session?.corpora ?? []) {
       for (const excerpt of entry.excerpts) {
-        map.set(String(excerpt.seq), excerpt);
+        map.set(`${entry.corpus._id}:${excerpt.seq}`, excerpt);
       }
     }
     return map;
@@ -91,7 +156,15 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
   async function handleSuggest() {
     setSuggesting(true);
     try {
-      const result = await suggestIdeas({ campaignId: typedCampaignId, mockAcknowledged: true });
+      // D-21: the confirm dialog mints a server-issued acknowledgment token;
+      // the client never asserts acknowledgment on its own.
+      const ack = await requestMockAcknowledgment({
+        campaignId: typedCampaignId,
+      });
+      const result = await suggestIdeas({
+        campaignId: typedCampaignId,
+        mockAckToken: ack.token,
+      });
       setMockConfirmOpen(false);
       showToast(
         result.created > 0
@@ -106,16 +179,27 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
   }
 
   async function handleAdd(idea: IdeaDoc, inOtherCampaign?: string) {
-    await addIdea({ campaignId: typedCampaignId, ideaId: idea._id as never });
+    try {
+      await addIdea({ campaignId: typedCampaignId, ideaId: idea._id as never });
+    } catch (caught) {
+      showToast(caught instanceof Error ? caught.message : "Could not add the idea.");
+      return;
+    }
     if (inOtherCampaign) {
       showToast(`Linked — still in ${inOtherCampaign} too. Many-to-many, nothing moved.`);
     } else {
-      showToast("Added to campaign — campaign-primary. It stays in research with a soft “in campaign” hint.");
+      showToast("Added to the working set. Ideas here are equals — the shape decides how each one is incorporated, via slots.");
     }
   }
 
   async function handleRemove(idea: IdeaDoc) {
-    const result = await removeIdea({ campaignId: typedCampaignId, ideaId: idea._id as never });
+    let result: { removed: boolean };
+    try {
+      result = await removeIdea({ campaignId: typedCampaignId, ideaId: idea._id as never });
+    } catch (caught) {
+      showToast(caught instanceof Error ? caught.message : "Could not remove the idea.");
+      return;
+    }
     showToast(
       result.removed
         ? "Removed from working set — also detached from any shape slot (one-way membership)."
@@ -167,8 +251,12 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
             </span>
           ) : null}
           {otherCampaign ? (
-            <span className={cn("text-[11px]", tokens.textMuted)}>
-              · already in <b>{otherCampaign}</b> — joining links it, nothing moves
+            <span
+              className={cn("text-[11px]", tokens.textMuted)}
+              title={others.map((hint) => hint.campaignTitle).join(", ")}
+            >
+              · already in <b>{otherCampaign}</b>
+              {others.length > 1 ? ` +${others.length - 1} more` : ""}
             </span>
           ) : null}
         </div>
@@ -181,7 +269,9 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
             (idea.excerptCitations ?? []).map((citation) => {
               const parsed = parseCorpusCitation(citation);
               if (!parsed) return null;
-              const excerpt = excerptLookup.get(String(parsed.seq));
+              const excerpt = excerptLookup.get(
+                `${parsed.corpusId}:${parsed.seq}`
+              );
               return (
                 <CitationChip
                   key={citation}
@@ -212,7 +302,12 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
               variant="secondary"
               size="xs"
               onClick={async () => {
-                await rejectIdea({ campaignId: typedCampaignId, ideaId: idea._id as never });
+                try {
+                  await rejectIdea({ campaignId: typedCampaignId, ideaId: idea._id as never });
+                } catch (caught) {
+                  showToast(caught instanceof Error ? caught.message : "Could not mark as not useful.");
+                  return;
+                }
                 showToast("Marked not useful — undo any time. It stays in research.");
               }}
             >
@@ -237,6 +332,8 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
       <p className={cn("mt-1 text-sm", tokens.textMuted)}>
         Ideas only — opinions, insights, and thoughts are idea flavors. Every
         suggested idea cites corpus excerpts; hover a citation to read it.
+        Working-set ideas are equals — the shape’s slots carry the plan for how
+        each one is incorporated.
       </p>
 
       <div className="mt-5 grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)_300px]">
@@ -247,9 +344,45 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
               corpus v{session.corpora[0]?.corpus.version ?? 1}
             </span>
           </div>
+          {attachableCorpora.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+              <span className="sr-only" id="attach-corpus-label">
+                Corpus version to attach
+              </span>
+              <Select
+                value={attachCorpusId}
+                onValueChange={setAttachCorpusId}
+              >
+                <SelectTrigger
+                  className="h-8 min-w-40 flex-1 text-xs"
+                  aria-label="Corpus version to attach"
+                >
+                  <SelectValue placeholder="Choose a corpus version…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {attachableCorpora.map((corpus) => (
+                    <SelectItem key={corpus._id} value={corpus._id}>
+                      {brandLabel(session.campaign.brandId)} corpus · v
+                      {corpus.version}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="accent"
+                size="xs"
+                disabled={!attachCorpusId || attaching}
+                onClick={() => void handleAttachCorpus()}
+                data-testid="attach-corpus"
+              >
+                {attaching ? "Attaching…" : "Attach corpus"}
+              </Button>
+            </div>
+          ) : null}
           {session.corpora.length === 0 ? (
             <p className={cn("px-4 pb-4 text-sm", tokens.textMuted)}>
-              No corpus attached yet — attach one from the Campaigns home.
+              No corpus attached yet — ingest a document on the Campaigns home,
+              then attach a version here.
             </p>
           ) : null}
           {session.corpora.map((entry) =>
@@ -276,7 +409,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
             </span>
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-[#fff1e0] px-2.5 py-0.5 text-[11px] font-normal text-[#b25400]">
-                mock AI
+                mock mode
               </span>
               <Button
                 variant="primary"
@@ -327,7 +460,12 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
                       variant="ghost"
                       size="xs"
                       onClick={async () => {
-                        await undoRejection({ campaignId: typedCampaignId, ideaId: entry.idea!._id as never });
+                        try {
+                          await undoRejection({ campaignId: typedCampaignId, ideaId: entry.idea!._id as never });
+                        } catch (caught) {
+                          showToast(caught instanceof Error ? caught.message : "Could not restore the idea.");
+                          return;
+                        }
                         showToast("Restored — back in the suggestion list.");
                       }}
                     >
@@ -377,8 +515,9 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
           </div>
           {session.workingSet.length === 0 ? (
             <p className={cn("border-t px-4 py-6 text-center text-sm", tokens.border, tokens.textMuted)}>
-              No ideas yet. Accept suggestions or search the inbox. Accepting
-              here makes the idea <b>campaign-primary</b>.
+              No ideas yet. Accept suggestions or search the inbox. Ideas in the
+              working set are equals — link each one to a slot on the{" "}
+              <b>Propose shape</b> step to say how it gets incorporated.
             </p>
           ) : null}
           {session.workingSet.map((entry) =>

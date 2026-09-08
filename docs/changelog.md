@@ -3609,3 +3609,265 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - main
+
+## 09/07/2026 16:07:10 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- No staged changes were present when the docs refresh ran.
+
+### Working Tree Snapshot
+
+-  M .env.local.example
+-  M app/api/campaigns/ingest-document/route.ts
+-  M components/__tests__/ApprovalQueue.test.tsx
+-  M components/__tests__/CampaignSession.test.tsx
+-  M components/__tests__/DraftSetView.test.tsx
+-  M components/campaigns/ApprovalQueue.tsx
+-  M components/campaigns/CampaignSession.tsx
+-  M components/campaigns/CampaignShapeBuilder.tsx
+-  M components/campaigns/CampaignsHome.tsx
+-  M components/campaigns/DraftSetView.tsx
+-  M components/campaigns/ExcerptReviewList.tsx
+-  M components/campaigns/IngestDocumentFlow.tsx
+-  M components/campaigns/ReviewPassesPanel.tsx
+-  M convex/__tests__/campaignSession.test.ts
+-  M convex/__tests__/campaignShape.test.ts
+-  M convex/__tests__/campaigns.test.ts
+-  M convex/__tests__/cohesion.test.ts
+-  M convex/__tests__/draftSet.test.ts
+-  M convex/__tests__/labImport.test.ts
+-  M convex/__tests__/queue.test.ts
+-  M convex/_generated/api.d.ts
+-  M convex/campaigns.ts
+-  M convex/cohesion.ts
+-  M convex/corpora.ts
+-  M convex/draftSet.ts
+-  M convex/queue.ts
+-  M convex/schema.ts
+-  M convex/shapes.ts
+-  M docs/glossary.md
+-  M lib/__tests__/campaignGrounding.test.ts
+-  M lib/__tests__/campaignShapes.test.ts
+-  M lib/__tests__/labImport.test.ts
+-  M lib/labImport.ts
+-  M scripts/corpus-import.mjs
+- ?? app/api/ops/lab-import/
+- ?? convex/__tests__/excerptReview.test.ts
+- ?? convex/__tests__/mockAck.test.ts
+- ?? convex/mockAck.ts
+- ?? convex/opsAudit.ts
+- ?? docs/adr/0006-campaign-loop-cta-autofix-and-unreviewed-warning.md
+- ?? lib/__tests__/urlGuard.test.ts
+- ?? lib/campaignLabels.ts
+- ?? lib/draftSetFingerprint.ts
+- ?? lib/urlGuard.ts
+
+### Branch
+
+- main
+
+## 09/08/2026 00:16:34 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- No staged changes were present when the docs refresh ran.
+
+### Working Tree Snapshot
+
+-  M .env.local.example
+-  M app/api/campaigns/ingest-document/route.ts
+-  M components/__tests__/ApprovalQueue.test.tsx
+-  M components/__tests__/CampaignSession.test.tsx
+-  M components/__tests__/DraftSetView.test.tsx
+-  M components/__tests__/ExcerptReviewList.test.tsx
+-  M components/campaigns/ApprovalQueue.tsx
+-  M components/campaigns/CampaignSession.tsx
+-  M components/campaigns/CampaignShapeBuilder.tsx
+-  M components/campaigns/CampaignsHome.tsx
+-  M components/campaigns/DraftSetView.tsx
+-  M components/campaigns/ExcerptReviewList.tsx
+-  M components/campaigns/IngestDocumentFlow.tsx
+-  M components/campaigns/ReviewPassesPanel.tsx
+-  M convex/__tests__/campaignSession.test.ts
+-  M convex/__tests__/campaignShape.test.ts
+-  M convex/__tests__/campaigns.test.ts
+-  M convex/__tests__/cohesion.test.ts
+-  M convex/__tests__/draftSet.test.ts
+-  M convex/__tests__/labImport.test.ts
+-  M convex/__tests__/queue.test.ts
+-  M convex/_generated/api.d.ts
+-  M convex/campaigns.ts
+-  M convex/cohesion.ts
+-  M convex/corpora.ts
+-  M convex/draftSet.ts
+-  M convex/queue.ts
+-  M convex/schema.ts
+-  M convex/shapes.ts
+-  M docs/changelog.md
+-  M docs/glossary.md
+-  M docs/project-status.md
+-  M lib/__tests__/campaignGrounding.test.ts
+-  M lib/__tests__/campaignShapes.test.ts
+-  M lib/__tests__/labImport.test.ts
+-  M lib/labImport.ts
+-  M scripts/corpus-import.mjs
+- ?? app/api/ops/lab-import/
+- ?? convex/__tests__/excerptReview.test.ts
+- ?? convex/__tests__/mockAck.test.ts
+- ?? convex/mockAck.ts
+- ?? convex/opsAudit.ts
+- ?? docs/adr/0006-campaign-loop-cta-autofix-and-unreviewed-warning.md
+- ?? docs/adr/0007-no-primary-ranking-and-presave-split-merge.md
+- ?? lib/__tests__/urlGuard.test.ts
+- ?? lib/campaignLabels.ts
+- ?? lib/draftSetFingerprint.ts
+- ?? lib/urlGuard.ts
+- ?? prototypes/69-campaign-hint-mockup/
+
+### Branch
+
+- main
+
+## 09/08/2026 00:21:17 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	app/api/campaigns/ingest-document/route.ts
+- A	app/api/ops/lab-import/__tests__/route.test.ts
+- A	app/api/ops/lab-import/route.ts
+- M	components/__tests__/ApprovalQueue.test.tsx
+- M	components/__tests__/CampaignSession.test.tsx
+- M	components/__tests__/DraftSetView.test.tsx
+- M	components/__tests__/ExcerptReviewList.test.tsx
+- M	components/campaigns/ApprovalQueue.tsx
+- M	components/campaigns/CampaignSession.tsx
+- M	components/campaigns/CampaignShapeBuilder.tsx
+- M	components/campaigns/CampaignsHome.tsx
+- M	components/campaigns/DraftSetView.tsx
+- M	components/campaigns/ExcerptReviewList.tsx
+- M	components/campaigns/IngestDocumentFlow.tsx
+- M	components/campaigns/ReviewPassesPanel.tsx
+- M	convex/__tests__/campaignSession.test.ts
+- M	convex/__tests__/campaignShape.test.ts
+- M	convex/__tests__/campaigns.test.ts
+- M	convex/__tests__/cohesion.test.ts
+- M	convex/__tests__/draftSet.test.ts
+- A	convex/__tests__/excerptReview.test.ts
+- M	convex/__tests__/labImport.test.ts
+- A	convex/__tests__/mockAck.test.ts
+- M	convex/__tests__/queue.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/campaigns.ts
+- M	convex/cohesion.ts
+- M	convex/corpora.ts
+- M	convex/draftSet.ts
+- A	convex/mockAck.ts
+- A	convex/opsAudit.ts
+- M	convex/queue.ts
+- M	convex/schema.ts
+- M	convex/shapes.ts
+- A	docs/adr/0006-campaign-loop-cta-autofix-and-unreviewed-warning.md
+- A	docs/adr/0007-no-primary-ranking-and-presave-split-merge.md
+- M	docs/changelog.md
+- M	docs/glossary.md
+- M	docs/project-status.md
+- M	lib/__tests__/campaignGrounding.test.ts
+- M	lib/__tests__/campaignShapes.test.ts
+- M	lib/__tests__/labImport.test.ts
+- A	lib/__tests__/urlGuard.test.ts
+- A	lib/campaignLabels.ts
+- A	lib/draftSetFingerprint.ts
+- M	lib/labImport.ts
+- A	lib/urlGuard.ts
+- A	prototypes/69-campaign-hint-mockup/index.html
+- M	scripts/corpus-import.mjs
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  app/api/campaigns/ingest-document/route.ts
+- A  app/api/ops/lab-import/__tests__/route.test.ts
+- A  app/api/ops/lab-import/route.ts
+- M  components/__tests__/ApprovalQueue.test.tsx
+- M  components/__tests__/CampaignSession.test.tsx
+- M  components/__tests__/DraftSetView.test.tsx
+- M  components/__tests__/ExcerptReviewList.test.tsx
+- M  components/campaigns/ApprovalQueue.tsx
+- M  components/campaigns/CampaignSession.tsx
+- M  components/campaigns/CampaignShapeBuilder.tsx
+- M  components/campaigns/CampaignsHome.tsx
+- M  components/campaigns/DraftSetView.tsx
+- M  components/campaigns/ExcerptReviewList.tsx
+- M  components/campaigns/IngestDocumentFlow.tsx
+- M  components/campaigns/ReviewPassesPanel.tsx
+- M  convex/__tests__/campaignSession.test.ts
+- M  convex/__tests__/campaignShape.test.ts
+- M  convex/__tests__/campaigns.test.ts
+- M  convex/__tests__/cohesion.test.ts
+- M  convex/__tests__/draftSet.test.ts
+- A  convex/__tests__/excerptReview.test.ts
+- M  convex/__tests__/labImport.test.ts
+- A  convex/__tests__/mockAck.test.ts
+- M  convex/__tests__/queue.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/campaigns.ts
+- M  convex/cohesion.ts
+- M  convex/corpora.ts
+- M  convex/draftSet.ts
+- A  convex/mockAck.ts
+- A  convex/opsAudit.ts
+- M  convex/queue.ts
+- M  convex/schema.ts
+- M  convex/shapes.ts
+- A  docs/adr/0006-campaign-loop-cta-autofix-and-unreviewed-warning.md
+- A  docs/adr/0007-no-primary-ranking-and-presave-split-merge.md
+- M  docs/changelog.md
+- M  docs/glossary.md
+- M  docs/project-status.md
+- M  lib/__tests__/campaignGrounding.test.ts
+- M  lib/__tests__/campaignShapes.test.ts
+- M  lib/__tests__/labImport.test.ts
+- A  lib/__tests__/urlGuard.test.ts
+- A  lib/campaignLabels.ts
+- A  lib/draftSetFingerprint.ts
+- M  lib/labImport.ts
+- A  lib/urlGuard.ts
+- A  prototypes/69-campaign-hint-mockup/index.html
+- M  scripts/corpus-import.mjs
+
+### Branch
+
+- main
+
+## 09/14/2026 15:37:43 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	lib/__tests__/labImport.test.ts
+
+### Working Tree Snapshot
+
+- M  lib/__tests__/labImport.test.ts
+- ?? docs/reviews/
+
+### Branch
+
+- main

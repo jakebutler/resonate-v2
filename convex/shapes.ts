@@ -199,6 +199,33 @@ async function getOwnedShapeContext(
   return { shape, campaign };
 }
 
+/**
+ * D-8: an accepted shape is the durable plan. Slot mutators refuse to change
+ * it — revision happens by proposing a new shape (which inherits edits, D-10).
+ */
+function assertShapeMutable(shape: { status: "proposed" | "accepted" }) {
+  if (shape.status === "accepted") {
+    throw new Error(
+      "This shape is accepted and durable — propose a new shape to revise it."
+    );
+  }
+}
+
+/** Idea links must reference an idea owned by the caller (no cross-tenant writes). */
+async function requireOwnedIdea(
+  ctx: ShapeCtx,
+  ideaId: string,
+  userId: string
+) {
+  const normalized = ctx.db.normalizeId("ideas", ideaId as never);
+  if (!normalized) throw new Error("Idea not found");
+  const idea = await ctx.db.get(normalized);
+  if (!idea || idea.userId !== userId) {
+    throw new Error("Idea not found");
+  }
+  return idea;
+}
+
 export const updateSlot = mutation({
   args: {
     shapeId: v.id("campaignShapes"),
@@ -209,6 +236,7 @@ export const updateSlot = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const { shape } = await getOwnedShapeContext(ctx, userId, args.shapeId);
+    assertShapeMutable(shape);
     const slot = await ctx.db.get(args.slotId);
     if (!slot || String(slot.shapeId) !== String(shape._id)) {
       throw new Error("Slot not found");
@@ -230,9 +258,13 @@ export const linkSlotIdea = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const { shape } = await getOwnedShapeContext(ctx, userId, args.shapeId);
+    assertShapeMutable(shape);
     const slot = await ctx.db.get(args.slotId);
     if (!slot || String(slot.shapeId) !== String(shape._id)) {
       throw new Error("Slot not found");
+    }
+    if (args.ideaId !== undefined) {
+      await requireOwnedIdea(ctx, args.ideaId, userId);
     }
     await ctx.db.patch(args.slotId, { ideaId: args.ideaId });
     return { linked: true };
@@ -248,6 +280,7 @@ export const moveSlot = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const { shape } = await getOwnedShapeContext(ctx, userId, args.shapeId);
+    assertShapeMutable(shape);
     const slots = await loadSlots(ctx, shape._id);
     const index = slots.findIndex((slot) => String(slot._id) === String(args.slotId));
     if (index === -1) throw new Error("Slot not found");

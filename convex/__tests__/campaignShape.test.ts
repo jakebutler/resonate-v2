@@ -229,6 +229,45 @@ describe("campaign shape", () => {
     expect(moved.moved).toBe(false);
   });
 
+  it("refuses to mutate an accepted shape's slots (D-8 durability)", async () => {
+    const { asUser, campaignId } = await setupCampaignWithWorkingSet(t, 5);
+    const { shapeId } = await asUser.mutation(api.shapes.proposeShape, {
+      campaignId,
+      preset: "standard",
+    });
+    const view = await asUser.query(api.shapes.getCampaignShape, { campaignId });
+    const slot = view!.slots[0]!;
+    await asUser.mutation(api.shapes.acceptShape, { shapeId });
+
+    await expect(
+      asUser.mutation(api.shapes.updateSlot, {
+        shapeId,
+        slotId: slot._id as never,
+        title: "Rewritten after acceptance",
+      })
+    ).rejects.toThrow(/durable/);
+    // Un-linking a slot after acceptance (the D-11 hole) is refused too.
+    await expect(
+      asUser.mutation(api.shapes.linkSlotIdea, {
+        shapeId,
+        slotId: slot._id as never,
+        ideaId: undefined,
+      })
+    ).rejects.toThrow(/durable/);
+    await expect(
+      asUser.mutation(api.shapes.moveSlot, {
+        shapeId,
+        slotId: slot._id as never,
+        direction: 1,
+      })
+    ).rejects.toThrow(/durable/);
+
+    // The slot is unchanged.
+    const after = await asUser.query(api.shapes.getCampaignShape, { campaignId });
+    expect(after!.slots[0]!.title).toBe(slot.title);
+    expect(after!.slots[0]!.ideaId).toBeDefined();
+  });
+
   it("saves the progressive brief (D-3 goal/audience at the shape step)", async () => {
     const { asUser, campaignId } = await setupCampaignWithWorkingSet(t, 2);
     await asUser.mutation(api.shapes.saveBrief, {

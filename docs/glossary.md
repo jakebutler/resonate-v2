@@ -160,10 +160,12 @@ Defined by `docs/campaigns/2026-09-06-campaign-loop-spec.md`. These are product 
 - **Excerpt.** A complete semantic unit (one or more whole thoughts/facts/arguments) inside a corpus version, with provenance, sensitivity (default `unreviewed`), and a stable number. Never a raw chunk. Cited by ideas as `corpus://…#excerpt-N`.
 - **Campaign.** Brand-scoped arc from source material to published batch. Created title-only; goal/audience arrive at the shape step.
 - **Idea flavors.** Opinion / Insight / Thought. There is no separate Stance type.
-- **Working set.** The ideas accepted into a campaign (campaign-primary). Many-to-many with campaigns; slot membership is one-way.
+- **Working set.** The ideas accepted into a campaign — all equals, no primary ranking (ADR 0007); the shape's slots carry the plan for how each idea is incorporated. Many-to-many with campaigns; slot membership is one-way.
 - **Campaign shape.** The durable slot plan accepted by the operator: numbered slots in publishing sequence.
 - **Slot.** One planned item in a shape: channel × media type × role, optional title/angle, linked idea. Roles: pillar / hook / satellite / cta / recap. Media types: post / article / essay / script.
 - **Publishing sequence vs publishing schedule.** The shape fixes sequence (1 → n); the calendar owns schedule (dates/times).
+- **"Add to the calendar" (copy convention).** The user-facing phrase for what the code calls materialization (`materializations` table, `materializeDraftSet` mutation — internal names only, never UI copy). A batch is added to the calendar only after the cohesion gate passes; it lands scheduled-but-unapproved on the Approval queue.
 - **Draft set.** Placeholders generated as one set from an accepted shape; every draft is scheduled-but-unapproved.
-- **Cohesion gate.** Blocking set-level check before materialization: exactly one pillar, exactly one CTA, no repeated framing openers, satellites reference the pillar claim. Mechanical violations auto-resolve with explanatory notes.
-- **Approval queue.** The calendar presentation of materialized drafts: expandable rows, inline approve for posts, composer routing for long-form, sequence-aware next-draft flow. Approve ≠ submit.
+- **Mock mode.** The product-facing wording for acknowledged placeholder generation (suggestions and draft sets). Grounding is fail-closed: generation requires a short-lived, server-issued acknowledgment token minted from the confirm dialog — a client assertion is never trusted. "Mock Provider" remains internal-only terminology.
+- **Cohesion gate.** Blocking set-level check before the batch can reach the calendar: exactly one pillar, exactly one CTA, no repeated framing openers, satellites reference the pillar claim. Mechanical violations auto-resolve with explanatory notes; the auto-added CTA slot links a working-set idea so slot completeness holds at materialize (ADR 0006).
+- **Approval queue.** The calendar presentation of the batch: expandable rows, inline approve for every draft (long-form rows also link to the composer for full-article review), sequence-aware next-draft flow. Approve ≠ submit.

@@ -37,11 +37,13 @@ describe("CAMPAIGN_PRESETS", () => {
 });
 
 describe("applyPreset (D-10 edit preservation)", () => {
-  const standardShape = CAMPAIGN_PRESETS.standard.slots.map((slot) => ({
+  // Distinct ids per slot: with duplicate ids the splice-once consumption of
+  // matched slots is unobservable (either duplicate could "explain" a match).
+  const standardShape = CAMPAIGN_PRESETS.standard.slots.map((slot, index) => ({
     ...slot,
     title: `${slot.role} title`,
     angle: `${slot.role} angle`,
-    ideaId: `idea-${slot.role}-${slot.channel}`,
+    ideaId: `idea-${index}-${slot.role}-${slot.channel}`,
   }));
 
   it("keeps edits on slots matched by role + channel", () => {
@@ -49,10 +51,25 @@ describe("applyPreset (D-10 edit preservation)", () => {
     const pillar = next.find((slot) => slot.role === "pillar")!;
     expect(pillar.title).toBe("pillar title");
     expect(pillar.angle).toBe("pillar angle");
-    expect(pillar.ideaId).toBe("idea-pillar-corvo-blog");
+    expect(pillar.ideaId).toBe("idea-0-pillar-corvo-blog");
 
     const hook = next.find((slot) => slot.role === "hook")!;
     expect(hook.title).toBe("hook title");
+  });
+
+  it("consumes each matched slot exactly once when duplicates share role + channel (splice-once)", () => {
+    const next = applyPreset(standardShape, "deep");
+    // Deep has three linkedin satellites; standard supplies two with distinct
+    // ids. The first two deep satellites consume them in order and the third
+    // starts fresh — a duplicate id would make this ambiguity invisible.
+    const linkedinSatellites = next.filter(
+      (slot) => slot.role === "satellite" && slot.channel === "linkedin"
+    );
+    expect(linkedinSatellites.map((slot) => slot.ideaId)).toEqual([
+      "idea-2-satellite-linkedin",
+      "idea-3-satellite-linkedin",
+      undefined,
+    ]);
   });
 
   it("fills unmatched slots fresh from the preset", () => {

@@ -6,6 +6,12 @@ import {
   getOwnedCampaign,
   requireUserId,
 } from "./campaignAccess";
+import { parseCorpusCitation } from "@/lib/campaignGrounding";
+import {
+  countIncompleteSlots,
+  isShapeComplete,
+} from "@/lib/campaignShapes";
+import { draftSetFingerprint } from "@/lib/draftSetFingerprint";
 
 const SCHEDULE_TIMES = ["09:00", "13:30", "16:00"];
 
@@ -50,12 +56,12 @@ async function loadCampaignDrafts(
       .collect()
   ).sort((a, b) => a.seq - b.seq);
 
-  const posts = (
-    await ctx.db
-      .query("v2Posts")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect()
-  ).filter((post) => post.sourceCampaignId === campaignId);
+  const posts = await ctx.db
+    .query("v2Posts")
+    .withIndex("by_user_and_campaign", (q) =>
+      q.eq("userId", userId).eq("sourceCampaignId", campaignId as never)
+    )
+    .collect();
 
   const drafts: { post: Doc<"v2Posts">; seq: number; role: string; mediaType: string }[] = [];
   for (const post of posts) {
@@ -100,9 +106,45 @@ export const materializeDraftSet = mutation({
       );
     }
 
-    const { drafts } = await loadCampaignDrafts(ctx, campaign._id, userId);
+    const { shape, slots, drafts } = await loadCampaignDrafts(
+      ctx,
+      campaign._id,
+      userId
+    );
     if (drafts.length === 0) {
       throw new Error("No drafts found for this campaign.");
+    }
+
+    // Gate freshness: the passing run must describe the drafts as they are
+    // right now. Any post-gate edit (content change, added or removed draft)
+    // stales the run and forces a re-run — the gate result never outlives the
+    // content it checked.
+    const currentFingerprint = draftSetFingerprint(
+      drafts.map((draft) => ({
+        postId: String(draft.post._id),
+        seq: draft.seq,
+        title: draft.post.title,
+        content: draft.post.content,
+      }))
+    );
+    if (
+      !latestRun.draftSetFingerprint ||
+      latestRun.draftSetFingerprint !== currentFingerprint
+    ) {
+      throw new Error(
+        "The drafts changed after the last cohesion gate run — run the gate again to materialize."
+      );
+    }
+
+    // D-11: slot completeness is re-checked at materialization, not only at
+    // accept — a slot can lose its linked idea after the shape was accepted.
+    if (shape) {
+      const incomplete = countIncompleteSlots(slots);
+      if (incomplete > 0 || !isShapeComplete(slots)) {
+        throw new Error(
+          `${incomplete} slot(s) incomplete — every slot needs a linked idea before the batch can be scheduled.`
+        );
+      }
     }
 
     const alreadyScheduled = drafts.filter(
@@ -114,6 +156,28 @@ export const materializeDraftSet = mutation({
 
     const now = Date.now();
     const timezone = "America/Los_Angeles";
+
+    // D-17: warn when the batch quotes excerpts still marked unreviewed.
+    const unreviewedCitations = new Set<string>();
+    for (const draft of drafts) {
+      for (const citation of draft.post.sourceExcerptIds ?? []) {
+        const parsed = parseCorpusCitation(citation);
+        if (!parsed) continue;
+        const corpusId = ctx.db.normalizeId("corpora", parsed.corpusId);
+        if (!corpusId) continue;
+        const excerpt = await ctx.db
+          .query("corpusExcerpts")
+          .withIndex("by_corpus_and_seq", (q) =>
+            q.eq("corpusId", corpusId).eq("seq", parsed.seq)
+          )
+          .first();
+        if (excerpt && excerpt.sensitivity === "unreviewed") {
+          unreviewedCitations.add(citation);
+        }
+      }
+    }
+    const unreviewedCount = unreviewedCitations.size;
+
     for (let index = 0; index < drafts.length; index += 1) {
       const draft = drafts[index]!;
       const scheduledDate = formatYmdFromOffset(1 + Math.floor(index / SCHEDULE_TIMES.length), now, timezone);
@@ -167,15 +231,20 @@ export const materializeDraftSet = mutation({
       userId,
       brandId: campaign.brandId,
       action: "campaign.materialize",
-      summary: `Materialized a ${drafts.length}-draft batch to the calendar as scheduled-but-unapproved for "${campaign.title}". Nothing auto-approves.`,
+      summary: `Materialized a ${drafts.length}-draft batch to the calendar as scheduled-but-unapproved for "${campaign.title}". Nothing auto-approves.${unreviewedCount > 0 ? ` Warning: ${unreviewedCount} cited excerpt(s) are still marked unreviewed.` : ""}`,
       metadata: {
         campaignId: String(campaign._id),
         materializationId: String(materialization._id),
         draftCount: drafts.length,
+        unreviewedExcerptCount: unreviewedCount,
       },
     });
 
-    return { materialized: true, draftCount: drafts.length };
+    return {
+      materialized: true,
+      draftCount: drafts.length,
+      unreviewedExcerptCount: unreviewedCount,
+    };
   },
 });
 

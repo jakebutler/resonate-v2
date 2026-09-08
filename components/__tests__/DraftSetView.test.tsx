@@ -18,6 +18,9 @@ vi.mock("@/convex/_generated/api", () => ({
       getReviewPasses: "cohesion:getReviewPasses",
       runCohesionGate: "cohesion:runCohesionGate",
     },
+    mockAck: {
+      requestMockAcknowledgment: "mockAck:requestMockAcknowledgment",
+    },
   },
 }));
 
@@ -87,22 +90,50 @@ describe("DraftSetView", () => {
   });
 
   it("gates generation behind an explicit mock-mode acknowledgment", async () => {
+    // Generation only runs before a draft set exists — after materialization
+    // the button is disabled ("Regenerate" arrives later).
+    useQueryMock.mockImplementation((reference: unknown) => {
+      if (reference === "draftSet:getDraftSet") return emptyView;
+      if (reference === "cohesion:getReviewPasses") return null;
+      return undefined;
+    });
+    const requestMockAcknowledgment = vi
+      .fn()
+      .mockResolvedValue({ token: "server-issued-token", expiresAt: Date.now() + 60000 });
     const generate = vi.fn().mockResolvedValue({ draftCount: 5, alreadyGenerated: false });
     useMutationMock.mockImplementation(((reference: unknown) =>
-      reference === "draftSet:generateDraftSet" ? generate : vi.fn()) as never);
+      reference === "mockAck:requestMockAcknowledgment"
+        ? requestMockAcknowledgment
+        : reference === "draftSet:generateDraftSet"
+          ? generate
+          : vi.fn()) as never);
 
     render(<DraftSetView campaignId="campaign_1" />);
-    fireEvent.click(screen.getByTestId("generate-draft-set"));
+    const button = screen.getByTestId("generate-draft-set") as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
     const confirm = await screen.findByTestId("draft-mock-confirm");
     expect(confirm.textContent).toContain("mock mode");
 
     fireEvent.click(screen.getByText("Run in mock mode"));
     await waitFor(() => {
+      // D-21: the confirm dialog mints a server-issued token; the client
+      // never asserts acknowledgment on its own.
+      expect(requestMockAcknowledgment).toHaveBeenCalledWith({
+        campaignId: "campaign_1",
+      });
       expect(generate).toHaveBeenCalledWith({
         campaignId: "campaign_1",
-        mockAcknowledged: true,
+        mockAckToken: "server-issued-token",
       });
     });
+  });
+
+  it("disables generation once the draft set exists (regenerate arrives later)", () => {
+    render(<DraftSetView campaignId="campaign_1" />);
+    const button = screen.getByTestId("generate-draft-set") as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toContain("Regenerate");
   });
 
   it("shows the empty state before generation", () => {

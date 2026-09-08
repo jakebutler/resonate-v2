@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { api } from "../_generated/api";
 import schema from "../schema";
+import { parseCorpusCitation } from "../../lib/campaignGrounding";
 
 const modules = import.meta.glob("../**/*.ts");
 
@@ -84,6 +85,17 @@ async function startCampaign(
   return { asUser, campaignId };
 }
 
+/** Drives the confirm flow: mints a server-issued acknowledgment token. */
+async function acknowledgeMock(
+  asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
+  campaignId: string
+) {
+  const { token } = await asUser.mutation(api.mockAck.requestMockAcknowledgment, {
+    campaignId: campaignId as never,
+  });
+  return token;
+}
+
 describe("campaign session", () => {
   let t: ReturnType<typeof convexTest>;
 
@@ -99,13 +111,13 @@ describe("campaign session", () => {
     await expect(
       asUser.mutation(api.campaigns.suggestIdeas, {
         campaignId,
-        mockAcknowledged: false,
+        mockAckToken: "forged-token",
       })
     ).rejects.toThrow(/acknowledge mock mode/);
 
     const { created } = await asUser.mutation(api.campaigns.suggestIdeas, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     expect(created).toBeGreaterThan(0);
 
@@ -128,11 +140,11 @@ describe("campaign session", () => {
 
     await asUser.mutation(api.campaigns.suggestIdeas, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     const second = await asUser.mutation(api.campaigns.suggestIdeas, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     expect(second.created).toBe(0);
 
@@ -151,17 +163,17 @@ describe("campaign session", () => {
     await expect(
       asUser.mutation(api.campaigns.suggestIdeas, {
         campaignId,
-        mockAcknowledged: true,
+        mockAckToken: await acknowledgeMock(asUser, campaignId),
       })
     ).rejects.toThrow(/Attach a corpus/);
   });
 
-  it("accepts suggested ideas into the working set with campaign-primary hints", async () => {
+  it("accepts suggested ideas into the working set (equals — no primary ranking)", async () => {
     const corpus = await createCorpus(t);
     const { asUser, campaignId } = await startCampaign(t, corpus.corpusId);
     await asUser.mutation(api.campaigns.suggestIdeas, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     const session = await asUser.query(api.campaigns.getCampaignSession, {
       campaignId,
@@ -178,7 +190,10 @@ describe("campaign session", () => {
       campaignId,
     });
     expect(updated?.workingSet).toHaveLength(1);
-    expect(updated?.workingSet[0].join.primary).toBe(true);
+    expect(updated?.workingSet[0].join.state).toBe("member");
+    // D-5: working-set ideas have no primary ranking — the join carries no
+    // such field at all.
+    expect(updated?.workingSet[0].join).not.toHaveProperty("primary");
 
     const idea = await t.run((ctx) => ctx.db.get(ideaId as never));
     expect(idea?.campaignHints?.[0]).toMatchObject({
@@ -191,7 +206,7 @@ describe("campaign session", () => {
     const { asUser, campaignId } = await startCampaign(t, corpus.corpusId);
     await asUser.mutation(api.campaigns.suggestIdeas, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     const session = await asUser.query(api.campaigns.getCampaignSession, {
       campaignId,
@@ -229,7 +244,7 @@ describe("campaign session", () => {
     const { asUser, campaignId } = await startCampaign(t, corpus.corpusId);
     await asUser.mutation(api.campaigns.suggestIdeas, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     const session = await asUser.query(api.campaigns.getCampaignSession, {
       campaignId,
@@ -258,7 +273,7 @@ describe("campaign session", () => {
     const { asUser, campaignId } = await startCampaign(t, corpus.corpusId);
     await asUser.mutation(api.campaigns.suggestIdeas, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     const session = await asUser.query(api.campaigns.getCampaignSession, {
       campaignId,
@@ -276,7 +291,7 @@ describe("campaign session", () => {
     const { asUser, campaignId } = await startCampaign(t, corpus.corpusId);
     await asUser.mutation(api.campaigns.suggestIdeas, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     const session = await asUser.query(api.campaigns.getCampaignSession, {
       campaignId,
@@ -431,5 +446,89 @@ describe("campaign session", () => {
         corpusId: foreign!._id as never,
       })
     ).rejects.toThrow(/Corpus not found for this brand/);
+  });
+
+  it("resolves citation chips per corpus when two versions are attached (C1)", async () => {
+    const asUser = t.withIdentity(JAKE);
+    const corpusA = await asUser.mutation(api.corpora.createCorpusVersion, {
+      brandId: "corvo",
+      origin: "upload",
+      documents: [
+        {
+          name: "alpha.pdf",
+          kind: "pdf",
+          excerpts: [
+            { text: "Alpha excerpt one: interleaved reasoning traces.", provenance: "a p.1" },
+            { text: "Alpha excerpt two: grounding reduces hallucination.", provenance: "a p.6" },
+          ],
+        },
+      ],
+    });
+    const corpusB = await asUser.mutation(api.corpora.createCorpusVersion, {
+      brandId: "corvo",
+      origin: "upload",
+      documents: [
+        {
+          name: "beta.md",
+          kind: "md",
+          excerpts: [
+            { text: "Beta excerpt one: batch cohesion beats per-post review.", provenance: "b p.1" },
+            { text: "Beta excerpt two: citations ground every claim.", provenance: "b p.2" },
+          ],
+        },
+      ],
+    });
+
+    const { campaignId } = await asUser.mutation(api.campaigns.createCampaign, {
+      brandId: "corvo",
+      title: "Two-corpus campaign",
+    });
+    await asUser.mutation(api.campaigns.attachCorpus, {
+      campaignId,
+      corpusId: corpusA.corpusId as never,
+    });
+    await asUser.mutation(api.campaigns.attachCorpus, {
+      campaignId,
+      corpusId: corpusB.corpusId as never,
+    });
+    await asUser.mutation(api.campaigns.suggestIdeas, {
+      campaignId,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
+    });
+
+    const session = await asUser.query(api.campaigns.getCampaignSession, {
+      campaignId,
+    });
+    expect(session?.corpora).toHaveLength(2);
+
+    // This mirrors the component's chip lookup: keyed by corpusId:seq, the
+    // key parseCorpusCitation already carries. Both corpora number excerpts
+    // from seq 1, so the corpusId half of the key is load-bearing — a
+    // seq-only map silently overwrites one corpus with the other.
+    const excerptByKey = new Map<string, { text: string; provenance: string }>();
+    const seqOnly = new Map<string, string>();
+    for (const entry of session?.corpora ?? []) {
+      for (const excerpt of entry.excerpts) {
+        excerptByKey.set(`${entry.corpus._id}:${excerpt.seq}`, excerpt);
+        seqOnly.set(String(excerpt.seq), excerpt.text);
+      }
+    }
+    expect(seqOnly.size).toBeLessThan(excerptByKey.size);
+
+    const attachedCorpusIds = new Set(
+      (session?.corpora ?? []).map((entry) => String(entry.corpus._id))
+    );
+    let resolved = 0;
+    for (const entry of session?.suggested ?? []) {
+      for (const citation of entry.idea?.excerptCitations ?? []) {
+        const parsed = parseCorpusCitation(citation);
+        expect(parsed).not.toBeNull();
+        expect(attachedCorpusIds.has(parsed!.corpusId)).toBe(true);
+        const excerpt = excerptByKey.get(`${parsed!.corpusId}:${parsed!.seq}`);
+        expect(excerpt).toBeDefined();
+        resolved += 1;
+      }
+    }
+    expect(resolved).toBeGreaterThan(0);
   });
 });

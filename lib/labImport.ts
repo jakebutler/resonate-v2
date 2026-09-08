@@ -6,14 +6,47 @@ export type SecretFinding = {
   preview: string;
 };
 
-/** Authoritative secret patterns — the CLI script mirrors these fail-fast locally. */
+/**
+ * Authoritative secret patterns — the CLI script mirrors these fail-fast locally.
+ * Keyword anchors use `(?<![A-Za-z0-9])` instead of `\b`: `_` is a word
+ * character, so `\b` never matches inside names like OPENAI_API_KEY or
+ * AWS_SECRET_ACCESS_KEY — the most common real-world shapes. Prefixed
+ * credential literals (sk-, ghp_, xox-…) match the value itself, independent
+ * of any variable name. False positives are acceptable; false negatives are
+ * not (D-18 hard-fails the import).
+ */
 export const SECRET_PATTERNS: { kind: string; pattern: RegExp }[] = [
   { kind: "private key block", pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  { kind: "api key assignment", pattern: /\b(api[_-]?key|apikey)\b\s*[:=]\s*["']?[A-Za-z0-9_\-]{12,}/i },
-  { kind: "bearer token", pattern: /\bBearer\s+[A-Za-z0-9_\-\.]{16,}/ },
-  { kind: "aws access key", pattern: /\bAKIA[0-9A-Z]{16}\b/ },
-  { kind: "password assignment", pattern: /\b(password|passwd|pwd)\b\s*[:=]\s*["']?[^\s"']{6,}/i },
-  { kind: "generic secret assignment", pattern: /\b(secret|token)\b\s*[:=]\s*["']?[A-Za-z0-9_\-]{16,}/i },
+  { kind: "openai api key", pattern: /(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{16,}/ },
+  { kind: "github token", pattern: /(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{16,}/ },
+  { kind: "slack token", pattern: /(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9-]{10,}/ },
+  { kind: "google api key", pattern: /(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{30,}/ },
+  {
+    kind: "jwt",
+    pattern: /(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/,
+  },
+  {
+    kind: "url credentials",
+    pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\s:@/]*:[^\s@/]*@/,
+  },
+  {
+    kind: "api key assignment",
+    pattern: /(?<![A-Za-z0-9])(api[_-]?key|apikey)(?![A-Za-z0-9])\s*[:=]\s*["']?[A-Za-z0-9_\-]{12,}/i,
+  },
+  { kind: "bearer token", pattern: /(?<![A-Za-z0-9])Bearer\s+[A-Za-z0-9_\-\.]{16,}/ },
+  { kind: "aws access key", pattern: /(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}(?![0-9A-Z])/ },
+  {
+    kind: "password assignment",
+    pattern: /(?<![A-Za-z0-9])(password|passwd|pwd)(?![A-Za-z0-9])\s*[:=]\s*["']?[^\s"']{6,}/i,
+  },
+  {
+    kind: "aws secret key assignment",
+    pattern: /(?<![A-Za-z0-9])(aws[_-]?)?secret[_-]?access[_-]?key(?![A-Za-z0-9])\s*[:=]\s*["']?[A-Za-z0-9/+=]{16,}/i,
+  },
+  {
+    kind: "generic secret assignment",
+    pattern: /(?<![A-Za-z0-9])(secret|token)(?![A-Za-z0-9])\s*[:=]\s*["']?[A-Za-z0-9_\-]{16,}/i,
+  },
 ];
 
 /**

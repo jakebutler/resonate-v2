@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import {
+  internalMutation,
+  mutation,
+  query,
+  type MutationCtx,
+} from "./_generated/server";
 import {
   audit,
   brandIdValidator,
@@ -172,16 +177,17 @@ async function insertCorpusVersion(
 }
 
 /**
- * Lab-folder import (C8, D-18): the CLI script scans a folder locally, then
- * posts raw document text here. This mutation is the authoritative gate —
- * no user identity exists on the CLI path, so it is guarded by the ops secret
- * (mirroring the /api/ops pattern), re-runs the secret scan server-side
- * (hard fail), and reuses the shared immutable-version insert helper.
+ * Lab-folder import (C8, D-18): the CLI posts to /api/ops/lab-import, which
+ * authenticates the ops bearer secret (timing-safe compare + rate limit +
+ * failure audit) and invokes this internal mutation. No user identity exists
+ * on the CLI path, so the function is internal-only: it is unreachable from
+ * the internet except through the guarded route. It re-runs the secret scan
+ * server-side (hard fail) and reuses the shared immutable-version insert
+ * helper.
  */
-export const importLabBundle = mutation({
+export const importLabBundle = internalMutation({
   args: {
     brandId: brandIdValidator,
-    opsSecret: v.string(),
     files: v.array(
       v.object({
         name: v.string(),
@@ -190,12 +196,6 @@ export const importLabBundle = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const expected = process.env.V2_OPS_SECRET?.trim();
-    const provided = args.opsSecret.trim();
-    if (!expected || provided !== expected) {
-      throw new Error("Unauthorized: invalid ops secret for lab import.");
-    }
-
     if (args.files.length === 0) {
       throw new Error("The lab bundle contains no files.");
     }
@@ -287,6 +287,35 @@ export const updateExcerptReview = mutation({
       ...(args.sensitivity !== undefined ? { sensitivity: args.sensitivity } : {}),
       ...(args.reviewState !== undefined ? { reviewState: args.reviewState } : {}),
     });
+
+    // D-17 governs exactly this flip: sensitivity (e.g. internal-only →
+    // public-safe) decides whether an excerpt is ever quotable, so the
+    // old → new values land in the audit trail.
+    const changed: string[] = [];
+    if (args.sensitivity !== undefined && args.sensitivity !== excerpt.sensitivity) {
+      changed.push(`sensitivity ${excerpt.sensitivity} → ${args.sensitivity}`);
+    }
+    if (args.reviewState !== undefined && args.reviewState !== excerpt.reviewState) {
+      changed.push(`review state ${excerpt.reviewState} → ${args.reviewState}`);
+    }
+    await audit(ctx, {
+      userId,
+      brandId: corpus.brandId,
+      action: "corpus.excerpt_review",
+      summary:
+        changed.length > 0
+          ? `Excerpt #${excerpt.seq} review updated — ${changed.join(", ")}.`
+          : `Excerpt #${excerpt.seq} review re-saved with unchanged values (sensitivity ${excerpt.sensitivity}, review state ${excerpt.reviewState}).`,
+      metadata: {
+        excerptId: String(excerpt._id),
+        corpusId: String(corpus._id),
+        previousSensitivity: excerpt.sensitivity,
+        sensitivity: args.sensitivity ?? excerpt.sensitivity,
+        previousReviewState: excerpt.reviewState,
+        reviewState: args.reviewState ?? excerpt.reviewState,
+      },
+    });
+
     return { updated: true };
   },
 });

@@ -10,6 +10,7 @@ const LOWER_DB_ONLY_USER = {
   subject: "user-lowerdb-only",
   name: "Lower DB User",
 };
+const OTHER_CORVO_USER = { subject: "user-other-corvo", name: "Other Corvo User" };
 
 function createTestHarness() {
   return convexTest(schema, modules);
@@ -40,6 +41,13 @@ async function seedBrandMemberships(t: ReturnType<typeof convexTest>) {
     await ctx.db.insert("v2BrandMemberships", {
       userId: LOWER_DB_ONLY_USER.subject,
       brandId: "lower-db",
+      role: "owner",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.insert("v2BrandMemberships", {
+      userId: OTHER_CORVO_USER.subject,
+      brandId: "corvo",
       role: "owner",
       createdAt: now,
       updatedAt: now,
@@ -178,6 +186,211 @@ describe("campaigns", () => {
     expect(lowerDbList.map((campaign) => campaign.title)).toEqual([
       "Lower dB campaign",
     ]);
+  });
+});
+
+describe("campaign idea authorization", () => {
+  let t: ReturnType<typeof convexTest>;
+
+  beforeEach(async () => {
+    t = createTestHarness();
+    await seedBrandMemberships(t);
+  });
+
+  async function seedForeignIdea() {
+    const ownerId = CORVO_ONLY_USER.subject;
+    return t.run(async (ctx) =>
+      String(
+        await ctx.db.insert("ideas", {
+          userId: ownerId,
+          title: "Victim idea",
+          text: "VICTIM SECRET IDEA — never for other users.",
+          status: "idea",
+          flavor: "insight",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        })
+      )
+    );
+  }
+
+  it("refuses to add another user's idea to a campaign and leaves the idea untouched", async () => {
+    const foreignIdeaId = await seedForeignIdea();
+
+    const asAttacker = t.withIdentity(OTHER_CORVO_USER);
+    const { campaignId } = await asAttacker.mutation(
+      api.campaigns.createCampaign,
+      { brandId: "corvo", title: "Attacker campaign" }
+    );
+
+    await expect(
+      asAttacker.mutation(api.campaigns.addIdeaToCampaign, {
+        campaignId,
+        ideaId: foreignIdeaId as never,
+      })
+    ).rejects.toThrow(/Idea not found/);
+
+    const { joins, idea } = await t.run(async (ctx) => ({
+      joins: await ctx.db.query("campaignIdeas").collect(),
+      idea: await ctx.db.get(foreignIdeaId as never),
+    }));
+    expect(joins).toHaveLength(0);
+    expect(idea?.campaignHints ?? []).toHaveLength(0);
+  });
+
+  it("refuses to reject, undo-reject, or remove another user's idea", async () => {
+    const foreignIdeaId = await seedForeignIdea();
+
+    const asAttacker = t.withIdentity(OTHER_CORVO_USER);
+    const { campaignId } = await asAttacker.mutation(
+      api.campaigns.createCampaign,
+      { brandId: "corvo", title: "Attacker campaign" }
+    );
+
+    for (const mutationName of [
+      "rejectIdea",
+      "undoIdeaRejection",
+      "removeIdeaFromCampaign",
+    ] as const) {
+      await expect(
+        asAttacker.mutation(api.campaigns[mutationName], {
+          campaignId,
+          ideaId: foreignIdeaId as never,
+        })
+      ).rejects.toThrow(/Idea not found/);
+    }
+
+    const joins = await t.run(async (ctx) =>
+      ctx.db.query("campaignIdeas").collect()
+    );
+    expect(joins).toHaveLength(0);
+  });
+
+  it("refuses to link another user's idea into a shape slot", async () => {
+    const foreignIdeaId = await seedForeignIdea();
+
+    // The attacker owns the campaign and shape — the hole was linking a
+    // foreign idea into it, not reaching the shape itself.
+    const asAttacker = t.withIdentity(OTHER_CORVO_USER);
+    const { campaignId } = await asAttacker.mutation(
+      api.campaigns.createCampaign,
+      { brandId: "corvo", title: "Attacker slot campaign" }
+    );
+    const { shapeId } = await asAttacker.mutation(api.shapes.proposeShape, {
+      campaignId,
+      preset: "seed",
+    });
+    const view = await asAttacker.query(api.shapes.getCampaignShape, {
+      campaignId,
+    });
+    const unlinked = view!.slots.find((slot) => !slot.ideaId)!;
+
+    await expect(
+      asAttacker.mutation(api.shapes.linkSlotIdea, {
+        shapeId,
+        slotId: unlinked._id as never,
+        ideaId: foreignIdeaId as never,
+      })
+    ).rejects.toThrow(/Idea not found/);
+
+    // Linking an owned idea into the same slot still works.
+    const ownIdeaId = await t.run(async (ctx) =>
+      String(
+        await ctx.db.insert("ideas", {
+          userId: OTHER_CORVO_USER.subject,
+          text: "Attacker's own idea.",
+          status: "idea",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        })
+      )
+    );
+    await asAttacker.mutation(api.shapes.linkSlotIdea, {
+      shapeId,
+      slotId: unlinked._id as never,
+      ideaId: ownIdeaId as never,
+    });
+    const after = await asAttacker.query(api.shapes.getCampaignShape, {
+      campaignId,
+    });
+    expect(
+      after!.slots.find((slot) => String(slot._id) === String(unlinked._id))?.ideaId
+    ).toBeDefined();
+  });
+});
+
+describe("suggestIdeas sensitivity filter (D-17)", () => {
+  let t: ReturnType<typeof convexTest>;
+
+  beforeEach(async () => {
+    t = createTestHarness();
+    await seedBrandMemberships(t);
+  });
+
+  it("never quotes internal-only or non-accepted excerpts into suggestions", async () => {
+    const asUser = t.withIdentity(CORVO_ONLY_USER);
+    const corpus = await asUser.mutation(api.corpora.createCorpusVersion, {
+      brandId: "corvo",
+      origin: "upload",
+      documents: [
+        {
+          name: "mixed.md",
+          kind: "md",
+          excerpts: [
+            {
+              text: "INTERNAL ONLY: the unreleased pricing pivot lands in Q3.",
+              provenance: "p.1",
+              sensitivity: "internal-only",
+            },
+            {
+              text: "Public finding: grounding drafts in cited excerpts reduces fact drift.",
+              provenance: "p.2",
+              sensitivity: "public-safe",
+            },
+            {
+              text: "Flagged claim: needs a source before it is quotable.",
+              provenance: "p.3",
+            },
+          ],
+        },
+      ],
+    });
+    await asUser.mutation(api.corpora.updateExcerptReview, {
+      excerptId: (await asUser.query(api.corpora.getCorpus, { corpusId: corpus.corpusId }))!.excerpts[2]._id as never,
+      reviewState: "flagged",
+    });
+    await asUser.mutation(api.campaigns.attachCorpus, {
+      campaignId: (
+        await asUser.mutation(api.campaigns.createCampaign, {
+          brandId: "corvo",
+          title: "Filtered campaign",
+        })
+      ).campaignId as never,
+      corpusId: corpus.corpusId as never,
+    });
+
+    const campaignList = await asUser.query(api.campaigns.listCampaigns, {});
+    const campaignId = campaignList[0]!._id as never;
+
+    const ack = await asUser.mutation(api.mockAck.requestMockAcknowledgment, {
+      campaignId,
+    });
+    const result = await asUser.mutation(api.campaigns.suggestIdeas, {
+      campaignId,
+      mockAckToken: ack.token,
+    });
+    expect(result.created).toBeGreaterThan(0);
+
+    const session = await asUser.query(api.campaigns.getCampaignSession, {
+      campaignId,
+    });
+    const quotedText = (session?.suggested ?? [])
+      .map((entry) => entry.idea?.text ?? "")
+      .join("\n");
+    expect(quotedText).not.toContain("INTERNAL ONLY");
+    expect(quotedText).not.toContain("unreleased pricing pivot");
+    expect(quotedText).not.toContain("needs a source before it is quotable");
+    expect(quotedText).toContain("grounding drafts in cited excerpts");
   });
 });
 

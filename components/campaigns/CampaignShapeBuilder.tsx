@@ -16,6 +16,7 @@ import {
 import { ChannelIcon } from "@/components/campaigns/ChannelIcon";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
+import { channelLabel } from "@/lib/campaignLabels";
 import {
   CAMPAIGN_PRESETS,
   ROLE_LEGEND,
@@ -135,20 +136,24 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
   function saveBriefField(field: "goal" | "audience", value: string) {
     const trimmed = value.trim();
     if (!trimmed) return;
-    void saveBrief({
+    saveBrief({
       campaignId: typedCampaignId,
       ...(field === "goal" ? { goal: trimmed } : { audience: trimmed }),
-    });
+    }).catch((caught: unknown) =>
+      showToast(caught instanceof Error ? caught.message : "Could not save the brief.")
+    );
   }
 
   function commitEdit(slot: SlotDoc, kind: "title" | "angle") {
     const value = draft.trim();
     if (view?.shape) {
-      void updateSlot({
+      updateSlot({
         shapeId: view.shape._id as never,
         slotId: slot._id as never,
         ...(kind === "title" ? { title: value } : { angle: value }),
-      });
+      }).catch((caught: unknown) =>
+        showToast(caught instanceof Error ? caught.message : "Could not save the edit.")
+      );
     }
     setEditing(null);
     setEditingSlot(null);
@@ -286,11 +291,13 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
                     aria-label="Move slot up"
                     disabled={index === 0 || isAccepted}
                     onClick={() =>
-                      void moveSlot({
+                      moveSlot({
                         shapeId: view.shape!._id as never,
                         slotId: slot._id as never,
                         direction: -1,
-                      })
+                      }).catch((caught: unknown) =>
+                        showToast(caught instanceof Error ? caught.message : "Could not reorder slots.")
+                      )
                     }
                     className="text-[10px] text-gray-400 hover:text-[#ff7d00] disabled:opacity-30"
                   >
@@ -302,11 +309,13 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
                     aria-label="Move slot down"
                     disabled={index === sorted.length - 1 || isAccepted}
                     onClick={() =>
-                      void moveSlot({
+                      moveSlot({
                         shapeId: view.shape!._id as never,
                         slotId: slot._id as never,
                         direction: 1,
-                      })
+                      }).catch((caught: unknown) =>
+                        showToast(caught instanceof Error ? caught.message : "Could not reorder slots.")
+                      )
                     }
                     className="text-[10px] text-gray-400 hover:text-[#ff7d00] disabled:opacity-30"
                   >
@@ -328,11 +337,11 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
                     </span>
                     <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
                       <ChannelIcon channel={slot.channel} />
-                      {slot.channel === "corvo-blog" ? "Corvo Blog" : slot.channel}
+                      {channelLabel(slot.channel)}
                     </span>
                     <span className="text-[13px]">{MEDIA_LABELS[slot.mediaType] ?? slot.mediaType}</span>
                     {slotIncomplete ? (
-                      <span className="rounded-[5px] bg-[#ffe3d3] px-2 py-0.5 text-[11px] font-semibold text-[#78290f]">
+                      <span className="rounded-[5px] bg-[#ffe3d3] px-2 py-0.5 text-[11px] font-normal text-[#78290f]">
                         incomplete — no idea linked
                       </span>
                     ) : null}
@@ -418,11 +427,13 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
                     disabled={isAccepted}
                     onValueChange={(value) => {
                       if (!view.shape) return;
-                      void linkSlotIdea({
+                      linkSlotIdea({
                         shapeId: view.shape._id as never,
                         slotId: slot._id as never,
                         ideaId: value === "none" ? undefined : (value as never),
-                      });
+                      }).catch((caught: unknown) =>
+                        showToast(caught instanceof Error ? caught.message : "Could not link the idea.")
+                      );
                     }}
                   >
                     <SelectTrigger className="w-full text-xs" aria-label={`Linked idea for slot ${slot.seq}`}>
@@ -465,8 +476,8 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
             </>
           ) : (
             <>
-              All slots linked. Accepting saves the durable plan — nothing is
-              materialized yet.
+            All slots linked. Accepting saves the durable plan — nothing
+            reaches the calendar yet.
             </>
           )}
         </span>

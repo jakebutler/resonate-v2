@@ -39,6 +39,17 @@ async function seedBrand(t: ReturnType<typeof convexTest>) {
   });
 }
 
+/** Drives the confirm flow: mints a server-issued acknowledgment token. */
+async function acknowledgeMock(
+  asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
+  campaignId: string
+) {
+  const { token } = await asUser.mutation(api.mockAck.requestMockAcknowledgment, {
+    campaignId: campaignId as never,
+  });
+  return token;
+}
+
 /** Sets up a campaign with an accepted, fully linked standard shape. */
 async function setupAcceptedShape(t: ReturnType<typeof convexTest>) {
   const asUser = t.withIdentity(JAKE);
@@ -99,12 +110,12 @@ describe("draft set", () => {
     await seedBrand(t);
   });
 
-  it("fails closed without explicit mock acknowledgment (D-21)", async () => {
+  it("fails closed without a valid mock acknowledgment token (D-21)", async () => {
     const { asUser, campaignId } = await setupAcceptedShape(t);
     await expect(
       asUser.mutation(api.draftSet.generateDraftSet, {
         campaignId,
-        mockAcknowledged: false,
+        mockAckToken: "forged-token",
       })
     ).rejects.toThrow(/acknowledge mock mode/);
   });
@@ -118,7 +129,7 @@ describe("draft set", () => {
     await expect(
       asUser.mutation(api.draftSet.generateDraftSet, {
         campaignId,
-        mockAcknowledged: true,
+        mockAckToken: await acknowledgeMock(asUser, campaignId),
       })
     ).rejects.toThrow(/Accept a complete shape/);
   });
@@ -126,9 +137,10 @@ describe("draft set", () => {
   it("materializes a placeholder draft set where every draft is unapproved", async () => {
     const { asUser, campaignId } = await setupAcceptedShape(t);
 
+    const token = await acknowledgeMock(asUser, campaignId);
     const result = await asUser.mutation(api.draftSet.generateDraftSet, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: token,
     });
     expect(result.draftCount).toBe(5);
     expect(result.alreadyGenerated).toBe(false);
@@ -136,6 +148,9 @@ describe("draft set", () => {
     const view = await asUser.query(api.draftSet.getDraftSet, { campaignId });
     expect(view?.drafts).toHaveLength(5);
     expect(view?.materialization?.mode).toBe("mock");
+    // The persisted flag records the server's own verification result (C8),
+    // not a client assertion.
+    expect(view?.materialization?.mockAcknowledged).toBe(true);
     expect(view?.drafts.map((entry) => entry.seq)).toEqual([1, 2, 3, 4, 5]);
     for (const entry of view?.drafts ?? []) {
       expect(entry.post.approvalState).toBe("unapproved");
@@ -151,11 +166,11 @@ describe("draft set", () => {
     const { asUser, campaignId } = await setupAcceptedShape(t);
     await asUser.mutation(api.draftSet.generateDraftSet, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     const second = await asUser.mutation(api.draftSet.generateDraftSet, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
     expect(second.alreadyGenerated).toBe(true);
     expect(second.draftCount).toBe(0);
@@ -168,7 +183,7 @@ describe("draft set", () => {
     const { asUser, campaignId } = await setupAcceptedShape(t);
     await asUser.mutation(api.draftSet.generateDraftSet, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
 
     const audits = await t.run(async (ctx) =>
@@ -182,7 +197,7 @@ describe("draft set", () => {
     await expect(
       otherUser.mutation(api.draftSet.generateDraftSet, {
         campaignId,
-        mockAcknowledged: true,
+        mockAckToken: await acknowledgeMock(asUser, campaignId),
       })
     ).rejects.toThrow(/Campaign not found/);
     await expect(

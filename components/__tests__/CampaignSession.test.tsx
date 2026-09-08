@@ -19,6 +19,12 @@ vi.mock("@/convex/_generated/api", () => ({
       undoIdeaRejection: "campaigns:undoIdeaRejection",
       searchSessionIdeas: "campaigns:searchSessionIdeas",
     },
+    corpora: {
+      listCorpora: "corpora:listCorpora",
+    },
+    mockAck: {
+      requestMockAcknowledgment: "mockAck:requestMockAcknowledgment",
+    },
   },
 }));
 
@@ -36,7 +42,13 @@ const IDEA_A = {
 };
 
 const sessionData = {
-  campaign: { _id: "campaign_1", title: "Reasoning + acting", brandId: "corvo", status: "active" },
+  campaign: {
+    _id: "campaign_1",
+    title: "Reasoning + acting",
+    brandId: "corvo",
+    status: "active",
+    corpusIds: [CORPUS_ID],
+  },
   brief: null,
   corpora: [
     {
@@ -70,6 +82,11 @@ describe("CampaignSession", () => {
           },
         ];
       }
+      if (reference === "corpora:listCorpora") {
+        return [
+          { _id: CORPUS_ID, brandId: "corvo", origin: "upload", version: 1, createdAt: 0 },
+        ];
+      }
       return undefined;
     });
     useMutationMock.mockReturnValue(vi.fn().mockResolvedValue({ created: 0, added: true, removed: true }));
@@ -85,10 +102,16 @@ describe("CampaignSession", () => {
   });
 
   it("gates suggestion generation behind an explicit mock-mode acknowledgment", async () => {
+    const requestMockAcknowledgment = vi
+      .fn()
+      .mockResolvedValue({ token: "server-issued-token", expiresAt: Date.now() + 60000 });
     const suggestIdeas = vi.fn().mockResolvedValue({ created: 5 });
     useMutationMock.mockImplementation(((reference: unknown) =>
-      reference === "campaigns:suggestIdeas" ? suggestIdeas : vi.fn()
-    ) as never);
+      reference === "mockAck:requestMockAcknowledgment"
+        ? requestMockAcknowledgment
+        : reference === "campaigns:suggestIdeas"
+          ? suggestIdeas
+          : vi.fn()) as never);
 
     render(<CampaignSession campaignId="campaign_1" />);
     fireEvent.click(screen.getByTestId("suggest-ideas"));
@@ -97,9 +120,14 @@ describe("CampaignSession", () => {
 
     fireEvent.click(screen.getByText("Run in mock mode"));
     await waitFor(() => {
+      // D-21: the confirm dialog mints a server-issued token and the
+      // suggestion runs against it — the client never asserts "acknowledged".
+      expect(requestMockAcknowledgment).toHaveBeenCalledWith({
+        campaignId: "campaign_1",
+      });
       expect(suggestIdeas).toHaveBeenCalledWith({
         campaignId: "campaign_1",
-        mockAcknowledged: true,
+        mockAckToken: "server-issued-token",
       });
     });
   });
@@ -115,6 +143,52 @@ describe("CampaignSession", () => {
     expect(screen.getByRole("tooltip").textContent).toContain("corpus://corvo/");
   });
 
+  it("keys citation chips by corpus and sequence so attached versions never collide (C1)", () => {
+    // Two corpora, both numbering excerpts from seq 1. The chips must resolve
+    // through corpusId:seq — a seq-only key silently overwrites corpus B's
+    // excerpt with corpus A's.
+    const corporaSession = {
+      ...sessionData,
+      corpora: [
+        {
+          corpus: { _id: "corpus_b", version: 2 },
+          excerpts: [
+            { seq: 1, text: "Beta excerpt one: batch cohesion wins.", provenance: "b p.1" },
+          ],
+        },
+        {
+          corpus: { _id: "corpus_a", version: 1 },
+          excerpts: [
+            { seq: 1, text: "Alpha excerpt one: interleaved reasoning.", provenance: "a p.1" },
+          ],
+        },
+      ],
+      suggested: [
+        {
+          join: { state: "suggested" },
+          idea: {
+            ...IDEA_A,
+            excerptCitations: ["corpus://corvo/corpus_b#excerpt-1"],
+          },
+        },
+      ],
+    };
+    useQueryMock.mockImplementation((reference: unknown) => {
+      if (reference === "campaigns:getCampaignSession") return corporaSession;
+      if (reference === "campaigns:searchSessionIdeas") return [];
+      return undefined;
+    });
+
+    render(<CampaignSession campaignId="campaign_1" />);
+    const chip = screen.getByRole("button", { name: /①1/ });
+    fireEvent.click(chip);
+    // Corpus B appears first in the payload; a seq-only key would resolve
+    // this chip to corpus A's "Alpha excerpt one".
+    expect(screen.getByRole("tooltip").textContent).toContain(
+      "Beta excerpt one: batch cohesion wins."
+    );
+  });
+
   it("adds a suggested idea to the working set with sticky toast", async () => {
     const addIdea = vi.fn().mockResolvedValue({ added: true });
     useMutationMock.mockImplementation(((reference: unknown) =>
@@ -128,7 +202,7 @@ describe("CampaignSession", () => {
       expect(addIdea).toHaveBeenCalled();
     });
     expect(await screen.findByTestId("session-toast").then((el) => el.textContent)).toContain(
-      "campaign-primary"
+      "working set"
     );
   });
 
@@ -144,6 +218,54 @@ describe("CampaignSession", () => {
   it("shows the one-way membership rule in the working set panel", () => {
     render(<CampaignSession campaignId="campaign_1" />);
     expect(screen.getByText(/one-way/i)).toBeDefined();
+  });
+
+  it("hints in-campaign membership beside the flavor, capped at one +N more (D-5)", () => {
+    const hintedSession = {
+      ...sessionData,
+      suggested: [
+        {
+          join: { state: "suggested" },
+          idea: {
+            ...IDEA_A,
+            campaignHints: [
+              { campaignId: "campaign_9", campaignTitle: "Evergreen series" },
+              { campaignId: "campaign_8", campaignTitle: "Launch week" },
+            ],
+          },
+        },
+        {
+          join: { state: "suggested" },
+          idea: {
+            ...IDEA_A,
+            _id: "idea_b",
+            text: "A second idea that is in exactly one other campaign.",
+            campaignHints: [
+              { campaignId: "campaign_7", campaignTitle: "Solo campaign" },
+            ],
+          },
+        },
+      ],
+    };
+    useQueryMock.mockImplementation((reference: unknown) => {
+      if (reference === "campaigns:getCampaignSession") return hintedSession;
+      if (reference === "campaigns:searchSessionIdeas") return [];
+      return undefined;
+    });
+
+    render(<CampaignSession campaignId="campaign_1" />);
+    // Quiet text beside the flavor — no chip, no navigation, current campaign excluded.
+    expect(screen.getAllByText(/already in/i)).toHaveLength(2);
+    // Two hints cap at the first name plus "+N more".
+    const cappedCard = screen
+      .getByText("Evergreen series")
+      .closest("[data-idea]") as HTMLElement;
+    expect(within(cappedCard).getByText(/\+\d more/)).toBeDefined();
+    // A single hint renders no "+N more" suffix.
+    const soloCard = screen
+      .getByText("Solo campaign")
+      .closest("[data-idea]") as HTMLElement;
+    expect(within(soloCard).queryByText(/\+\d more/)).toBeNull();
   });
 
   it("renders a not-found state for a missing campaign", () => {

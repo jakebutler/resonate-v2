@@ -74,7 +74,7 @@ export function ReviewPassesPanel({
       showToast(
         result.passed
           ? `Cohesion gate passing (run #${result.runNumber}) — ${result.autoFixLog.length} auto-fix(es) applied with notes.`
-          : `Cohesion gate is blocking (run #${result.runNumber}) — resolve the failures to materialize.`
+          : `Cohesion gate is blocking (run #${result.runNumber}) — resolve the failures to add the batch to the calendar.`
       );
       onGateResolved?.(result.passed);
     } catch (caught) {
@@ -99,9 +99,9 @@ export function ReviewPassesPanel({
       <div className="flex flex-wrap items-baseline gap-3">
         <h2 className="text-lg font-semibold">Review passes</h2>
         <p className={cn("text-sm", tokens.textMuted)}>
-          Set-level checks run across the whole batch — cohesion can block
-          materialization; the SEO/AEO and humanizer surfaces are placeholders
-          for the skill packs.
+          Set-level checks run across the whole batch — the cohesion gate can
+          block the batch from reaching the calendar; the SEO/AEO and
+          humanizer surfaces are placeholders for upcoming automated passes.
         </p>
       </div>
 
@@ -189,8 +189,8 @@ export function ReviewPassesPanel({
         <div className={cn(tokens.panel, "p-4")} data-testid="seo-aeo-panel">
           <h3 className="text-sm font-semibold">SEO / AEO pass</h3>
           <p className={cn("mt-0.5 text-xs", tokens.textMuted)}>
-            Placeholder surface — the real extraction skill pack arrives with
-            the agent layer.
+            Placeholder surface — automatic question and answer extraction
+            arrives with live generation.
           </p>
           <ul className="mt-2 space-y-2">
             {review.seoAeo.map((entry) => (

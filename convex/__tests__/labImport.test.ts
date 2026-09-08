@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { api } from "../_generated/api";
+import { beforeEach, describe, expect, it } from "vitest";
+import { internal } from "../_generated/api";
 import schema from "../schema";
 
 const modules = import.meta.glob("../**/*.ts");
@@ -9,7 +9,18 @@ function createTestHarness() {
   return convexTest(schema, modules);
 }
 
-const OPS_SECRET = "test-ops-secret";
+/**
+ * importLabBundle is internal-only (C9): the ops route authenticates and
+ * invokes it, so tests drive it through the server context directly.
+ */
+function importBundle(
+  t: ReturnType<typeof convexTest>,
+  args: { brandId: "corvo" | "lower-db"; files: { name: string; text: string }[] }
+) {
+  return t.run((ctx) =>
+    ctx.runMutation(internal.corpora.importLabBundle, args)
+  );
+}
 
 const labFiles = [
   {
@@ -28,7 +39,6 @@ const labFiles = [
 
 describe("lab import (C8)", () => {
   let t: ReturnType<typeof convexTest>;
-  const originalSecret = process.env.V2_OPS_SECRET;
 
   beforeEach(async () => {
     t = createTestHarness();
@@ -42,30 +52,10 @@ describe("lab import (C8)", () => {
         updatedAt: now,
       });
     });
-    process.env.V2_OPS_SECRET = OPS_SECRET;
-  });
-
-  afterEach(() => {
-    if (originalSecret === undefined) delete process.env.V2_OPS_SECRET;
-    else process.env.V2_OPS_SECRET = originalSecret;
-  });
-
-  it("rejects an invalid ops secret", async () => {
-    await expect(
-      t.mutation(api.corpora.importLabBundle, {
-        brandId: "lower-db",
-        opsSecret: "wrong-secret",
-        files: labFiles,
-      })
-    ).rejects.toThrow(/invalid ops secret/);
   });
 
   it("imports a clean lab folder as an immutable corpus version", async () => {
-    const result = await t.mutation(api.corpora.importLabBundle, {
-      brandId: "lower-db",
-      opsSecret: OPS_SECRET,
-      files: labFiles,
-    });
+    const result = await importBundle(t, { brandId: "lower-db", files: labFiles });
 
     expect(result.version).toBe(1);
     expect(result.excerptCount).toBeGreaterThanOrEqual(3);
@@ -98,11 +88,9 @@ describe("lab import (C8)", () => {
   });
 
   it("hard-fails the whole import on a secret finding server-side", async () => {
-    process.env.V2_OPS_SECRET = OPS_SECRET;
     await expect(
-      t.mutation(api.corpora.importLabBundle, {
+      importBundle(t, {
         brandId: "lower-db",
-        opsSecret: OPS_SECRET,
         files: [
           ...labFiles,
           {
@@ -121,26 +109,16 @@ describe("lab import (C8)", () => {
 
   it("refuses unsupported formats server-side", async () => {
     await expect(
-      t.mutation(api.corpora.importLabBundle, {
+      importBundle(t, {
         brandId: "lower-db",
-        opsSecret: OPS_SECRET,
         files: [{ name: "board-sync-scratch.ipynb", text: "{}" }],
       })
     ).rejects.toThrow(/Unsupported format/);
   });
 
   it("bumps versions monotonically across imports", async () => {
-    process.env.V2_OPS_SECRET = OPS_SECRET;
-    const first = await t.mutation(api.corpora.importLabBundle, {
-      brandId: "lower-db",
-      opsSecret: OPS_SECRET,
-      files: labFiles,
-    });
-    const second = await t.mutation(api.corpora.importLabBundle, {
-      brandId: "lower-db",
-      opsSecret: OPS_SECRET,
-      files: labFiles,
-    });
+    const first = await importBundle(t, { brandId: "lower-db", files: labFiles });
+    const second = await importBundle(t, { brandId: "lower-db", files: labFiles });
     expect(first.version).toBe(1);
     expect(second.version).toBe(2);
   });

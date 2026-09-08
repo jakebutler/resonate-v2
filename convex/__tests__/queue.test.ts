@@ -39,6 +39,17 @@ async function seedBrand(t: ReturnType<typeof convexTest>) {
   });
 }
 
+/** Drives the confirm flow: mints a server-issued acknowledgment token. */
+async function acknowledgeMock(
+  asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
+  campaignId: string
+) {
+  const { token } = await asUser.mutation(api.mockAck.requestMockAcknowledgment, {
+    campaignId: campaignId as never,
+  });
+  return token;
+}
+
 async function setupGatedDraftSet(t: ReturnType<typeof convexTest>) {
   const asUser = t.withIdentity(JAKE);
   const { campaignId } = await asUser.mutation(api.campaigns.createCampaign, {
@@ -76,6 +87,12 @@ async function setupGatedDraftSet(t: ReturnType<typeof convexTest>) {
         })
       );
     });
+    // Working-set membership mirrors the real flow — the cohesion gate's
+    // auto-added CTA slot links a working-set idea (D-11 completeness).
+    await asUser.mutation(api.campaigns.addIdeaToCampaign, {
+      campaignId,
+      ideaId,
+    });
     await t.run(async (ctx) => {
       await ctx.db.insert("campaignSlots", {
         shapeId: shapeId as never,
@@ -91,7 +108,7 @@ async function setupGatedDraftSet(t: ReturnType<typeof convexTest>) {
 
   await asUser.mutation(api.draftSet.generateDraftSet, {
     campaignId,
-    mockAcknowledged: true,
+    mockAckToken: await acknowledgeMock(asUser, campaignId),
   });
   await asUser.mutation(api.cohesion.runCohesionGate, { campaignId });
 
@@ -153,12 +170,158 @@ describe("materialize + approval queue", () => {
     });
     await asUser.mutation(api.draftSet.generateDraftSet, {
       campaignId,
-      mockAcknowledged: true,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
     });
 
     await expect(
       asUser.mutation(api.queue.materializeDraftSet, { campaignId })
     ).rejects.toThrow(/Cohesion gate is blocking/);
+  });
+
+  it("blocks materialization when drafts changed after the gate passed (gate freshness)", async () => {
+    const { asUser, campaignId } = await setupGatedDraftSet(t);
+
+    // Probe parity: a satellite is rewritten to be ungrounded AFTER the gate
+    // passed. The stale pass must not unlock materialization.
+    await t.run(async (ctx) => {
+      const posts = await ctx.db.query("v2Posts").collect();
+      const satellite = posts.find((post) => post.title === "Slot 3");
+      if (satellite) {
+        await ctx.db.patch(satellite._id, {
+          content: "Wholly unrelated content with no grounding whatsoever.",
+        });
+      }
+    });
+
+    await expect(
+      asUser.mutation(api.queue.materializeDraftSet, { campaignId })
+    ).rejects.toThrow(/changed after the last cohesion gate/);
+
+    // Re-running the gate over the changed drafts re-evaluates honestly —
+    // the gate now blocks on the ungrounded satellite instead.
+    const rerun = await asUser.mutation(api.cohesion.runCohesionGate, {
+      campaignId,
+    });
+    expect(rerun.passed).toBe(false);
+    expect(
+      rerun.blockingFailures.map((failure) => failure.id)
+    ).toContain("satellites-reference-pillar");
+
+    await t.run(async (ctx) => {
+      const posts = await ctx.db.query("v2Posts").collect();
+      const satellite = posts.find((post) => post.title === "Slot 3");
+      if (satellite) {
+        await ctx.db.patch(satellite._id, {
+          content: "Grounded claims need receipts, so every satellite cites its source.",
+        });
+      }
+    });
+    await asUser.mutation(api.cohesion.runCohesionGate, { campaignId });
+    const result = await asUser.mutation(api.queue.materializeDraftSet, {
+      campaignId,
+    });
+    expect(result.materialized).toBe(true);
+  });
+
+  it("blocks materialization when a slot lost its linked idea after acceptance (D-11)", async () => {
+    const { asUser, campaignId } = await setupGatedDraftSet(t);
+    await asUser.mutation(api.cohesion.runCohesionGate, { campaignId });
+
+    await t.run(async (ctx) => {
+      const slots = await ctx.db.query("campaignSlots").collect();
+      const target = slots.find((slot) => slot.title === "Slot 2");
+      if (target) {
+        await ctx.db.patch(target._id, { ideaId: undefined });
+      }
+    });
+
+    await expect(
+      asUser.mutation(api.queue.materializeDraftSet, { campaignId })
+    ).rejects.toThrow(/incomplete/);
+  });
+
+  it("warns when materializing drafts that cite unreviewed excerpts (D-17)", async () => {
+    const asUser = t.withIdentity(JAKE);
+    const corpus = await asUser.mutation(api.corpora.createCorpusVersion, {
+      brandId: "corvo",
+      origin: "upload",
+      documents: [
+        {
+          name: "unreviewed-source.md",
+          kind: "md",
+          excerpts: [
+            { text: "An unreviewed claim that still gets cited.", provenance: "p.1" },
+          ],
+        },
+      ],
+    });
+    const corpusId = corpus.corpusId;
+
+    const { campaignId } = await asUser.mutation(api.campaigns.createCampaign, {
+      brandId: "corvo",
+      title: "Unreviewed citation campaign",
+    });
+    await asUser.mutation(api.campaigns.attachCorpus, {
+      campaignId,
+      corpusId: corpusId as never,
+    });
+
+    const now = Date.now();
+    const shapeId = await t.run(async (ctx) =>
+      String(
+        await ctx.db.insert("campaignShapes", {
+          campaignId: campaignId as never,
+          preset: "seed",
+          status: "accepted",
+          createdAt: now,
+          updatedAt: now,
+        })
+      )
+    );
+    const ideaId = await t.run(async (ctx) =>
+      String(
+        await ctx.db.insert("ideas", {
+          userId: JAKE.subject,
+          text: "An unreviewed claim that still gets cited.",
+          status: "idea",
+          excerptCitations: [`corpus://corvo/${corpusId}#excerpt-1`],
+          createdAt: now,
+          updatedAt: now,
+        })
+      )
+    );
+    await asUser.mutation(api.campaigns.addIdeaToCampaign, {
+      campaignId,
+      ideaId,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("campaignSlots", {
+        shapeId: shapeId as never,
+        seq: 1,
+        channel: "linkedin",
+        mediaType: "post",
+        role: "pillar",
+        ideaId: ideaId as never,
+      });
+    });
+
+    await asUser.mutation(api.draftSet.generateDraftSet, {
+      campaignId,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
+    });
+    await asUser.mutation(api.cohesion.runCohesionGate, { campaignId });
+
+    const result = await asUser.mutation(api.queue.materializeDraftSet, {
+      campaignId,
+    });
+    expect(result.materialized).toBe(true);
+    expect(result.unreviewedExcerptCount).toBe(1);
+
+    const audits = await t.run(async (ctx) =>
+      ctx.db.query("v2AuditEvents").collect()
+    );
+    const event = audits.find((entry) => entry.action === "campaign.materialize");
+    expect(event?.summary).toContain("unreviewed");
   });
 
   it("materializes as scheduled-but-unapproved with calendar intents", async () => {

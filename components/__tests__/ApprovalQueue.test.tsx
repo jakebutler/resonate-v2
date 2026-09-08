@@ -133,14 +133,51 @@ describe("ApprovalQueue", () => {
     expect(toast.textContent).toContain("Next in sequence: #1");
   });
 
-  it("routes long-form to the composer instead of inline approve", () => {
+  it("offers long-form rows both the composer link and inline approve (C3)", () => {
     render(<ApprovalQueue campaignId="campaign_1" />);
     const firstRow = screen.getAllByTestId("queue-row")[0]!;
     fireEvent.click(within(firstRow).getByText("Review ▾"));
     const expanded = screen.getByTestId("queue-expand");
     const link = expanded.querySelector("a[href='/editor/post_1']");
     expect(link).not.toBeNull();
-    expect(within(expanded).queryByTestId("approve-draft")).toBeNull();
+    // The article row keeps its inline approve so the sequence-aware chain
+    // never stalls at seq 1.
+    expect(within(expanded).getByTestId("approve-draft")).toBeDefined();
+  });
+
+  it("approves a long-form article inline through the audited approval path", async () => {
+    const setApproval = vi.fn().mockResolvedValue(undefined);
+    useMutationMock.mockImplementation(((reference: unknown) =>
+      reference === "publishing:setApproval" ? setApproval : vi.fn()) as never);
+
+    render(<ApprovalQueue campaignId="campaign_1" />);
+    const articleRow = screen.getAllByTestId("queue-row")[0]!;
+    fireEvent.click(within(articleRow).getByText("Review ▾"));
+
+    fireEvent.click(within(articleRow).getByTestId("approve-draft"));
+    await waitFor(() => {
+      expect(setApproval).toHaveBeenCalledWith({
+        postId: "post_1",
+        approvalState: "approved",
+      });
+    });
+    const toast = await screen.findByTestId("queue-toast");
+    expect(toast.textContent).toContain("Approved — 2 of 3");
+    expect(toast.textContent).toContain("Next in sequence: #2");
+  });
+
+  it("shows an error toast when approving fails", async () => {
+    const setApproval = vi.fn().mockRejectedValue(new Error("Approval denied"));
+    useMutationMock.mockImplementation(((reference: unknown) =>
+      reference === "publishing:setApproval" ? setApproval : vi.fn()) as never);
+
+    render(<ApprovalQueue campaignId="campaign_1" />);
+    const hookRow = screen.getAllByTestId("queue-row")[1]!;
+    fireEvent.click(within(hookRow).getByText("Review ▾"));
+    fireEvent.click(within(hookRow).getByTestId("approve-draft"));
+
+    const toast = await screen.findByTestId("queue-toast");
+    expect(toast.textContent).toContain("Approval denied");
   });
 
   it("shows the fully-approved end state with no auto-submit", () => {

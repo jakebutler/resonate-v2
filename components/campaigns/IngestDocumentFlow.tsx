@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ExcerptReviewList } from "@/components/campaigns/ExcerptReviewList";
+import { ExcerptReviewList, type ReviewedExcerpt } from "@/components/campaigns/ExcerptReviewList";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 import type { BrandId } from "@/lib/domain";
@@ -18,6 +18,7 @@ type ExcerptResponse = {
   provenance: string;
   unusable: boolean;
   unusableReason?: string;
+  sensitivity?: string;
 };
 
 type IngestDocumentResponse = {
@@ -38,6 +39,60 @@ type SaveResult = {
   excerptCount: number;
 };
 
+type SensitivityValue = "unreviewed" | "internal-only" | "public-safe";
+
+/** Pre-save excerpt with its source document, so save-time grouping survives split/merge. */
+type EditedExcerpt = ReviewedExcerpt & { documentIndex: number };
+
+function sameExcerpt(a: ReviewedExcerpt, b: ReviewedExcerpt): boolean {
+  return (
+    a.text === b.text && a.provenance === b.provenance && a.unusable === b.unusable
+  );
+}
+
+/**
+ * D-16: split/merge replaces a run of rows in place. Prefix/suffix rows map
+ * 1:1; replacement rows inherit the source run's document.
+ */
+function remapDocumentIndexes(
+  oldList: EditedExcerpt[],
+  next: ReviewedExcerpt[]
+): EditedExcerpt[] {
+  let prefix = 0;
+  while (
+    prefix < oldList.length &&
+    prefix < next.length &&
+    sameExcerpt(oldList[prefix], next[prefix])
+  ) {
+    prefix += 1;
+  }
+  let suffix = 0;
+  while (
+    suffix < oldList.length - prefix &&
+    suffix < next.length - prefix &&
+    sameExcerpt(oldList[oldList.length - 1 - suffix], next[next.length - 1 - suffix])
+  ) {
+    suffix += 1;
+  }
+  const inheritedIndex = oldList[prefix]?.documentIndex ?? 0;
+  return next.map((excerpt, index) => {
+    if (index < prefix) {
+      return { ...excerpt, documentIndex: oldList[index].documentIndex };
+    }
+    if (index >= next.length - suffix) {
+      const oldIndex = oldList.length - (next.length - index);
+      return { ...excerpt, documentIndex: oldList[oldIndex].documentIndex };
+    }
+    return { ...excerpt, documentIndex: inheritedIndex };
+  });
+}
+
+const SENSITIVITY_VALUES: SensitivityValue[] = [
+  "unreviewed",
+  "internal-only",
+  "public-safe",
+];
+
 type IngestDocumentFlowProps = {
   brandId: BrandId;
   nextVersion: number;
@@ -53,24 +108,38 @@ export function IngestDocumentFlow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [review, setReview] = useState<IngestResponse | null>(null);
+  const [editedExcerpts, setEditedExcerpts] = useState<EditedExcerpt[]>([]);
   const [selectedIndexes, setSelectedIndexes] = useState<number[]>([]);
+  const [sensitivityByIndex, setSensitivityByIndex] = useState<
+    Record<number, SensitivityValue>
+  >({});
   const [pasteText, setPasteText] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const flattenedExcerpts = review
-    ? review.documents.flatMap((document) =>
+  function applyReview(payload: IngestResponse) {
+    setReview(payload);
+    setEditedExcerpts(
+      payload.documents.flatMap((document, documentIndex) =>
         document.excerpts.map((excerpt) => ({
-          document,
-          excerpt,
+          documentIndex,
+          text: excerpt.text,
+          provenance: excerpt.provenance,
+          unusable: excerpt.unusable,
+          unusableReason: excerpt.unusableReason,
         }))
       )
-    : [];
+    );
+    setSelectedIndexes([]);
+    setSensitivityByIndex({});
+  }
 
   function resetReview() {
     setReview(null);
+    setEditedExcerpts([]);
     setSelectedIndexes([]);
+    setSensitivityByIndex({});
   }
 
   const createCorpusVersion = useMutation(api.corpora.createCorpusVersion);
@@ -89,7 +158,7 @@ export function IngestDocumentFlow({
       if (!response.ok) {
         throw new Error(payload.error ?? "Extraction failed.");
       }
-      setReview(payload as IngestResponse);
+      applyReview(payload as IngestResponse);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Extraction failed.");
     } finally {
@@ -111,7 +180,7 @@ export function IngestDocumentFlow({
       if (!response.ok) {
         throw new Error(payload.error ?? "Extraction failed.");
       }
-      setReview(payload as IngestResponse);
+      applyReview(payload as IngestResponse);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Extraction failed.");
     } finally {
@@ -133,7 +202,7 @@ export function IngestDocumentFlow({
       if (!response.ok) {
         throw new Error(payload.error ?? "Extraction failed.");
       }
-      setReview(payload as IngestResponse);
+      applyReview(payload as IngestResponse);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Extraction failed.");
     } finally {
@@ -148,17 +217,22 @@ export function IngestDocumentFlow({
     try {
       const selectedByDocument = new Map<
         IngestDocumentResponse,
-        { text: string; provenance: string }[]
+        { text: string; provenance: string; sensitivity?: SensitivityValue }[]
       >();
       for (const index of selectedIndexes) {
-        const entry = flattenedExcerpts[index];
-        if (!entry || entry.excerpt.unusable) continue;
-        const list = selectedByDocument.get(entry.document) ?? [];
+        const entry = editedExcerpts[index];
+        if (!entry || entry.unusable) continue;
+        const document = review.documents[entry.documentIndex];
+        if (!document) continue;
+        const list = selectedByDocument.get(document) ?? [];
+        const chosen = sensitivityByIndex[index];
         list.push({
-          text: entry.excerpt.text,
-          provenance: entry.excerpt.provenance,
+          text: entry.text,
+          provenance: entry.provenance,
+          // Persist the operator's per-excerpt sensitivity decision (D-17).
+          sensitivity: SENSITIVITY_VALUES.includes(chosen) ? chosen : "unreviewed",
         });
-        selectedByDocument.set(entry.document, list);
+        selectedByDocument.set(document, list);
       }
 
       const documents = [...selectedByDocument.entries()].map(
@@ -198,13 +272,15 @@ export function IngestDocumentFlow({
           <ExcerptReviewList
             brandId={brandId}
             documentName={review.documents[0]?.name ?? "document"}
-            excerpts={flattenedExcerpts.map((entry) => ({
-              text: entry.excerpt.text,
-              provenance: entry.excerpt.provenance,
-              unusable: entry.excerpt.unusable,
-              unusableReason: entry.excerpt.unusableReason,
-            }))}
+            excerpts={editedExcerpts}
             onSelectionChange={setSelectedIndexes}
+            onSensitivityChange={setSensitivityByIndex}
+            // D-16: split/merge is a pre-save edit — corpus versions stay
+            // immutable once saved.
+            editable
+            onExcerptsChange={(next) =>
+              setEditedExcerpts(remapDocumentIndexes(editedExcerpts, next))
+            }
           />
         </div>
         {error ? (

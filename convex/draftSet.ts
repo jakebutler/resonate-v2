@@ -7,6 +7,7 @@ import {
   requireUserId,
 } from "./campaignAccess";
 import { assertGroundingAllowed } from "@/lib/campaignGrounding";
+import { verifyMockAcknowledgment } from "./mockAck";
 import {
   composeDraftSet,
   containsPlaceholderTokens,
@@ -20,17 +21,23 @@ function contentFingerprint(title: string, content: string) {
 export const generateDraftSet = mutation({
   args: {
     campaignId: v.id("campaigns"),
-    mockAcknowledged: v.boolean(),
+    mockAckToken: v.string(),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const campaign = await getOwnedCampaign(ctx, userId, args.campaignId);
 
-    // Fail-closed grounding (D-21): mock generation refuses to run until the
-    // operator explicitly acknowledges mock mode.
+    // Fail-closed grounding (D-21): mock generation refuses to run without a
+    // server-issued, unexpired acknowledgment token — a client asserting
+    // "acknowledged" is never trusted on its own.
+    const mockAcknowledged = await verifyMockAcknowledgment(ctx, {
+      campaignId: campaign._id,
+      userId,
+      token: args.mockAckToken,
+    });
     assertGroundingAllowed({
       mode: "mock",
-      mockAcknowledged: args.mockAcknowledged,
+      mockAcknowledged,
       liveConfigured: false,
     });
 
@@ -103,7 +110,7 @@ export const generateDraftSet = mutation({
       campaignId: campaign._id,
       shapeId: shape._id,
       mode: "mock",
-      mockAcknowledged: true,
+      mockAcknowledged,
       createdAt: now,
     });
 
@@ -142,6 +149,7 @@ export const generateDraftSet = mutation({
         materializationId: String(materializationId),
         draftCount: slots.length,
         mode: "mock",
+        acknowledged: mockAcknowledged,
       },
     });
 
@@ -180,16 +188,15 @@ export const getDraftSet = query({
         ).sort((a, b) => a.seq - b.seq)
       : [];
 
-    const drafts = (
-      await ctx.db
-        .query("v2Posts")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect()
-    ).filter(
-      (post) =>
-        post.sourceCampaignId === campaign._id &&
-        post.sourceSlotId !== undefined
-    );
+    const drafts = await ctx.db
+      .query("v2Posts")
+      .withIndex("by_user_and_campaign", (q) =>
+        q.eq("userId", userId).eq("sourceCampaignId", campaign._id)
+      )
+      .collect()
+      .then((posts) =>
+        posts.filter((post) => post.sourceSlotId !== undefined)
+      );
 
     const hydrated = [];
     for (const post of drafts) {
