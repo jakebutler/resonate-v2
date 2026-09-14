@@ -21,6 +21,12 @@ export type CohesionCheck = {
   label: string;
   passed: boolean;
   blocking: boolean;
+  /**
+   * Drafts responsible for a failure, when attributable. The review surface
+   * links each one into the composer so non-mechanical failures have a
+   * remediation path (D-13).
+   */
+  failedPostIds?: string[];
 };
 
 export type CohesionAutoFix = {
@@ -138,6 +144,9 @@ export function runCohesionChecks(
     label: "No repeated framing openers across drafts.",
     passed: duplicates.length === 0,
     blocking: true,
+    failedPostIds: duplicates.flatMap(([, group]) =>
+      group.slice(1).map((draft) => draft.postId)
+    ),
   };
 
   const keywords = pillarClaimKeywords(pillar);
@@ -156,6 +165,7 @@ export function runCohesionChecks(
     label: "Satellites reference the pillar's core claim.",
     passed: satellites.length === 0 || ungrounded.length === 0,
     blocking: true,
+    failedPostIds: ungrounded.map((satellite) => satellite.postId),
   };
 
   const pillarCheck: CohesionCheck = {

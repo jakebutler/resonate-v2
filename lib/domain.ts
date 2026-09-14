@@ -56,8 +56,36 @@ export type ProviderAttemptStatus =
 /** Brands with a configured Buffer LinkedIn channel name in the adapter. */
 export const BUFFER_LINKEDIN_MAPPED_BRANDS = ["corvo", "lower-db"] as const satisfies readonly BrandId[];
 
+/** Default brand → Buffer LinkedIn channel names, used when BUFFER_LINKEDIN_CHANNELS is unset. */
+const BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND: Partial<Record<BrandId, string>> = {
+  corvo: "corvo-labs-us",
+  "lower-db": "the-lower-db",
+};
+
+/**
+ * Resolves the Buffer LinkedIn channel for a brand. The mapping is deployment
+ * configuration, not source: set BUFFER_LINKEDIN_CHANNELS on the **Convex
+ * deployment** (e.g. "corvo:corvo-labs-us,lower-db:the-lower-db" via
+ * `npx convex env set`) to override the defaults above. An override list is
+ * authoritative — brands absent from it stay unmapped instead of falling back.
+ */
+export function bufferLinkedInChannelForBrand(brandId: BrandId): string | null {
+  const raw = process.env.BUFFER_LINKEDIN_CHANNELS?.trim();
+  if (raw) {
+    for (const pair of raw.split(",")) {
+      const separator = pair.indexOf(":");
+      if (separator === -1) continue;
+      if (pair.slice(0, separator).trim() !== brandId) continue;
+      const channel = pair.slice(separator + 1).trim();
+      return channel || null;
+    }
+    return null;
+  }
+  return BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND[brandId] ?? null;
+}
+
 export function brandHasBufferLinkedInMapping(brandId: BrandId): boolean {
-  return (BUFFER_LINKEDIN_MAPPED_BRANDS as readonly BrandId[]).includes(brandId);
+  return bufferLinkedInChannelForBrand(brandId) !== null;
 }
 
 export type IdeaEntry = {

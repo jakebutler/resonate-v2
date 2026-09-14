@@ -39,6 +39,10 @@ vi.mock("@/convex/_generated/api", () => ({
       submit: "bufferLive:submit",
       cancelOrUnpublish: "bufferLive:cancelOrUnpublish",
     },
+    v2Storage: {
+      generateUploadUrl: "v2Storage:generateUploadUrl",
+      getFileUrl: "v2Storage:getFileUrl",
+    },
     posts: {
       generateUploadUrl: "posts:generateUploadUrl",
       getFileUrl: "posts:getFileUrl",
@@ -312,6 +316,7 @@ describe("PersistedPublishingPanel", () => {
         case "publishing:deletePost":
           return deletePostMock;
         case "posts:generateUploadUrl":
+        case "v2Storage:generateUploadUrl":
           return generateUploadUrlMock;
         default:
           throw new Error(`Unexpected mutation reference: ${String(reference)}`);

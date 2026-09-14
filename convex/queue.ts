@@ -17,6 +17,37 @@ import { latestIntent } from "./publishing";
 
 const SCHEDULE_TIMES = ["09:00", "13:30", "16:00"];
 
+/**
+ * D-17: distinct citations in the batch whose target excerpt is still marked
+ * "unreviewed". Used at materialize time for the audit record and by
+ * getCampaignQueue for the persistent warning banner (so the warning survives
+ * reloads and clears itself once sensitivities are fixed).
+ */
+async function countUnreviewedCitations(
+  ctx: Parameters<typeof getOwnedCampaign>[0],
+  drafts: Awaited<ReturnType<typeof loadCampaignDrafts>>["drafts"]
+): Promise<number> {
+  const unreviewedCitations = new Set<string>();
+  for (const draft of drafts) {
+    for (const citation of draft.post.sourceExcerptIds ?? []) {
+      const parsed = parseCorpusCitation(citation);
+      if (!parsed) continue;
+      const corpusId = ctx.db.normalizeId("corpora", parsed.corpusId);
+      if (!corpusId) continue;
+      const excerpt = await ctx.db
+        .query("corpusExcerpts")
+        .withIndex("by_corpus_and_seq", (q) =>
+          q.eq("corpusId", corpusId).eq("seq", parsed.seq)
+        )
+        .first();
+      if (excerpt && excerpt.sensitivity === "unreviewed") {
+        unreviewedCitations.add(citation);
+      }
+    }
+  }
+  return unreviewedCitations.size;
+}
+
 async function loadCampaignDrafts(
   ctx: Parameters<typeof getOwnedCampaign>[0],
   campaignId: string,
@@ -141,25 +172,7 @@ export const materializeDraftSet = mutation({
     const timezone = "America/Los_Angeles";
 
     // D-17: warn when the batch quotes excerpts still marked unreviewed.
-    const unreviewedCitations = new Set<string>();
-    for (const draft of drafts) {
-      for (const citation of draft.post.sourceExcerptIds ?? []) {
-        const parsed = parseCorpusCitation(citation);
-        if (!parsed) continue;
-        const corpusId = ctx.db.normalizeId("corpora", parsed.corpusId);
-        if (!corpusId) continue;
-        const excerpt = await ctx.db
-          .query("corpusExcerpts")
-          .withIndex("by_corpus_and_seq", (q) =>
-            q.eq("corpusId", corpusId).eq("seq", parsed.seq)
-          )
-          .first();
-        if (excerpt && excerpt.sensitivity === "unreviewed") {
-          unreviewedCitations.add(citation);
-        }
-      }
-    }
-    const unreviewedCount = unreviewedCitations.size;
+    const unreviewedCount = await countUnreviewedCitations(ctx, drafts);
 
     for (let index = 0; index < drafts.length; index += 1) {
       const draft = drafts[index]!;
@@ -262,6 +275,7 @@ export const getCampaignQueue = query({
 
     const approvedCount = queue.filter((entry) => entry.approvalState === "approved").length;
     const nextUnapproved = queue.find((entry) => entry.approvalState !== "approved");
+    const unreviewedCitationCount = await countUnreviewedCitations(ctx, drafts);
 
     return {
       campaign,
@@ -271,6 +285,7 @@ export const getCampaignQueue = query({
       nextSeq: nextUnapproved?.seq ?? null,
       allApproved: queue.length > 0 && approvedCount === queue.length,
       materialized: queue.some((entry) => entry.status === "scheduled"),
+      unreviewedCitationCount,
     };
   },
 });

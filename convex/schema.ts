@@ -828,6 +828,7 @@ export default defineSchema({
         label: v.string(),
         passed: v.boolean(),
         blocking: v.boolean(),
+        failedPostIds: v.optional(v.array(v.string())),
       })
     ),
     autoFixLog: v.array(

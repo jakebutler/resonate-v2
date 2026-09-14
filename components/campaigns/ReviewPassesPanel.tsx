@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ type Check = {
   label: string;
   passed: boolean;
   blocking: boolean;
+  failedPostIds?: string[];
 };
 
 type LatestRun = {
@@ -161,6 +163,20 @@ export function ReviewPassesPanel({
                           {fix.note}
                         </span>
                       ))}
+                    {!check.passed && (check.failedPostIds?.length ?? 0) > 0 ? (
+                      <span className="mt-1 flex flex-wrap gap-2">
+                        {check.failedPostIds!.map((postId) => (
+                          <Link
+                            key={postId}
+                            href={`/?postId=${postId}`}
+                            className={cn("text-xs underline", tokens.accent)}
+                            data-testid={`fix-in-composer-${postId}`}
+                          >
+                            Fix draft in composer ↗
+                          </Link>
+                        ))}
+                      </span>
+                    ) : null}
                   </span>
                 </li>
               ))}

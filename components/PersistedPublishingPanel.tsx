@@ -59,6 +59,7 @@ type PersistedCalendarItem = {
     timezone?: string;
     sourceIdeaId?: string;
     sourceResearchBriefId?: string;
+    sourceCampaignId?: string;
     prUrl?: string;
     branchName?: string;
     blogExcerpt?: string;
@@ -1394,6 +1395,16 @@ function AgendaItem(props: {
             <Badge>{statusLabel(post.status)}</Badge>
             {providerState?.simulated && <Badge>Simulated</Badge>}
             {post.blogPrStatus && <PrStatusBadge status={post.blogPrStatus} />}
+            {post.sourceCampaignId ? (
+              <Link
+                href={`/campaigns/${post.sourceCampaignId}/queue`}
+                className="inline-flex items-center rounded-full bg-[#e2eff1] px-2.5 py-0.5 text-xs font-medium text-[#0e4a54] hover:bg-[#d0e6ea]"
+                title="Materialized from a campaign draft set"
+                data-testid="campaign-provenance"
+              >
+                Campaign queue ↗
+              </Link>
+            ) : null}
           </div>
           <p className="mt-2 max-w-3xl text-sm text-gray-600">{post.content}</p>
         </div>
@@ -1866,13 +1877,21 @@ function PublishingDetailDrawer(props: {
               className="inline-flex items-center gap-1 rounded-md bg-[#15616d] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0f4a53] disabled:opacity-50"
               disabled={submitDisabled}
               onClick={() => props.onSubmit(item)}
-              title={!approved ? "Approval is required before Buffer submission." : undefined}
+              title={
+                !approved ? "Approval is required before Buffer submission." : undefined
+              }
               type="button"
             >
               <Send size={15} />
               Submit to Buffer
             </button>
           )}
+          {showLiveBuffer && !brandHasBufferLinkedInMapping(post.brandId) ? (
+            <p className="w-full text-xs text-gray-500" role="note">
+              No Buffer LinkedIn channel mapping for this brand — live submission is
+              unavailable here; use the simulated path.
+            </p>
+          ) : null}
           {showSimulate && (
             <button
               className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
@@ -2007,7 +2026,9 @@ function PersistedPostComposer(props: {
   const { item } = props;
   const post = item.post;
   const intent = item.intent;
-  const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
+  // v2-owned storage module — the legacy posts.generateUploadUrl retires at
+  // the ADR 0004 cutover.
+  const generateUploadUrl = useMutation(api.v2Storage.generateUploadUrl);
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
   const [blogExcerpt, setBlogExcerpt] = useState(post.blogExcerpt ?? "");
@@ -2025,7 +2046,7 @@ function PersistedPostComposer(props: {
   const [heroUploading, setHeroUploading] = useState(false);
   const [heroUploadError, setHeroUploadError] = useState<string | null>(null);
   const resolvedHeroUrl = useQuery(
-    api.posts.getFileUrl,
+    api.v2Storage.getFileUrl,
     heroImageStorageId ? { fileId: heroImageStorageId } : "skip"
   );
   const [scheduledDate, setScheduledDate] = useState(

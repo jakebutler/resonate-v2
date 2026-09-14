@@ -38,6 +38,7 @@ type QueueView = {
   nextSeq: number | null;
   allApproved: boolean;
   materialized: boolean;
+  unreviewedCitationCount: number;
 } | null | undefined;
 
 const TOKEN_PATTERN = /(\[[A-Z]+:[^\]]*\])/g;
@@ -83,6 +84,12 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
           ? `Added to the calendar: ${result.draftCount} drafts are now scheduled-but-unapproved. Click any row to review; approve inline to unblock.`
           : "This batch is already on the calendar."
       );
+      const unreviewed = result.unreviewedExcerptCount ?? 0;
+      if (result.materialized && unreviewed > 0) {
+        showToast(
+          `⚠ ${unreviewed} unreviewed citation(s) in this batch — see the warning above.`
+        );
+      }
     } catch (caught) {
       showToast(caught instanceof Error ? caught.message : "Could not add the batch to the calendar.");
     } finally {
@@ -192,6 +199,19 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
           <Link href={`/campaigns/${campaignId}/drafts`} className={cn("underline", tokens.accent)}>
             Go to drafts
           </Link>
+        </div>
+      ) : null}
+
+      {view.unreviewedCitationCount > 0 ? (
+        <div className={cn(tokens.noticeWarning, "mt-4")} data-testid="unreviewed-warning" role="alert">
+          <b>D-17 warning:</b> this batch cites {view.unreviewedCitationCount} excerpt
+          {view.unreviewedCitationCount === 1 ? "" : "s"} still marked{" "}
+          <b>unreviewed</b>. They may include internal-only material.{" "}
+          <Link href="/campaigns" className={cn("underline", tokens.accent)}>
+            Review excerpt sensitivity on Campaigns home
+          </Link>{" "}
+          — expand the corpus row, mark excerpts internal-only or public-safe, then
+          re-run the gate.
         </div>
       ) : null}
 

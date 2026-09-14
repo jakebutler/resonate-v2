@@ -240,3 +240,40 @@ After deploying to production, run this sequence manually:
 12. Confirm long-form draft appears with footnotes
 
 If all 12 steps succeed: ✅ V2 production is healthy.
+
+---
+
+## 10. Data Retention Policy (decided 2026-09-14)
+
+`v2AuditEvents` (and other append-only tables) are never pruned today. Policy,
+split by event class rather than a blanket age cutoff:
+
+| Class | Events | Retention |
+|---|---|---|
+| Decision-bearing | `campaign.materialize` (carries unreviewed-excerpt counts), `campaign.cohesion_gate`, approval changes, live provider submits/cancels | **Permanent** — ADR 0006 makes the materialize trail a forever record answering "did we schedule unreviewed material?" for every batch |
+| Operational telemetry | `provider.mock_submit`, `provider.skip`, `provider.status_refresh`, suggestion runs | **12 months**, then prunable |
+
+**Implementation is deferred until volume warrants** (solo-operator, low write
+volume). When implemented it needs:
+
+1. A time-ordered index on `v2AuditEvents` (`by_created_at`) — every existing
+   index is `by_post`/`by_user`-shaped, so any retention job would scan.
+2. A daily cron in `convex/crons.ts` (skeleton exists for the Buffer status
+   refresh) deleting only the operational class older than 12 months.
+
+---
+
+## 11. Legacy Strata Retirement (decided 2026-09-14)
+
+`convex/posts.ts` and `convex/settings.ts` are the v1 strata. Decisions:
+
+- **No `userId` backfill.** The Next-layer allowlist (`proxy.ts`) is fail-closed
+  and single-operator; all public functions are authenticated (audit wave A).
+  The tables are treated as single-tenant operator data until cutover.
+- **Storage ownership moved.** v2 surfaces upload/resolve hero images through
+  `convex/v2Storage.ts`. `posts.generateUploadUrl`/`getFileUrl` remain only for
+  the legacy editors.
+- **Cutover (date: TBD — Jake):** delete `convex/posts.ts`, `convex/settings.ts`,
+  `app/legacy/`, the legacy editors, and the `posts`/`settings` tables per
+  ADR 0004's deletion intent. Until then the authentication gate is the
+  security boundary.

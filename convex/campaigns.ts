@@ -187,18 +187,24 @@ export const suggestIdeas = mutation({
       existingIdeas.filter(Boolean).map((idea) => (idea as { text: string }).text)
     );
 
-    const excerptInputs: SuggestionExcerptInput[] = [];
+    // D-17 window cap: the prompt cannot consume thousands of excerpts, so
+    // bound it deterministically — round-robin across attached corpus
+    // versions (each in seq order), same result on every reload. The sampled
+    // window is recorded in the audit event so suggestions stay explainable.
+    const SUGGESTION_EXCERPT_CAP = 60;
+    const corpusGroups: SuggestionExcerptInput[][] = [];
     for (const corpusId of campaign.corpusIds) {
       const excerpts = await ctx.db
         .query("corpusExcerpts")
         .withIndex("by_corpus", (q) => q.eq("corpusId", corpusId))
         .collect();
+      const group: SuggestionExcerptInput[] = [];
       for (const excerpt of excerpts.sort((a, b) => a.seq - b.seq)) {
         // D-17: internal-only excerpts are never quoted; only excerpts whose
         // review state is accepted are quotable at all.
         if (excerpt.sensitivity === "internal-only") continue;
         if (excerpt.reviewState !== "accepted") continue;
-        excerptInputs.push({
+        group.push({
           seq: excerpt.seq,
           text: excerpt.text,
           provenance: excerpt.provenance,
@@ -209,14 +215,29 @@ export const suggestIdeas = mutation({
           }),
         });
       }
+      corpusGroups.push(group);
     }
+    const excerptInputs = corpusGroups.flat();
     if (excerptInputs.length === 0) {
       throw new Error(
         "Attach a corpus version before requesting suggested ideas."
       );
     }
+    let excerptWindow = excerptInputs;
+    if (excerptInputs.length > SUGGESTION_EXCERPT_CAP) {
+      const windowed: SuggestionExcerptInput[] = [];
+      const maxLength = Math.max(...corpusGroups.map((group) => group.length));
+      for (let index = 0; index < maxLength && windowed.length < SUGGESTION_EXCERPT_CAP; index += 1) {
+        for (const group of corpusGroups) {
+          if (index < group.length && windowed.length < SUGGESTION_EXCERPT_CAP) {
+            windowed.push(group[index]);
+          }
+        }
+      }
+      excerptWindow = windowed;
+    }
 
-    const suggestions = suggestCampaignIdeas(excerptInputs);
+    const suggestions = suggestCampaignIdeas(excerptWindow);
     let created = 0;
     for (const suggestion of suggestions) {
       if (existingTexts.has(suggestion.text)) continue;
@@ -251,6 +272,12 @@ export const suggestIdeas = mutation({
         mode: "mock",
         created,
         acknowledged: mockAcknowledged,
+        excerptWindow: {
+          sampled: excerptWindow.length,
+          total: excerptInputs.length,
+          capped: excerptWindow.length < excerptInputs.length,
+          cap: SUGGESTION_EXCERPT_CAP,
+        },
       },
     });
 

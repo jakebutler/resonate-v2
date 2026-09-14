@@ -154,6 +154,61 @@ describe("campaign session", () => {
     expect(session?.suggested.length).toBeGreaterThan(0);
   });
 
+  it("caps the suggestion excerpt window deterministically once a corpus exceeds it (D-17)", async () => {
+    // Seed 70 accepted, public-safe excerpts (cap is 60) in one document.
+    const many = Array.from({ length: 70 }, (_, index) => ({
+      text: `Excerpt ${index + 1}: grounding evidence for suggestion sampling.`,
+      provenance: `p.${index + 1}`,
+    }));
+    const asUser = t.withIdentity(JAKE);
+    const corpus = await asUser.mutation(api.corpora.createCorpusVersion, {
+      brandId: "corvo",
+      origin: "upload",
+      documents: [
+        {
+          name: "wide-corpus.md",
+          kind: "md" as const,
+          excerpts: many,
+        },
+      ],
+    });
+    const { campaignId } = await asUser.mutation(api.campaigns.createCampaign, {
+      brandId: "corvo",
+      title: "Wide corpus campaign",
+    });
+    await asUser.mutation(api.campaigns.attachCorpus, {
+      campaignId,
+      corpusId: corpus.corpusId as never,
+    });
+
+    const first = await asUser.mutation(api.campaigns.suggestIdeas, {
+      campaignId,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
+    });
+    expect(first.created).toBeGreaterThan(0);
+
+    // The audit records the bounded, deterministic window.
+    const audits = await t.run(async (ctx) =>
+      (await ctx.db.query("v2AuditEvents").collect()).filter(
+        (event) => event.action === "campaign.suggest_ideas"
+      )
+    );
+    const window = audits[0]?.metadata as {
+      excerptWindow?: { sampled: number; total: number; capped: boolean };
+    } | undefined;
+    expect(window?.excerptWindow?.total).toBe(70);
+    expect(window?.excerptWindow?.sampled).toBe(60);
+    expect(window?.excerptWindow?.capped).toBe(true);
+
+    // Deterministic: re-running adds nothing new (no duplicates), and the
+    // window would replay identically.
+    const second = await asUser.mutation(api.campaigns.suggestIdeas, {
+      campaignId,
+      mockAckToken: await acknowledgeMock(asUser, campaignId),
+    });
+    expect(second.created).toBe(0);
+  });
+
   it("refuses suggestions before a corpus is attached", async () => {
     const asUser = t.withIdentity(JAKE);
     const { campaignId } = await asUser.mutation(api.campaigns.createCampaign, {

@@ -4050,3 +4050,53 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/audit-query-perf
+
+## 09/14/2026 16:57:58 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/campaigns/ApprovalQueue.tsx
+- M	components/campaigns/ReviewPassesPanel.tsx
+- M	convex/__tests__/campaignSession.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/campaigns.ts
+- M	convex/publishing.ts
+- M	convex/queue.ts
+- M	convex/schema.ts
+- A	convex/v2Storage.ts
+- M	docs/ops-runbook.md
+- M	lib/__tests__/cohesion.test.ts
+- M	lib/cohesion.ts
+- M	lib/domain.ts
+- M	lib/providerAdapters.ts
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/campaigns/ApprovalQueue.tsx
+- M  components/campaigns/ReviewPassesPanel.tsx
+- M  convex/__tests__/campaignSession.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/campaigns.ts
+- M  convex/publishing.ts
+- M  convex/queue.ts
+- M  convex/schema.ts
+- A  convex/v2Storage.ts
+- M  docs/ops-runbook.md
+- M  lib/__tests__/cohesion.test.ts
+- M  lib/cohesion.ts
+- M  lib/domain.ts
+- M  lib/providerAdapters.ts
+
+### Branch
+
+- feat/audit-decisions

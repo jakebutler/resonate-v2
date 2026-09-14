@@ -11,6 +11,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { requireBrandAccess, requireUserId } from "./campaignAccess";
+import { brandHasBufferLinkedInMapping } from "@/lib/domain";
 import {
   providerForChannel as providerForChannelOrNull,
 } from "@/lib/providerAdapters";
@@ -1688,10 +1689,6 @@ function assembleLinkedInSubmissionContent(
   const body = content.trim();
   if (hashtags.length === 0) return body;
   return `${body}\n\n${hashtags.join(" ")}`;
-}
-
-function brandHasBufferLinkedInMapping(brandId: BrandId): boolean {
-  return brandId === "corvo" || brandId === "lower-db";
 }
 
 function isLiveBufferProviderPostId(providerPostId: string | undefined): boolean {
