@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
+import { requireUserId } from "./campaignAccess";
 
 const brandIdValidator = v.union(
   v.literal("personal"),
@@ -40,14 +41,6 @@ function deriveSourceDomain(url?: string) {
   } catch {
     return undefined;
   }
-}
-
-async function requireUserId(ctx: {
-  auth: { getUserIdentity: () => Promise<{ subject: string } | null> };
-}) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.subject) throw new Error("Unauthorized");
-  return identity.subject;
 }
 
 export const importV1Ideas = mutation({

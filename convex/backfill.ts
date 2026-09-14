@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
+import { requireUserId } from "./campaignAccess";
 
 const importedPostValidator = v.object({
   type: v.union(v.literal("blog"), v.literal("linkedin")),
@@ -22,10 +23,7 @@ export const upsertMany = mutation({
     unchanged: v.number(),
   }),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject) {
-      throw new Error("Unauthorized");
-    }
+    await requireUserId(ctx);
 
     let inserted = 0;
     let updated = 0;

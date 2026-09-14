@@ -100,17 +100,22 @@ export function ExcerptReviewList({
     const nextSensitivity: Record<number, "unreviewed" | "internal-only" | "public-safe"> = {};
     const nextCaptured = new Set<number>();
     const nextFlagOpen = new Set<number>();
+    const nextCorrections: Record<number, string> = {};
     for (let index = 0; index < start; index += 1) {
       if (checked.has(index)) nextChecked.add(index);
       if (sensitivity[index]) nextSensitivity[index] = sensitivity[index];
       if (captured.has(index)) nextCaptured.add(index);
       if (flagOpen.has(index)) nextFlagOpen.add(index);
+      if (corrections[index] !== undefined) nextCorrections[index] = corrections[index];
     }
     replacements.forEach((replacement, offset) => {
       if (!replacement.unusable) nextChecked.add(start + offset);
     });
     if (sensitivity[start] !== undefined && replacements[0] !== undefined) {
       nextSensitivity[start] = sensitivity[start];
+    }
+    if (corrections[start] !== undefined && replacements[0] !== undefined) {
+      nextCorrections[start] = corrections[start];
     }
     const shift = replacements.length - removeCount;
     for (let index = start + removeCount; index < excerpts.length; index += 1) {
@@ -119,11 +124,13 @@ export function ExcerptReviewList({
       if (sensitivity[index]) nextSensitivity[target] = sensitivity[index];
       if (captured.has(index)) nextCaptured.add(target);
       if (flagOpen.has(index)) nextFlagOpen.add(target);
+      if (corrections[index] !== undefined) nextCorrections[target] = corrections[index];
     }
     setChecked(nextChecked);
     setSensitivity(nextSensitivity);
     setCaptured(nextCaptured);
     setFlagOpen(nextFlagOpen);
+    setCorrections(nextCorrections);
     setSplitIndex(null);
     setSplitDraft("");
     setMergeError(null);

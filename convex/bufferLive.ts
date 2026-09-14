@@ -7,6 +7,7 @@ import {
   bufferProviderAdapter,
   type ProviderResult,
 } from "../lib/providerAdapters";
+import { requireUserId as requireActionUserId } from "./campaignAccess";
 
 function isFlagApproved(value: string | undefined): boolean {
   const normalized = (value ?? "").trim().toLowerCase();
@@ -28,14 +29,6 @@ function bufferAdapterContext() {
 
 function isBufferLiveGateOn() {
   return process.env.BUFFER_LIVE_SUBMISSION === "approved";
-}
-
-async function requireActionUserId(ctx: {
-  auth: { getUserIdentity: () => Promise<{ subject: string } | null> };
-}) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.subject) throw new Error("Unauthorized");
-  return identity.subject;
 }
 
 function providerFailureFromError(error: unknown): ProviderResult {

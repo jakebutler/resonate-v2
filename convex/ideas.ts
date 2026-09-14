@@ -1,6 +1,10 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
+import { requireBrandAccess, requireUserId } from "./campaignAccess";
+import {
+  providerForChannel as providerForChannelOrNull,
+} from "@/lib/providerAdapters";
 
 type IdeaStatus = Doc<"capturedIdeas">["status"];
 type BrandId = NonNullable<Doc<"capturedIdeas">["brandId"]>;
@@ -38,11 +42,9 @@ function deriveSourceDomain(url?: string) {
   }
 }
 
+/** Normalizes the lib routing table's null to the record shape's undefined. */
 function providerForChannel(channelId: ChannelId) {
-  if (channelId === "linkedin") return "buffer" as const;
-  if (channelId === "reddit") return "zernio" as const;
-  if (channelId === "corvo-blog") return "github-pr" as const;
-  return undefined;
+  return providerForChannelOrNull(channelId) ?? undefined;
 }
 
 function contentFingerprint(title: string, content: string) {
@@ -71,14 +73,6 @@ function contentForChannel(
   return `${sortedEntries.map((entry) => entry.content).join("\n\n")}${referenceLine}`;
 }
 
-async function requireUserId(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new Error("Unauthorized");
-  }
-  return identity.subject;
-}
-
 async function requireOwnedIdea(
   ctx: { db: { get: (id: Id<"capturedIdeas">) => Promise<Doc<"capturedIdeas"> | null> } },
   ideaId: Id<"capturedIdeas">,
@@ -89,22 +83,6 @@ async function requireOwnedIdea(
     throw new Error("Idea not found");
   }
   return idea;
-}
-
-async function requireBrandAccess(
-  ctx: QueryCtx | MutationCtx,
-  userId: string,
-  brandId: BrandId
-) {
-  const membership = await ctx.db
-    .query("v2BrandMemberships")
-    .withIndex("by_user_and_brand", (q) =>
-      q.eq("userId", userId).eq("brandId", brandId)
-    )
-    .first();
-
-  if (!membership) throw new Error("Brand access denied");
-  return membership;
 }
 
 export const list = query({

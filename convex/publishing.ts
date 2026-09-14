@@ -10,6 +10,13 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
+import { requireBrandAccess, requireUserId } from "./campaignAccess";
+import {
+  providerForChannel as providerForChannelOrNull,
+} from "@/lib/providerAdapters";
+import { providerSubmissionIneligibilityReason } from "@/lib/approvalGate";
+import { sanitizeProviderResponse } from "@/lib/sanitize";
+import { formatYmdFromOffset } from "@/lib/formatYmd";
 
 type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
 type ChannelId =
@@ -115,11 +122,9 @@ const brandSeed = [
   },
 ] as const;
 
+/** Normalizes the lib routing table's null to the record shape's undefined. */
 function providerForChannel(channelId: ChannelId) {
-  if (channelId === "linkedin") return "buffer" as const;
-  if (channelId === "reddit") return "zernio" as const;
-  if (channelId === "corvo-blog") return "github-pr" as const;
-  return undefined;
+  return providerForChannelOrNull(channelId) ?? undefined;
 }
 
 function brandConfigFor(brandId: BrandId) {
@@ -222,38 +227,6 @@ function contentFingerprint(title: string, content: string) {
   return `${title.trim()}\n${content.trim()}`;
 }
 
-function sanitizeProviderResponse(response: Record<string, unknown>) {
-  const blocked = /token|secret|key|authorization|cookie/i;
-  return Object.fromEntries(
-    Object.entries(response).map(([key, value]) => [
-      key,
-      blocked.test(key) ? "[redacted]" : value,
-    ])
-  );
-}
-
-async function requireUserId(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.subject) throw new Error("Unauthorized");
-  return identity.subject;
-}
-
-async function requireBrandAccess(
-  ctx: QueryCtx | MutationCtx,
-  userId: string,
-  brandId: BrandId
-) {
-  const membership = await ctx.db
-    .query("v2BrandMemberships")
-    .withIndex("by_user_and_brand", (q) =>
-      q.eq("userId", userId).eq("brandId", brandId)
-    )
-    .first();
-
-  if (!membership) throw new Error("Brand access denied");
-  return membership;
-}
-
 async function getOwnedPost(
   ctx: QueryCtx | MutationCtx,
   userId: string,
@@ -265,13 +238,17 @@ async function getOwnedPost(
   return post;
 }
 
-async function latestIntent(ctx: QueryCtx | MutationCtx, postId: Id<"v2Posts">) {
+async function latestIntent(
+  ctx: QueryCtx | MutationCtx,
+  postId: Id<"v2Posts">
+) {
   const intents = await ctx.db
     .query("v2PublishingIntents")
     .withIndex("by_post", (q) => q.eq("postId", postId))
     .collect();
   return intents.sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null;
 }
+export { latestIntent };
 
 async function accessibleBrandIds(ctx: QueryCtx | MutationCtx, userId: string) {
   const memberships = await ctx.db
@@ -312,27 +289,6 @@ async function seedBrandsAndChannels(
       await ensureBrandChannel(ctx, brand.brandId, channelId, now);
     }
   }
-}
-
-function formatYmdFromOffset(
-  dayOffset: number,
-  now = Date.now(),
-  timeZone = "America/Los_Angeles"
-) {
-  // Derive the civil calendar day in the post timezone first, then apply the
-  // offset. Using UTC alone drifts one day after LA's UTC midnight rollover.
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(now));
-  const year = Number(parts.find((part) => part.type === "year")?.value);
-  const month = Number(parts.find((part) => part.type === "month")?.value);
-  const day = Number(parts.find((part) => part.type === "day")?.value);
-  const base = new Date(Date.UTC(year, month - 1, day, 12));
-  base.setUTCDate(base.getUTCDate() + dayOffset);
-  return base.toISOString().slice(0, 10);
 }
 
 async function previewSeedRecordExists(
@@ -1098,15 +1054,13 @@ export const submitMockProvider = mutation({
       .first();
     const now = Date.now();
 
-    const ineligibleReason = !channel?.routable
-      ? "Channel is not routable."
-      : intent.approvalState !== "approved"
-        ? "Post is not approved."
-        : !intent.scheduledDate
-          ? "Scheduled date is required."
-          : intent.contentFingerprint !== contentFingerprint(post.title, post.content)
-            ? "Content changed after approval."
-            : null;
+    const ineligibleReason = providerSubmissionIneligibilityReason({
+      routable: Boolean(channel?.routable),
+      approvalState: intent.approvalState,
+      scheduledDate: intent.scheduledDate,
+      contentFingerprint: intent.contentFingerprint,
+      currentFingerprint: contentFingerprint(post.title, post.content),
+    });
 
     if (ineligibleReason) {
       await audit(ctx, {
@@ -1760,15 +1714,13 @@ export const getBufferSubmissionContext = internalQuery({
       )
       .first();
 
-    const ineligibleReason = !channel?.routable
-      ? "Channel is not routable."
-      : intent.approvalState !== "approved"
-        ? "Post is not approved."
-        : !intent.scheduledDate
-          ? "Scheduled date is required."
-          : intent.contentFingerprint !== contentFingerprint(post.title, post.content)
-            ? "Content changed after approval."
-            : null;
+    const ineligibleReason = providerSubmissionIneligibilityReason({
+      routable: Boolean(channel?.routable),
+      approvalState: intent.approvalState,
+      scheduledDate: intent.scheduledDate,
+      contentFingerprint: intent.contentFingerprint,
+      currentFingerprint: contentFingerprint(post.title, post.content),
+    });
 
     if (ineligibleReason) {
       return {
@@ -1975,15 +1927,13 @@ export const claimBufferSubmission = internalMutation({
       )
       .first();
 
-    const ineligibleReason = !channel?.routable
-      ? "Channel is not routable."
-      : intent.approvalState !== "approved"
-        ? "Post is not approved."
-        : !intent.scheduledDate
-          ? "Scheduled date is required."
-          : intent.contentFingerprint !== contentFingerprint(post.title, post.content)
-            ? "Content changed after approval."
-            : null;
+    const ineligibleReason = providerSubmissionIneligibilityReason({
+      routable: Boolean(channel?.routable),
+      approvalState: intent.approvalState,
+      scheduledDate: intent.scheduledDate,
+      contentFingerprint: intent.contentFingerprint,
+      currentFingerprint: contentFingerprint(post.title, post.content),
+    });
 
     if (ineligibleReason) {
       return {

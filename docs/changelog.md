@@ -3907,3 +3907,54 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/audit-security
+
+## 09/14/2026 16:07:23 PDT
+
+### Summary
+
+- Touched the workflow board or editorial workflow logic.
+- Touched the captured ideas experience.
+
+### Staged Changes
+
+- M	components/campaigns/ExcerptReviewList.tsx
+- M	convex/backfill.ts
+- M	convex/bufferLive.ts
+- M	convex/campaignAccess.ts
+- M	convex/cohesion.ts
+- M	convex/ideas.ts
+- M	convex/posts.ts
+- M	convex/publishing.ts
+- M	convex/queue.ts
+- M	convex/research.ts
+- M	convex/v2Migration.ts
+- M	convex/workflow.ts
+- M	eslint.config.mjs
+- A	lib/approvalGate.ts
+- M	lib/domain.ts
+- A	lib/formatYmd.ts
+- A	lib/sanitize.ts
+
+### Working Tree Snapshot
+
+- M  components/campaigns/ExcerptReviewList.tsx
+- M  convex/backfill.ts
+- M  convex/bufferLive.ts
+- M  convex/campaignAccess.ts
+- M  convex/cohesion.ts
+- M  convex/ideas.ts
+- M  convex/posts.ts
+- M  convex/publishing.ts
+- M  convex/queue.ts
+- M  convex/research.ts
+- M  convex/v2Migration.ts
+- M  convex/workflow.ts
+- M  eslint.config.mjs
+- A  lib/approvalGate.ts
+- M  lib/domain.ts
+- A  lib/formatYmd.ts
+- A  lib/sanitize.ts
+
+### Branch
+
+- fix/audit-consolidation

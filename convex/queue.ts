@@ -12,27 +12,10 @@ import {
   isShapeComplete,
 } from "@/lib/campaignShapes";
 import { draftSetFingerprint } from "@/lib/draftSetFingerprint";
+import { formatYmdFromOffset } from "@/lib/formatYmd";
+import { latestIntent } from "./publishing";
 
 const SCHEDULE_TIMES = ["09:00", "13:30", "16:00"];
-
-function formatYmdFromOffset(
-  dayOffset: number,
-  now = Date.now(),
-  timeZone = "America/Los_Angeles"
-) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(now));
-  const year = Number(parts.find((part) => part.type === "year")?.value);
-  const month = Number(parts.find((part) => part.type === "month")?.value);
-  const day = Number(parts.find((part) => part.type === "day")?.value);
-  const base = new Date(Date.UTC(year, month - 1, day, 12));
-  base.setUTCDate(base.getUTCDate() + dayOffset);
-  return base.toISOString().slice(0, 10);
-}
 
 async function loadCampaignDrafts(
   ctx: Parameters<typeof getOwnedCampaign>[0],
@@ -258,10 +241,10 @@ export const getCampaignQueue = query({
 
     const queue = [];
     for (const draft of drafts) {
-      const intent = await ctx.db
-        .query("v2PublishingIntents")
-        .withIndex("by_post", (q) => q.eq("postId", draft.post._id))
-        .first();
+      // Resolve the same way the calendar does (latest by updatedAt) so the
+      // campaign queue and the calendar can never disagree about a post's
+      // schedule when it has more than one intent.
+      const intent = await latestIntent(ctx, draft.post._id);
       queue.push({
         postId: String(draft.post._id),
         seq: draft.seq,

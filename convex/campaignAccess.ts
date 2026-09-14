@@ -11,7 +11,13 @@ export const brandIdValidator = v.union(
   v.literal("freshproof")
 );
 
-export async function requireUserId(ctx: QueryCtx | MutationCtx) {
+/**
+ * Single source of truth for caller identity. The ctx param is structural so
+ * the same helper works in queries, mutations, and "use node" actions.
+ */
+export async function requireUserId(ctx: {
+  auth: { getUserIdentity: () => Promise<{ subject: string } | null> };
+}) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity?.subject) throw new Error("Unauthorized");
   return identity.subject;

@@ -133,13 +133,10 @@ export const createFromIdea = mutation({
     type: v.union(v.literal("blog"), v.literal("linkedin")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Unauthorized");
-    }
+    const userId = await requireUserId(ctx);
 
     const idea = await ctx.db.get(args.ideaId);
-    if (!idea || idea.userId !== identity.subject) {
+    if (!idea || idea.userId !== userId) {
       throw new Error("Idea not found");
     }
 
@@ -174,7 +171,7 @@ export const createFromIdea = mutation({
     await ctx.db.insert("capturedIdeaPostLinks", {
       ideaId: args.ideaId,
       postId,
-      userId: identity.subject,
+      userId,
       createdAt: now,
     });
 

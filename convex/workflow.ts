@@ -14,6 +14,7 @@ import {
   summarizeTextPreview,
   type DraftStage,
 } from "../lib/workflow";
+import { requireUserId } from "./campaignAccess";
 
 const ideaStatusValidator = v.union(
   v.literal("backlog"),
@@ -59,14 +60,6 @@ const referenceValidator = v.object({
     v.literal("agent")
   ),
 });
-
-async function requireUserId(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.subject) {
-    throw new Error("Unauthorized");
-  }
-  return identity.subject;
-}
 
 function mergeReferences(
   existing: Doc<"ideas">["references"] | undefined,

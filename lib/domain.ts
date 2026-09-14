@@ -1,3 +1,6 @@
+import { providerSubmissionIneligibilityReason } from "./approvalGate";
+import { sanitizeProviderResponse } from "./sanitize";
+
 export type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
 
 export type ChannelId =
@@ -670,29 +673,14 @@ export function isEligibleForProviderSubmission(params: {
 }): { eligible: boolean; reason?: string } {
   const channel =
     params.channel ?? findChannel(params.intent.brandId, params.intent.channelId);
-  if (!channel?.routable || !channel.providerId) {
-    return { eligible: false, reason: "Channel is not routable." };
-  }
-  if (params.intent.approvalState !== "approved") {
-    return { eligible: false, reason: "Post is not approved." };
-  }
-  if (!params.intent.scheduledDate) {
-    return { eligible: false, reason: "Scheduled date is required." };
-  }
-  if (params.intent.contentFingerprint !== fingerprintPostContent(params.post)) {
-    return { eligible: false, reason: "Content changed after approval." };
-  }
-  return { eligible: true };
-}
-
-function sanitizeProviderResponse(response: Record<string, unknown>) {
-  const blocked = /token|secret|key|authorization|cookie/i;
-  return Object.fromEntries(
-    Object.entries(response).map(([key, value]) => [
-      key,
-      blocked.test(key) ? "[redacted]" : value,
-    ])
-  );
+  const reason = providerSubmissionIneligibilityReason({
+    routable: Boolean(channel?.routable && channel.providerId),
+    approvalState: params.intent.approvalState,
+    scheduledDate: params.intent.scheduledDate,
+    contentFingerprint: params.intent.contentFingerprint,
+    currentFingerprint: fingerprintPostContent(params.post),
+  });
+  return reason ? { eligible: false, reason } : { eligible: true };
 }
 
 export type MockProviderMode =
