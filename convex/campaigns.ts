@@ -16,6 +16,7 @@ import {
 import {
   assertGroundingAllowed,
   buildCorpusCitation,
+  parseCorpusCitation,
 } from "@/lib/campaignGrounding";
 import { verifyMockAcknowledgment } from "./mockAck";
 import {
@@ -477,18 +478,20 @@ export const getCampaignSession = query({
       .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
       .first();
 
-    const corporaWithExcerpts = [];
+    const corporaWithCounts = [];
+    const citedExcerptKeys = new Set<string>();
     for (const corpusId of campaign.corpusIds) {
       const corpus = await ctx.db.get(corpusId);
       if (!corpus) continue;
-      const excerpts = await ctx.db
+      // Bounded sample instead of full rows: an immutable corpus version can
+      // hold thousands of excerpts, and shipping every `text` to the browser
+      // fails cliff-style once a brand crosses the response-size limit. The
+      // sample is read server-side only; the count is capped, not shipped.
+      const excerptSample = await ctx.db
         .query("corpusExcerpts")
         .withIndex("by_corpus", (q) => q.eq("corpusId", corpusId))
-        .collect();
-      corporaWithExcerpts.push({
-        corpus,
-        excerpts: excerpts.sort((a, b) => a.seq - b.seq),
-      });
+        .take(51);
+      corporaWithCounts.push({ corpus, excerptCount: excerptSample.length });
     }
 
     const joins = await ctx.db
@@ -503,6 +506,44 @@ export const getCampaignSession = query({
     );
     const withIdeas = hydrated.filter((entry) => entry.idea !== null);
 
+    // Resolve just the excerpts that ideas actually cite so citation chips
+    // work without shipping entire corpora.
+    for (const entry of withIdeas) {
+      for (const citation of entry.idea?.excerptCitations ?? []) {
+        const parsed = parseCorpusCitation(citation);
+        if (parsed) citedExcerptKeys.add(`${parsed.corpusId}:${parsed.seq}`);
+      }
+    }
+    const citedExcerpts: {
+      _id: string;
+      corpusId: string;
+      seq: number;
+      text: string;
+      provenance: string;
+    }[] = [];
+    for (const key of citedExcerptKeys) {
+      const separator = key.lastIndexOf(":");
+      const corpusId = key.slice(0, separator);
+      const seq = Number(key.slice(separator + 1));
+      const normalizedCorpusId = ctx.db.normalizeId("corpora", corpusId);
+      if (!normalizedCorpusId || !Number.isInteger(seq)) continue;
+      const excerpt = await ctx.db
+        .query("corpusExcerpts")
+        .withIndex("by_corpus_and_seq", (q) =>
+          q.eq("corpusId", normalizedCorpusId).eq("seq", seq)
+        )
+        .first();
+      if (excerpt) {
+        citedExcerpts.push({
+          _id: excerpt._id,
+          corpusId: corpusId,
+          seq: excerpt.seq,
+          text: excerpt.text,
+          provenance: excerpt.provenance,
+        });
+      }
+    }
+
     const shape = await ctx.db
       .query("campaignShapes")
       .withIndex("by_campaign_and_status", (q) =>
@@ -513,7 +554,8 @@ export const getCampaignSession = query({
     return {
       campaign,
       brief: brief ?? null,
-      corpora: corporaWithExcerpts,
+      corpora: corporaWithCounts,
+      citedExcerpts,
       suggested: withIdeas.filter((entry) => entry.join.state === "suggested"),
       workingSet: withIdeas.filter((entry) => entry.join.state === "member"),
       rejected: withIdeas.filter((entry) => entry.join.state === "rejected"),

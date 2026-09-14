@@ -264,7 +264,8 @@ export default defineSchema({
     .index("by_brand_and_status", ["brandId", "status"])
     .index("by_channel", ["channelId"])
     .index("by_scheduled_date", ["scheduledDate"])
-    .index("by_user_and_campaign", ["userId", "sourceCampaignId"]),
+    .index("by_user_and_campaign", ["userId", "sourceCampaignId"])
+    .index("by_user_and_status", ["userId", "status"]),
 
   v2PublishingIntents: defineTable({
     postId: v.id("v2Posts"),

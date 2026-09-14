@@ -4010,3 +4010,43 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/audit-ui-fixes
+
+## 09/14/2026 16:38:47 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/CampaignSession.test.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/campaigns/CampaignSession.tsx
+- M	components/campaigns/CorpusExcerptReview.tsx
+- M	convex/__tests__/campaignSession.test.ts
+- M	convex/bufferLive.ts
+- M	convex/campaigns.ts
+- M	convex/corpora.ts
+- A	convex/crons.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/CampaignSession.test.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/campaigns/CampaignSession.tsx
+- M  components/campaigns/CorpusExcerptReview.tsx
+- M  convex/__tests__/campaignSession.test.ts
+- M  convex/bufferLive.ts
+- M  convex/campaigns.ts
+- M  convex/corpora.ts
+- A  convex/crons.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+
+### Branch
+
+- fix/audit-query-perf

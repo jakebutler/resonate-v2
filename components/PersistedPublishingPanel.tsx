@@ -1553,7 +1553,7 @@ function AgendaItem(props: {
       </dl>
       {(props.devMode || showLiveBuffer) && item.attemptCount > 0 && (
         <p className="mt-2 text-xs text-gray-500">
-          Attempts: {item.attemptCount}; last result: {item.lastAttempt?.status ?? "unknown"}
+          Attempts: {item.attemptCount >= 11 ? "10+" : item.attemptCount}; last result: {item.lastAttempt?.status ?? "unknown"}
         </p>
       )}
     </article>
@@ -1601,6 +1601,18 @@ function PublishingDetailDrawer(props: {
   const post = item.post;
   const intent = item.intent;
   const providerState = item.providerState;
+  // The list query no longer ships full attempt rows and audit events for
+  // every post on every reactive tick; the open drawer loads the trail for
+  // this one post on demand.
+  const postTrail = useQuery(
+    api.publishing.getPostAuditTrail,
+    props.devMode ? { postId: post._id } : "skip"
+  ) as
+    | {
+        attempts: PersistedCalendarItem["attempts"];
+        auditEvents: PersistedCalendarItem["auditEvents"];
+      }
+    | undefined;
   const approved = post.approvalState === "approved";
   const providerIntentRecorded = providerState?.status === "cancel-intent-recorded";
   const providerIntentType = post.status === "published" ? "unpublish" : "cancel";
@@ -1765,11 +1777,11 @@ function PublishingDetailDrawer(props: {
                     <Send size={15} />
                     Provider Attempts
                   </div>
-                  {!item.attempts?.length ? (
+                  {!postTrail?.attempts?.length ? (
                     <p className="mt-2 text-sm text-gray-600">No provider attempts recorded.</p>
                   ) : (
                     <div className="mt-3 space-y-3">
-                      {item.attempts.map((attempt, index) => (
+                      {postTrail.attempts.map((attempt, index) => (
                         <div
                           className="rounded-md border border-black/10 bg-black/[0.02] p-3"
                           key={String(attempt._id ?? index)}
@@ -1806,11 +1818,11 @@ function PublishingDetailDrawer(props: {
                     <History size={15} />
                     Audit Trail
                   </div>
-                  {!item.auditEvents?.length ? (
+                  {!postTrail?.auditEvents?.length ? (
                     <p className="mt-2 text-sm text-gray-600">No audit events recorded.</p>
                   ) : (
                     <ol className="mt-3 space-y-3">
-                      {item.auditEvents.map((event, index) => (
+                      {postTrail.auditEvents.map((event, index) => (
                         <li
                           className="rounded-md border border-black/10 p-3"
                           key={String(event._id ?? index)}

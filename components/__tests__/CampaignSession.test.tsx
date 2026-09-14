@@ -53,9 +53,16 @@ const sessionData = {
   corpora: [
     {
       corpus: { _id: CORPUS_ID, version: 1 },
-      excerpts: [
-        { seq: 1, text: "We explore reasoning traces and actions interleaved.", provenance: "p.1 · Abstract" },
-      ],
+      excerptCount: 1,
+    },
+  ],
+  citedExcerpts: [
+    {
+      _id: "excerpt_1",
+      corpusId: CORPUS_ID,
+      seq: 1,
+      text: "We explore reasoning traces and actions interleaved.",
+      provenance: "p.1 · Abstract",
     },
   ],
   suggested: [{ join: { state: "suggested" }, idea: IDEA_A }],
@@ -92,11 +99,11 @@ describe("CampaignSession", () => {
     useMutationMock.mockReturnValue(vi.fn().mockResolvedValue({ created: 0, added: true, removed: true }));
   });
 
-  it("renders the three session panels with corpus excerpts and provenance", () => {
+  it("renders the three session panels with a per-corpus excerpt browser", () => {
     render(<CampaignSession campaignId="campaign_1" />);
     expect(screen.getByText("Reasoning + acting")).toBeDefined();
     expect(screen.getByText("Corpus & excerpts")).toBeDefined();
-    expect(screen.getByText("p.1 · Abstract")).toBeDefined();
+    expect(screen.getByText("Corpus v1 — 1 excerpt")).toBeDefined();
     expect(screen.getByText("Campaign working set")).toBeDefined();
     expect(screen.getByTestId("working-count").textContent).toContain("0 ideas");
   });
@@ -150,17 +157,23 @@ describe("CampaignSession", () => {
     const corporaSession = {
       ...sessionData,
       corpora: [
+        { corpus: { _id: "corpus_b", version: 2 }, excerptCount: 1 },
+        { corpus: { _id: "corpus_a", version: 1 }, excerptCount: 1 },
+      ],
+      citedExcerpts: [
         {
-          corpus: { _id: "corpus_b", version: 2 },
-          excerpts: [
-            { seq: 1, text: "Beta excerpt one: batch cohesion wins.", provenance: "b p.1" },
-          ],
+          _id: "excerpt_b1",
+          corpusId: "corpus_b",
+          seq: 1,
+          text: "Beta excerpt one: batch cohesion wins.",
+          provenance: "b p.1",
         },
         {
-          corpus: { _id: "corpus_a", version: 1 },
-          excerpts: [
-            { seq: 1, text: "Alpha excerpt one: interleaved reasoning.", provenance: "a p.1" },
-          ],
+          _id: "excerpt_a1",
+          corpusId: "corpus_a",
+          seq: 1,
+          text: "Alpha excerpt one: interleaved reasoning.",
+          provenance: "a p.1",
         },
       ],
       suggested: [

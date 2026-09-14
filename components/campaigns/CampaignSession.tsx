@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -44,7 +44,14 @@ type SessionData = {
   brief: { goal?: string; audience?: string } | null;
   corpora: {
     corpus: { _id: string; version: number };
-    excerpts: { seq: number; text: string; provenance: string }[];
+    excerptCount: number;
+  }[];
+  citedExcerpts: {
+    _id: string;
+    corpusId: string;
+    seq: number;
+    text: string;
+    provenance: string;
   }[];
   suggested: { join: { state: string }; idea: IdeaDoc | null }[];
   workingSet: { join: { state: string }; idea: IdeaDoc | null }[];
@@ -129,15 +136,15 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
   const excerptLookup = useMemo(() => {
     // C1: citations carry corpus://<brand>/<corpusId>#excerpt-N, and `seq`
     // restarts per corpus version — keying by seq alone lets a second
-    // attached corpus overwrite the first and mis-resolve its chips.
+    // attached corpus overwrite the first and mis-resolve its chips. The
+    // server resolves just the excerpts that are actually cited so chips
+    // work without shipping every corpus excerpt to the browser.
     const map = new Map<string, { seq: number; text: string; provenance: string }>();
-    for (const entry of session?.corpora ?? []) {
-      for (const excerpt of entry.excerpts) {
-        map.set(`${entry.corpus._id}:${excerpt.seq}`, excerpt);
-      }
+    for (const excerpt of session?.citedExcerpts ?? []) {
+      map.set(`${excerpt.corpusId}:${excerpt.seq}`, excerpt);
     }
     return map;
-  }, [session?.corpora]);
+  }, [session?.citedExcerpts]);
 
   const workingSetIds = useMemo(
     () =>
@@ -382,28 +389,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
             </p>
           ) : null}
           {session.corpora.map((entry) => (
-            <Fragment key={`${entry.corpus._id}-excerpts`}>
-              {entry.excerpts.slice(0, 12).map((excerpt) => (
-                <div key={`${entry.corpus._id}-${excerpt.seq}`} className="border-t px-4 py-2.5 text-sm" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
-                  <div className="mb-0.5 flex items-baseline gap-2">
-                    <span className="text-[13px] font-semibold">#{excerpt.seq}</span>
-                    <span className={cn("text-[11px]", tokens.textMuted)}>{excerpt.provenance}</span>
-                  </div>
-                  <p className={cn("line-clamp-2 text-[13px]", tokens.textMuted)}>{excerpt.text}</p>
-                </div>
-              ))}
-              {entry.excerpts.length > 12 ? (
-                <p className={cn("border-t px-4 py-2 text-[11px]", tokens.border, tokens.textMuted)}>
-                  Showing 12 of {entry.excerpts.length} excerpts from this corpus —{" "}
-                  <Link
-                    href="/campaigns"
-                    className={cn("underline", tokens.accent)}
-                  >
-                    view all on Campaigns home
-                  </Link>
-                </p>
-              ) : null}
-            </Fragment>
+            <CorpusExcerptSection key={`${entry.corpus._id}-excerpts`} corpusId={entry.corpus._id} version={entry.corpus.version} excerptCount={entry.excerptCount} />
           ))}
           <p className={cn("border-t px-4 py-2.5 text-[11px] leading-relaxed", tokens.border, tokens.textMuted)}>
             Brand corpora are shared across campaigns. This campaign holds a
@@ -563,5 +549,72 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
 
       <ToastBanner message={toast} testId="session-toast" />
     </main>
+  );
+}
+
+const EXCERPT_PREVIEW_LIMIT = 12;
+
+/**
+ * Loads a bounded page of excerpts on expand instead of the session query
+ * shipping every excerpt `text` of every attached corpus up front.
+ */
+function CorpusExcerptSection({
+  corpusId,
+  version,
+  excerptCount,
+}: {
+  corpusId: string;
+  version: number;
+  excerptCount: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const preview = useQuery(
+    api.corpora.listCorpusExcerptPreview,
+    expanded ? { corpusId: corpusId as never, limit: EXCERPT_PREVIEW_LIMIT } : "skip"
+  ) as { excerpts: { _id: string; seq: number; text: string; provenance: string }[]; hasMore: boolean } | null | undefined;
+
+  const excerptLabel = excerptCount > 50 ? "50+" : String(excerptCount);
+
+  return (
+    <div className="border-t" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <span className="text-[13px] font-medium">
+          Corpus v{version} — {excerptLabel} excerpt{excerptCount === 1 ? "" : "s"}
+        </span>
+        <span className={cn("ml-auto text-xs", tokens.textMuted)}>
+          {expanded ? "Hide ▴" : "Browse ▾"}
+        </span>
+      </button>
+      {expanded ? (
+        preview === undefined ? (
+          <p className={cn("px-4 pb-3 text-xs", tokens.textMuted)}>Loading excerpts…</p>
+        ) : preview === null ? (
+          <p className={cn("px-4 pb-3 text-xs", tokens.textMuted)}>Corpus unavailable.</p>
+        ) : (
+          <>
+            {preview.excerpts.map((excerpt) => (
+              <div key={excerpt._id} className="border-t px-4 py-2.5 text-sm" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+                <div className="mb-0.5 flex items-baseline gap-2">
+                  <span className="text-[13px] font-semibold">#{excerpt.seq}</span>
+                  <span className={cn("text-[11px]", tokens.textMuted)}>{excerpt.provenance}</span>
+                </div>
+                <p className={cn("line-clamp-2 text-[13px]", tokens.textMuted)}>{excerpt.text}</p>
+              </div>
+            ))}
+            <p className={cn("border-t px-4 py-2 text-[11px]", tokens.border, tokens.textMuted)}>
+              Showing the first {preview.excerpts.length} excerpts —{" "}
+              <Link href="/campaigns" className={cn("underline", tokens.accent)}>
+                view all on Campaigns home
+              </Link>
+            </p>
+          </>
+        )
+      ) : null}
+    </div>
   );
 }

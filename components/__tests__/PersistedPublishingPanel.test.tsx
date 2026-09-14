@@ -21,6 +21,7 @@ vi.mock("@/convex/_generated/api", () => ({
     publishing: {
       listBrands: "publishing:listBrands",
       listCalendarItems: "publishing:listCalendarItems",
+      getPostAuditTrail: "publishing:getPostAuditTrail",
       seedMvpWorkspace: "publishing:seedMvpWorkspace",
       createPostWithIntent: "publishing:createPostWithIntent",
       setApproval: "publishing:setApproval",
@@ -247,7 +248,7 @@ describe("PersistedPublishingPanel", () => {
     vi.clearAllMocks();
     bufferLiveEnabledMock = false;
     vi.stubGlobal("fetch", vi.fn());
-    vi.mocked(useQuery).mockImplementation((reference) => {
+    vi.mocked(useQuery).mockImplementation((reference, args) => {
       if (reference === "publishing:listBrands") {
         return [
           { brandId: "personal", name: "Personal" },
@@ -258,6 +259,18 @@ describe("PersistedPublishingPanel", () => {
       }
       if (reference === "publishing:listCalendarItems") {
         return [unapprovedItem, approvedItem, retryableItem, blogItem];
+      }
+      if (reference === "publishing:getPostAuditTrail") {
+        // The list query no longer ships attempt rows / audit events; the
+        // drawer loads the trail per open post.
+        const items = [unapprovedItem, approvedItem, retryableItem, blogItem];
+        const match = items.find(
+          (entry) => entry.post._id === (args as { postId?: string })?.postId
+        );
+        return {
+          attempts: match?.attempts ?? [],
+          auditEvents: match?.auditEvents ?? [],
+        };
       }
       if (reference === "publishing:bufferLiveSubmissionEnabled") {
         return { enabled: bufferLiveEnabledMock };

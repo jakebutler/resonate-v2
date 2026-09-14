@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -25,6 +26,8 @@ type CorpusDetail = {
     sensitivity: string;
     reviewState: string;
   }[];
+  excerptTotal?: number;
+  hasMoreExcerpts?: boolean;
 } | null | undefined;
 
 type CorpusExcerptReviewProps = {
@@ -43,8 +46,10 @@ export function CorpusExcerptReview({
   corpusId,
 }: CorpusExcerptReviewProps) {
   void brandId;
+  const [excerptLimit, setExcerptLimit] = useState(200);
   const detail = useQuery(api.corpora.getCorpus, {
     corpusId: corpusId as never,
+    excerptLimit,
   }) as CorpusDetail;
   const updateExcerptReview = useMutation(api.corpora.updateExcerptReview);
   const [rowError, setRowError] = useState<string | null>(null);
@@ -138,6 +143,22 @@ export function CorpusExcerptReview({
           </div>
         ))}
       </div>
+      {detail !== null && detail?.hasMoreExcerpts ? (
+        <div className="border-t px-4 py-3" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+          <p className={cn("text-[11px]", tokens.textMuted)}>
+            Showing the first {detail.excerpts.length} excerpts of this corpus version.
+          </p>
+          <Button
+            variant="secondary"
+            size="xs"
+            className="mt-2"
+            disabled={excerptLimit >= 1000}
+            onClick={() => setExcerptLimit((limit) => Math.min(limit + 500, 1000))}
+          >
+            Load more excerpts
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

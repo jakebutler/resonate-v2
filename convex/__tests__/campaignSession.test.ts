@@ -504,14 +504,13 @@ describe("campaign session", () => {
     // This mirrors the component's chip lookup: keyed by corpusId:seq, the
     // key parseCorpusCitation already carries. Both corpora number excerpts
     // from seq 1, so the corpusId half of the key is load-bearing — a
-    // seq-only map silently overwrites one corpus with the other.
+    // seq-only map silently overwrites one corpus with the other. The session
+    // resolves only cited excerpts (bounded response), keyed the same way.
     const excerptByKey = new Map<string, { text: string; provenance: string }>();
     const seqOnly = new Map<string, string>();
-    for (const entry of session?.corpora ?? []) {
-      for (const excerpt of entry.excerpts) {
-        excerptByKey.set(`${entry.corpus._id}:${excerpt.seq}`, excerpt);
-        seqOnly.set(String(excerpt.seq), excerpt.text);
-      }
+    for (const excerpt of session?.citedExcerpts ?? []) {
+      excerptByKey.set(`${excerpt.corpusId}:${excerpt.seq}`, excerpt);
+      seqOnly.set(String(excerpt.seq), excerpt.text);
     }
     expect(seqOnly.size).toBeLessThan(excerptByKey.size);
 

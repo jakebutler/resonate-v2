@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import {
   bufferProviderAdapter,
   type ProviderResult,
@@ -212,5 +212,52 @@ export const cancelOrUnpublish = action({
       liveGateOff: false,
       reason: result.ok ? undefined : result.reason,
     };
+  },
+});
+
+/**
+ * Cron target (convex/crons.ts): posts submitted to Buffer stay "submitted"
+ * forever without a status-refresh loop, leaving "published" unreachable for
+ * Buffer-routed channels. Runs hourly, bounded, and only for live
+ * (non-simulated) Buffer provider states.
+ */
+export const refreshSubmittedStatuses = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ refreshed: number }> => {
+    if (!isBufferLiveGateOn()) return { refreshed: 0 };
+
+    const submitted = await ctx.runQuery(
+      internal.publishing.listProviderStatesByStatus,
+      { status: "submitted", limit: 50 }
+    );
+
+    let refreshed = 0;
+    for (const state of submitted) {
+      if (state.providerId && state.providerId !== "buffer") continue;
+      const providerPostId = state.providerPostId?.trim();
+      if (!providerPostId || providerPostId.startsWith("mock-")) continue;
+
+      let result: ProviderResult;
+      try {
+        result = await bufferProviderAdapter.refreshStatus(
+          providerPostId,
+          bufferAdapterContext()
+        );
+      } catch (error) {
+        result = providerFailureFromError(error);
+      }
+      if (!result.ok) continue;
+
+      await ctx.runMutation(internal.publishing.recordBufferStatusRefresh, {
+        providerStateId: state._id,
+        postId: state.postId,
+        providerStateStatus: result.providerStateStatus,
+        providerPostId: result.providerPostId ?? providerPostId,
+        reason: result.reason,
+        sanitizedResponse: result.sanitizedResponse,
+      });
+      refreshed += 1;
+    }
+    return { refreshed };
   },
 });
