@@ -31,6 +31,7 @@ const emptyView = {
   campaign: { _id: "campaign_1", title: "Draft set campaign" },
   materialization: null,
   drafts: [],
+  shapeAccepted: true,
 };
 
 const generatedView = {
@@ -129,11 +130,24 @@ describe("DraftSetView", () => {
     });
   });
 
-  it("disables generation once the draft set exists (regenerate arrives later)", () => {
+  it("shows a muted note instead of a regenerate control once the draft set exists", () => {
+    render(<DraftSetView campaignId="campaign_1" />);
+    expect(screen.queryByTestId("generate-draft-set")).toBeNull();
+    expect(
+      screen.getByText(/One set per shape — regeneration arrives with live generation/)
+    ).toBeDefined();
+  });
+
+  it("pre-gates generation until the shape is accepted", () => {
+    useQueryMock.mockImplementation((reference: unknown) => {
+      if (reference === "draftSet:getDraftSet")
+        return { ...emptyView, shapeAccepted: false };
+      if (reference === "cohesion:getReviewPasses") return null;
+      return undefined;
+    });
     render(<DraftSetView campaignId="campaign_1" />);
     const button = screen.getByTestId("generate-draft-set") as HTMLButtonElement;
     expect(button.disabled).toBe(true);
-    expect(button.textContent).toContain("Regenerate");
   });
 
   it("shows the empty state before generation", () => {

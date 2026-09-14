@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ToastBanner, useToast } from "./useToast";
 import {
   Select,
   SelectContent,
@@ -74,7 +75,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
   const session = useQuery(api.campaigns.getCampaignSession, {
     campaignId: typedCampaignId,
   }) as SessionData | null | undefined;
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, showToast } = useToast(3600);
   const [mockConfirmOpen, setMockConfirmOpen] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [inboxSearch, setInboxSearch] = useState("");
@@ -147,11 +148,6 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
       ),
     [session?.workingSet]
   );
-
-  function showToast(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 3600);
-  }
 
   async function handleSuggest() {
     setSuggesting(true);
@@ -385,17 +381,30 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
               then attach a version here.
             </p>
           ) : null}
-          {session.corpora.map((entry) =>
-            entry.excerpts.slice(0, 12).map((excerpt) => (
-              <div key={`${entry.corpus._id}-${excerpt.seq}`} className="border-t px-4 py-2.5 text-sm" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
-                <div className="mb-0.5 flex items-baseline gap-2">
-                  <span className="text-[13px] font-semibold">#{excerpt.seq}</span>
-                  <span className={cn("text-[11px]", tokens.textMuted)}>{excerpt.provenance}</span>
+          {session.corpora.map((entry) => (
+            <Fragment key={`${entry.corpus._id}-excerpts`}>
+              {entry.excerpts.slice(0, 12).map((excerpt) => (
+                <div key={`${entry.corpus._id}-${excerpt.seq}`} className="border-t px-4 py-2.5 text-sm" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+                  <div className="mb-0.5 flex items-baseline gap-2">
+                    <span className="text-[13px] font-semibold">#{excerpt.seq}</span>
+                    <span className={cn("text-[11px]", tokens.textMuted)}>{excerpt.provenance}</span>
+                  </div>
+                  <p className={cn("line-clamp-2 text-[13px]", tokens.textMuted)}>{excerpt.text}</p>
                 </div>
-                <p className={cn("line-clamp-2 text-[13px]", tokens.textMuted)}>{excerpt.text}</p>
-              </div>
-            ))
-          )}
+              ))}
+              {entry.excerpts.length > 12 ? (
+                <p className={cn("border-t px-4 py-2 text-[11px]", tokens.border, tokens.textMuted)}>
+                  Showing 12 of {entry.excerpts.length} excerpts from this corpus —{" "}
+                  <Link
+                    href="/campaigns"
+                    className={cn("underline", tokens.accent)}
+                  >
+                    view all on Campaigns home
+                  </Link>
+                </p>
+              ) : null}
+            </Fragment>
+          ))}
           <p className={cn("border-t px-4 py-2.5 text-[11px] leading-relaxed", tokens.border, tokens.textMuted)}>
             Brand corpora are shared across campaigns. This campaign holds a
             working set — removing an idea from a slot never detaches the corpus.
@@ -491,7 +500,11 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
               />
             </div>
             <div data-testid="inbox-results">
-              {(inboxResults ?? []).filter((hit) => !workingSetIds.has(hit.idea._id)).length === 0 ? (
+              {inboxResults === undefined ? (
+                <p className={cn("border-t px-4 py-4 text-center text-sm", tokens.border, tokens.textMuted)}>
+                  Searching your inbox…
+                </p>
+              ) : (inboxResults ?? []).filter((hit) => !workingSetIds.has(hit.idea._id)).length === 0 ? (
                 <p className={cn("border-t px-4 py-4 text-center text-sm", tokens.border, tokens.textMuted)}>
                   No one-off ideas match{inboxSearch ? ` “${inboxSearch}”` : " yet"}.
                 </p>
@@ -548,15 +561,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
         </section>
       </div>
 
-      {toast ? (
-        <div
-          role="status"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg bg-[#001524] px-4 py-3 text-sm text-[#ffecd1] shadow-lg"
-          data-testid="session-toast"
-        >
-          {toast}
-        </div>
-      ) : null}
+      <ToastBanner message={toast} testId="session-toast" />
     </main>
   );
 }

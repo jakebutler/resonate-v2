@@ -12,6 +12,7 @@ import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 import { BRANDS, type BrandId } from "@/lib/domain";
 import { campaignStatusLabel, corpusOriginLabel } from "@/lib/campaignLabels";
+import { ToastBanner, useToast } from "./useToast";
 
 type CampaignSummary = {
   _id: string;
@@ -45,7 +46,7 @@ export function CampaignsHome() {
   const [brandId, setBrandId] = useState<BrandId>("corvo");
   const [ingestOpen, setIngestOpen] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, showToast } = useToast(3600);
   const [openCorpusId, setOpenCorpusId] = useState<string | null>(null);
 
   const campaigns = useQuery(api.campaigns.listCampaigns, {}) as
@@ -60,11 +61,6 @@ export function CampaignsHome() {
     [campaigns, brandId]
   );
   const nextVersion = (corpora?.[0]?.version ?? 0) + 1;
-
-  function showToast(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 3600);
-  }
 
   return (
     <main className={cn(tokens.maxWidth)}>
@@ -217,7 +213,11 @@ export function CampaignsHome() {
                 </Link>
               </li>
             ))}
-            {visibleCampaigns.length === 0 ? (
+            {campaigns === undefined ? (
+              <li className={cn("rounded-lg border border-dashed px-3 py-6 text-center text-sm", tokens.border, tokens.textMuted)}>
+                Loading campaigns…
+              </li>
+            ) : visibleCampaigns.length === 0 ? (
               <li className={cn("rounded-lg border border-dashed px-3 py-6 text-center text-sm", tokens.border, tokens.textMuted)}>
                 No campaigns yet for {brandLabel(brandId)}.
               </li>
@@ -236,15 +236,7 @@ export function CampaignsHome() {
         }}
       />
 
-      {toast ? (
-        <div
-          role="status"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg bg-[#001524] px-4 py-3 text-sm text-[#ffecd1] shadow-lg"
-          data-testid="campaigns-toast"
-        >
-          {toast}
-        </div>
-      ) : null}
+      <ToastBanner message={toast} testId="campaigns-toast" />
     </main>
   );
 }

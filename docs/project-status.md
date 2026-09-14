@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/14/2026 16:07:23 PDT
+Last updated: 09/14/2026 16:23:24 PDT
 
 ## State
 
@@ -12,48 +12,46 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Touched the workflow board or editorial workflow logic.
-- Touched the captured ideas experience.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- e064bcd fix: audit wave A — close unauthenticated Convex functions, make lab-import reachable, single-use mock-ack tokens
+- 4a8839b refactor: audit wave B — consolidate duplicated auth/routing/gate logic, fix campaign-loop correctness bugs
 
 ## Recent Commits
 
+- 4a8839b refactor: audit wave B — consolidate duplicated auth/routing/gate logic, fix campaign-loop correctness bugs
 - e064bcd fix: audit wave A — close unauthenticated Convex functions, make lab-import reachable, single-use mock-ack tokens
 - 68c66b6 feat: campaign loop remediation pass — should-fix C1-C12 + D-5/D-16 product decisions
 - 4690c4c docs: campaign loop C1-C8 build record, HITL checklist, prod secrets remediation
 - b0d1b3e Merge pull request #87 from jakebutler/feat/c8-lab-journey
-- 6577d3a test: disambiguate campaigns heading in E2E
 
 ## Local Working Tree
 
+- A  app/error.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/CampaignShapeBuilder.test.tsx
+- M  components/__tests__/DraftSetView.test.tsx
+- M  components/__tests__/ExcerptReviewList.test.tsx
+- M  components/__tests__/ReviewPassesPanel.test.tsx
+- M  components/campaigns/ApprovalQueue.tsx
+- M  components/campaigns/CampaignSession.tsx
+- M  components/campaigns/CampaignShapeBuilder.tsx
+- M  components/campaigns/CampaignsHome.tsx
+- M  components/campaigns/CitationChip.tsx
+- M  components/campaigns/CorpusExcerptReview.tsx
+- M  components/campaigns/DraftSetView.tsx
 - M  components/campaigns/ExcerptReviewList.tsx
-- M  convex/backfill.ts
-- M  convex/bufferLive.ts
-- M  convex/campaignAccess.ts
-- M  convex/cohesion.ts
-- M  convex/ideas.ts
-- M  convex/posts.ts
-- M  convex/publishing.ts
-- M  convex/queue.ts
-- M  convex/research.ts
-- M  convex/v2Migration.ts
-- M  convex/workflow.ts
-- M  eslint.config.mjs
-- A  lib/approvalGate.ts
-- M  lib/domain.ts
-- A  lib/formatYmd.ts
-- A  lib/sanitize.ts
+- M  components/campaigns/IngestDocumentFlow.tsx
+- M  components/campaigns/ReviewPassesPanel.tsx
+- A  components/campaigns/useToast.tsx
+- M  convex/draftSet.ts
 
 ## Next Agent Pickup
 
 - Start by checking the living docs against the current code before making assumptions.
 - If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
-- Workflow changes should preserve the distinction between backend stages and the simplified kanban columns.
-- Do not conflate the captured ideas inbox with the separate workflow idea system.
 
 ## Branch
 
-- fix/audit-consolidation
+- fix/audit-ui-fixes

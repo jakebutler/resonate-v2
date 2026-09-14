@@ -213,20 +213,35 @@ export function ExcerptReviewList({
     });
   }
 
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const [correctingIndex, setCorrectingIndex] = useState<number | null>(null);
+
   async function captureCorrection(index: number) {
-    await recordCorrection({
-      brandId,
-      documentName,
-      excerptPreview: excerpts[index].text,
-      correction: corrections[index] ?? "",
-    });
-    setCaptured((previous) => new Set(previous).add(index));
-    setFlagOpen((previous) => {
-      const updated = new Set(previous);
-      updated.delete(index);
-      return updated;
-    });
-    onCorrectionsRecorded?.();
+    setCorrectingIndex(index);
+    setCorrectionError(null);
+    try {
+      await recordCorrection({
+        brandId,
+        documentName,
+        excerptPreview: excerpts[index].text,
+        correction: corrections[index] ?? "",
+      });
+      setCaptured((previous) => new Set(previous).add(index));
+      setFlagOpen((previous) => {
+        const updated = new Set(previous);
+        updated.delete(index);
+        return updated;
+      });
+      onCorrectionsRecorded?.();
+    } catch (caught) {
+      setCorrectionError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not record the correction."
+      );
+    } finally {
+      setCorrectingIndex(null);
+    }
   }
 
   return (
@@ -302,9 +317,11 @@ export function ExcerptReviewList({
                 <div className="mt-2.5 flex flex-wrap items-center gap-3">
                   <span className={cn("flex items-center gap-2 text-xs", tokens.textMuted)}>
                     Sensitivity
-                    <span className={cn(!isEnabled && "pointer-events-none opacity-45")}>
+                    <span className={cn(!isEnabled && "opacity-45")}>
                       <Select
                         value={sensitivity[index] ?? "unreviewed"}
+                        disabled={!isEnabled}
+                        aria-disabled={!isEnabled}
                         onValueChange={(value) => {
                           const chosen = value as
                             | "unreviewed"
@@ -317,7 +334,12 @@ export function ExcerptReviewList({
                           });
                         }}
                       >
-                        <SelectTrigger className="h-7 w-36 text-xs" aria-label={`Sensitivity for excerpt ${index + 1}`}>
+                        <SelectTrigger
+                          className="h-7 w-36 text-xs"
+                          aria-label={`Sensitivity for excerpt ${index + 1}`}
+                          disabled={!isEnabled}
+                          aria-disabled={!isEnabled}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -410,6 +432,7 @@ export function ExcerptReviewList({
                     <Textarea
                       rows={2}
                       className="mt-2 text-sm"
+                      aria-label={`Correction for excerpt ${index + 1}`}
                       placeholder="What should this be? e.g. 'This is Table 2 — success rates by task. Column headers lost in extraction.'"
                       value={corrections[index] ?? ""}
                       onChange={(event) =>
@@ -419,13 +442,20 @@ export function ExcerptReviewList({
                         }))
                       }
                     />
+                    {correctionError !== null && correctingIndex === index ? (
+                      <p role="alert" className="mt-1 text-xs font-semibold text-red-700">
+                        {correctionError}
+                      </p>
+                    ) : null}
                     <div className="mt-2 flex gap-2">
                       <Button
                         size="xs"
-                        disabled={!(corrections[index] ?? "").trim()}
-                        onClick={() => captureCorrection(index)}
+                        disabled={!(corrections[index] ?? "").trim() || correctingIndex === index}
+                        onClick={() => void captureCorrection(index)}
                       >
-                        Capture correction &amp; keep blocked
+                        {correctingIndex === index
+                          ? "Capturing…"
+                          : "Capture correction & keep blocked"}
                       </Button>
                       <Button
                         variant="ghost"

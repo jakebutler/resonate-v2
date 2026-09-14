@@ -82,7 +82,7 @@ describe("ReviewPassesPanel", () => {
     expect(screen.getByTestId("seo-aeo-panel")).toBeDefined();
     expect(screen.getByTestId("humanizer-panel")).toBeDefined();
     expect(screen.getByText(/Placeholder surface/)).toBeDefined();
-    expect(screen.getByText(/28% placeholder bot-likelihood/)).toBeDefined();
+    expect(screen.getByText(/28% bot-likelihood/)).toBeDefined();
     expect(screen.getByText("what is acting without observation?")).toBeDefined();
   });
 

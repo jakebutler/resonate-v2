@@ -307,7 +307,11 @@ export function IngestDocumentFlow({
 
   return (
     <div className={cn(tokens.panel, "p-4")} data-testid="ingest-document-flow">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div
+        className="mb-3 flex flex-wrap items-center gap-2"
+        role="tablist"
+        aria-label="Ingest source"
+      >
         {(
           [
             { key: "upload", label: "Upload file" },
@@ -318,6 +322,8 @@ export function IngestDocumentFlow({
           <button
             key={option.key}
             type="button"
+            role="tab"
+            aria-selected={tab === option.key}
             onClick={() => setTab(option.key)}
             className={cn(
               "rounded-full border px-3 py-1 text-xs transition-colors",
@@ -375,6 +381,7 @@ export function IngestDocumentFlow({
         <div className="space-y-2">
           <Textarea
             rows={8}
+            aria-label="Paste source text"
             placeholder="Paste the source text — it will be segmented into excerpt candidates."
             value={pasteText}
             onChange={(event) => setPasteText(event.target.value)}
@@ -394,6 +401,7 @@ export function IngestDocumentFlow({
         <div className="space-y-2">
           <Input
             type="url"
+            aria-label="Source URL"
             placeholder="https://arxiv.org/pdf/2210.03629"
             value={linkUrl}
             onChange={(event) => setLinkUrl(event.target.value)}

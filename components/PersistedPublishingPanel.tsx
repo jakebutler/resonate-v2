@@ -637,18 +637,32 @@ export function PersistedPublishingPanel({
             ? "Submitted to Buffer queue for LinkedIn."
             : (result.reason ?? "Buffer submission was skipped.")
         );
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? `Buffer submission failed: ${error.message}`
+            : "Buffer submission failed."
+        );
       } finally {
         setBufferLiveBusyPostId(null);
       }
       return;
     }
 
-    const result = await submitMockProvider({ postId, mode: "success" });
-    setMessage(
-      result.submitted
-        ? "Simulated submission recorded. No post was sent to the platform."
-        : (result.reason ?? "Simulated submission was skipped.")
-    );
+    try {
+      const result = await submitMockProvider({ postId, mode: "success" });
+      setMessage(
+        result.submitted
+          ? "Simulated submission recorded. No post was sent to the platform."
+          : (result.reason ?? "Simulated submission was skipped.")
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Submission failed: ${error.message}`
+          : "Submission failed."
+      );
+    }
   }
 
   async function handleRetry(item: PersistedCalendarItem) {
@@ -676,18 +690,32 @@ export function PersistedPublishingPanel({
             ? "Buffer submission retry recorded."
             : (result.reason ?? "Buffer submission retry was skipped.")
         );
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? `Buffer retry failed: ${error.message}`
+            : "Buffer retry failed."
+        );
       } finally {
         setBufferLiveBusyPostId(null);
       }
       return;
     }
 
-    const result = await submitMockProvider({ postId, mode: "success", retry: true });
-    setMessage(
-      result.submitted
-        ? "Simulated submission retry recorded."
-        : (result.reason ?? "Simulated submission retry was skipped.")
-    );
+    try {
+      const result = await submitMockProvider({ postId, mode: "success", retry: true });
+      setMessage(
+        result.submitted
+          ? "Simulated submission retry recorded."
+          : (result.reason ?? "Simulated submission retry was skipped.")
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Retry failed: ${error.message}`
+          : "Retry failed."
+      );
+    }
   }
 
   async function handleProviderIntent(
@@ -718,22 +746,35 @@ export function PersistedPublishingPanel({
               : "Buffer cancel/delete completed."
             : (result.reason ?? "Buffer cancel did not complete.")
         );
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? `Provider action failed: ${error.message}`
+            : "Provider action failed."
+        );
       } finally {
         setBufferLiveBusyPostId(null);
       }
       return;
     }
 
-    const result = await recordProviderIntent({ postId, intentType });
-    setMessage(
-      result.recorded
-        ? intentType === "unpublish"
-          ? "Recorded an unpublish intent for operator follow-up."
-          : "Recorded a cancel intent for operator follow-up."
-        : "Provider intent was not recorded."
-    );
+    try {
+      const result = await recordProviderIntent({ postId, intentType });
+      setMessage(
+        result.recorded
+          ? intentType === "unpublish"
+            ? "Recorded an unpublish intent for operator follow-up."
+            : "Recorded a cancel intent for operator follow-up."
+          : "Provider intent was not recorded."
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Recording the provider intent failed: ${error.message}`
+          : "Recording the provider intent failed."
+      );
+    }
   }
-
   async function handleCreatePr(
     item: PersistedCalendarItem,
     snapshot?: BlogPublishSnapshot | null
@@ -1970,6 +2011,7 @@ function PersistedPostComposer(props: {
     post.heroImageStorageId
   );
   const [heroUploading, setHeroUploading] = useState(false);
+  const [heroUploadError, setHeroUploadError] = useState<string | null>(null);
   const resolvedHeroUrl = useQuery(
     api.posts.getFileUrl,
     heroImageStorageId ? { fileId: heroImageStorageId } : "skip"
@@ -2039,8 +2081,12 @@ function PersistedPostComposer(props: {
       const { storageId } = (await uploadRes.json()) as { storageId: Id<"_storage"> };
       setHeroImageStorageId(storageId);
       setHeroImageUrl("");
-    } catch {
-      // Upload errors surface on next save attempt via missing hero URL.
+    } catch (error) {
+      setHeroUploadError(
+        error instanceof Error
+          ? `Hero image upload failed: ${error.message}`
+          : "Hero image upload failed — the image was not attached. Try again before saving."
+      );
     } finally {
       setHeroUploading(false);
     }
@@ -2202,6 +2248,11 @@ function PersistedPostComposer(props: {
                   type="file"
                 />
               </label>
+              {heroUploadError ? (
+                <p role="alert" className="mt-1 text-xs font-semibold text-red-700">
+                  {heroUploadError}
+                </p>
+              ) : null}
               {(heroImageUrl || resolvedHeroUrl) && (
                 <div className="mt-2 space-y-1">
                   <img

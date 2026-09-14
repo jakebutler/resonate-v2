@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
+import { ToastBanner, useToast } from "./useToast";
 
 type Check = {
   id: string;
@@ -60,12 +61,7 @@ export function ReviewPassesPanel({
 
   const runCohesionGate = useMutation(api.cohesion.runCohesionGate);
   const [running, setRunning] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
-  function showToast(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 3600);
-  }
+  const { toast, showToast } = useToast(3600);
 
   async function handleRunGate() {
     setRunning(true);
@@ -235,7 +231,15 @@ export function ReviewPassesPanel({
                     />
                   </span>
                   <span className={cn("text-xs", tokens.textMuted)}>
-                    {entry.score}% placeholder bot-likelihood
+                    {entry.score}% bot-likelihood (
+                    <span
+                      className={cn(
+                        entry.band === "elevated" ? "text-[#a11441]" : "text-[#1d5c31]"
+                      )}
+                    >
+                      {entry.band}
+                    </span>
+                    )
                   </span>
                 </span>
               </li>
@@ -244,15 +248,7 @@ export function ReviewPassesPanel({
         </div>
       </div>
 
-      {toast ? (
-        <div
-          role="status"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg bg-[#001524] px-4 py-3 text-sm text-[#ffecd1] shadow-lg"
-          data-testid="review-toast"
-        >
-          {toast}
-        </div>
-      ) : null}
+      <ToastBanner message={toast} testId="review-toast" />
     </section>
   );
 }

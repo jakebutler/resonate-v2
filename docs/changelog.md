@@ -3958,3 +3958,55 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/audit-consolidation
+
+## 09/14/2026 16:23:24 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	app/error.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/CampaignShapeBuilder.test.tsx
+- M	components/__tests__/DraftSetView.test.tsx
+- M	components/__tests__/ExcerptReviewList.test.tsx
+- M	components/__tests__/ReviewPassesPanel.test.tsx
+- M	components/campaigns/ApprovalQueue.tsx
+- M	components/campaigns/CampaignSession.tsx
+- M	components/campaigns/CampaignShapeBuilder.tsx
+- M	components/campaigns/CampaignsHome.tsx
+- M	components/campaigns/CitationChip.tsx
+- M	components/campaigns/CorpusExcerptReview.tsx
+- M	components/campaigns/DraftSetView.tsx
+- M	components/campaigns/ExcerptReviewList.tsx
+- M	components/campaigns/IngestDocumentFlow.tsx
+- M	components/campaigns/ReviewPassesPanel.tsx
+- A	components/campaigns/useToast.tsx
+- M	convex/draftSet.ts
+
+### Working Tree Snapshot
+
+- A  app/error.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/CampaignShapeBuilder.test.tsx
+- M  components/__tests__/DraftSetView.test.tsx
+- M  components/__tests__/ExcerptReviewList.test.tsx
+- M  components/__tests__/ReviewPassesPanel.test.tsx
+- M  components/campaigns/ApprovalQueue.tsx
+- M  components/campaigns/CampaignSession.tsx
+- M  components/campaigns/CampaignShapeBuilder.tsx
+- M  components/campaigns/CampaignsHome.tsx
+- M  components/campaigns/CitationChip.tsx
+- M  components/campaigns/CorpusExcerptReview.tsx
+- M  components/campaigns/DraftSetView.tsx
+- M  components/campaigns/ExcerptReviewList.tsx
+- M  components/campaigns/IngestDocumentFlow.tsx
+- M  components/campaigns/ReviewPassesPanel.tsx
+- A  components/campaigns/useToast.tsx
+- M  convex/draftSet.ts
+
+### Branch
+
+- fix/audit-ui-fixes
