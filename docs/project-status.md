@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/14/2026 15:37:43 PDT
+Last updated: 09/14/2026 15:54:01 PDT
 
 ## State
 
@@ -12,15 +12,15 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Updated repository documentation and handoff records.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- a7b255d feat: campaign loop remediation pass — should-fix C1-C12 + D-5/D-16 product decisions
+- 68c66b6 feat: campaign loop remediation pass — should-fix C1-C12 + D-5/D-16 product decisions
 
 ## Recent Commits
 
-- a7b255d feat: campaign loop remediation pass — should-fix C1-C12 + D-5/D-16 product decisions
+- 68c66b6 feat: campaign loop remediation pass — should-fix C1-C12 + D-5/D-16 product decisions
 - 4690c4c docs: campaign loop C1-C8 build record, HITL checklist, prod secrets remediation
 - b0d1b3e Merge pull request #87 from jakebutler/feat/c8-lab-journey
 - 6577d3a test: disambiguate campaigns heading in E2E
@@ -28,8 +28,16 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Local Working Tree
 
-- M  lib/__tests__/labImport.test.ts
-- ?? docs/reviews/
+- M  app/api/ops/lab-import/route.ts
+- M  app/api/ops/validate-workflow/route.ts
+- M  convex/__tests__/mockAck.test.ts
+- M  convex/mockAck.ts
+- M  convex/posts.ts
+- M  convex/schema.ts
+- M  convex/settings.ts
+- A  lib/opsSecret.ts
+- M  proxy.ts
+- M  scripts/corpus-import.mjs
 
 ## Next Agent Pickup
 
@@ -38,4 +46,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- main
+- fix/audit-security

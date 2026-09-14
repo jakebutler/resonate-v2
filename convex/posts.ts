@@ -1,11 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireUserId } from "./campaignAccess";
 
 export const list = query({
   args: {
     type: v.optional(v.union(v.literal("blog"), v.literal("linkedin"))),
   },
   handler: async (ctx, args) => {
+    await requireUserId(ctx);
     if (args.type) {
       return await ctx.db
         .query("posts")
@@ -20,6 +22,7 @@ export const list = query({
 export const getById = query({
   args: { id: v.id("posts") },
   handler: async (ctx, args) => {
+    await requireUserId(ctx);
     return await ctx.db.get(args.id);
   },
 });
@@ -53,6 +56,7 @@ export const create = mutation({
     coverImageAlt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireUserId(ctx);
     const now = Date.now();
     return await ctx.db.insert("posts", {
       ...args,
@@ -94,6 +98,7 @@ export const update = mutation({
     coverImageAlt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireUserId(ctx);
     const { id, ...fields } = args;
     await ctx.db.patch(id, { ...fields, updatedAt: Date.now() });
   },
@@ -102,12 +107,14 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("posts") },
   handler: async (ctx, args) => {
+    await requireUserId(ctx);
     await ctx.db.delete(args.id);
   },
 });
 
 export const generateUploadUrl = mutation({
   handler: async (ctx) => {
+    await requireUserId(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -115,6 +122,7 @@ export const generateUploadUrl = mutation({
 export const getFileUrl = query({
   args: { fileId: v.id("_storage") },
   handler: async (ctx, args) => {
+    await requireUserId(ctx);
     return await ctx.storage.getUrl(args.fileId);
   },
 });

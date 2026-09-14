@@ -847,5 +847,6 @@ export default defineSchema({
     campaignId: v.id("campaigns"),
     expiresAt: v.number(),
     createdAt: v.number(),
+    consumedAt: v.optional(v.number()),
   }).index("by_token", ["token"]),
 });

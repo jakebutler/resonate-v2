@@ -40,7 +40,11 @@ export const requestMockAcknowledgment = mutation({
   },
 });
 
-/** Verifies a minted token server-side; false means the gate stays closed. */
+/**
+ * Verifies a minted token server-side and consumes it: a token unlocks at most
+ * one grounded-generation mutation (the UI mints a fresh token per action).
+ * False means the gate stays closed.
+ */
 export async function verifyMockAcknowledgment(
   ctx: MutationCtx,
   input: { campaignId: string; userId: string; token: string }
@@ -53,9 +57,14 @@ export async function verifyMockAcknowledgment(
     .withIndex("by_token", (q) => q.eq("token", input.token))
     .first();
   if (!record) return false;
-  return (
-    record.userId === input.userId &&
-    record.campaignId === normalized &&
-    record.expiresAt > Date.now()
-  );
+  if (
+    record.userId !== input.userId ||
+    record.campaignId !== normalized ||
+    record.expiresAt <= Date.now() ||
+    record.consumedAt !== undefined
+  ) {
+    return false;
+  }
+  await ctx.db.patch(record._id, { consumedAt: Date.now() });
+  return true;
 }
