@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/14/2026 15:54:01 PDT
+Last updated: 09/14/2026 16:57:58 PDT
 
 ## State
 
@@ -12,32 +12,39 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- 68c66b6 feat: campaign loop remediation pass — should-fix C1-C12 + D-5/D-16 product decisions
+- 1cd642d perf: audit wave D — calendar N+1 removal, corpus pagination, buffer status cron
 
 ## Recent Commits
 
+- 1cd642d perf: audit wave D — calendar N+1 removal, corpus pagination, buffer status cron
+- d8154dd fix: audit wave C — composer error surfacing, shared toast, UI quick wins
+- 4a8839b refactor: audit wave B — consolidate duplicated auth/routing/gate logic, fix campaign-loop correctness bugs
+- e064bcd fix: audit wave A — close unauthenticated Convex functions, make lab-import reachable, single-use mock-ack tokens
 - 68c66b6 feat: campaign loop remediation pass — should-fix C1-C12 + D-5/D-16 product decisions
-- 4690c4c docs: campaign loop C1-C8 build record, HITL checklist, prod secrets remediation
-- b0d1b3e Merge pull request #87 from jakebutler/feat/c8-lab-journey
-- 6577d3a test: disambiguate campaigns heading in E2E
-- 71bca81 test: E2E coverage for campaign loop surfaces
 
 ## Local Working Tree
 
-- M  app/api/ops/lab-import/route.ts
-- M  app/api/ops/validate-workflow/route.ts
-- M  convex/__tests__/mockAck.test.ts
-- M  convex/mockAck.ts
-- M  convex/posts.ts
+- M  .env.local.example
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/campaigns/ApprovalQueue.tsx
+- M  components/campaigns/ReviewPassesPanel.tsx
+- M  convex/__tests__/campaignSession.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/campaigns.ts
+- M  convex/publishing.ts
+- M  convex/queue.ts
 - M  convex/schema.ts
-- M  convex/settings.ts
-- A  lib/opsSecret.ts
-- M  proxy.ts
-- M  scripts/corpus-import.mjs
+- A  convex/v2Storage.ts
+- M  docs/ops-runbook.md
+- M  lib/__tests__/cohesion.test.ts
+- M  lib/cohesion.ts
+- M  lib/domain.ts
+- M  lib/providerAdapters.ts
 
 ## Next Agent Pickup
 
@@ -46,4 +53,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- fix/audit-security
+- feat/audit-decisions

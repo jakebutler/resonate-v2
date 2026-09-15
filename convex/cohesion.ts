@@ -155,7 +155,20 @@ export const runCohesionGate = mutation({
         const post = posts.find(
           (candidate) => String(candidate._id) === openerPostId
         );
-        if (post) {
+        if (
+          post &&
+          (post.approvalState === "approved" || post.status !== "draft")
+        ) {
+          // The post already advanced past the working set (human-approved or
+          // materialized/scheduled): an auto-fix must never silently rewrite
+          // it back to draft. Leave it untouched; the verification pass below
+          // still blocks if the violation persists.
+          autoFixLog.push({
+            checkId: fix.checkId,
+            note: `${fix.note} (skipped — post is ${post.status}/${post.approvalState})`,
+            fixedAt: now,
+          });
+        } else if (post) {
           const updated = applyRegeneratedOpener(post.content, fix.action.opener);
           await ctx.db.patch(post._id, {
             content: updated,

@@ -1,3 +1,6 @@
+import { providerSubmissionIneligibilityReason } from "./approvalGate";
+import { sanitizeProviderResponse } from "./sanitize";
+
 export type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
 
 export type ChannelId =
@@ -53,8 +56,36 @@ export type ProviderAttemptStatus =
 /** Brands with a configured Buffer LinkedIn channel name in the adapter. */
 export const BUFFER_LINKEDIN_MAPPED_BRANDS = ["corvo", "lower-db"] as const satisfies readonly BrandId[];
 
+/** Default brand → Buffer LinkedIn channel names, used when BUFFER_LINKEDIN_CHANNELS is unset. */
+const BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND: Partial<Record<BrandId, string>> = {
+  corvo: "corvo-labs-us",
+  "lower-db": "the-lower-db",
+};
+
+/**
+ * Resolves the Buffer LinkedIn channel for a brand. The mapping is deployment
+ * configuration, not source: set BUFFER_LINKEDIN_CHANNELS on the **Convex
+ * deployment** (e.g. "corvo:corvo-labs-us,lower-db:the-lower-db" via
+ * `npx convex env set`) to override the defaults above. An override list is
+ * authoritative — brands absent from it stay unmapped instead of falling back.
+ */
+export function bufferLinkedInChannelForBrand(brandId: BrandId): string | null {
+  const raw = process.env.BUFFER_LINKEDIN_CHANNELS?.trim();
+  if (raw) {
+    for (const pair of raw.split(",")) {
+      const separator = pair.indexOf(":");
+      if (separator === -1) continue;
+      if (pair.slice(0, separator).trim() !== brandId) continue;
+      const channel = pair.slice(separator + 1).trim();
+      return channel || null;
+    }
+    return null;
+  }
+  return BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND[brandId] ?? null;
+}
+
 export function brandHasBufferLinkedInMapping(brandId: BrandId): boolean {
-  return (BUFFER_LINKEDIN_MAPPED_BRANDS as readonly BrandId[]).includes(brandId);
+  return bufferLinkedInChannelForBrand(brandId) !== null;
 }
 
 export type IdeaEntry = {
@@ -670,29 +701,14 @@ export function isEligibleForProviderSubmission(params: {
 }): { eligible: boolean; reason?: string } {
   const channel =
     params.channel ?? findChannel(params.intent.brandId, params.intent.channelId);
-  if (!channel?.routable || !channel.providerId) {
-    return { eligible: false, reason: "Channel is not routable." };
-  }
-  if (params.intent.approvalState !== "approved") {
-    return { eligible: false, reason: "Post is not approved." };
-  }
-  if (!params.intent.scheduledDate) {
-    return { eligible: false, reason: "Scheduled date is required." };
-  }
-  if (params.intent.contentFingerprint !== fingerprintPostContent(params.post)) {
-    return { eligible: false, reason: "Content changed after approval." };
-  }
-  return { eligible: true };
-}
-
-function sanitizeProviderResponse(response: Record<string, unknown>) {
-  const blocked = /token|secret|key|authorization|cookie/i;
-  return Object.fromEntries(
-    Object.entries(response).map(([key, value]) => [
-      key,
-      blocked.test(key) ? "[redacted]" : value,
-    ])
-  );
+  const reason = providerSubmissionIneligibilityReason({
+    routable: Boolean(channel?.routable && channel.providerId),
+    approvalState: params.intent.approvalState,
+    scheduledDate: params.intent.scheduledDate,
+    contentFingerprint: params.intent.contentFingerprint,
+    currentFingerprint: fingerprintPostContent(params.post),
+  });
+  return reason ? { eligible: false, reason } : { eligible: true };
 }
 
 export type MockProviderMode =

@@ -3907,3 +3907,196 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - fix/audit-security
+
+## 09/14/2026 16:07:23 PDT
+
+### Summary
+
+- Touched the workflow board or editorial workflow logic.
+- Touched the captured ideas experience.
+
+### Staged Changes
+
+- M	components/campaigns/ExcerptReviewList.tsx
+- M	convex/backfill.ts
+- M	convex/bufferLive.ts
+- M	convex/campaignAccess.ts
+- M	convex/cohesion.ts
+- M	convex/ideas.ts
+- M	convex/posts.ts
+- M	convex/publishing.ts
+- M	convex/queue.ts
+- M	convex/research.ts
+- M	convex/v2Migration.ts
+- M	convex/workflow.ts
+- M	eslint.config.mjs
+- A	lib/approvalGate.ts
+- M	lib/domain.ts
+- A	lib/formatYmd.ts
+- A	lib/sanitize.ts
+
+### Working Tree Snapshot
+
+- M  components/campaigns/ExcerptReviewList.tsx
+- M  convex/backfill.ts
+- M  convex/bufferLive.ts
+- M  convex/campaignAccess.ts
+- M  convex/cohesion.ts
+- M  convex/ideas.ts
+- M  convex/posts.ts
+- M  convex/publishing.ts
+- M  convex/queue.ts
+- M  convex/research.ts
+- M  convex/v2Migration.ts
+- M  convex/workflow.ts
+- M  eslint.config.mjs
+- A  lib/approvalGate.ts
+- M  lib/domain.ts
+- A  lib/formatYmd.ts
+- A  lib/sanitize.ts
+
+### Branch
+
+- fix/audit-consolidation
+
+## 09/14/2026 16:23:24 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	app/error.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/CampaignShapeBuilder.test.tsx
+- M	components/__tests__/DraftSetView.test.tsx
+- M	components/__tests__/ExcerptReviewList.test.tsx
+- M	components/__tests__/ReviewPassesPanel.test.tsx
+- M	components/campaigns/ApprovalQueue.tsx
+- M	components/campaigns/CampaignSession.tsx
+- M	components/campaigns/CampaignShapeBuilder.tsx
+- M	components/campaigns/CampaignsHome.tsx
+- M	components/campaigns/CitationChip.tsx
+- M	components/campaigns/CorpusExcerptReview.tsx
+- M	components/campaigns/DraftSetView.tsx
+- M	components/campaigns/ExcerptReviewList.tsx
+- M	components/campaigns/IngestDocumentFlow.tsx
+- M	components/campaigns/ReviewPassesPanel.tsx
+- A	components/campaigns/useToast.tsx
+- M	convex/draftSet.ts
+
+### Working Tree Snapshot
+
+- A  app/error.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/CampaignShapeBuilder.test.tsx
+- M  components/__tests__/DraftSetView.test.tsx
+- M  components/__tests__/ExcerptReviewList.test.tsx
+- M  components/__tests__/ReviewPassesPanel.test.tsx
+- M  components/campaigns/ApprovalQueue.tsx
+- M  components/campaigns/CampaignSession.tsx
+- M  components/campaigns/CampaignShapeBuilder.tsx
+- M  components/campaigns/CampaignsHome.tsx
+- M  components/campaigns/CitationChip.tsx
+- M  components/campaigns/CorpusExcerptReview.tsx
+- M  components/campaigns/DraftSetView.tsx
+- M  components/campaigns/ExcerptReviewList.tsx
+- M  components/campaigns/IngestDocumentFlow.tsx
+- M  components/campaigns/ReviewPassesPanel.tsx
+- A  components/campaigns/useToast.tsx
+- M  convex/draftSet.ts
+
+### Branch
+
+- fix/audit-ui-fixes
+
+## 09/14/2026 16:38:47 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/CampaignSession.test.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/campaigns/CampaignSession.tsx
+- M	components/campaigns/CorpusExcerptReview.tsx
+- M	convex/__tests__/campaignSession.test.ts
+- M	convex/bufferLive.ts
+- M	convex/campaigns.ts
+- M	convex/corpora.ts
+- A	convex/crons.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/CampaignSession.test.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/campaigns/CampaignSession.tsx
+- M  components/campaigns/CorpusExcerptReview.tsx
+- M  convex/__tests__/campaignSession.test.ts
+- M  convex/bufferLive.ts
+- M  convex/campaigns.ts
+- M  convex/corpora.ts
+- A  convex/crons.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+
+### Branch
+
+- fix/audit-query-perf
+
+## 09/14/2026 16:57:58 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	.env.local.example
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/campaigns/ApprovalQueue.tsx
+- M	components/campaigns/ReviewPassesPanel.tsx
+- M	convex/__tests__/campaignSession.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/campaigns.ts
+- M	convex/publishing.ts
+- M	convex/queue.ts
+- M	convex/schema.ts
+- A	convex/v2Storage.ts
+- M	docs/ops-runbook.md
+- M	lib/__tests__/cohesion.test.ts
+- M	lib/cohesion.ts
+- M	lib/domain.ts
+- M	lib/providerAdapters.ts
+
+### Working Tree Snapshot
+
+- M  .env.local.example
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/campaigns/ApprovalQueue.tsx
+- M  components/campaigns/ReviewPassesPanel.tsx
+- M  convex/__tests__/campaignSession.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/campaigns.ts
+- M  convex/publishing.ts
+- M  convex/queue.ts
+- M  convex/schema.ts
+- A  convex/v2Storage.ts
+- M  docs/ops-runbook.md
+- M  lib/__tests__/cohesion.test.ts
+- M  lib/cohesion.ts
+- M  lib/domain.ts
+- M  lib/providerAdapters.ts
+
+### Branch
+
+- feat/audit-decisions

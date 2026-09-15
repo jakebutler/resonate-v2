@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -24,6 +26,8 @@ type CorpusDetail = {
     sensitivity: string;
     reviewState: string;
   }[];
+  excerptTotal?: number;
+  hasMoreExcerpts?: boolean;
 } | null | undefined;
 
 type CorpusExcerptReviewProps = {
@@ -42,10 +46,30 @@ export function CorpusExcerptReview({
   corpusId,
 }: CorpusExcerptReviewProps) {
   void brandId;
+  const [excerptLimit, setExcerptLimit] = useState(200);
   const detail = useQuery(api.corpora.getCorpus, {
     corpusId: corpusId as never,
+    excerptLimit,
   }) as CorpusDetail;
   const updateExcerptReview = useMutation(api.corpora.updateExcerptReview);
+  const [rowError, setRowError] = useState<string | null>(null);
+  const [pendingExcerptId, setPendingExcerptId] = useState<string | null>(null);
+
+  async function updateRow(excerptId: string, patch: Record<string, unknown>) {
+    setPendingExcerptId(excerptId);
+    setRowError(null);
+    try {
+      await updateExcerptReview({ excerptId: excerptId as never, ...patch } as never);
+    } catch (caught) {
+      setRowError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not save the review change."
+      );
+    } finally {
+      setPendingExcerptId(null);
+    }
+  }
 
   if (detail === undefined) {
     return <p className={cn("px-4 py-3 text-xs", tokens.textMuted)}>Loading excerpts…</p>;
@@ -61,6 +85,11 @@ export function CorpusExcerptReview({
         excerpts are not offered as citations. The version&apos;s content is
         immutable; review state is metadata.
       </p>
+      {rowError ? (
+        <p role="alert" className={cn("px-4 py-2 text-[11px] font-semibold", "text-red-700")}>
+          {rowError}
+        </p>
+      ) : null}
       <div>
         {detail.excerpts.map((excerpt) => (
           <div
@@ -77,10 +106,10 @@ export function CorpusExcerptReview({
               <div className="ml-auto flex items-center gap-2">
                 <Select
                   value={excerpt.sensitivity}
+                  disabled={pendingExcerptId === excerpt._id}
                   onValueChange={(value) => {
-                    void updateExcerptReview({
-                      excerptId: excerpt._id as never,
-                      sensitivity: value as never,
+                    void updateRow(excerpt._id, {
+                      sensitivity: value,
                     });
                   }}
                 >
@@ -98,9 +127,9 @@ export function CorpusExcerptReview({
                     type="checkbox"
                     aria-label={`Include excerpt ${excerpt.seq}`}
                     checked={excerpt.reviewState !== "excluded"}
+                    disabled={pendingExcerptId === excerpt._id}
                     onChange={(event) => {
-                      void updateExcerptReview({
-                        excerptId: excerpt._id as never,
+                      void updateRow(excerpt._id, {
                         reviewState: event.target.checked ? "accepted" : "excluded",
                       });
                     }}
@@ -114,6 +143,22 @@ export function CorpusExcerptReview({
           </div>
         ))}
       </div>
+      {detail !== null && detail?.hasMoreExcerpts ? (
+        <div className="border-t px-4 py-3" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+          <p className={cn("text-[11px]", tokens.textMuted)}>
+            Showing the first {detail.excerpts.length} excerpts of this corpus version.
+          </p>
+          <Button
+            variant="secondary"
+            size="xs"
+            className="mt-2"
+            disabled={excerptLimit >= 1000}
+            onClick={() => setExcerptLimit((limit) => Math.min(limit + 500, 1000))}
+          >
+            Load more excerpts
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

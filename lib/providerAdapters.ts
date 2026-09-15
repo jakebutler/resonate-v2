@@ -5,7 +5,7 @@ import type {
   ProviderId,
   ProviderStateStatus,
 } from "./domain";
-import { brandHasBufferLinkedInMapping } from "./domain";
+import { brandHasBufferLinkedInMapping, bufferLinkedInChannelForBrand } from "./domain";
 
 export type ProviderSubmission = {
   postId: string;
@@ -229,11 +229,6 @@ function sanitizeBufferChannel(channel: Record<string, unknown>) {
   };
 }
 
-const BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND: Partial<Record<BrandId, string>> = {
-  corvo: "corvo-labs-us",
-  "lower-db": "the-lower-db",
-};
-
 export { brandHasBufferLinkedInMapping };
 
 export function scheduleToUtcIso(input: {
@@ -431,7 +426,7 @@ async function resolveBufferLinkedInChannelId(
       sanitizedResponse: { brandId, mapped: false },
     };
   }
-  const expectedName = BUFFER_LINKEDIN_CHANNEL_NAME_BY_BRAND[brandId];
+  const expectedName = bufferLinkedInChannelForBrand(brandId);
   if (!expectedName) {
     return {
       ok: false,

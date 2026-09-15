@@ -10,6 +10,14 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
+import { requireBrandAccess, requireUserId } from "./campaignAccess";
+import { brandHasBufferLinkedInMapping } from "@/lib/domain";
+import {
+  providerForChannel as providerForChannelOrNull,
+} from "@/lib/providerAdapters";
+import { providerSubmissionIneligibilityReason } from "@/lib/approvalGate";
+import { sanitizeProviderResponse } from "@/lib/sanitize";
+import { formatYmdFromOffset } from "@/lib/formatYmd";
 
 type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
 type ChannelId =
@@ -115,11 +123,9 @@ const brandSeed = [
   },
 ] as const;
 
+/** Normalizes the lib routing table's null to the record shape's undefined. */
 function providerForChannel(channelId: ChannelId) {
-  if (channelId === "linkedin") return "buffer" as const;
-  if (channelId === "reddit") return "zernio" as const;
-  if (channelId === "corvo-blog") return "github-pr" as const;
-  return undefined;
+  return providerForChannelOrNull(channelId) ?? undefined;
 }
 
 function brandConfigFor(brandId: BrandId) {
@@ -222,38 +228,6 @@ function contentFingerprint(title: string, content: string) {
   return `${title.trim()}\n${content.trim()}`;
 }
 
-function sanitizeProviderResponse(response: Record<string, unknown>) {
-  const blocked = /token|secret|key|authorization|cookie/i;
-  return Object.fromEntries(
-    Object.entries(response).map(([key, value]) => [
-      key,
-      blocked.test(key) ? "[redacted]" : value,
-    ])
-  );
-}
-
-async function requireUserId(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.subject) throw new Error("Unauthorized");
-  return identity.subject;
-}
-
-async function requireBrandAccess(
-  ctx: QueryCtx | MutationCtx,
-  userId: string,
-  brandId: BrandId
-) {
-  const membership = await ctx.db
-    .query("v2BrandMemberships")
-    .withIndex("by_user_and_brand", (q) =>
-      q.eq("userId", userId).eq("brandId", brandId)
-    )
-    .first();
-
-  if (!membership) throw new Error("Brand access denied");
-  return membership;
-}
-
 async function getOwnedPost(
   ctx: QueryCtx | MutationCtx,
   userId: string,
@@ -265,13 +239,17 @@ async function getOwnedPost(
   return post;
 }
 
-async function latestIntent(ctx: QueryCtx | MutationCtx, postId: Id<"v2Posts">) {
+async function latestIntent(
+  ctx: QueryCtx | MutationCtx,
+  postId: Id<"v2Posts">
+) {
   const intents = await ctx.db
     .query("v2PublishingIntents")
     .withIndex("by_post", (q) => q.eq("postId", postId))
     .collect();
   return intents.sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null;
 }
+export { latestIntent };
 
 async function accessibleBrandIds(ctx: QueryCtx | MutationCtx, userId: string) {
   const memberships = await ctx.db
@@ -312,27 +290,6 @@ async function seedBrandsAndChannels(
       await ensureBrandChannel(ctx, brand.brandId, channelId, now);
     }
   }
-}
-
-function formatYmdFromOffset(
-  dayOffset: number,
-  now = Date.now(),
-  timeZone = "America/Los_Angeles"
-) {
-  // Derive the civil calendar day in the post timezone first, then apply the
-  // offset. Using UTC alone drifts one day after LA's UTC midnight rollover.
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(now));
-  const year = Number(parts.find((part) => part.type === "year")?.value);
-  const month = Number(parts.find((part) => part.type === "month")?.value);
-  const day = Number(parts.find((part) => part.type === "day")?.value);
-  const base = new Date(Date.UTC(year, month - 1, day, 12));
-  base.setUTCDate(base.getUTCDate() + dayOffset);
-  return base.toISOString().slice(0, 10);
 }
 
 async function previewSeedRecordExists(
@@ -621,10 +578,25 @@ export const listCalendarItems = query({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const accessibleBrands = await accessibleBrandIds(ctx, userId);
-    const posts = await ctx.db
-      .query("v2Posts")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
+    // Push the status filter into the index when provided: the calendar no
+    // longer scans every post of every status and filters in JS.
+    const posts = args.statuses?.length
+      ? (
+          await Promise.all(
+            args.statuses.map((status) =>
+              ctx.db
+                .query("v2Posts")
+                .withIndex("by_user_and_status", (q) =>
+                  q.eq("userId", userId).eq("status", status)
+                )
+                .collect()
+            )
+          )
+        ).flat()
+      : await ctx.db
+          .query("v2Posts")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .collect();
     const filteredPosts = posts
       .filter((post) => accessibleBrands.has(post.brandId))
       .filter(
@@ -635,8 +607,7 @@ export const listCalendarItems = query({
       .filter((post) => !args.brandIds?.length || args.brandIds.includes(post.brandId))
       .filter(
         (post) => !args.platformIds?.length || args.platformIds.includes(post.platformId)
-      )
-      .filter((post) => !args.statuses?.length || args.statuses.includes(post.status));
+      );
 
     const hydrated = await Promise.all(
       filteredPosts.map(async (post) => {
@@ -647,31 +618,68 @@ export const listCalendarItems = query({
               .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
               .first()
           : null;
+        // The full attempt rows and per-post audit trail used to ship for
+        // every post on every reactive tick (an O(posts × events) N+1). The
+        // list only needs a bounded count + the latest attempt; the drawer
+        // loads the full trail for one post at a time via getPostAuditTrail.
         const attempts = intent
           ? await ctx.db
               .query("v2PublishAttempts")
               .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
-              .collect()
+              .take(11)
           : [];
-        const sortedAttempts = attempts.sort((a, b) => b.createdAt - a.createdAt);
-        const auditEvents = await ctx.db
-          .query("v2AuditEvents")
-          .withIndex("by_post", (q) => q.eq("postId", post._id))
-          .collect();
-
         return {
           post,
           intent,
           providerState,
           attemptCount: attempts.length,
-          attempts: sortedAttempts,
-          lastAttempt: sortedAttempts[0] ?? null,
-          auditEvents: auditEvents.sort((a, b) => b.createdAt - a.createdAt),
+          lastAttempt: attempts.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null,
         };
       })
     );
 
     return hydrated.sort((a, b) => b.post.updatedAt - a.post.updatedAt);
+  },
+});
+
+export const getPostAuditTrail = query({
+  args: {
+    postId: v.string(),
+    attemptLimit: v.optional(v.number()),
+    eventLimit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const normalizedId = ctx.db.normalizeId("v2Posts", args.postId);
+    if (!normalizedId) return { attempts: [], auditEvents: [] };
+    const post = await ctx.db.get(normalizedId);
+    if (!post) return { attempts: [], auditEvents: [] };
+    try {
+      await requireBrandAccess(ctx, userId, post.brandId);
+    } catch {
+      return { attempts: [], auditEvents: [] };
+    }
+    const attemptLimit = Math.min(Math.max(args.attemptLimit ?? 20, 1), 100);
+    const eventLimit = Math.min(Math.max(args.eventLimit ?? 50, 1), 200);
+    const intent = await latestIntent(ctx, normalizedId);
+    const attempts = intent
+      ? (
+          await ctx.db
+            .query("v2PublishAttempts")
+            .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
+            .collect()
+        ).sort((a, b) => b.createdAt - a.createdAt)
+      : [];
+    const auditEvents = (
+      await ctx.db
+        .query("v2AuditEvents")
+        .withIndex("by_post", (q) => q.eq("postId", normalizedId))
+        .collect()
+    ).sort((a, b) => b.createdAt - a.createdAt);
+    return {
+      attempts: attempts.slice(0, attemptLimit),
+      auditEvents: auditEvents.slice(0, eventLimit),
+    };
   },
 });
 
@@ -1098,15 +1106,13 @@ export const submitMockProvider = mutation({
       .first();
     const now = Date.now();
 
-    const ineligibleReason = !channel?.routable
-      ? "Channel is not routable."
-      : intent.approvalState !== "approved"
-        ? "Post is not approved."
-        : !intent.scheduledDate
-          ? "Scheduled date is required."
-          : intent.contentFingerprint !== contentFingerprint(post.title, post.content)
-            ? "Content changed after approval."
-            : null;
+    const ineligibleReason = providerSubmissionIneligibilityReason({
+      routable: Boolean(channel?.routable),
+      approvalState: intent.approvalState,
+      scheduledDate: intent.scheduledDate,
+      contentFingerprint: intent.contentFingerprint,
+      currentFingerprint: contentFingerprint(post.title, post.content),
+    });
 
     if (ineligibleReason) {
       await audit(ctx, {
@@ -1685,10 +1691,6 @@ function assembleLinkedInSubmissionContent(
   return `${body}\n\n${hashtags.join(" ")}`;
 }
 
-function brandHasBufferLinkedInMapping(brandId: BrandId): boolean {
-  return brandId === "corvo" || brandId === "lower-db";
-}
-
 function isLiveBufferProviderPostId(providerPostId: string | undefined): boolean {
   if (!providerPostId?.trim()) return false;
   return !providerPostId.startsWith("mock-");
@@ -1704,6 +1706,65 @@ function mapProviderStateToPostStatus(
   if (providerStateStatus === "submitted") return "submitted";
   return "scheduled";
 }
+
+export const listProviderStatesByStatus = internalQuery({
+  args: {
+    status: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(args.limit ?? 50, 1), 200);
+    const status = args.status as Doc<"v2ProviderStates">["status"];
+    return await ctx.db
+      .query("v2ProviderStates")
+      .withIndex("by_status", (q) => q.eq("status", status))
+      .take(limit);
+  },
+});
+
+export const recordBufferStatusRefresh = internalMutation({
+  args: {
+    providerStateId: v.id("v2ProviderStates"),
+    postId: v.id("v2Posts"),
+    providerStateStatus: v.string(),
+    providerPostId: v.optional(v.string()),
+    reason: v.optional(v.string()),
+    sanitizedResponse: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const state = await ctx.db.get(args.providerStateId);
+    if (!state) return { updated: false };
+    const post = await ctx.db.get(args.postId);
+    if (!post) return { updated: false };
+    const nextPostStatus = mapProviderStateToPostStatus(
+      args.providerStateStatus as Doc<"v2ProviderStates">["status"]
+    );
+    const now = Date.now();
+    await ctx.db.patch(args.providerStateId, {
+      status: args.providerStateStatus as Doc<"v2ProviderStates">["status"],
+      providerPostId: args.providerPostId ?? state.providerPostId,
+      lastResponseSummary: args.reason ?? state.lastResponseSummary,
+      updatedAt: now,
+    });
+    if (post.status !== nextPostStatus) {
+      await ctx.db.patch(post._id, { status: nextPostStatus, updatedAt: now });
+    }
+    await audit(ctx, {
+      userId: post.userId,
+      brandId: post.brandId,
+      postId: post._id,
+      action: "provider.status_refresh",
+      summary:
+        args.reason ??
+        `Buffer status refresh: provider ${args.providerStateStatus}, post ${nextPostStatus}.`,
+      metadata: {
+        providerStateId: String(args.providerStateId),
+        providerStateStatus: args.providerStateStatus,
+      },
+    });
+    return { updated: true };
+  },
+});
 
 export const bufferLiveSubmissionEnabled = query({
   args: {},
@@ -1760,15 +1821,13 @@ export const getBufferSubmissionContext = internalQuery({
       )
       .first();
 
-    const ineligibleReason = !channel?.routable
-      ? "Channel is not routable."
-      : intent.approvalState !== "approved"
-        ? "Post is not approved."
-        : !intent.scheduledDate
-          ? "Scheduled date is required."
-          : intent.contentFingerprint !== contentFingerprint(post.title, post.content)
-            ? "Content changed after approval."
-            : null;
+    const ineligibleReason = providerSubmissionIneligibilityReason({
+      routable: Boolean(channel?.routable),
+      approvalState: intent.approvalState,
+      scheduledDate: intent.scheduledDate,
+      contentFingerprint: intent.contentFingerprint,
+      currentFingerprint: contentFingerprint(post.title, post.content),
+    });
 
     if (ineligibleReason) {
       return {
@@ -1975,15 +2034,13 @@ export const claimBufferSubmission = internalMutation({
       )
       .first();
 
-    const ineligibleReason = !channel?.routable
-      ? "Channel is not routable."
-      : intent.approvalState !== "approved"
-        ? "Post is not approved."
-        : !intent.scheduledDate
-          ? "Scheduled date is required."
-          : intent.contentFingerprint !== contentFingerprint(post.title, post.content)
-            ? "Content changed after approval."
-            : null;
+    const ineligibleReason = providerSubmissionIneligibilityReason({
+      routable: Boolean(channel?.routable),
+      approvalState: intent.approvalState,
+      scheduledDate: intent.scheduledDate,
+      contentFingerprint: intent.contentFingerprint,
+      currentFingerprint: contentFingerprint(post.title, post.content),
+    });
 
     if (ineligibleReason) {
       return {

@@ -17,7 +17,12 @@ export function CitationChip({ seq, provenance, text, uri }: CitationChipProps) 
         type="button"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
         onClick={() => setOpen((value) => !value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+        }}
         className="inline-flex items-center gap-1 rounded-[5px] bg-[#e2eff1] px-2 py-0.5 text-[11px] font-normal text-[#0e4a54] underline decoration-dotted decoration-[#15616d] underline-offset-2"
         aria-expanded={open}
       >

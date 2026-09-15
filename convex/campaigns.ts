@@ -16,6 +16,7 @@ import {
 import {
   assertGroundingAllowed,
   buildCorpusCitation,
+  parseCorpusCitation,
 } from "@/lib/campaignGrounding";
 import { verifyMockAcknowledgment } from "./mockAck";
 import {
@@ -186,18 +187,24 @@ export const suggestIdeas = mutation({
       existingIdeas.filter(Boolean).map((idea) => (idea as { text: string }).text)
     );
 
-    const excerptInputs: SuggestionExcerptInput[] = [];
+    // D-17 window cap: the prompt cannot consume thousands of excerpts, so
+    // bound it deterministically — round-robin across attached corpus
+    // versions (each in seq order), same result on every reload. The sampled
+    // window is recorded in the audit event so suggestions stay explainable.
+    const SUGGESTION_EXCERPT_CAP = 60;
+    const corpusGroups: SuggestionExcerptInput[][] = [];
     for (const corpusId of campaign.corpusIds) {
       const excerpts = await ctx.db
         .query("corpusExcerpts")
         .withIndex("by_corpus", (q) => q.eq("corpusId", corpusId))
         .collect();
+      const group: SuggestionExcerptInput[] = [];
       for (const excerpt of excerpts.sort((a, b) => a.seq - b.seq)) {
         // D-17: internal-only excerpts are never quoted; only excerpts whose
         // review state is accepted are quotable at all.
         if (excerpt.sensitivity === "internal-only") continue;
         if (excerpt.reviewState !== "accepted") continue;
-        excerptInputs.push({
+        group.push({
           seq: excerpt.seq,
           text: excerpt.text,
           provenance: excerpt.provenance,
@@ -208,14 +215,29 @@ export const suggestIdeas = mutation({
           }),
         });
       }
+      corpusGroups.push(group);
     }
+    const excerptInputs = corpusGroups.flat();
     if (excerptInputs.length === 0) {
       throw new Error(
         "Attach a corpus version before requesting suggested ideas."
       );
     }
+    let excerptWindow = excerptInputs;
+    if (excerptInputs.length > SUGGESTION_EXCERPT_CAP) {
+      const windowed: SuggestionExcerptInput[] = [];
+      const maxLength = Math.max(...corpusGroups.map((group) => group.length));
+      for (let index = 0; index < maxLength && windowed.length < SUGGESTION_EXCERPT_CAP; index += 1) {
+        for (const group of corpusGroups) {
+          if (index < group.length && windowed.length < SUGGESTION_EXCERPT_CAP) {
+            windowed.push(group[index]);
+          }
+        }
+      }
+      excerptWindow = windowed;
+    }
 
-    const suggestions = suggestCampaignIdeas(excerptInputs);
+    const suggestions = suggestCampaignIdeas(excerptWindow);
     let created = 0;
     for (const suggestion of suggestions) {
       if (existingTexts.has(suggestion.text)) continue;
@@ -250,6 +272,12 @@ export const suggestIdeas = mutation({
         mode: "mock",
         created,
         acknowledged: mockAcknowledged,
+        excerptWindow: {
+          sampled: excerptWindow.length,
+          total: excerptInputs.length,
+          capped: excerptWindow.length < excerptInputs.length,
+          cap: SUGGESTION_EXCERPT_CAP,
+        },
       },
     });
 
@@ -477,18 +505,20 @@ export const getCampaignSession = query({
       .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
       .first();
 
-    const corporaWithExcerpts = [];
+    const corporaWithCounts = [];
+    const citedExcerptKeys = new Set<string>();
     for (const corpusId of campaign.corpusIds) {
       const corpus = await ctx.db.get(corpusId);
       if (!corpus) continue;
-      const excerpts = await ctx.db
+      // Bounded sample instead of full rows: an immutable corpus version can
+      // hold thousands of excerpts, and shipping every `text` to the browser
+      // fails cliff-style once a brand crosses the response-size limit. The
+      // sample is read server-side only; the count is capped, not shipped.
+      const excerptSample = await ctx.db
         .query("corpusExcerpts")
         .withIndex("by_corpus", (q) => q.eq("corpusId", corpusId))
-        .collect();
-      corporaWithExcerpts.push({
-        corpus,
-        excerpts: excerpts.sort((a, b) => a.seq - b.seq),
-      });
+        .take(51);
+      corporaWithCounts.push({ corpus, excerptCount: excerptSample.length });
     }
 
     const joins = await ctx.db
@@ -503,6 +533,44 @@ export const getCampaignSession = query({
     );
     const withIdeas = hydrated.filter((entry) => entry.idea !== null);
 
+    // Resolve just the excerpts that ideas actually cite so citation chips
+    // work without shipping entire corpora.
+    for (const entry of withIdeas) {
+      for (const citation of entry.idea?.excerptCitations ?? []) {
+        const parsed = parseCorpusCitation(citation);
+        if (parsed) citedExcerptKeys.add(`${parsed.corpusId}:${parsed.seq}`);
+      }
+    }
+    const citedExcerpts: {
+      _id: string;
+      corpusId: string;
+      seq: number;
+      text: string;
+      provenance: string;
+    }[] = [];
+    for (const key of citedExcerptKeys) {
+      const separator = key.lastIndexOf(":");
+      const corpusId = key.slice(0, separator);
+      const seq = Number(key.slice(separator + 1));
+      const normalizedCorpusId = ctx.db.normalizeId("corpora", corpusId);
+      if (!normalizedCorpusId || !Number.isInteger(seq)) continue;
+      const excerpt = await ctx.db
+        .query("corpusExcerpts")
+        .withIndex("by_corpus_and_seq", (q) =>
+          q.eq("corpusId", normalizedCorpusId).eq("seq", seq)
+        )
+        .first();
+      if (excerpt) {
+        citedExcerpts.push({
+          _id: excerpt._id,
+          corpusId: corpusId,
+          seq: excerpt.seq,
+          text: excerpt.text,
+          provenance: excerpt.provenance,
+        });
+      }
+    }
+
     const shape = await ctx.db
       .query("campaignShapes")
       .withIndex("by_campaign_and_status", (q) =>
@@ -513,7 +581,8 @@ export const getCampaignSession = query({
     return {
       campaign,
       brief: brief ?? null,
-      corpora: corporaWithExcerpts,
+      corpora: corporaWithCounts,
+      citedExcerpts,
       suggested: withIdeas.filter((entry) => entry.join.state === "suggested"),
       workingSet: withIdeas.filter((entry) => entry.join.state === "member"),
       rejected: withIdeas.filter((entry) => entry.join.state === "rejected"),

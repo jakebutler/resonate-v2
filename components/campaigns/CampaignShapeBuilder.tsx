@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ToastBanner, useToast } from "./useToast";
 import {
   Select,
   SelectContent,
@@ -79,12 +80,9 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
   const [editing, setEditing] = useState<"title" | "angle" | null>(null);
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
-
-  function showToast(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 3600);
-  }
+  const [presetPending, setPresetPending] = useState<CampaignPresetKey | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  const { toast, showToast } = useToast(3600);
 
   if (view === undefined) {
     return (
@@ -110,7 +108,8 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
   const activePreset = view.shape?.preset ?? "standard";
 
   async function handleSwitchPreset(preset: CampaignPresetKey) {
-    if (isAccepted) return;
+    if (isAccepted || presetPending) return;
+    setPresetPending(preset);
     try {
       await proposeShape({ campaignId: typedCampaignId, preset });
       showToast(
@@ -118,11 +117,14 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
       );
     } catch (caught) {
       showToast(caught instanceof Error ? caught.message : "Could not switch preset.");
+    } finally {
+      setPresetPending(null);
     }
   }
 
   async function handleAccept() {
-    if (!view?.shape) return;
+    if (!view?.shape || accepting) return;
+    setAccepting(true);
     try {
       await acceptShape({ shapeId: view.shape._id as never });
       showToast(
@@ -130,12 +132,14 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
       );
     } catch (caught) {
       showToast(caught instanceof Error ? caught.message : "Could not accept the shape.");
+    } finally {
+      setAccepting(false);
     }
   }
 
   function saveBriefField(field: "goal" | "audience", value: string) {
     const trimmed = value.trim();
-    if (!trimmed) return;
+    // Empty trims clear the field (a typo'd goal must not be permanent).
     saveBrief({
       campaignId: typedCampaignId,
       ...(field === "goal" ? { goal: trimmed } : { audience: trimmed }),
@@ -183,6 +187,7 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
           </label>
           <Input
             id="brief-goal"
+            key={`goal-${view.brief?.goal ?? ""}`}
             defaultValue={view.brief?.goal ?? ""}
             onBlur={(event) => saveBriefField("goal", event.target.value)}
           />
@@ -193,6 +198,7 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
           </label>
           <Input
             id="brief-audience"
+            key={`audience-${view.brief?.audience ?? ""}`}
             defaultValue={view.brief?.audience ?? ""}
             onBlur={(event) => saveBriefField("audience", event.target.value)}
           />
@@ -204,7 +210,8 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
           <button
             key={preset.key}
             type="button"
-            disabled={isAccepted}
+            disabled={isAccepted || presetPending === preset.key}
+            aria-pressed={preset.key === activePreset}
             onClick={() => void handleSwitchPreset(preset.key)}
             className={cn(
               "rounded-lg border bg-white p-3.5 text-left transition-colors",
@@ -288,7 +295,7 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
                 <div className="flex flex-col items-center gap-0.5">
                   <button
                     type="button"
-                    aria-label="Move slot up"
+                    aria-label={`Move slot ${slot.seq} up`}
                     disabled={index === 0 || isAccepted}
                     onClick={() =>
                       moveSlot({
@@ -306,7 +313,7 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
                   <span className="text-lg text-[#15616d]">{slot.seq}</span>
                   <button
                     type="button"
-                    aria-label="Move slot down"
+                    aria-label={`Move slot ${slot.seq} down`}
                     disabled={index === sorted.length - 1 || isAccepted}
                     onClick={() =>
                       moveSlot({
@@ -497,15 +504,7 @@ export function CampaignShapeBuilder({ campaignId }: { campaignId: string }) {
         )}
       </div>
 
-      {toast ? (
-        <div
-          role="status"
-          className="fixed bottom-16 right-6 z-50 max-w-sm rounded-lg bg-[#001524] px-4 py-3 text-sm text-[#ffecd1] shadow-lg"
-          data-testid="shape-toast"
-        >
-          {toast}
-        </div>
-      ) : null}
+      <ToastBanner message={toast} testId="shape-toast" position="bottom-16" />
     </main>
   );
 }

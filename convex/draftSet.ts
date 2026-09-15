@@ -175,7 +175,26 @@ export const getDraftSet = query({
     ).sort((a, b) => b.createdAt - a.createdAt)[0];
 
     if (!materialization) {
-      return { campaign, materialization: null, drafts: [] };
+      // Surface shape acceptance so the client can pre-gate Generate (the
+      // mutation fails closed without an accepted complete shape).
+      const shape = await ctx.db
+        .query("campaignShapes")
+        .withIndex("by_campaign_and_status", (q) =>
+          q.eq("campaignId", campaign._id).eq("status", "proposed")
+        )
+        .first();
+      const acceptedShape = await ctx.db
+        .query("campaignShapes")
+        .withIndex("by_campaign_and_status", (q) =>
+          q.eq("campaignId", campaign._id).eq("status", "accepted")
+        )
+        .first();
+      return {
+        campaign,
+        materialization: null,
+        drafts: [],
+        shapeAccepted: acceptedShape !== null || shape?.status === "accepted",
+      };
     }
 
     const shape = await ctx.db.get(materialization.shapeId);
@@ -212,6 +231,7 @@ export const getDraftSet = query({
       campaign,
       materialization,
       drafts: hydrated,
+      shapeAccepted: true,
     };
   },
 });

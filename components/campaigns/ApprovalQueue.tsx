@@ -9,6 +9,7 @@ import { ChannelIcon } from "@/components/campaigns/ChannelIcon";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 import { channelLabel } from "@/lib/campaignLabels";
+import { ToastBanner, useToast } from "./useToast";
 import {
   ROLE_LEGEND,
   ROLE_TINTS,
@@ -37,6 +38,7 @@ type QueueView = {
   nextSeq: number | null;
   allApproved: boolean;
   materialized: boolean;
+  unreviewedCitationCount: number;
 } | null | undefined;
 
 const TOKEN_PATTERN = /(\[[A-Z]+:[^\]]*\])/g;
@@ -66,14 +68,12 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
   const materialize = useMutation(api.queue.materializeDraftSet);
   const setApproval = useMutation(api.publishing.setApproval);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [approvingPostId, setApprovingPostId] = useState<string | null>(null);
   const nextRowRef = useRef<HTMLDivElement | null>(null);
-
-  function showToast(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 4200);
-  }
+  const rowButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const materializeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const { toast, showToast } = useToast();
 
   async function handleAddToCalendar() {
     setBusy(true);
@@ -84,6 +84,12 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
           ? `Added to the calendar: ${result.draftCount} drafts are now scheduled-but-unapproved. Click any row to review; approve inline to unblock.`
           : "This batch is already on the calendar."
       );
+      const unreviewed = result.unreviewedExcerptCount ?? 0;
+      if (result.materialized && unreviewed > 0) {
+        showToast(
+          `⚠ ${unreviewed} unreviewed citation(s) in this batch — see the warning above.`
+        );
+      }
     } catch (caught) {
       showToast(caught instanceof Error ? caught.message : "Could not add the batch to the calendar.");
     } finally {
@@ -103,24 +109,36 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
   }
 
   async function approveAndAdvance(entry: QueueEntry) {
-    const approved = await handleApprove(entry);
-    if (!approved) return;
-    const remaining = (view?.queue ?? []).filter(
-      (candidate) =>
-        candidate.seq !== entry.seq && candidate.approvalState !== "approved"
-    );
-    if (remaining.length === 0) {
-      showToast("Campaign fully approved — ready to schedule. Nothing submits automatically.");
-      return;
+    if (approvingPostId) return;
+    setApprovingPostId(entry.postId);
+    try {
+      const approved = await handleApprove(entry);
+      if (!approved) return;
+      const remaining = (view?.queue ?? []).filter(
+        (candidate) =>
+          candidate.seq !== entry.seq && candidate.approvalState !== "approved"
+      );
+      if (remaining.length === 0) {
+        showToast("Campaign fully approved — ready to schedule. Nothing submits automatically.");
+        window.setTimeout(() => {
+          materializeButtonRef.current?.focus();
+        }, 60);
+        return;
+      }
+      const next = remaining[0]!;
+      setExpanded(next.postId);
+      showToast(
+        `Approved — ${view!.approvedCount + 1} of ${view!.totalCount}. Next in sequence: #${next.seq} ${next.title}`
+      );
+      window.setTimeout(() => {
+        // The clicked Approve button unmounts on success; move focus to the
+        // next row's expander so keyboard/SR users are not dumped to <body>.
+        rowButtonRefs.current.get(next.postId)?.focus();
+        nextRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 60);
+    } finally {
+      setApprovingPostId(null);
     }
-    const next = remaining[0]!;
-    setExpanded(next.postId);
-    showToast(
-      `Approved — ${view!.approvedCount + 1} of ${view!.totalCount}. Next in sequence: #${next.seq} ${next.title}`
-    );
-    window.setTimeout(() => {
-      nextRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 60);
   }
 
   if (view === undefined) {
@@ -154,9 +172,10 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
           variant="primary"
           size="sm"
           className="ml-auto"
-          disabled={busy || view.materialized}
+          disabled={busy || view.materialized || view.totalCount === 0}
           onClick={() => void handleAddToCalendar()}
           data-testid="materialize-button"
+          ref={materializeButtonRef}
         >
           {busy ? "Adding to calendar…" : view.materialized ? "On the calendar ✓" : "Add batch to calendar"}
         </Button>
@@ -171,6 +190,28 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
         <div className={cn(tokens.noticeWarning, "mt-4")}>
           Not on the calendar yet — the batch is added after the cohesion
           gate passes (run it on the drafts page).
+        </div>
+      ) : null}
+
+      {view.totalCount === 0 ? (
+        <div className={cn(tokens.notice, "mt-4")} data-testid="queue-empty">
+          No draft set yet — generate one from the campaign shape.{" "}
+          <Link href={`/campaigns/${campaignId}/drafts`} className={cn("underline", tokens.accent)}>
+            Go to drafts
+          </Link>
+        </div>
+      ) : null}
+
+      {view.unreviewedCitationCount > 0 ? (
+        <div className={cn(tokens.noticeWarning, "mt-4")} data-testid="unreviewed-warning" role="alert">
+          <b>D-17 warning:</b> this batch cites {view.unreviewedCitationCount} excerpt
+          {view.unreviewedCitationCount === 1 ? "" : "s"} still marked{" "}
+          <b>unreviewed</b>. They may include internal-only material.{" "}
+          <Link href="/campaigns" className={cn("underline", tokens.accent)}>
+            Review excerpt sensitivity on Campaigns home
+          </Link>{" "}
+          — expand the corpus row, mark excerpts internal-only or public-safe, then
+          re-run the gate.
         </div>
       ) : null}
 
@@ -211,6 +252,10 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
                 className="flex w-full flex-wrap items-center gap-2.5 px-4 py-3 text-left"
                 onClick={() => setExpanded(isExpanded ? null : entry.postId)}
                 aria-expanded={isExpanded}
+                ref={(el) => {
+                  if (el) rowButtonRefs.current.set(entry.postId, el);
+                  else rowButtonRefs.current.delete(entry.postId);
+                }}
               >
                 <span className="text-sm text-[#15616d]">#{entry.seq}</span>
                 <span
@@ -267,18 +312,24 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
                       </Button>
                     ) : null}
                     {entry.approvalState === "approved" ? (
-                      <span className={cn("text-xs", tokens.textMuted)}>
-                        ✓ Approved — this post is unblocked. Submission still
-                        happens in the composer, by you.
-                      </span>
+                      <>
+                        <Button variant="secondary" size="xs" asChild>
+                          <Link href={`/?postId=${entry.postId}`}>Open on calendar ↗</Link>
+                        </Button>
+                        <span className={cn("text-xs", tokens.textMuted)}>
+                          ✓ Approved — this post is unblocked. Submission still
+                          happens in the composer, by you.
+                        </span>
+                      </>
                     ) : (
                       <Button
                         variant="accent"
                         size="xs"
+                        disabled={approvingPostId === entry.postId}
                         onClick={() => void approveAndAdvance(entry)}
                         data-testid="approve-draft"
                       >
-                        Approve draft
+                        {approvingPostId === entry.postId ? "Approving…" : "Approve draft"}
                       </Button>
                     )}
                   </div>
@@ -289,15 +340,7 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
         })}
       </div>
 
-      {toast ? (
-        <div
-          role="status"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg bg-[#001524] px-4 py-3 text-sm text-[#ffecd1] shadow-lg"
-          data-testid="queue-toast"
-        >
-          {toast}
-        </div>
-      ) : null}
+      <ToastBanner message={toast} testId="queue-toast" />
     </main>
   );
 }

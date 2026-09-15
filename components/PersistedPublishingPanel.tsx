@@ -59,6 +59,7 @@ type PersistedCalendarItem = {
     timezone?: string;
     sourceIdeaId?: string;
     sourceResearchBriefId?: string;
+    sourceCampaignId?: string;
     prUrl?: string;
     branchName?: string;
     blogExcerpt?: string;
@@ -637,18 +638,32 @@ export function PersistedPublishingPanel({
             ? "Submitted to Buffer queue for LinkedIn."
             : (result.reason ?? "Buffer submission was skipped.")
         );
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? `Buffer submission failed: ${error.message}`
+            : "Buffer submission failed."
+        );
       } finally {
         setBufferLiveBusyPostId(null);
       }
       return;
     }
 
-    const result = await submitMockProvider({ postId, mode: "success" });
-    setMessage(
-      result.submitted
-        ? "Simulated submission recorded. No post was sent to the platform."
-        : (result.reason ?? "Simulated submission was skipped.")
-    );
+    try {
+      const result = await submitMockProvider({ postId, mode: "success" });
+      setMessage(
+        result.submitted
+          ? "Simulated submission recorded. No post was sent to the platform."
+          : (result.reason ?? "Simulated submission was skipped.")
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Submission failed: ${error.message}`
+          : "Submission failed."
+      );
+    }
   }
 
   async function handleRetry(item: PersistedCalendarItem) {
@@ -676,18 +691,32 @@ export function PersistedPublishingPanel({
             ? "Buffer submission retry recorded."
             : (result.reason ?? "Buffer submission retry was skipped.")
         );
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? `Buffer retry failed: ${error.message}`
+            : "Buffer retry failed."
+        );
       } finally {
         setBufferLiveBusyPostId(null);
       }
       return;
     }
 
-    const result = await submitMockProvider({ postId, mode: "success", retry: true });
-    setMessage(
-      result.submitted
-        ? "Simulated submission retry recorded."
-        : (result.reason ?? "Simulated submission retry was skipped.")
-    );
+    try {
+      const result = await submitMockProvider({ postId, mode: "success", retry: true });
+      setMessage(
+        result.submitted
+          ? "Simulated submission retry recorded."
+          : (result.reason ?? "Simulated submission retry was skipped.")
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Retry failed: ${error.message}`
+          : "Retry failed."
+      );
+    }
   }
 
   async function handleProviderIntent(
@@ -718,22 +747,35 @@ export function PersistedPublishingPanel({
               : "Buffer cancel/delete completed."
             : (result.reason ?? "Buffer cancel did not complete.")
         );
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? `Provider action failed: ${error.message}`
+            : "Provider action failed."
+        );
       } finally {
         setBufferLiveBusyPostId(null);
       }
       return;
     }
 
-    const result = await recordProviderIntent({ postId, intentType });
-    setMessage(
-      result.recorded
-        ? intentType === "unpublish"
-          ? "Recorded an unpublish intent for operator follow-up."
-          : "Recorded a cancel intent for operator follow-up."
-        : "Provider intent was not recorded."
-    );
+    try {
+      const result = await recordProviderIntent({ postId, intentType });
+      setMessage(
+        result.recorded
+          ? intentType === "unpublish"
+            ? "Recorded an unpublish intent for operator follow-up."
+            : "Recorded a cancel intent for operator follow-up."
+          : "Provider intent was not recorded."
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Recording the provider intent failed: ${error.message}`
+          : "Recording the provider intent failed."
+      );
+    }
   }
-
   async function handleCreatePr(
     item: PersistedCalendarItem,
     snapshot?: BlogPublishSnapshot | null
@@ -1353,6 +1395,16 @@ function AgendaItem(props: {
             <Badge>{statusLabel(post.status)}</Badge>
             {providerState?.simulated && <Badge>Simulated</Badge>}
             {post.blogPrStatus && <PrStatusBadge status={post.blogPrStatus} />}
+            {post.sourceCampaignId ? (
+              <Link
+                href={`/campaigns/${post.sourceCampaignId}/queue`}
+                className="inline-flex items-center rounded-full bg-[#e2eff1] px-2.5 py-0.5 text-xs font-medium text-[#0e4a54] hover:bg-[#d0e6ea]"
+                title="Materialized from a campaign draft set"
+                data-testid="campaign-provenance"
+              >
+                Campaign queue ↗
+              </Link>
+            ) : null}
           </div>
           <p className="mt-2 max-w-3xl text-sm text-gray-600">{post.content}</p>
         </div>
@@ -1512,7 +1564,7 @@ function AgendaItem(props: {
       </dl>
       {(props.devMode || showLiveBuffer) && item.attemptCount > 0 && (
         <p className="mt-2 text-xs text-gray-500">
-          Attempts: {item.attemptCount}; last result: {item.lastAttempt?.status ?? "unknown"}
+          Attempts: {item.attemptCount >= 11 ? "10+" : item.attemptCount}; last result: {item.lastAttempt?.status ?? "unknown"}
         </p>
       )}
     </article>
@@ -1560,6 +1612,18 @@ function PublishingDetailDrawer(props: {
   const post = item.post;
   const intent = item.intent;
   const providerState = item.providerState;
+  // The list query no longer ships full attempt rows and audit events for
+  // every post on every reactive tick; the open drawer loads the trail for
+  // this one post on demand.
+  const postTrail = useQuery(
+    api.publishing.getPostAuditTrail,
+    props.devMode ? { postId: post._id } : "skip"
+  ) as
+    | {
+        attempts: PersistedCalendarItem["attempts"];
+        auditEvents: PersistedCalendarItem["auditEvents"];
+      }
+    | undefined;
   const approved = post.approvalState === "approved";
   const providerIntentRecorded = providerState?.status === "cancel-intent-recorded";
   const providerIntentType = post.status === "published" ? "unpublish" : "cancel";
@@ -1724,11 +1788,11 @@ function PublishingDetailDrawer(props: {
                     <Send size={15} />
                     Provider Attempts
                   </div>
-                  {!item.attempts?.length ? (
+                  {!postTrail?.attempts?.length ? (
                     <p className="mt-2 text-sm text-gray-600">No provider attempts recorded.</p>
                   ) : (
                     <div className="mt-3 space-y-3">
-                      {item.attempts.map((attempt, index) => (
+                      {postTrail.attempts.map((attempt, index) => (
                         <div
                           className="rounded-md border border-black/10 bg-black/[0.02] p-3"
                           key={String(attempt._id ?? index)}
@@ -1765,11 +1829,11 @@ function PublishingDetailDrawer(props: {
                     <History size={15} />
                     Audit Trail
                   </div>
-                  {!item.auditEvents?.length ? (
+                  {!postTrail?.auditEvents?.length ? (
                     <p className="mt-2 text-sm text-gray-600">No audit events recorded.</p>
                   ) : (
                     <ol className="mt-3 space-y-3">
-                      {item.auditEvents.map((event, index) => (
+                      {postTrail.auditEvents.map((event, index) => (
                         <li
                           className="rounded-md border border-black/10 p-3"
                           key={String(event._id ?? index)}
@@ -1813,13 +1877,21 @@ function PublishingDetailDrawer(props: {
               className="inline-flex items-center gap-1 rounded-md bg-[#15616d] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0f4a53] disabled:opacity-50"
               disabled={submitDisabled}
               onClick={() => props.onSubmit(item)}
-              title={!approved ? "Approval is required before Buffer submission." : undefined}
+              title={
+                !approved ? "Approval is required before Buffer submission." : undefined
+              }
               type="button"
             >
               <Send size={15} />
               Submit to Buffer
             </button>
           )}
+          {showLiveBuffer && !brandHasBufferLinkedInMapping(post.brandId) ? (
+            <p className="w-full text-xs text-gray-500" role="note">
+              No Buffer LinkedIn channel mapping for this brand — live submission is
+              unavailable here; use the simulated path.
+            </p>
+          ) : null}
           {showSimulate && (
             <button
               className="inline-flex items-center gap-1 rounded-md bg-[#ff7d00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#dd6d00] disabled:opacity-50"
@@ -1954,7 +2026,9 @@ function PersistedPostComposer(props: {
   const { item } = props;
   const post = item.post;
   const intent = item.intent;
-  const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
+  // v2-owned storage module — the legacy posts.generateUploadUrl retires at
+  // the ADR 0004 cutover.
+  const generateUploadUrl = useMutation(api.v2Storage.generateUploadUrl);
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
   const [blogExcerpt, setBlogExcerpt] = useState(post.blogExcerpt ?? "");
@@ -1970,8 +2044,9 @@ function PersistedPostComposer(props: {
     post.heroImageStorageId
   );
   const [heroUploading, setHeroUploading] = useState(false);
+  const [heroUploadError, setHeroUploadError] = useState<string | null>(null);
   const resolvedHeroUrl = useQuery(
-    api.posts.getFileUrl,
+    api.v2Storage.getFileUrl,
     heroImageStorageId ? { fileId: heroImageStorageId } : "skip"
   );
   const [scheduledDate, setScheduledDate] = useState(
@@ -2039,8 +2114,12 @@ function PersistedPostComposer(props: {
       const { storageId } = (await uploadRes.json()) as { storageId: Id<"_storage"> };
       setHeroImageStorageId(storageId);
       setHeroImageUrl("");
-    } catch {
-      // Upload errors surface on next save attempt via missing hero URL.
+    } catch (error) {
+      setHeroUploadError(
+        error instanceof Error
+          ? `Hero image upload failed: ${error.message}`
+          : "Hero image upload failed — the image was not attached. Try again before saving."
+      );
     } finally {
       setHeroUploading(false);
     }
@@ -2202,6 +2281,11 @@ function PersistedPostComposer(props: {
                   type="file"
                 />
               </label>
+              {heroUploadError ? (
+                <p role="alert" className="mt-1 text-xs font-semibold text-red-700">
+                  {heroUploadError}
+                </p>
+              ) : null}
               {(heroImageUrl || resolvedHeroUrl) && (
                 <div className="mt-2 space-y-1">
                   <img

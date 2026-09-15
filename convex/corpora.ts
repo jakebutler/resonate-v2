@@ -336,7 +336,7 @@ export const listCorpora = query({
 });
 
 export const getCorpus = query({
-  args: { corpusId: v.id("corpora") },
+  args: { corpusId: v.id("corpora"), excerptLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const corpusId = ctx.db.normalizeId("corpora", args.corpusId);
@@ -353,15 +353,51 @@ export const getCorpus = query({
       .query("corpusDocuments")
       .withIndex("by_corpus", (q) => q.eq("corpusId", corpusId))
       .collect();
+    // Immutable versions are never deleted, so a full collect ships every
+    // excerpt `text` on every read. Take a bounded page and let the client
+    // request more.
+    const excerptLimit = Math.min(Math.max(args.excerptLimit ?? 200, 1), 1000);
     const excerpts = await ctx.db
       .query("corpusExcerpts")
-      .withIndex("by_corpus", (q) => q.eq("corpusId", corpusId))
-      .collect();
+      .withIndex("by_corpus_and_seq", (q) => q.eq("corpusId", corpusId))
+      .order("asc")
+      .take(excerptLimit + 1);
+    const hasMoreExcerpts = excerpts.length > excerptLimit;
 
     return {
       corpus,
       documents: documents.sort((a, b) => a._creationTime - b._creationTime),
-      excerpts: excerpts.sort((a, b) => a.seq - b.seq),
+      excerpts: excerpts
+        .slice(0, excerptLimit)
+        .sort((a, b) => a.seq - b.seq),
+      hasMoreExcerpts,
     };
+  },
+});
+
+export const listCorpusExcerptPreview = query({
+  args: {
+    corpusId: v.id("corpora"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const corpusId = ctx.db.normalizeId("corpora", args.corpusId);
+    if (!corpusId) return null;
+    const corpus = await ctx.db.get(corpusId);
+    if (!corpus) return null;
+    try {
+      await requireBrandAccess(ctx, userId, corpus.brandId as BrandId);
+    } catch {
+      return null;
+    }
+    const limit = Math.min(Math.max(args.limit ?? 12, 1), 100);
+    const excerpts = await ctx.db
+      .query("corpusExcerpts")
+      .withIndex("by_corpus_and_seq", (q) => q.eq("corpusId", corpusId))
+      .order("asc")
+      .take(limit + 1);
+    const hasMore = excerpts.length > limit;
+    return { excerpts: excerpts.slice(0, limit), hasMore };
   },
 });

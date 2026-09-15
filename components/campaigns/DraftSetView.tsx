@@ -10,6 +10,7 @@ import { ReviewPassesPanel } from "@/components/campaigns/ReviewPassesPanel";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 import { channelLabel } from "@/lib/campaignLabels";
+import { ToastBanner, useToast } from "./useToast";
 import {
   ROLE_LEGEND,
   ROLE_TINTS,
@@ -32,6 +33,7 @@ type DraftSetView = {
   campaign: { _id: string; title: string };
   materialization: { _id: string; mode: string } | null;
   drafts: DraftEntry[];
+  shapeAccepted?: boolean;
 } | null | undefined;
 
 const TOKEN_PATTERN = /(\[[A-Z]+:[^\]]*\])/g;
@@ -65,12 +67,7 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
 
   const [mockConfirmOpen, setMockConfirmOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
-  function showToast(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 3600);
-  }
+  const { toast, showToast } = useToast(3600);
 
   async function handleGenerate() {
     setGenerating(true);
@@ -133,17 +130,26 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
           <span className="rounded-full bg-[#fff1e0] px-2.5 py-0.5 text-[11px] font-normal text-[#b25400]">
             mock mode
           </span>
-          <Button
-            variant={view.materialization ? "secondary" : "primary"}
-            size="sm"
-            disabled={generating || Boolean(view.materialization)}
-            onClick={() => setMockConfirmOpen(true)}
-            data-testid="generate-draft-set"
-          >
-            {view.materialization
-              ? "Regenerate (coming soon)"
-              : "Generate draft set"}
-          </Button>
+          {view.materialization ? (
+            <span className={cn("text-xs", tokens.textMuted)}>
+              One set per shape — regeneration arrives with live generation.
+            </span>
+          ) : (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={generating || view.shapeAccepted !== true}
+              title={
+                view.shapeAccepted
+                  ? undefined
+                  : "Accept a complete shape on the shape page first."
+              }
+              onClick={() => setMockConfirmOpen(true)}
+              data-testid="generate-draft-set"
+            >
+              Generate draft set
+            </Button>
+          )}
         </div>
       </div>
       <p className={cn("mt-1 text-sm", tokens.textMuted)}>
@@ -237,15 +243,7 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
 
       <ReviewPassesPanel campaignId={campaignId} />
 
-      {toast ? (
-        <div
-          role="status"
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg bg-[#001524] px-4 py-3 text-sm text-[#ffecd1] shadow-lg"
-          data-testid="drafts-toast"
-        >
-          {toast}
-        </div>
-      ) : null}
+      <ToastBanner message={toast} testId="drafts-toast" />
     </main>
   );
 }

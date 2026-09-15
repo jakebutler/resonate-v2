@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { requireBrandAccess, requireUserId } from "./campaignAccess";
 
 type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
 
@@ -84,28 +85,6 @@ const outlineStatusValidator = v.union(
   v.literal("approved"),
   v.literal("generating-draft")
 );
-
-async function requireUserId(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.subject) throw new Error("Unauthorized");
-  return identity.subject;
-}
-
-async function requireBrandAccess(
-  ctx: QueryCtx | MutationCtx,
-  userId: string,
-  brandId: BrandId
-) {
-  const membership = await ctx.db
-    .query("v2BrandMemberships")
-    .withIndex("by_user_and_brand", (q) =>
-      q.eq("userId", userId).eq("brandId", brandId)
-    )
-    .first();
-
-  if (!membership) throw new Error("Brand access denied");
-  return membership;
-}
 
 async function ownedResearchBrief(
   ctx: QueryCtx | MutationCtx,

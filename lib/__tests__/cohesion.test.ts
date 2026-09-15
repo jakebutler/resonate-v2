@@ -106,6 +106,27 @@ describe("runCohesionChecks (EXP-020 / D-13)", () => {
     );
     expect(report.passed).toBe(false);
   });
+
+  it("attributes satellite failures to the offending drafts so the queue can link a fix", () => {
+    const orphanSatellite: CohesionDraftInput = {
+      ...makeDraft({ seq: 3, role: "satellite" }),
+      content: "Unrelated vibes content with zero grounding tokens here.",
+      excerptCitations: ["corpus://corvo/other#excerpt-99"],
+    };
+    const groundedSatellite = healthySet[4]!; // recap — not checked
+    const report = runCohesionChecks([
+      healthySet[0],
+      healthySet[3]!, // grounded satellite
+      orphanSatellite,
+      groundedSatellite,
+      healthySet[5]!,
+    ]);
+    const check = report.checks.find(
+      (check) => check.id === "satellites-reference-pillar"
+    )!;
+    expect(check.passed).toBe(false);
+    expect(check.failedPostIds).toEqual([orphanSatellite.postId]);
+  });
 });
 
 describe("applyRegeneratedOpener", () => {

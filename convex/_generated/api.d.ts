@@ -28,6 +28,7 @@ import type * as research from "../research.js";
 import type * as settings from "../settings.js";
 import type * as shapes from "../shapes.js";
 import type * as v2Migration from "../v2Migration.js";
+import type * as v2Storage from "../v2Storage.js";
 import type * as workflow from "../workflow.js";
 
 import type {
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   settings: typeof settings;
   shapes: typeof shapes;
   v2Migration: typeof v2Migration;
+  v2Storage: typeof v2Storage;
   workflow: typeof workflow;
 }>;
 

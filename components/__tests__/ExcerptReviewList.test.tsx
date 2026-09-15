@@ -54,14 +54,11 @@ describe("ExcerptReviewList", () => {
     const usable = screen.getByLabelText("Include excerpt 1") as HTMLInputElement;
     const combo = screen.getByLabelText("Sensitivity for excerpt 1");
     expect(combo.getAttribute("aria-disabled") ?? "false").toBe("false");
-    expect(
-      (combo.closest("span") as HTMLElement).className
-    ).not.toContain("pointer-events-none");
+    expect((combo as HTMLInputElement).disabled).toBe(false);
 
     fireEvent.click(usable);
-    expect(
-      (combo.closest("span") as HTMLElement).className
-    ).toContain("pointer-events-none");
+    expect(combo.getAttribute("aria-disabled")).toBe("true");
+    expect((combo as HTMLInputElement).disabled).toBe(true);
   });
 
   it("captures a correction for an unusable extract without saving it", async () => {

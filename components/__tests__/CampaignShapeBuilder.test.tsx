@@ -142,7 +142,7 @@ describe("CampaignShapeBuilder", () => {
     const mutations = mockMutations();
     render(<CampaignShapeBuilder campaignId="campaign_1" />);
 
-    fireEvent.click(screen.getAllByLabelText("Move slot up")[1]);
+    fireEvent.click(screen.getAllByLabelText(/Move slot \d+ up/)[1]);
     await waitFor(() => {
       expect(mutations["shapes:moveSlot"]).toHaveBeenCalledWith({
         shapeId: "shape_1",
