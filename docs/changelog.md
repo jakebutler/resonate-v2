@@ -3871,3 +3871,39 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - main
+
+## 09/14/2026 15:54:01 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	app/api/ops/lab-import/route.ts
+- M	app/api/ops/validate-workflow/route.ts
+- M	convex/__tests__/mockAck.test.ts
+- M	convex/mockAck.ts
+- M	convex/posts.ts
+- M	convex/schema.ts
+- M	convex/settings.ts
+- A	lib/opsSecret.ts
+- M	proxy.ts
+- M	scripts/corpus-import.mjs
+
+### Working Tree Snapshot
+
+- M  app/api/ops/lab-import/route.ts
+- M  app/api/ops/validate-workflow/route.ts
+- M  convex/__tests__/mockAck.test.ts
+- M  convex/mockAck.ts
+- M  convex/posts.ts
+- M  convex/schema.ts
+- M  convex/settings.ts
+- A  lib/opsSecret.ts
+- M  proxy.ts
+- M  scripts/corpus-import.mjs
+
+### Branch
+
+- fix/audit-security

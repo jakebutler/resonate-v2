@@ -141,6 +141,14 @@ describe("mock acknowledgment tokens (D-21, C8)", () => {
       mockAckToken: ack.token,
     });
     expect(result.draftCount).toBeGreaterThan(0);
+
+    // Tokens are single-use: replaying the same token fails closed.
+    await expect(
+      asUser.mutation(api.draftSet.generateDraftSet, {
+        campaignId,
+        mockAckToken: ack.token,
+      })
+    ).rejects.toThrow(/acknowledge mock mode/);
   });
 
   it("rejects another user's token and expired tokens (fail-closed)", async () => {

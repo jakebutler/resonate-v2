@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash, timingSafeEqual } from "node:crypto";
 import { fetchMutation, type NextjsOptions } from "convex/nextjs";
 import type { FunctionArgs, FunctionReference, FunctionReturnType } from "convex/server";
 import { internal } from "@/convex/_generated/api";
+import { secretsMatch } from "@/lib/opsSecret";
 
 export const runtime = "nodejs";
 
@@ -40,12 +40,7 @@ function isRateLimited(key: string): boolean {
   return recent.length > MAX_REQUESTS_PER_WINDOW;
 }
 
-/** Length-independent constant-time comparison (hash, then compare). */
-function secretsMatch(provided: string, expected: string): boolean {
-  const providedHash = createHash("sha256").update(provided).digest();
-  const expectedHash = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(providedHash, expectedHash);
-}
+/** Length-independent constant-time comparison lives in lib/opsSecret. */
 
 function bearerSecret(req: NextRequest): string {
   const header = req.headers.get("authorization") ?? "";
@@ -96,6 +91,16 @@ async function auditRejection(input: {
 export async function POST(req: NextRequest) {
   const key = clientKey(req);
 
+  // Rate-limit FIRST so unauthenticated floods cannot spend a Convex write per
+  // request via the rejection audit. Bad-secret attempts consume slots too.
+  if (isRateLimited(key)) {
+    await auditRejection({ reason: "rate limited" });
+    return NextResponse.json(
+      { error: "Too many requests — retry later." },
+      { status: 429 }
+    );
+  }
+
   let body: { brandId?: unknown; files?: unknown };
   try {
     body = await req.json();
@@ -112,18 +117,6 @@ export async function POST(req: NextRequest) {
       fileCount: Array.isArray(body.files) ? body.files.length : undefined,
     });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (isRateLimited(key)) {
-    await auditRejection({
-      reason: "rate limited",
-      attemptedBrand: typeof body.brandId === "string" ? body.brandId : undefined,
-      fileCount: Array.isArray(body.files) ? body.files.length : undefined,
-    });
-    return NextResponse.json(
-      { error: "Too many requests — retry later." },
-      { status: 429 }
-    );
   }
 
   const brandId = body.brandId;

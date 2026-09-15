@@ -5,6 +5,9 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/ops/validate-workflow",
+  // The route enforces its own stronger ops-secret (timing-safe) check;
+  // middleware-level Clerk auth would make the bearer-auth CLI unreachable.
+  "/api/ops/lab-import",
 ]);
 const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
 

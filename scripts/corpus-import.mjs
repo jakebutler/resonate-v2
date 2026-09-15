@@ -219,10 +219,27 @@ async function main() {
       },
       body: JSON.stringify({ brandId: brand, files: accepted }),
     });
-    const payload = await response.json().catch(() => ({}));
+    const contentType = response.headers.get("content-type") ?? "";
+    const rawBody = await response.text();
+    let payload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      // A non-JSON body (e.g. an HTML sign-in redirect page) must fail loudly,
+      // never print a false success.
+      throw new Error(
+        `Non-JSON response (${response.status} ${response.statusText}, content-type: ${contentType || "none"}). ` +
+          `Body starts with: ${rawBody.slice(0, 200)}`
+      );
+    }
     if (!response.ok) {
       throw new Error(
         `${response.status} ${response.statusText}${payload?.error ? ` — ${payload.error}` : ""}`
+      );
+    }
+    if (!payload?.ok || payload?.version === undefined) {
+      throw new Error(
+        `Unexpected response payload from lab-import: ${JSON.stringify(payload).slice(0, 200)}`
       );
     }
     console.log(

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createBlogPostPR } from "@/lib/github";
+import { secretsMatch } from "@/lib/opsSecret";
 import {
   CORVO_PLACEHOLDER_VOICE_PACK,
   DEFAULT_WORKSPACE_STATE,
@@ -24,7 +25,7 @@ function getSecret(req: NextRequest): string {
 function validateSecret(req: NextRequest): boolean {
   const expected = process.env.V2_OPS_SECRET?.trim();
   const provided = getSecret(req).trim();
-  return Boolean(expected && provided && expected === provided);
+  return Boolean(expected && provided && secretsMatch(provided, expected));
 }
 
 async function generatePioneerDraft(params: {
