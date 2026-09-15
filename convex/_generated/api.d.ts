@@ -15,6 +15,7 @@ import type * as campaignAccess from "../campaignAccess.js";
 import type * as campaigns from "../campaigns.js";
 import type * as cohesion from "../cohesion.js";
 import type * as corpora from "../corpora.js";
+import type * as crons from "../crons.js";
 import type * as draftSet from "../draftSet.js";
 import type * as githubPrSync from "../githubPrSync.js";
 import type * as ideas from "../ideas.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   campaigns: typeof campaigns;
   cohesion: typeof cohesion;
   corpora: typeof corpora;
+  crons: typeof crons;
   draftSet: typeof draftSet;
   githubPrSync: typeof githubPrSync;
   ideas: typeof ideas;

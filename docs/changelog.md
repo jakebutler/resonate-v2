@@ -4122,3 +4122,21 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - main
+
+## 09/15/2026 15:36:22 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	convex/_generated/api.d.ts
+
+### Working Tree Snapshot
+
+- M  convex/_generated/api.d.ts
+
+### Branch
+
+- main

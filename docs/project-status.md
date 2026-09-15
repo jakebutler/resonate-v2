@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/15/2026 15:34:30 PDT
+Last updated: 09/15/2026 15:36:22 PDT
 
 ## State
 
@@ -12,25 +12,23 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Updated repository documentation and handoff records.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- b4b5d9c Merge pull request #93 from jakebutler/feat/audit-decisions
+- 6f9a97b docs: land the three 2026-09-14 audit reports (architecture, code review, UI/UX)
 
 ## Recent Commits
 
+- 6f9a97b docs: land the three 2026-09-14 audit reports (architecture, code review, UI/UX)
 - b4b5d9c Merge pull request #93 from jakebutler/feat/audit-decisions
 - 2a4a8ee Merge pull request #88 from jakebutler/fix/audit-security
 - 81e42a1 feat: implement audit decision list — D-17 warning surface, gate remediation links, provenance, mapping config, storage ownership
 - 1cd642d perf: audit wave D — calendar N+1 removal, corpus pagination, buffer status cron
-- d8154dd fix: audit wave C — composer error surfacing, shared toast, UI quick wins
 
 ## Local Working Tree
 
-- A  docs/reviews/2026-09-14-architecture-review.md
-- A  docs/reviews/2026-09-14-code-review.md
-- A  docs/reviews/2026-09-14-ui-ux-audit.md
+- M  convex/_generated/api.d.ts
 
 ## Next Agent Pickup
 
