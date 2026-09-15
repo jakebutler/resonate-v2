@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/14/2026 16:57:58 PDT
+Last updated: 09/15/2026 15:34:30 PDT
 
 ## State
 
@@ -16,35 +16,21 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 1cd642d perf: audit wave D — calendar N+1 removal, corpus pagination, buffer status cron
+- b4b5d9c Merge pull request #93 from jakebutler/feat/audit-decisions
 
 ## Recent Commits
 
+- b4b5d9c Merge pull request #93 from jakebutler/feat/audit-decisions
+- 2a4a8ee Merge pull request #88 from jakebutler/fix/audit-security
+- 81e42a1 feat: implement audit decision list — D-17 warning surface, gate remediation links, provenance, mapping config, storage ownership
 - 1cd642d perf: audit wave D — calendar N+1 removal, corpus pagination, buffer status cron
 - d8154dd fix: audit wave C — composer error surfacing, shared toast, UI quick wins
-- 4a8839b refactor: audit wave B — consolidate duplicated auth/routing/gate logic, fix campaign-loop correctness bugs
-- e064bcd fix: audit wave A — close unauthenticated Convex functions, make lab-import reachable, single-use mock-ack tokens
-- 68c66b6 feat: campaign loop remediation pass — should-fix C1-C12 + D-5/D-16 product decisions
 
 ## Local Working Tree
 
-- M  .env.local.example
-- M  components/PersistedPublishingPanel.tsx
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
-- M  components/campaigns/ApprovalQueue.tsx
-- M  components/campaigns/ReviewPassesPanel.tsx
-- M  convex/__tests__/campaignSession.test.ts
-- M  convex/_generated/api.d.ts
-- M  convex/campaigns.ts
-- M  convex/publishing.ts
-- M  convex/queue.ts
-- M  convex/schema.ts
-- A  convex/v2Storage.ts
-- M  docs/ops-runbook.md
-- M  lib/__tests__/cohesion.test.ts
-- M  lib/cohesion.ts
-- M  lib/domain.ts
-- M  lib/providerAdapters.ts
+- A  docs/reviews/2026-09-14-architecture-review.md
+- A  docs/reviews/2026-09-14-code-review.md
+- A  docs/reviews/2026-09-14-ui-ux-audit.md
 
 ## Next Agent Pickup
 
@@ -53,4 +39,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/audit-decisions
+- main
