@@ -1,5 +1,6 @@
 import { providerSubmissionIneligibilityReason } from "./approvalGate";
 import { sanitizeProviderResponse } from "./sanitize";
+import { JAKE_PERSONAL_VOICE_MARKDOWN } from "./voicePacks/jakePersonalVoice";
 
 export type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
 
@@ -369,8 +370,20 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
       brandId: "corvo",
       name: "Corvo Labs Placeholder Voice",
       markdown: CORVO_PLACEHOLDER_VOICE_PACK,
-      isDefault: true,
+      isDefault: false,
       updatedAt: new Date("2026-06-05T00:00:00.000Z").toISOString(),
+    },
+    {
+      // VOICE.md v0.1.2 is a *personal* profile. It is the Corvo default only by
+      // explicit operator decision (2026-09-28); flip isDefault to revert. Keep the
+      // placeholder at index 0: ResearchApp falls back to voicePacks[0] for brands
+      // with no pack, and the personal profile must not leak to them.
+      id: "voice-jake-personal",
+      brandId: "corvo",
+      name: "Jake Butler — Personal Voice (v0.1.2)",
+      markdown: JAKE_PERSONAL_VOICE_MARKDOWN,
+      isDefault: true,
+      updatedAt: new Date("2026-09-26T00:00:00.000Z").toISOString(),
     },
   ],
 };

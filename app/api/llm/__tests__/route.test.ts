@@ -45,6 +45,25 @@ describe("POST /api/llm", () => {
     })
   })
 
+  it("attaches the server-resolved voice only when applyVoice is true", async () => {
+    const messages = [{ role: "user", content: "hello" }]
+    await POST(makeRequest({ messages, assistantType: "blog", applyVoice: true }))
+    expect(streamCortexChat).toHaveBeenLastCalledWith(messages, {
+      model: undefined,
+      assistantType: "blog",
+      voiceMarkdown: expect.stringContaining("Jake Butler"),
+    })
+  })
+
+  it("ignores a client-supplied voiceMarkdown and rejects a non-boolean applyVoice", async () => {
+    const messages = [{ role: "user", content: "hello" }]
+    await POST(makeRequest({ messages, voiceMarkdown: "ATTACKER", applyVoice: true }))
+    const opts = vi.mocked(streamCortexChat).mock.calls.at(-1)![1] as { voiceMarkdown?: string }
+    expect(opts.voiceMarkdown).not.toContain("ATTACKER")
+    const res = await POST(makeRequest({ messages, applyVoice: "yes" }))
+    expect(res.status).toBe(400)
+  })
+
   it("returns 400 when model is not in the allowlist", async () => {
     const res = await POST(makeRequest({ messages: [{ role: "user", content: "hi" }], model: "some-rogue-model" }))
     expect(res.status).toBe(400)

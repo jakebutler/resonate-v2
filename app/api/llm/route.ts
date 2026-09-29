@@ -5,6 +5,7 @@ import {
   type ChatMessage,
 } from "@/lib/cortex";
 import { MODEL_IDS } from "@/lib/models";
+import { getDefaultVoiceMarkdown } from "@/lib/voicePacks";
 import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
@@ -17,13 +18,16 @@ export async function POST(req: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { messages, model, assistantType } = await req.json();
+  const { messages, model, assistantType, applyVoice } = await req.json();
 
   if (!Array.isArray(messages)) {
     return new Response("messages must be an array", { status: 400 });
   }
   if (model !== undefined && typeof model !== "string") {
     return new Response("model must be a string", { status: 400 });
+  }
+  if (applyVoice !== undefined && typeof applyVoice !== "boolean") {
+    return new Response("applyVoice must be a boolean", { status: 400 });
   }
   if (assistantType !== undefined && typeof assistantType !== "string") {
     return new Response("assistantType must be a string", { status: 400 });
@@ -39,6 +43,9 @@ export async function POST(req: NextRequest) {
     const stream = await streamCortexChat(messages as ChatMessage[], {
       model,
       assistantType: (assistantType as AssistantType | undefined) ?? "linkedin",
+      // Writing surfaces opt in; research/analysis calls stay voice-free. The
+      // profile is resolved server-side, never taken from the request body.
+      ...(applyVoice === true ? { voiceMarkdown: getDefaultVoiceMarkdown("corvo") } : {}),
     });
 
     return new Response(stream, {

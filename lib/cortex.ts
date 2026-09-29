@@ -45,6 +45,18 @@ const SYSTEM_PROMPTS: Record<AssistantType, string> = {
   blog: BLOG_SYSTEM_PROMPT,
 };
 
+export function withVoiceProfile(systemPrompt: string, voiceMarkdown?: string): string {
+  const voice = voiceMarkdown?.trim();
+  if (!voice) return systemPrompt;
+  return [
+    systemPrompt,
+    "",
+    "Voice profile — apply to expression only. The current brief controls substance, facts, and claims; never invent opinions, experiences, or numbers from the profile's examples.",
+    "",
+    voice,
+  ].join("\n");
+}
+
 function getCortexConfig() {
   const cortexApiKey = process.env.CORTEX_API_KEY;
   const openAiApiKey = process.env.OPENAI_API_KEY;
@@ -67,6 +79,8 @@ export async function streamCortexChat(
   options?: {
     assistantType?: AssistantType;
     model?: string;
+    /** Voice profile markdown appended to the system prompt (expression only). */
+    voiceMarkdown?: string;
   }
 ): Promise<ReadableStream> {
   const { useOpenAI, apiKey, baseUrl } = getCortexConfig();
@@ -83,7 +97,7 @@ export async function streamCortexChat(
       model: resolvedModel,
       stream: true,
       messages: [
-        { role: "system", content: SYSTEM_PROMPTS[assistantType] },
+        { role: "system", content: withVoiceProfile(SYSTEM_PROMPTS[assistantType], options?.voiceMarkdown) },
         ...messages,
       ],
     }),
