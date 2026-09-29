@@ -4140,3 +4140,39 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - main
+
+## 09/28/2026 17:39:34 PDT
+
+### Summary
+
+- Touched AI assistant request or prompt plumbing.
+
+### Staged Changes
+
+- M	app/api/llm/__tests__/route.test.ts
+- M	app/api/llm/route.ts
+- M	components/AIAssistant/AIAssistant.tsx
+- M	components/EditorChat/EditorChat.tsx
+- M	components/ResearchApp.tsx
+- M	lib/__tests__/cortex.test.ts
+- M	lib/cortex.ts
+- M	lib/domain.ts
+- A	lib/voicePacks/index.ts
+- A	lib/voicePacks/jakePersonalVoice.ts
+
+### Working Tree Snapshot
+
+- M  app/api/llm/__tests__/route.test.ts
+- M  app/api/llm/route.ts
+- M  components/AIAssistant/AIAssistant.tsx
+- M  components/EditorChat/EditorChat.tsx
+- M  components/ResearchApp.tsx
+- M  lib/__tests__/cortex.test.ts
+- M  lib/cortex.ts
+- M  lib/domain.ts
+- A  lib/voicePacks/index.ts
+- A  lib/voicePacks/jakePersonalVoice.ts
+
+### Branch
+
+- feat/jake-voice-profile

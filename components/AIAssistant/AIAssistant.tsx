@@ -119,6 +119,7 @@ export function AIAssistant({
             .map((m) => ({ role: m.role, content: m.content })),
           model: selectedModel.id,
           assistantType: variant,
+          applyVoice: true,
         }),
       });
 

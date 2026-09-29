@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/15/2026 15:36:22 PDT
+Last updated: 09/28/2026 17:39:34 PDT
 
 ## State
 
@@ -12,23 +12,32 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Touched AI assistant request or prompt plumbing.
 
 ## Last Completed Task
 
-- 6f9a97b docs: land the three 2026-09-14 audit reports (architecture, code review, UI/UX)
+- 4dc7e07 chore: regenerate convex api bindings (v2Storage module entry from prod codegen)
 
 ## Recent Commits
 
+- 4dc7e07 chore: regenerate convex api bindings (v2Storage module entry from prod codegen)
 - 6f9a97b docs: land the three 2026-09-14 audit reports (architecture, code review, UI/UX)
 - b4b5d9c Merge pull request #93 from jakebutler/feat/audit-decisions
 - 2a4a8ee Merge pull request #88 from jakebutler/fix/audit-security
 - 81e42a1 feat: implement audit decision list — D-17 warning surface, gate remediation links, provenance, mapping config, storage ownership
-- 1cd642d perf: audit wave D — calendar N+1 removal, corpus pagination, buffer status cron
 
 ## Local Working Tree
 
-- M  convex/_generated/api.d.ts
+- M  app/api/llm/__tests__/route.test.ts
+- M  app/api/llm/route.ts
+- M  components/AIAssistant/AIAssistant.tsx
+- M  components/EditorChat/EditorChat.tsx
+- M  components/ResearchApp.tsx
+- M  lib/__tests__/cortex.test.ts
+- M  lib/cortex.ts
+- M  lib/domain.ts
+- A  lib/voicePacks/index.ts
+- A  lib/voicePacks/jakePersonalVoice.ts
 
 ## Next Agent Pickup
 
@@ -37,4 +46,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- main
+- feat/jake-voice-profile

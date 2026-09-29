@@ -154,6 +154,7 @@ export function EditorChat({
             .map((m) => ({ role: m.role, content: m.content })),
           model: selectedModel.id,
           assistantType: "blog",
+          applyVoice: true,
         }),
       });
 

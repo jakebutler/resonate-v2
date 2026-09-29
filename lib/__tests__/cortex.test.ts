@@ -107,3 +107,19 @@ describe('module initialization', () => {
     vi.resetModules()
   })
 })
+
+describe('withVoiceProfile', () => {
+  it('returns the system prompt unchanged without voice markdown', async () => {
+    const { withVoiceProfile } = await import('../cortex')
+    expect(withVoiceProfile('base')).toBe('base')
+    expect(withVoiceProfile('base', '   ')).toBe('base')
+  })
+
+  it('appends the voice profile after a scoping instruction', async () => {
+    const { withVoiceProfile } = await import('../cortex')
+    const out = withVoiceProfile('base', '# Voice')
+    expect(out.startsWith('base\n')).toBe(true)
+    expect(out).toContain('apply to expression only')
+    expect(out.endsWith('# Voice')).toBe(true)
+  })
+})

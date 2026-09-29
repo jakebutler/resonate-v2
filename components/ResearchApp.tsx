@@ -614,6 +614,8 @@ export function ResearchApp({
     const accepted = claimMap.claims.filter((c) => c.status === "accepted");
     if (accepted.length === 0) return;
     const approvedOutline = { ...editorialOutline, status: "approved" as const };
+    const claimMapPacks = voicePacks.filter((pack) => pack.brandId === claimMap.brandId);
+    const draftVoicePack = claimMapPacks.find((pack) => pack.isDefault) ?? claimMapPacks[0];
     setDraftBusy(true);
     setNotice(null);
 
@@ -625,6 +627,7 @@ export function ResearchApp({
           outline: approvedOutline,
           acceptedClaims: accepted,
           brandId: claimMap.brandId,
+          voicePackMarkdown: draftVoicePack?.markdown,
         }),
       });
       const data = await response.json();
