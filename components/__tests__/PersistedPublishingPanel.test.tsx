@@ -20,6 +20,7 @@ vi.mock("@/convex/_generated/api", () => ({
   api: {
     publishing: {
       listBrands: "publishing:listBrands",
+      getPostById: "publishing:getPostById",
       listCalendarItems: "publishing:listCalendarItems",
       getPostAuditTrail: "publishing:getPostAuditTrail",
       seedMvpWorkspace: "publishing:seedMvpWorkspace",
@@ -363,7 +364,7 @@ describe("PersistedPublishingPanel", () => {
     expect(useQuery).toHaveBeenCalledWith("publishing:listCalendarItems", {
       brandIds: ["corvo"],
       platformIds: ["linkedin", "reddit", "corvo-blog"],
-      statuses: ["draft", "scheduled", "submitted", "needs-review"],
+      statuses: ["draft", "scheduled", "submitted", "needs-review", "pr-created"],
     });
 
     fireEvent.click(screen.getByText("FreshProof"));
@@ -378,7 +379,7 @@ describe("PersistedPublishingPanel", () => {
       {
         brandIds: ["corvo", "freshproof"],
         platformIds: ["linkedin", "reddit", "corvo-blog", "youtube"],
-        statuses: ["draft", "scheduled", "submitted", "needs-review", "published"],
+        statuses: ["draft", "scheduled", "submitted", "needs-review", "pr-created", "published"],
       },
     ]);
   });
@@ -951,6 +952,42 @@ describe("PersistedPublishingPanel", () => {
     await waitFor(() =>
       expect(deletePostMock).toHaveBeenCalledWith({ postId: "post_1" })
     );
+  });
+
+  it("opens an undated draft from the unscheduled section", () => {
+    const item = {
+      ...unapprovedItem,
+      post: { ...unapprovedItem.post, scheduledDate: undefined, scheduledTime: undefined },
+      intent: { ...unapprovedItem.intent, scheduledDate: undefined, scheduledTime: undefined },
+    };
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [item];
+      return undefined;
+    });
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: `Open composer for ${item.post.title}` }));
+    expect(screen.getByLabelText("Publishing item detail")).toBeInTheDocument();
+    expect(screen.getByLabelText("Date")).toHaveValue("");
+  });
+
+  it("opens a composer link whose brand and status were excluded by default", async () => {
+    const item = {
+      ...approvedItem,
+      post: { ...approvedItem.post, status: "unavailable", channelId: "youtube", platformId: "youtube" },
+    };
+    vi.mocked(useQuery).mockImplementation((reference, args) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:getPostById") return item.post;
+      if (reference === "publishing:listCalendarItems") {
+        const filters = args as { brandIds: string[]; statuses: string[]; platformIds: string[] };
+        return filters.brandIds.includes("freshproof") && filters.statuses.includes("unavailable") && filters.platformIds.includes("youtube") ? [item] : [];
+      }
+      return undefined;
+    });
+    render(<PersistedPublishingPanel initialPostId="post_2" />);
+    await waitFor(() => expect(screen.getByLabelText("Publishing item detail")).toBeInTheDocument());
+    expect(screen.getByLabelText("Title")).toHaveValue(item.post.title);
   });
 
   it("selects a post when initialPostId matches a visible calendar item", () => {

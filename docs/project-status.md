@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/28/2026 17:39:34 PDT
+Last updated: 09/29/2026 15:07:03 PDT
 
 ## State
 
@@ -12,32 +12,27 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Touched AI assistant request or prompt plumbing.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- 4dc7e07 chore: regenerate convex api bindings (v2Storage module entry from prod codegen)
+- c6bd2fb Merge pull request #94 from jakebutler/feat/jake-voice-profile
 
 ## Recent Commits
 
+- c6bd2fb Merge pull request #94 from jakebutler/feat/jake-voice-profile
+- c3edf1b feat: wire Jake's personal voice profile into drafting as the Corvo default
 - 4dc7e07 chore: regenerate convex api bindings (v2Storage module entry from prod codegen)
 - 6f9a97b docs: land the three 2026-09-14 audit reports (architecture, code review, UI/UX)
 - b4b5d9c Merge pull request #93 from jakebutler/feat/audit-decisions
-- 2a4a8ee Merge pull request #88 from jakebutler/fix/audit-security
-- 81e42a1 feat: implement audit decision list — D-17 warning surface, gate remediation links, provenance, mapping config, storage ownership
 
 ## Local Working Tree
 
-- M  app/api/llm/__tests__/route.test.ts
-- M  app/api/llm/route.ts
-- M  components/AIAssistant/AIAssistant.tsx
-- M  components/EditorChat/EditorChat.tsx
-- M  components/ResearchApp.tsx
-- M  lib/__tests__/cortex.test.ts
-- M  lib/cortex.ts
-- M  lib/domain.ts
-- A  lib/voicePacks/index.ts
-- A  lib/voicePacks/jakePersonalVoice.ts
+- M  components/IdeaDetail/IdeaDetail.tsx
+- M  components/IdeaDetail/__tests__/IdeaDetail.test.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/shell/Shell.tsx
 
 ## Next Agent Pickup
 
@@ -46,4 +41,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/jake-voice-profile
+- codex/publishing-navigation

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { Button } from "@/components/ui/button";
 import { Id } from "@/convex/_generated/dataModel";
@@ -269,6 +270,12 @@ export function IdeaDetail({
                         <p className="mt-1 text-xs text-gray-500">
                           {post.channelId} · {post.status} · {post.approvalState}
                         </p>
+                        <Link
+                          href={`/?postId=${encodeURIComponent(post._id)}`}
+                          className="mt-2 inline-block text-sm font-medium text-[#15616d] underline underline-offset-2"
+                        >
+                          Open composer for {post.title}
+                        </Link>
                       </div>
                       <span className="rounded-full bg-[#15616d]/10 px-2.5 py-1 text-xs font-medium text-[#15616d]">
                         {link.channelId}
