@@ -1,4 +1,9 @@
 "use client";
+import {deliverySummary} from "@/lib/deliverySummary";
+import {ArticleDependencyPanel} from "./ArticleDependencyPanel";
+import { BufferDestinationPanel } from "./BufferDestinationPanel";
+import { DeliveryReceiptPanel } from "./DeliveryReceiptPanel";
+import { BlogExportPreview } from "./BlogExportPreview";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -66,6 +71,7 @@ type PersistedCalendarItem = {
     content: string;
     linkedinFirstComment?: string;
     contentFingerprint?: string;
+    platformSettings?: unknown;
     status: PostStatus;
     approvalState: string;
     scheduledDate?: string;
@@ -82,11 +88,16 @@ type PersistedCalendarItem = {
     blogCategory?: string;
     blogTags?: string[];
     blogSlug?: string;
+    blogPublicationIntent?: "draft" | "published";
+    coverImageAlt?: string;
     heroImageUrl?: string;
     heroImageStorageId?: Id<"_storage">;
+    preparedHero?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["preparedHero"];
+    blogArtifact?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["blogArtifact"];
     blogPrNumber?: number;
     blogPrStatus?: "open" | "merged" | "closed" | "draft";
   };
+  articlePublication?: import("@/convex/_generated/dataModel").Doc<"articlePublications">|null;
   intent?: {
     _id?: Id<"v2PublishingIntents">;
     scheduledDate?: string;
@@ -152,7 +163,8 @@ const statusOptions: Array<{ id: PostStatus; label: string }> = [
   { id: "draft", label: "Draft" },
   { id: "approved", label: "Approved" },
   { id: "scheduled", label: "Scheduled" },
-  { id: "submitted", label: "Submitted" },
+  { id: "submitted", label: "Submitted (legacy)" },
+  {id:"queued",label:"Queued"}, {id:"publishing",label:"Publishing"}, {id:"cancel-requested",label:"Cancel requested"}, {id:"cancelled",label:"Cancelled"}, {id:"removed",label:"Removed"}, {id:"provider-draft",label:"Provider draft"},
   { id: "published", label: "Published" },
   { id: "needs-review", label: "Needs Review" },
   { id: "failed", label: "Failed" },
@@ -180,6 +192,7 @@ function slugifyTitle(title: string) {
 
 type BlogPublishSnapshot = {
   articleChanged?: boolean;
+  title?: string; content?: string; publicationIntent?: "draft" | "published"; coverImageAlt?: string;
   excerpt?: string;
   author?: string;
   category?: string;
@@ -218,6 +231,8 @@ function blogPrBlockedReason(
     post.heroImageUrl?.trim() ||
     post.heroImageStorageId;
   if (!hero && !approvedVisualHero) return "Add a hero image before opening a PR.";
+  if (!post.blogPublicationIntent || (!approvedVisualHero && !post.coverImageAlt?.trim())) return "Save and review publication intent and manual cover alt text.";
+  if (!approvedVisualHero && !post.preparedHero) return "Prepare and review the exported hero crop before approval.";
   return null;
 }
 
@@ -364,11 +379,14 @@ function renderJson(value: unknown) {
 
 export function PersistedPublishingPanel({
   initialPostId,
+  initialSeriesId,
   devMode = false,
 }: {
   initialPostId?: string;
+  initialSeriesId?: string;
   devMode?: boolean;
 } = {}) {
+  const [seriesFilter, setSeriesFilter] = useState(initialSeriesId ?? "");
   const [brandFilters, setBrandFilters] = useState<BrandId[]>(["corvo"]);
   const [platformFilters, setPlatformFilters] = useState<ChannelId[]>([
     "linkedin",
@@ -378,7 +396,7 @@ export function PersistedPublishingPanel({
   const [statusFilters, setStatusFilters] = useState<PostStatus[]>([
     "draft",
     "scheduled",
-    "submitted",
+    "submitted", "queued", "publishing", "published", "cancel-requested", "cancelled", "removed", "provider-draft",
     "needs-review",
     "pr-created",
   ]);
@@ -428,10 +446,12 @@ export function PersistedPublishingPanel({
     );
   }, [linkedBrandId, linkedChannelId, linkedStatus]);
 
+  const seriesList = useQuery(api.series.list, isConvexAuthenticated ? {} : "skip") as import("@/convex/_generated/dataModel").Doc<"postSeries">[] | undefined;
   const items = useQuery(
     api.publishing.listCalendarItems,
     isConvexAuthenticated
       ? {
+          ...(seriesFilter ? {seriesId: seriesFilter as Id<"postSeries">} : {}),
           brandIds: brandFilters,
           platformIds: platformFilters,
           statuses: statusFilters,
@@ -453,7 +473,7 @@ export function PersistedPublishingPanel({
   const cancelBufferLive = useAction(api.bufferLive.cancelOrUnpublish);
   const recordGithubPr = useMutation(api.publishing.recordGithubPr);
   const updateBlogMetadata = useMutation(api.publishing.updateBlogMetadata);
-  const recordBlogPrStatus = useMutation(api.publishing.recordBlogPrStatus);
+  const checkArticlePublication = useAction(api.articlePublication.refresh);
   const deletePost = useMutation(api.publishing.deletePost);
   const bufferLiveGateResolved = bufferLiveGate !== undefined;
   const bufferLiveEnabled = bufferLiveGate?.enabled === true;
@@ -514,18 +534,7 @@ export function PersistedPublishingPanel({
         }),
     [visibleDateKeys, visibleItems]
   );
-  const providerSummary = useMemo(() => {
-    const submitted = visibleItems.filter(
-      (item) => item.providerState?.status === "submitted"
-    ).length;
-    const needsReview = visibleItems.filter(
-      (item) => item.providerState?.status === "needs-review"
-    ).length;
-    const notSubmitted = visibleItems.filter(
-      (item) => item.providerState?.status === "not-submitted"
-    ).length;
-    return { submitted, needsReview, notSubmitted };
-  }, [visibleItems]);
+  const providerSummary = useMemo(() => deliverySummary(visibleItems), [visibleItems]);
   const autoSelectedPostId = useMemo(() => {
     if (!initialPostId || loading) return null;
     return visibleItems.find((item) => item.post._id === initialPostId)?.post._id ?? null;
@@ -612,8 +621,11 @@ export function PersistedPublishingPanel({
         blogCategory?: string;
         blogTags?: string[];
         blogSlug?: string;
+    blogPublicationIntent?: "draft" | "published";
+    coverImageAlt?: string;
         heroImageUrl?: string;
         heroImageStorageId?: Id<"_storage">;
+    preparedHero?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["preparedHero"];
       };
     }
   ) {
@@ -638,7 +650,9 @@ export function PersistedPublishingPanel({
           JSON.stringify(item.post.blogTags ?? []) ||
         blogMetadata.blogSlug !== (item.post.blogSlug ?? "") ||
         blogMetadata.heroImageUrl !== (item.post.heroImageUrl ?? "") ||
-        blogMetadata.heroImageStorageId !== item.post.heroImageStorageId);
+        blogMetadata.heroImageStorageId !== item.post.heroImageStorageId ||
+        blogMetadata.blogPublicationIntent !== item.post.blogPublicationIntent ||
+        blogMetadata.coverImageAlt !== item.post.coverImageAlt);
 
     if (titleChanged || contentChanged || firstCommentChanged) {
       await updateContent({
@@ -697,7 +711,7 @@ export function PersistedPublishingPanel({
         }
         setMessage(
           result.submitted
-            ? "Submitted to Buffer queue for LinkedIn."
+            ? "Queued in Buffer for LinkedIn; publication is still pending."
             : (result.reason ?? "Buffer submission was skipped.")
         );
       } catch (error) {
@@ -869,7 +883,9 @@ export function PersistedPublishingPanel({
 
     const snapshotDiffers =
       Boolean(snapshot) &&
-      ((snapshot?.excerpt?.trim() || "") !== (item.post.blogExcerpt?.trim() || "") ||
+      ((snapshot?.title !== item.post.title) || (snapshot?.content !== item.post.content) ||
+        snapshot?.publicationIntent !== item.post.blogPublicationIntent || snapshot?.coverImageAlt !== item.post.coverImageAlt ||
+        (snapshot?.excerpt?.trim() || "") !== (item.post.blogExcerpt?.trim() || "") ||
         (snapshot?.author?.trim() || "") !== (item.post.blogAuthor?.trim() || "") ||
         (snapshot?.category?.trim() || "") !== (item.post.blogCategory?.trim() || "") ||
         JSON.stringify(snapshot?.tags ?? []) !== JSON.stringify(item.post.blogTags ?? []) ||
@@ -891,9 +907,6 @@ export function PersistedPublishingPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           postId: item.post._id,
-          scheduleTrigger: "pr-body",
-          status: "draft",
-          coverImageAlt: `Cover image for ${item.post.title}`,
         }),
       });
       const data = await response.json();
@@ -926,6 +939,7 @@ export function PersistedPublishingPanel({
       if (!data.recorded) await recordGithubPr({
         postId: item.post._id,
         result: {
+          artifact: sanitized.artifact as import("@/lib/github").BlogArtifact | undefined,
           prUrl: data.prUrl,
           branchName: data.branchName,
           prNumber,
@@ -952,24 +966,9 @@ export function PersistedPublishingPanel({
       return;
     }
 
-    setMessage("Checking pull request status...");
-    const response = await fetch("/api/blog-pr-status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prUrl, postId: item.post._id }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setMessage(data.error || "PR status check failed.");
-      return;
-    }
+    setMessage("Checking PR, exact Production deployment and canonical article...");
+    try{const result=await checkArticlePublication({postId:item.post._id});setMessage(result.reason??"Article publication evidence checked.");}catch{setMessage("Article publication check failed; companion delivery remains held.");}
 
-    if (!data.recorded) await recordBlogPrStatus({
-      postId: item.post._id,
-      prStatus: data.prStatus,
-      prNumber: data.prNumber ?? undefined,
-    });
-    setMessage(`PR status updated: ${prStatusLabel(data.prStatus)}.`);
   }
 
   function moveCalendar(direction: -1 | 1) {
@@ -1005,6 +1004,7 @@ export function PersistedPublishingPanel({
       sidebar={
         <>
           <SidebarCard className="space-y-3">
+            <label className="block text-sm">Series<select aria-label="Calendar series filter" className="w-full rounded border p-2" value={seriesFilter} onChange={e => setSeriesFilter(e.target.value)}><option value="">All series</option>{seriesList?.map(series => <option key={series._id} value={series._id}>{series.title}</option>)}</select></label>
             <FilterGroup
               label="Brands"
               onChange={(id) => setBrandFilters(toggleFilterSet(brandFilters, id))}
@@ -1040,7 +1040,7 @@ export function PersistedPublishingPanel({
         <MainCard className={selectedItem ? "order-2 min-w-0 lg:order-1" : undefined}>
             <div className="grid gap-3 border-b border-black/10 p-4 sm:grid-cols-3">
               <Metric label="Not submitted" value={providerSummary.notSubmitted} />
-              <Metric label="Submitted" value={providerSummary.submitted} />
+              <Metric label="Queued / publishing" value={providerSummary.queued} /><Metric label="Published" value={providerSummary.published} /><Metric label="Legacy unverified" value={providerSummary.submitted} /><Metric label="Simulated" value={providerSummary.simulated} />
               <Metric label="Needs review" value={providerSummary.needsReview} />
             </div>
 
@@ -1461,7 +1461,7 @@ function AgendaItem(props: {
   const submitDisabled =
     !approved ||
     !intent?.scheduledDate ||
-    providerState?.status === "submitted" ||
+    ["submitted","queued","publishing","published","cancel-requested","cancelled","removed"].includes(providerState?.status ?? "") ||
     providerIntentRecorded ||
     props.bufferLiveBusy ||
     (showLiveBuffer && !brandHasBufferLinkedInMapping(post.brandId));
@@ -1621,6 +1621,8 @@ function AgendaItem(props: {
           )}
           <button
             aria-label={`Delete ${post.title}`}
+            disabled={Boolean(existingPrUrl) || hasLiveBufferProviderPost(providerState)}
+            title={Boolean(existingPrUrl) || hasLiveBufferProviderPost(providerState) ? "Publication receipts are retained." : undefined}
             className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
             onClick={() => props.onDelete(post._id, post.title)}
             type="button"
@@ -1689,8 +1691,11 @@ function PublishingDetailDrawer(props: {
       blogCategory?: string;
       blogTags?: string[];
       blogSlug?: string;
+    blogPublicationIntent?: "draft" | "published";
+    coverImageAlt?: string;
       heroImageUrl?: string;
       heroImageStorageId?: Id<"_storage">;
+    preparedHero?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["preparedHero"];
     };
   }) => void;
   onSubmit: (item: PersistedCalendarItem) => void;
@@ -1727,7 +1732,7 @@ function PublishingDetailDrawer(props: {
   const submitDisabled =
     !approved ||
     !intent?.scheduledDate ||
-    providerState?.status === "submitted" ||
+    ["submitted","queued","publishing","published","cancel-requested","cancelled","removed"].includes(providerState?.status ?? "") ||
     providerIntentRecorded ||
     props.bufferLiveBusy ||
     (showLiveBuffer && !brandHasBufferLinkedInMapping(post.brandId));
@@ -1828,6 +1833,8 @@ function PublishingDetailDrawer(props: {
               </div>
             )}
 
+            {(isLinkedIn||post.channelId==="corvo-blog")&&<ArticleDependencyPanel postId={post._id}/>}
+            {isLinkedIn && <><BufferDestinationPanel brandId={post.brandId} post={post}/><DeliveryReceiptPanel postId={post._id}/></>}
             <PersistedPostComposer
               embedded
               item={item}
@@ -2085,6 +2092,8 @@ function PublishingDetailDrawer(props: {
           )}
           <button
             aria-label={`Delete ${post.title}`}
+            disabled={Boolean(existingPrUrl) || hasLiveBufferProviderPost(providerState)}
+            title={Boolean(existingPrUrl) || hasLiveBufferProviderPost(providerState) ? "Publication receipts are retained." : undefined}
             className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
             onClick={() => props.onDelete(post._id, post.title)}
             type="button"
@@ -2116,8 +2125,11 @@ function PersistedPostComposer(props: {
       blogCategory?: string;
       blogTags?: string[];
       blogSlug?: string;
+    blogPublicationIntent?: "draft" | "published";
+    coverImageAlt?: string;
       heroImageUrl?: string;
       heroImageStorageId?: Id<"_storage">;
+    preparedHero?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["preparedHero"];
     };
   }) => void;
 }) {
@@ -2127,6 +2139,9 @@ function PersistedPostComposer(props: {
   // v2-owned storage module — the legacy posts.generateUploadUrl retires at
   // the ADR 0004 cutover.
   const uploadImage = useAction(api.v2Storage.uploadImage);
+  const prepareHero = useAction(api.blogHero.prepare);
+  const [heroCrop, setHeroCrop] = useState<"centre" | "north" | "south">("centre");
+  const exportedHeroUrl = useQuery(api.v2Storage.getFileUrl, post.preparedHero ? {fileId: post.preparedHero.storageId} : "skip");
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
   const [linkedinFirstComment, setLinkedinFirstComment] = useState(post.linkedinFirstComment ?? "");
@@ -2156,6 +2171,8 @@ function PersistedPostComposer(props: {
   );
   const [blogTagsInput, setBlogTagsInput] = useState((post.blogTags ?? []).join(", "));
   const [blogSlug, setBlogSlug] = useState(post.blogSlug ?? slugifyTitle(post.title));
+  const [blogPublicationIntent, setBlogPublicationIntent] = useState<"draft" | "published">(post.blogPublicationIntent ?? "draft");
+  const [coverImageAlt, setCoverImageAlt] = useState(post.coverImageAlt ?? "");
   const [slugTouched, setSlugTouched] = useState(Boolean(post.blogSlug));
   const [heroImageUrl, setHeroImageUrl] = useState(post.heroImageUrl ?? "");
   const [heroImageStorageId, setHeroImageStorageId] = useState<Id<"_storage"> | undefined>(
@@ -2177,6 +2194,21 @@ function PersistedPostComposer(props: {
     intent?.timezone ?? post.timezone ?? "America/Los_Angeles"
   );
 
+  // Server-side link/fallback edits update an untouched composer field. Preserve
+  // local typing when it already differs from the last saved value.
+  const previousSaved = useRef({title:post.title, content:post.content, comment:post.linkedinFirstComment ?? "", date:normalizeScheduledDate(intent?.scheduledDate ?? post.scheduledDate) ?? "", time:intent?.scheduledTime ?? post.scheduledTime ?? "", timezone:intent?.timezone ?? post.timezone ?? "America/Los_Angeles"});
+  useEffect(() => {
+    const old=previousSaved.current;
+    const next={title:post.title, content:post.content, comment:post.linkedinFirstComment ?? "", date:normalizeScheduledDate(intent?.scheduledDate ?? post.scheduledDate) ?? "", time:intent?.scheduledTime ?? post.scheduledTime ?? "", timezone:intent?.timezone ?? post.timezone ?? "America/Los_Angeles"};
+    setTitle(current=>current===old.title?next.title:current);
+    setContent(current=>current===old.content?next.content:current);
+    setLinkedinFirstComment(current=>current===old.comment?next.comment:current);
+    setScheduledDate(current=>current===old.date?next.date:current);
+    setScheduledTime(current=>current===old.time?next.time:current);
+    setTimezone(current=>current===old.timezone?next.timezone:current);
+    previousSaved.current=next;
+  },[post.title,post.content,post.linkedinFirstComment,post.scheduledDate,post.scheduledTime,post.timezone,intent?.scheduledDate,intent?.scheduledTime,intent?.timezone]);
+
   const contentChanged =
     title.trim() !== post.title ||
     content !== post.content ||
@@ -2197,7 +2229,8 @@ function PersistedPostComposer(props: {
       JSON.stringify(blogTags) !== JSON.stringify(post.blogTags ?? []) ||
       blogSlug !== (post.blogSlug ?? "") ||
       heroImageUrl !== (post.heroImageUrl ?? "") ||
-      heroImageStorageId !== post.heroImageStorageId);
+      heroImageStorageId !== post.heroImageStorageId ||
+      blogPublicationIntent !== post.blogPublicationIntent || coverImageAlt !== (post.coverImageAlt ?? ""));
   const heroPreviewUrl = heroImageUrl.trim() || resolvedHeroUrl || "";
   const canSave =
     (contentChanged || scheduleChanged || blogMetadataChanged) && title.trim().length > 0;
@@ -2207,6 +2240,7 @@ function PersistedPostComposer(props: {
     if (post.channelId !== "corvo-blog" || !notifyPublishSnapshot) return;
     notifyPublishSnapshot({
       articleChanged: contentChanged || externalConflict || saving,
+      title, content, publicationIntent: blogPublicationIntent, coverImageAlt,
       excerpt: blogExcerpt,
       author: blogAuthor,
       category: blogCategory,
@@ -2215,6 +2249,7 @@ function PersistedPostComposer(props: {
       heroImageUrl: heroPreviewUrl || undefined,
     });
   }, [
+    title, content, blogPublicationIntent, coverImageAlt,
     blogAuthor,
     blogCategory,
     blogExcerpt,
@@ -2389,6 +2424,33 @@ function PersistedPostComposer(props: {
                 />
               </label>
               <label className="block text-xs font-semibold text-gray-600">
+                Publication intent
+                <select aria-label="Publication intent" className="mt-1 w-full rounded-md border px-2 py-1.5 text-sm" value={blogPublicationIntent} onChange={e => setBlogPublicationIntent(e.target.value as "draft" | "published")}>
+                  <option value="draft">Draft — keep hidden</option>
+                  <option value="published">Published — visible when merged</option>
+                </select>
+              </label>
+              <p className="text-xs text-amber-800">Published articles become visible when merged, even with a future date. Resonate never merges automatically.</p>
+              <label className="block text-xs font-semibold text-gray-600">
+                Cover image alt text
+                <textarea aria-label="Cover image alt text" className="mt-1 w-full rounded-md border px-2 py-1.5 text-sm" value={coverImageAlt} onChange={e => setCoverImageAlt(e.target.value)} />
+              </label>
+              <label className="block text-xs font-semibold text-gray-600">Exported crop
+                <select value={heroCrop} onChange={e => setHeroCrop(e.target.value as typeof heroCrop)} aria-label="Exported crop">
+                  <option value="centre">Centre</option><option value="north">Top</option><option value="south">Bottom</option>
+                </select>
+              </label>
+              <button type="button" disabled={!post.heroImageStorageId || heroUploading || blogMetadataChanged} className="rounded bg-[#15616d] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" onClick={async () => {
+                setHeroUploading(true); setHeroUploadError(null);
+                try { await prepareHero({postId: post._id, crop: heroCrop}); }
+                catch (error) { setHeroUploadError(error instanceof Error ? error.message : "Hero preparation failed"); }
+                finally { setHeroUploading(false); }
+              }}>Prepare exported hero</button>
+              <p className="text-xs text-gray-600">Save the original upload first, prepare the crop, then review it before approval. External URLs remain readable; new exports require an upload.</p>
+              {exportedHeroUrl && <img alt={post.coverImageAlt ?? "Export crop preview"} src={exportedHeroUrl} className="aspect-video w-full rounded object-cover" />}
+              {post.preparedHero && <p className="text-xs text-gray-600">1600×900 WebP · {post.preparedHero.byteLength.toLocaleString()} bytes · {post.preparedHero.crop}</p>}
+              <BlogExportPreview post={post} />
+              <label className="block text-xs font-semibold text-gray-600">
                 Hero image URL
                 <input
                   className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
@@ -2476,14 +2538,15 @@ function PersistedPostComposer(props: {
               timezone,
               blogMetadata: blogMetadataChanged
                 ? {
-                    blogExcerpt: blogExcerpt.trim() || undefined,
-                    blogAuthor: blogAuthor.trim() || undefined,
-                    blogCategory: blogCategory.trim() || undefined,
-                    blogTags: blogTags.length ? blogTags : undefined,
-                    blogSlug: blogSlug.trim() || undefined,
+                    blogExcerpt: blogExcerpt.trim(),
+                    blogAuthor: blogAuthor.trim(),
+                    blogCategory: blogCategory.trim(),
+                    blogTags: blogTags,
+                    blogSlug: blogSlug.trim(),
                     heroImageUrl:
                       heroImageUrl.trim() || resolvedHeroUrl || undefined,
                     heroImageStorageId,
+                    blogPublicationIntent, coverImageAlt,
                   }
                 : undefined,
             }); } catch (error) {

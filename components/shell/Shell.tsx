@@ -3,7 +3,7 @@ import { UserButton } from "@clerk/nextjs";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 
-export type WorkspaceSurface = "calendar" | "campaigns" | "research" | "connections";
+export type WorkspaceSurface = "calendar" | "queue" | "series" | "campaigns" | "research" | "connections";
 
 type ShellProps = {
   activeSurface: WorkspaceSurface;
@@ -40,6 +40,8 @@ export function Shell({ activeSurface, children }: ShellProps) {
             >
               Calendar
             </Link>
+            <Link href="/series" aria-current={activeSurface === "series" ? "page" : undefined} className={navLinkClass(activeSurface === "series")}>Series</Link>
+            <Link href="/queue" aria-current={activeSurface === "queue" ? "page" : undefined} className={navLinkClass(activeSurface === "queue")}>Queue</Link>
             <Link href="/ideas" className={navLinkClass(false)}>
               Ideas
             </Link>

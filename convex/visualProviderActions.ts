@@ -65,6 +65,11 @@ export const executeImageAttempt = action({
       // Read back stored bytes before completion; never label an unverified blob as a version.
       const stored = await ctx.storage.get(outputStorageId);
       if (!stored || (await verifyVisualOutput(new Uint8Array(await stored.arrayBuffer()), stored.type)).sha256 !== verified.sha256) throw new Error("Stored output verification failed");
+      const [requestedWidth, requestedHeight] = attempt.input.size.split("x").map(Number);
+      if (verified.width !== requestedWidth || verified.height !== requestedHeight || verified.contentType !== `image/${attempt.input.outputFormat}`) {
+        await ctx.runMutation(internal.visualWorkflow.markUncertain, { attemptId: attempt._id, claimKey: claim.claimKey, reason: "provider-output-contract-mismatch", outputStorageId, usageReceipt: usageReceipt! });
+        return { status: "uncertain", versionId: null, reason: "provider-output-contract-mismatch" };
+      }
       const cost = result.usage ? calculateVisualUsageCost(route.provider, result.usage, route.model) : null;
       if (cost === null) {
         await ctx.runMutation(internal.visualWorkflow.markUncertain, { attemptId: attempt._id, claimKey: claim.claimKey, reason: "provider-usage-unavailable", outputStorageId, usageReceipt: usageReceipt! });

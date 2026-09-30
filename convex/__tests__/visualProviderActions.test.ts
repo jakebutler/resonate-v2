@@ -113,8 +113,8 @@ async function queued() {
   });
   return { ...result, attemptId };
 }
-async function successResponse() {
-  const bytes = await sharp({ create: { width: 32, height: 24, channels: 3, background: "#123456" } }).webp().toBuffer();
+async function successResponse(width = 1536, height = 1024) {
+  const bytes = await sharp({ create: { width, height, channels: 3, background: "#123456" } }).webp().toBuffer();
   return new Response(JSON.stringify({ model: "gpt-image-2-2026-04-21", data: [{ b64_json: bytes.toString("base64"), revised_prompt: "Fictional raven repairs a gear" }], usage: { input_tokens_details: { text_tokens: 10, image_tokens: 20 }, output_tokens: 30 } }), { status: 200, headers: { "x-request-id": "req_fictional" } });
 }
 describe("actual server image execution (SPECULATIVE offline contract doubles)", () => {
@@ -126,7 +126,7 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
   });
   it("schedules one automatic reflection for a newly approved real edited lineage and does not duplicate it on repeated approval", async () => {
     const { t, user, postId, attemptId } = await queued(); await reviewedTestRoute(t);
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(successResponse));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => successResponse()));
     await user.action(api.visualProviderActions.executeImageAttempt, { attemptId });
     const editId = await user.mutation(api.visualWorkflow.requestEdit, { postId, operationKey: "scheduled-reflection-edit", feedback: "Move the raven closer to the gear." });
     const edited = await user.action(api.visualProviderActions.executeImageAttempt, { attemptId: editId });
@@ -193,7 +193,7 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
   it("sends actual ordered identity references for generation, then selected parent first followed by the same reference", async () => {
     const { t, user, postId, referenceId } = await selectedPlan(true);
     await user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1_000_000 }); await reviewedTestRoute(t);
-    const fetchMock = vi.fn().mockImplementation(successResponse); vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = vi.fn().mockImplementation(() => successResponse()); vi.stubGlobal("fetch", fetchMock);
     const attemptId = await user.mutation(api.visualWorkflow.requestGeneration, { postId, operationKey: "owned-ref", providerOverride: "openai" });
     expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toMatchObject({ status: "completed" });
     const form = fetchMock.mock.calls[0][1].body as FormData;
@@ -220,7 +220,7 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
     expect(await t.run(ctx => ctx.db.query("v2VisualProviderAllowances").first())).toMatchObject({ reservedMicros: 0, spentMicros: 500 });
     const raw = await t.run(ctx => ctx.db.get(attemptId));
     const bytes = Buffer.from(await t.run(async ctx => (await ctx.storage.get(raw!.pendingOutputStorageId!))!.arrayBuffer()));
-    const completion = { attemptId, claimKey: raw!.claimKey, storageId: raw!.pendingOutputStorageId, sha256: createHash("sha256").update(bytes).digest("hex"), contentType: "image/webp", width: 32, height: 24, bytes: bytes.length, actualMicros: 1110, usageKind: "estimated", usageReceipt: "SPECULATIVE late trusted usage" };
+    const completion = { attemptId, claimKey: raw!.claimKey, storageId: raw!.pendingOutputStorageId, sha256: createHash("sha256").update(bytes).digest("hex"), contentType: "image/webp", width: 1536, height: 1024, bytes: bytes.length, actualMicros: 1110, usageKind: "estimated", usageReceipt: "SPECULATIVE late trusted usage" };
     expect(await t.mutation(api.visualWorkflow.completeImage, completion)).toBeNull();
     expect(await t.mutation(api.visualWorkflow.completeImage, completion)).toBeNull();
     expect(await t.run(ctx => ctx.db.query("v2VisualProviderAllowances").first())).toMatchObject({ reservedMicros: 0, spentMicros: 1110 });
@@ -240,7 +240,7 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
   });
   it("permits one dispatch under concurrent public action calls and blocks subsequent replay", async () => {
     const { t, user, attemptId } = await queued(); await reviewedTestRoute(t);
-    const fetchMock = vi.fn().mockImplementation(successResponse); vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = vi.fn().mockImplementation(() => successResponse()); vi.stubGlobal("fetch", fetchMock);
     const results = await Promise.all([user.action(api.visualProviderActions.executeImageAttempt, { attemptId }), user.action(api.visualProviderActions.executeImageAttempt, { attemptId })]);
     expect(results.filter(r => r.status === "completed")).toHaveLength(1); expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toMatchObject({ status: "blocked" });
@@ -262,7 +262,7 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
   });
   it("denies anonymous/foreign callers and substituted pinned parent bytes before HTTP", async () => {
     const { t, user, postId, attemptId } = await queued(); await reviewedTestRoute(t);
-    const fetchMock = vi.fn().mockImplementation(successResponse); vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = vi.fn().mockImplementation(() => successResponse()); vi.stubGlobal("fetch", fetchMock);
     await expect(t.action(api.visualProviderActions.executeImageAttempt, { attemptId })).rejects.toThrow("Unauthorized");
     await expect(t.withIdentity({ subject: "intruder" }).action(api.visualProviderActions.executeImageAttempt, { attemptId })).rejects.toThrow("Attempt not found"); expect(fetchMock).not.toHaveBeenCalled();
     await user.action(api.visualProviderActions.executeImageAttempt, { attemptId });
@@ -274,7 +274,7 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
     const { t, user, postId, attemptId } = await queued();
     await t.mutation(api.visualProviderConfig.registerReviewedImageRoute, { provider: "openai", model: "gpt-image-2", apiModelId: "gpt-image-2-2026-04-21", operations: ["generate"], referenceInputs: true, maxInputImages: 16, size: "1536x1024", outputFormat: "webp", quality: "medium", maximumMicros: 100000, maxPromptBytes: 100000, maxInputBytes: 20*1024*1024, capabilityReceiptIds: [], boundReceiptId: "SPECULATIVE-probe-bound", reviewedBy: "offline tester", provenance: "SPECULATIVE PROBE PACKET ONLY", expiresAt: Date.now()+60000, qualification: "qualification-probe", operatorUserId: "author", probeAttemptId: attemptId, reviewedPacketId: "SPECULATIVE-exact-packet" });
     expect(await user.query(api.visualProviderConfig.getAvailability, { postId })).toMatchObject({ imageRoutes: [] });
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(successResponse));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => successResponse()));
     expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toMatchObject({ status: "completed" });
     const saved = await user.query(api.visualWorkflow.get, { postId }); const attempt = saved.attempts.find((a: { _id: string }) => a._id === attemptId);
     expect(JSON.parse(attempt.usageReceipt)).toMatchObject({ evidence: "authorized-probe", qualifiesRoute: false });
@@ -310,6 +310,45 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
     expect(Buffer.from(await (form.getAll("image[]")[0] as Blob).arrayBuffer())).toEqual(Buffer.from(await result.t.run(async ctx => (await ctx.storage.get(saved.versions[1].storageId))!.arrayBuffer())));
   });
 
+  it("refuses a redirect at the public dispatch boundary and holds the reservation without a second destination request", async () => {
+    const { t, user, postId, attemptId } = await queued(); await reviewedTestRoute(t);
+    let redirectedRequests = 0;
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      if (init.redirect === "error") throw new TypeError("SPECULATIVE redirect rejected");
+      redirectedRequests++;
+      return successResponse();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toMatchObject({ status: "uncertain", reason: "provider-transport-uncertain" });
+    expect(redirectedRequests).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].redirect).toBe("error");
+    const saved = await user.query(api.visualWorkflow.get, { postId });
+    expect(saved.versions).toHaveLength(0);
+    expect(saved.month.reservedMicros).toBe(100000);
+    expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toMatchObject({ status: "blocked" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains a decoded output with wrong requested dimensions as uncertain without creating a selectable version or retry", async () => {
+    const { t, user, postId, attemptId } = await queued();
+    await reviewedTestRoute(t);
+    const fetchMock = vi.fn().mockResolvedValue(await successResponse(32, 24)); vi.stubGlobal("fetch", fetchMock);
+    const result = await user.action(api.visualProviderActions.executeImageAttempt, { attemptId });
+    expect(result).toMatchObject({ status: "uncertain", versionId: null, reason: "provider-output-contract-mismatch" });
+    const saved = await user.query(api.visualWorkflow.get, { postId });
+    expect(saved.versions).toHaveLength(0);
+    const raw = await t.run(ctx => ctx.db.get(attemptId));
+    expect(raw).toMatchObject({ status: "uncertain", reservedMicros: 100000, providerAllowanceReserved: true });
+    expect(raw!.pendingOutputStorageId).toBeDefined();
+    const bytes = await t.run(async ctx => Array.from(new Uint8Array(await (await ctx.storage.get(raw!.pendingOutputStorageId!))!.arrayBuffer())));
+    expect(await sharp(Buffer.from(bytes)).metadata()).toMatchObject({ width: 32, height: 24, format: "webp" });
+    expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toMatchObject({ status: "blocked" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const allowance = await t.run(ctx => ctx.db.query("v2VisualProviderAllowances").first());
+    expect(allowance).toMatchObject({ reservedMicros: 100000, spentMicros: 0 });
+  });
+
   it("executes the public action once and persists decoded image bytes, lineage and usage", async () => {
     const { t, user, postId, attemptId } = await queued();
     await reviewedTestRoute(t);
@@ -319,7 +358,7 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
     expect(result).toMatchObject({ status: "completed", reason: null });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const saved = await user.query(api.visualWorkflow.get, { postId });
-    expect(saved.versions[0]).toMatchObject({ _id: result.versionId, width: 32, height: 24, provider: "openai", model: "gpt-image-2", parentVersionId: null });
+    expect(saved.versions[0]).toMatchObject({ _id: result.versionId, width: 1536, height: 1024, provider: "openai", model: "gpt-image-2", parentVersionId: null });
     expect(saved.attempts.find((a: { _id: string }) => a._id === attemptId)).toMatchObject({ status: "completed", estimatedActualMicros: 1110 });
     expect(saved.month.reservedMicros).toBe(0);
   });

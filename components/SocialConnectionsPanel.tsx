@@ -1,5 +1,6 @@
 "use client";
 
+import { BufferConnections } from "./BufferDestinationPanel";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Link2, CheckCircle2, XCircle } from "lucide-react";
 
@@ -113,7 +114,7 @@ export function SocialConnectionsPanel() {
         </p>
       )}
 
-      <div className="mt-4 space-y-3">
+      <div className="mt-4 space-y-3"><BufferConnections/>
         {(data?.platforms ?? []).map((platform) => {
           const hints = platform.ok
             ? []

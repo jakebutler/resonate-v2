@@ -31,7 +31,7 @@ async function setup(brandId: "corvo" | "lower-db" = "corvo") {
   };
   await user.mutation(api.publishing.seedMvpWorkspace, {});
   const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId, channelId: "corvo-blog", ...article, timezone: "UTC", scheduledDate: "2026-10-01" });
-  await user.mutation(api.publishing.updateBlogMetadata, { postId, metadata: { blogSlug: "review-fictional-schedule",blogTags:["fictional"],blogExcerpt:"Fictional inspection workflow for independent review.",blogAuthor:"Fictional Reviewer" } });
+  await user.mutation(api.publishing.updateBlogMetadata, { postId, metadata: { blogSlug: "review-fictional-schedule",blogTags:["fictional"],blogExcerpt:"Fictional inspection workflow for independent review.",blogAuthor:"Fictional Reviewer",blogCategory:"Fictional Category" } });
   return { t, user, postId };
 }
 
@@ -216,9 +216,10 @@ it.each(["open", "draft", "closed"] as const)("keeps recorded %s PR identity aut
   await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved", expectedArticleSignature: review.articleSignature, expectedVisualSignature: review.visualSignature });
   const sent = await user.query(api.publishing.getPostForPublication, { postId });
   const prUrl = "https://github.com/fictional-owner/fictional-reader/pull/123456";
+  await user.mutation(api.publishing.claimBlogExport, { postId, fingerprint: sent.post.contentFingerprint, schedule: JSON.stringify([sent.post.scheduledDate, sent.post.scheduledTime, sent.post.timezone]), key: "SPECULATIVE-recorded-pr-export-claim", expectedVisualSignature: sent.reviewSignature, expectedIntentId: sent.intent._id, expectedSchedule: resolvePublicationSchedule(sent.post, sent.intent, "2026-10-01") });
   await user.mutation(api.publishing.recordVisualPublicationPr, {
     postId, expectedArticleSignature: approvalArticleSignature(sent.post), expectedVisualSignature: sent.reviewSignature, expectedIntentId: sent.intent._id, expectedSchedule: resolvePublicationSchedule(sent.post, sent.intent, "2026-10-01"),
-    result: { prUrl, branchName: "blog/fictional-recorded", prNumber: 123456, prStatus: "open", sanitizedResponse: {} },
+    result: { artifact: { repository: "fictional-owner/fictional-reader", branchName: "blog/fictional-recorded", prNumber: 123456, mdxPath: "apps/blog/blog/2026-10-01-review-fictional-schedule.mdx", canonicalUrl: "https://fictional-reader.invalid/blog/review-fictional-schedule", editorialFingerprint: sent.post.contentFingerprint }, exportClaimKey: "SPECULATIVE-recorded-pr-export-claim", prUrl, branchName: "blog/fictional-recorded", prNumber: 123456, prStatus: "open", sanitizedResponse: {} },
   });
   await user.mutation(api.publishing.recordVisualPublicationPrStatus, { postId, expectedPrUrl: prUrl, prStatus, prNumber: 123456 });
   await t.run(async ctx => { for (const state of await ctx.db.query("v2ProviderStates").collect()) await ctx.db.delete(state._id); });
@@ -259,4 +260,24 @@ it.each(["prUrl", "branchName", "blogPrStatus"] as const)("keeps historical part
   await expect(user.mutation(api.visualLinkedEvidence.importLinkedEvidence, { postId, expectedSnapshotHash: "a".repeat(64), expectedSourceId: null })).rejects.toThrow("Separate publishing transition");
   expect(await user.query(api.publishing.getPostById, { postId })).toEqual(before);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+
+it("atomically pins the exact visual snapshot before export and freezes authoring while retaining readable reconciliation", async () => {
+  const { user, postId } = await approvedEdited();
+  const review = await user.query(api.publishing.getApprovalReview, { postId });
+  await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved", expectedArticleSignature: review.articleSignature, expectedVisualSignature: review.visualSignature });
+  const sent = await user.query(api.publishing.getPostForPublication, { postId });
+  const base = { postId, fingerprint: sent.post.contentFingerprint, schedule: JSON.stringify([sent.post.scheduledDate, sent.post.scheduledTime, sent.post.timezone]), key: "SPECULATIVE-exact-claim" };
+  await expect(user.mutation(api.publishing.claimBlogExport, base)).rejects.toThrow("Reviewed visuals changed");
+  const pins = { expectedVisualSignature: sent.reviewSignature, expectedIntentId: sent.intent._id, expectedSchedule: resolvePublicationSchedule(sent.post, sent.intent, "2026-10-01") };
+  await expect(user.mutation(api.publishing.claimBlogExport, { ...base, ...pins, expectedVisualSignature: "stale visual snapshot" })).rejects.toThrow("Reviewed visuals changed");
+  await expect(user.mutation(api.publishing.claimBlogExport, { ...base, ...pins, expectedSchedule: { ...pins.expectedSchedule, scheduledDate: "2026-10-02" } })).rejects.toThrow("intent or schedule changed");
+  expect((await user.query(api.publishing.getPostById, { postId })).blogExportClaimKey).toBeUndefined();
+  expect(await user.mutation(api.publishing.claimBlogExport, { ...base, ...pins })).toBe(base.key);
+  expect(await user.mutation(api.publishing.claimBlogExport, { ...base, ...pins })).toBe(base.key);
+  expect((await user.query(api.publishing.getPostForPublication, { postId })).reviewSignature).toBe(sent.reviewSignature);
+  expect((await user.query(api.publishing.getApprovalReview, { postId })).blockedReason).toContain("export is pending");
+  await expect(user.mutation(api.visualWorkflow.requestGeneration, { postId, operationKey: "claim-authoring-denied" })).rejects.toThrow("Separate publishing transition");
+  await expect(user.mutation(api.publishing.setApproval, { postId, approvalState: "approved", expectedArticleSignature: review.articleSignature, expectedVisualSignature: review.visualSignature })).rejects.toThrow("export is pending");
 });

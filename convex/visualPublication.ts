@@ -5,6 +5,8 @@ import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { requireUserId } from "./campaignAccess";
+import { blogArtifactValidator } from "./blogValidators";
+import { blogEditorialFingerprint } from "../lib/blogContract";
 import { assertVisualAdmissionEnabled } from "./visualRollout";
 import { resolvePublicationSchedule } from "../lib/publicationReview";
 import { createBlogPostPR, fetchBlogPrStatus, prepareBlogPublication, type BlogPublicationParams, type BlogPrStatus } from "../lib/github";
@@ -13,6 +15,7 @@ const sanitizedResponseValidator = v.object({
   repo: v.string(), prUrl: v.string(), branchName: v.string(), number: v.optional(v.number()), state: v.optional(v.string()),
   scheduleTrigger: v.union(v.literal("frontmatter"), v.literal("pr-body")), scheduledDate: v.string(),
   scheduledTime: v.optional(v.string()), timezone: v.optional(v.string()),
+  artifact: v.optional(blogArtifactValidator),
 });
 type CreatedPr = Awaited<ReturnType<typeof createBlogPostPR>> & { recorded: true };
 const prStatusValidator = v.union(v.literal("open"), v.literal("merged"), v.literal("closed"), v.literal("draft"));
@@ -26,6 +29,7 @@ export const createPr = action({
     const snapshot = await ctx.runQuery(api.publishing.getPostForPublication, { postId: args.postId });
     assertVisualAdmissionEnabled(userId);
     const { post, intent } = snapshot;
+    if (!post.blogPublicationIntent) throw new Error("Review and save the article publication intent before export");
     const hero = snapshot.visuals?.hero;
     if (!hero) throw new Error("Approve a prepared hero before creating a visual publication PR");
     if (hero.qualification === "qualification-probe") throw new Error("Qualification probe images cannot be published");
@@ -40,8 +44,9 @@ export const createPr = action({
     const dispatchSchedule = resolvePublicationSchedule(post, intent, new Date().toISOString().slice(0, 10));
     const params: BlogPublicationParams = {
       postId: post._id, title: post.title, content: post.content, linkedinFirstComment: post.linkedinFirstComment,
+      exportIdentity: String(post._id), editorialFingerprint: blogEditorialFingerprint(post),
       ...dispatchSchedule,
-      scheduleTrigger: "pr-body", status: "draft", featured: false,
+      scheduleTrigger: "pr-body", status: post.blogPublicationIntent, featured: false,
       excerpt: post.blogExcerpt, author: post.blogAuthor, tags: post.blogTags, category: post.blogCategory, slug: post.blogSlug,
       coverImageAlt: hero.alt,
       images: [{ sourceUrl: hero.url, alt: hero.alt, isCover: true, export: {
@@ -56,10 +61,18 @@ export const createPr = action({
     };
     // Validate actual bytes and all provenance before the transport can create a branch.
     await prepareBlogPublication(params);
+    const schedule = JSON.stringify([post.scheduledDate, post.scheduledTime, post.timezone]);
+    const key = createHash("sha256").update(JSON.stringify([post._id, params.editorialFingerprint, snapshot.reviewSignature, intent._id, dispatchSchedule])).digest("hex");
+    await ctx.runMutation(api.publishing.claimBlogExport, {
+      postId: post._id, fingerprint: params.editorialFingerprint!, schedule, key,
+      expectedVisualSignature: snapshot.reviewSignature, expectedIntentId: intent._id, expectedSchedule: dispatchSchedule,
+    });
     const result = await createBlogPostPR(params);
     try {
       await ctx.runMutation(internal.publishing.recordVisualPublicationPr, {
-        postId: args.postId, result: { ...result, prStatus: "open", ...(result.sanitizedResponse.number === undefined ? {} : { prNumber: result.sanitizedResponse.number }) },
+        postId: args.postId, result: { ...result, exportClaimKey: key,
+          ...(result.sanitizedResponse.artifact ? { artifact: result.sanitizedResponse.artifact } : {}),
+          prStatus: "open", ...(result.sanitizedResponse.number === undefined ? {} : { prNumber: result.sanitizedResponse.number }) },
         expectedArticleSignature: JSON.stringify({ title: post.title, content: post.content, linkedinFirstComment: post.linkedinFirstComment ?? "" }),
         expectedVisualSignature: snapshot.reviewSignature,
         expectedIntentId: intent._id, expectedSchedule: dispatchSchedule,

@@ -2,6 +2,8 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
+import sharp from "sharp";
+import type { Id } from "../_generated/dataModel";
 import { api } from "../_generated/api";
 import { anyApi } from "convex/server";
 import { approvalArticleSignature, resolvePublicationSchedule } from "../../lib/publicationReview";
@@ -9,6 +11,19 @@ import { approvalArticleSignature, resolvePublicationSchedule } from "../../lib/
 const modules = import.meta.glob("../**/*.ts");
 beforeEach(() => { vi.stubEnv("BLOG_REPO_OWNER", "fictional-owner"); vi.stubEnv("BLOG_REPO_NAME", "fictional-reader"); });
 afterEach(() => { vi.unstubAllEnvs(); });
+
+// Genuine owned bytes and crop receipts through the same public interfaces as the composer.
+// Synthetic editorial content; no provider calls or live qualification.
+async function prepareOwnedBlogFixture(t: ReturnType<typeof convexTest>, user: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>, postId: Id<"v2Posts">) {
+  const post = await user.query(api.publishing.getPostById, { postId });
+  if (post?.channelId !== "corvo-blog") return;
+  const bytes = await sharp({ create: { width: 1536, height: 1024, channels: 3, background: "#345678" } }).png().toBuffer();
+  const { storageId } = await user.action(api.v2Storage.uploadImage, { brandId: "corvo", bytes: Uint8Array.from(bytes).buffer, contentType: "image/png", fileName: "SPECULATIVE-integration-source.png" });
+  await user.mutation(api.publishing.updateBlogMetadata, { postId, metadata: { blogExcerpt: "Fictional reviewed excerpt", blogAuthor: "Fictional editor", blogCategory: "Fictional category", blogTags: ["fictional"], blogPublicationIntent: "draft", coverImageAlt: "Fictional manually reviewed gear", blogSlug: "fictional-owned-integration", heroImageStorageId: storageId } });
+  await user.action(api.blogHero.prepare, { postId, crop: "centre" });
+  expect((await user.query(api.publishing.getPostById, { postId }))?.preparedHero).toMatchObject({ width: 1600, height: 900, mimeType: "image/webp" });
+  expect(await t.run(ctx => ctx.db.query("v2StorageUploads").withIndex("by_storageId", q => q.eq("storageId", storageId)).unique())).toMatchObject({ userId: "fixture-author", brandId: "corvo" });
+}
 
 describe("final post approval with editorial visuals", () => {
   it("asks an older composer to reload before new uploads without creating storage or changing saved content", async () => {
@@ -99,6 +114,7 @@ describe("final post approval with editorial visuals", () => {
     const user = t.withIdentity({ subject: "fixture-author" });
     await user.mutation(api.publishing.seedMvpWorkspace, {});
     const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Fictional dispatch schedule", content: "Fictional saved body.", scheduledDate: "2026-10-01", scheduledTime: "09:30", timezone: "UTC" });
+    await prepareOwnedBlogFixture(t, user, postId);
     await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
     const sent = await user.query(api.publishing.getPostForPublication, { postId });
     await user.mutation(api.publishing.reschedule, { postId, scheduledDate: "2026-10-02", scheduledTime: "12:30", timezone: "America/Los_Angeles" });
@@ -120,6 +136,7 @@ describe("final post approval with editorial visuals", () => {
     const user = t.withIdentity({ subject: "fixture-author" });
     await user.mutation(api.publishing.seedMvpWorkspace, {});
     const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Fictional dispatch context", content: "Fictional saved body.", scheduledDate: "2026-10-01", scheduledTime: "09:30", timezone: "UTC" });
+    await prepareOwnedBlogFixture(t, user, postId);
     await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
     const sent = await user.query(api.publishing.getPostForPublication, { postId });
     if (change === "intent") {
@@ -144,13 +161,16 @@ describe("final post approval with editorial visuals", () => {
     const user = t.withIdentity({ subject: "fixture-author" });
     await user.mutation(api.publishing.seedMvpWorkspace, {});
     const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Fictional unscheduled dispatch", content: "Fictional saved body." });
+    await prepareOwnedBlogFixture(t, user, postId);
     await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
     const sent = await user.query(api.publishing.getPostForPublication, { postId });
     const expectedSchedule = resolvePublicationSchedule(sent.post, sent.intent, "2026-10-01");
+    const exportClaimKey = "SPECULATIVE-fallback-export-claim";
+    await user.mutation(api.publishing.claimBlogExport, { postId, fingerprint: sent.post.contentFingerprint, schedule: JSON.stringify([sent.post.scheduledDate, sent.post.scheduledTime, sent.post.timezone]), key: exportClaimKey });
     const result = await user.mutation(anyApi.publishing.recordVisualPublicationPr, {
       postId, expectedArticleSignature: approvalArticleSignature(sent.post), expectedVisualSignature: sent.reviewSignature,
       expectedIntentId: sent.intent._id, expectedSchedule,
-      result: { prUrl: "https://github.com/fictional-owner/fictional-reader/pull/987654", branchName: "blog/fictional-fallback", prStatus: "open", sanitizedResponse: expectedSchedule },
+      result: { exportClaimKey, artifact: { repository: "fictional-owner/fictional-reader", prNumber: 987654, branchName: "blog/fictional-fallback", mdxPath: "apps/blog/blog/2026-10-01-fictional-owned-integration.mdx", canonicalUrl: "https://fictional-reader.invalid/blog/2026-10-01-fictional-owned-integration", editorialFingerprint: sent.post.contentFingerprint }, prUrl: "https://github.com/fictional-owner/fictional-reader/pull/987654", branchName: "blog/fictional-fallback", prNumber: 987654, prStatus: "open", sanitizedResponse: expectedSchedule },
     });
     const attempt = await t.run(ctx => ctx.db.get(result.attemptId));
     expect(attempt?.submissionSnapshot).toMatchObject(expectedSchedule);
@@ -184,6 +204,7 @@ describe("final post approval with editorial visuals", () => {
     expect(await user.query(api.publishing.getApprovalReview, { postId })).toMatchObject({ hasVisuals: false, publicationQualified: true, blockedReason: null });
     await user.mutation(api.visualFigures.declineCandidate, { candidateId: planned.candidateIds[0] });
     expect(await user.query(api.publishing.getApprovalReview, { postId })).toMatchObject({ hasVisuals: false, publicationQualified: true, blockedReason: null });
+    await prepareOwnedBlogFixture(t, user, postId);
     await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
     expect((await user.query(api.publishing.getPostForPublication, { postId })).figures).toEqual([]);
   });
@@ -225,6 +246,7 @@ describe("final post approval with editorial visuals", () => {
     const user = t.withIdentity({ subject: "fixture-author" });
     await user.mutation(api.publishing.seedMvpWorkspace, {});
     const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Role fixture", content: "Fictional draft." });
+    await prepareOwnedBlogFixture(t, user, postId);
     await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
     await t.run(async ctx => {
       const membership = (await ctx.db.query("v2BrandMemberships").withIndex("by_user_and_brand", q => q.eq("userId", "fixture-author").eq("brandId", "corvo")).unique())!;
@@ -232,7 +254,7 @@ describe("final post approval with editorial visuals", () => {
     });
     expect((await user.query(api.publishing.getPostById, { postId }))?.title).toBe("Role fixture");
     await expect(user.query(api.publishing.getPostForPublication, { postId })).rejects.toThrow("Publishing requires an owner or editor");
-    await expect(user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" })).rejects.toThrow("Publishing requires an owner or editor");
+    await expect(user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" })).rejects.toThrow("Editor access required");
     await expect(user.mutation(api.publishing.updateContent, { postId, content: "Unauthorized edit." })).rejects.toThrow("Publishing requires an owner or editor");
     await expect(user.mutation(api.publishing.updateBlogMetadata, { postId, metadata: { blogAuthor: "Unauthorized author" } })).rejects.toThrow("Publishing requires an owner or editor");
     expect((await user.query(api.publishing.getPostById, { postId }))?.approvalState).toBe("approved");
@@ -304,6 +326,7 @@ describe("final post approval with editorial visuals", () => {
     const user = t.withIdentity({ subject: "fixture-author" });
     await user.mutation(api.publishing.seedMvpWorkspace, {});
     const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Legacy fixture", content: "Fictional draft." });
+    await prepareOwnedBlogFixture(t, user, postId);
     await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
     const snapshot = await user.query(api.publishing.getPostForPublication, { postId });
     expect(snapshot.post).toMatchObject({ _id: postId, title: "Legacy fixture", approvalState: "approved" });
@@ -330,6 +353,7 @@ describe("final post approval with editorial visuals", () => {
     const user = t.withIdentity({ subject: "fixture-author" });
     await user.mutation(api.publishing.seedMvpWorkspace, {});
     const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "linkedin", title: "Social fixture", content: "Fictional post." });
+    await prepareOwnedBlogFixture(t, user, postId);
     await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
     await expect(user.query(api.publishing.getPostForPublication, { postId })).rejects.toThrow("Only blog posts can create publication packages");
   });

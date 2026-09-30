@@ -11,7 +11,12 @@ const FixtureTokenUrl = createContext<string | undefined>(undefined);
 function useE2EBypassAuth() {
   const tokenUrl = useContext(FixtureTokenUrl);
   const fetchAccessToken = useCallback(async () => {
-    if (!tokenUrl) return null;
+    if (!tokenUrl) {
+      // The unsigned token is used only by intercepted .test WebSockets.
+      if (process.env.NEXT_PUBLIC_CONVEX_URL !== "https://convex.test") return null;
+      const now = Math.floor(Date.now() / 1000);
+      return `${btoa('{"alg":"none"}')}.${btoa(JSON.stringify({sub:"fixture-editor",iat:now,exp:now+3600}))}.fixture`;
+    }
     try {
       const response = await fetch(tokenUrl, { cache: "no-store", credentials: "omit", redirect: "error" });
       if (!response.ok) return null;
@@ -20,6 +25,7 @@ function useE2EBypassAuth() {
       return body.token;
     } catch { return null; }
   }, [tokenUrl]);
+
   return useMemo(
     () => ({
       isLoading: false,

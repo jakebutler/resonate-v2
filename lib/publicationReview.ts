@@ -8,8 +8,8 @@ export const publicationMetadataSignature = (post: ReviewedPost) => JSON.stringi
 
 type ScheduledPublication = { scheduledDate?: string; scheduledTime?: string; timezone?: string };
 /** Legacy date/metadata edits cannot erase an already recorded publication identity. */
-export function publicationTransitionRequired(post: { status: string; prUrl?: string; branchName?: string; blogPrStatus?: string }) {
-  return ["pr-created", "submitted", "published", "unavailable"].includes(post.status) || Boolean(post.prUrl || post.branchName || post.blogPrStatus);
+export function publicationTransitionRequired(post: { status: string; prUrl?: string; branchName?: string; blogPrStatus?: string; blogExportClaimKey?: string }) {
+  return ["pr-created", "submitted", "published", "unavailable"].includes(post.status) || Boolean(post.prUrl || post.branchName || post.blogPrStatus || post.blogExportClaimKey);
 }
 /** Dispatch consistency is separate from editorial approval, which survives date-only changes. */
 export function resolvePublicationSchedule(post: ScheduledPublication, intent: ScheduledPublication, fallbackDate: string) {

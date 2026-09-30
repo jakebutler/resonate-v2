@@ -1,0 +1,11 @@
+"use client";
+import {useState} from "react";
+import {useAction,useQuery} from "convex/react";
+import {api} from "@/convex/_generated/api";
+import type {Doc,Id} from "@/convex/_generated/dataModel";
+import {STATUS_LABELS,type PostStatus} from "@/lib/domain";
+export function DeliveryReceiptPanel({postId}:{postId:Id<"v2Posts">}){
+ const result=useQuery(api.bufferDelivery.history,{postId}) as {state:Doc<"v2ProviderStates">|null;receipts:Doc<"v2AuditEvents">[];attempt?:Doc<"v2PublishAttempts">|null}|undefined;const refresh=useAction(api.bufferLive.refreshStatus);const [message,setMessage]=useState("");const [busy,setBusy]=useState(false);const s=result?.state;
+ if(!s||s.providerId!=="buffer"||s.simulated===true)return null;
+ return <section aria-label="Delivery receipt" className="space-y-2 rounded border p-3 text-sm"><h3 className="font-semibold">Delivery: {STATUS_LABELS[s.status as PostStatus]??s.status}</h3><p>Last checked: {s.lastCheckedAt?new Date(s.lastCheckedAt).toLocaleString():"Unverified"} · due UTC {s.dueAt??"Unverified"}</p>{s.destination&&<p>{s.destination.displayName} · {s.destination.accountType} · {s.destination.channelId}</p>}{s.publishedAt&&<p>Published: {s.publishedAt}</p>}{s.publishedUrl&&<a className="underline" href={s.publishedUrl} target="_blank" rel="noreferrer">Published post</a>}{s.lastReadError&&<p>{s.lastReadError}</p>}<button disabled={busy} onClick={async()=>{setBusy(true);try{const response=await refresh({postId});setMessage(response.reason??(response.updated?"Receipt refreshed":"Receipt retained; check was unverified or stale."));}catch{setMessage("Refresh failed; prior delivery receipt retained.");}finally{setBusy(false);}}}>Refresh delivery status</button>{message&&<p role="status">{message}</p>}<details><summary>Submitted version</summary><pre className="whitespace-pre-wrap">{result?.attempt?JSON.stringify(result.attempt.submissionSnapshot,null,2):"Legacy submitted copy is unverified; consult the recorded receipt."}</pre></details><details><summary>Sanitized receipt history</summary><ol>{result?.receipts.filter(e=>e.action.startsWith("provider.")).map(e=><li className="border-t py-2" key={e._id}><p>{new Date(e.createdAt).toLocaleString()} — {e.summary}</p><pre className="overflow-auto text-xs">{JSON.stringify(e.metadata,null,2)}</pre></li>)}</ol></details></section>;
+}

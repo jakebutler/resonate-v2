@@ -8,10 +8,11 @@ import { v } from "convex/values";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
 import { api } from "../_generated/api";
-import { query, internalMutation } from "../_generated/server";
+import { query, mutation, internalMutation } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { requireUserId } from "../campaignAccess";
 import { fingerprintPostContent } from "../../lib/domain";
+import { blogEditorialFingerprint } from "../../lib/blogContract";
 import { assertFigureInsertionAnchor, buildFigureMarkdownBlock, figureSignatures, planFigureCandidates } from "../../lib/visualFigures";
 
 const transport = vi.hoisted(() => ({ create: vi.fn(), refresh: vi.fn() }));
@@ -26,6 +27,7 @@ const OWNER = { subject: "publication-owner" };
 type Snapshot = FunctionReturnType<typeof api.publishing.getPostForPublication>;
 async function harness() {
   const records: unknown[] = [];
+  const claims: unknown[] = [];
   const statusRecords: unknown[] = [];
   const reads: string[] = [];
   let recordingError: string | null = null;
@@ -35,6 +37,9 @@ async function harness() {
   const t = convexTest(schema, { ...modules, "../publishing.ts": async () => ({
     getPostForPublication: query({ args: { postId: v.string() }, returns: v.any(), handler: async (ctx, args) => {
       await owned(ctx); if (args.postId !== snapshot.post._id) throw new Error("Post not found"); reads.push(args.postId); return snapshot;
+    } }),
+    claimBlogExport: mutation({ args: { postId: v.id("v2Posts"), fingerprint: v.string(), schedule: v.string(), key: v.string(), expectedVisualSignature: v.string(), expectedIntentId: v.id("v2PublishingIntents"), expectedSchedule: v.object({ scheduledDate: v.string(), scheduledTime: v.optional(v.string()), timezone: v.string() }) }, returns: v.string(), handler: async (ctx, args) => {
+      await owned(ctx); claims.push(args); return args.key;
     } }),
     recordVisualPublicationPr: internalMutation({ args: { postId: v.id("v2Posts"), result: v.any(), expectedArticleSignature: v.string(), expectedVisualSignature: v.string(), expectedIntentId: v.id("v2PublishingIntents"), expectedSchedule: v.object({ scheduledDate: v.string(), scheduledTime: v.optional(v.string()), timezone: v.string() }) }, returns: v.any(), handler: async (ctx, args) => {
       await owned(ctx); records.push(args); if (recordingError) throw new Error(recordingError); return { recorded: true, attemptId: "retained-attempt" };
@@ -48,7 +53,7 @@ async function harness() {
   }) });
   const bytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2e5b60" } }).webp().toBuffer();
   const snapshot: Snapshot = await t.run(async ctx => {
-    const postId = await ctx.db.insert("v2Posts", { userId: OWNER.subject, brandId: "corvo", channelId: "corvo-blog", platformId: "corvo-blog", title: "Fictional publication inspection", content: "A fictional raven checks a gear.", status: "draft", approvalState: "approved", scheduledDate: "2026-10-03", scheduledTime: "09:15", timezone: "America/Los_Angeles", blogExcerpt: "Saved excerpt", blogAuthor: "Saved author", blogCategory: "Saved category", blogTags: ["Saved tag"], blogSlug: "fictional-inspection", contentFingerprint: "fixture", createdAt: 1, updatedAt: 1 });
+    const postId = await ctx.db.insert("v2Posts", { userId: OWNER.subject, brandId: "corvo", channelId: "corvo-blog", platformId: "corvo-blog", title: "Fictional publication inspection", content: "A fictional raven checks a gear.", status: "draft", approvalState: "approved", scheduledDate: "2026-10-04", scheduledTime: "10:30", timezone: "UTC", blogExcerpt: "Saved excerpt", blogAuthor: "Saved author", blogCategory: "strategy", blogPublicationIntent: "draft", blogTags: ["Saved tag"], blogSlug: "fictional-inspection", contentFingerprint: "fixture", createdAt: 1, updatedAt: 1 });
     const post = (await ctx.db.get(postId))!;
     const intentId = await ctx.db.insert("v2PublishingIntents", { postId, userId: OWNER.subject, brandId: "corvo", channelId: "corvo-blog", platformId: "corvo-blog", scheduledDate: "2026-10-04", scheduledTime: "10:30", timezone: "UTC", approvalState: "approved", contentFingerprint: fingerprintPostContent(post), createdAt: 1, updatedAt: 1 });
     const storageId = await ctx.storage.store(new Blob([Uint8Array.from(bytes).buffer], { type: "image/webp" }));
@@ -56,7 +61,7 @@ async function harness() {
       articleSignature: "reviewed-article-signature", hero: { versionId: "trusted-query-hero" as Id<"v2VisualVersions">, storageId, sha256: createHash("sha256").update(bytes).digest("hex"), alt: "A fictional raven checking a gear", metadata: { width: 1600, height: 900, bytes: bytes.length, format: "webp", crop: "reviewed crop" }, approvedBy: OWNER.subject, approvedAt: 1, provider: "offline-fixture", model: "offline-fixture", quoteProvenance: "LOCAL OFFLINE FIXTURE", qualification: "offline-fixture", url: "https://owned-storage.invalid/hero" },
     } };
   });
-  return { t, user: t.withIdentity(OWNER), snapshot, bytes, records, reads, statusRecords, failRecording: (message: string) => { recordingError = message; } };
+  return { t, user: t.withIdentity(OWNER), snapshot, bytes, records, claims, reads, statusRecords, failRecording: (message: string) => { recordingError = message; } };
 }
 
 function qualifiedMock(snapshot: Snapshot) {
@@ -66,6 +71,18 @@ const created = { prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/
 
 beforeEach(() => { transport.create.mockReset(); transport.refresh.mockReset(); });
 describe("server-owned visual publication", () => {
+  it("claims the exact visual version and schedule before transport can create a PR", async () => {
+    const { user, snapshot, claims } = await harness();
+    qualifiedMock(snapshot);
+    transport.create.mockImplementation(async () => { expect(claims).toHaveLength(1); return created; });
+    await user.action(anyApi.visualPublication.createPr, { postId: snapshot.post._id });
+    expect(claims).toEqual([expect.objectContaining({ postId: snapshot.post._id,
+      fingerprint: blogEditorialFingerprint(snapshot.post),
+      schedule: JSON.stringify([snapshot.post.scheduledDate, snapshot.post.scheduledTime, snapshot.post.timezone]),
+      expectedVisualSignature: snapshot.reviewSignature, expectedIntentId: snapshot.intent._id,
+      expectedSchedule: { scheduledDate: "2026-10-04", scheduledTime: "10:30", timezone: "UTC" } })]);
+    expect(transport.create).toHaveBeenCalledTimes(1);
+  });
   it("pauses a new publication dispatch server-side before transport while preserving retained PR status refresh", async () => {
     const { user, snapshot, records } = await harness();
     qualifiedMock(snapshot);
@@ -119,7 +136,7 @@ describe("server-owned visual publication", () => {
     expect(Buffer.from(params.images[0].export.bytes)).toEqual(bytes);
     expect(params.images[0].export.hero).toEqual({ provider: "mock-provider", model: "mock-model", quoteProvenance: "Mock trusted snapshot receipt", qualification: "live-receipt", approvedBy: OWNER.subject, approvedAt: 1 });
     expect(params.images[1].export.figure).toEqual({ spec, rendererVersion: signatures.rendererVersion, dataSignature: signatures.dataSignature, presentationSignature: signatures.presentationSignature, postId: snapshot.post._id, postContentSha256: bodyHash, postContentFingerprint: fingerprintPostContent(snapshot.post), acceptedBy: OWNER.subject, acceptedAt: 1, evidenceSources: figure.evidenceSources });
-    expect(records).toEqual([{ postId: snapshot.post._id, result: { ...created, prStatus: "open", prNumber: 123456 }, expectedArticleSignature: JSON.stringify({ title: snapshot.post.title, content: snapshot.post.content, linkedinFirstComment: snapshot.post.linkedinFirstComment }), expectedVisualSignature: snapshot.reviewSignature, expectedIntentId: snapshot.intent._id, expectedSchedule: { scheduledDate: "2026-10-04", scheduledTime: "10:30", timezone: "UTC" } }]);
+    expect(records).toEqual([{ postId: snapshot.post._id, result: { ...created, exportClaimKey: expect.any(String), prStatus: "open", prNumber: 123456 }, expectedArticleSignature: JSON.stringify({ title: snapshot.post.title, content: snapshot.post.content, linkedinFirstComment: snapshot.post.linkedinFirstComment }), expectedVisualSignature: snapshot.reviewSignature, expectedIntentId: snapshot.intent._id, expectedSchedule: { scheduledDate: "2026-10-04", scheduledTime: "10:30", timezone: "UTC" } }]);
   });
 
   it("refreshes only the server-recorded PR URL and records the server-fetched status", async () => {

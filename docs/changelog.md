@@ -4237,6 +4237,462 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 - codex/linkedin-first-comment
 
+## 09/30/2026 02:27:52 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	app/api/publish/__tests__/route.test.ts
+- M	app/api/publish/route.ts
+- A	components/BlogExportPreview.tsx
+- M	components/ConvexClientProvider.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- A	convex.json
+- A	convex/__tests__/blogExport.test.ts
+- M	convex/__tests__/queue.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/blogHero.ts
+- A	convex/blogValidators.ts
+- M	convex/githubPrSync.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- A	docs/epic-97-progress.md
+- A	e2e/blog-export.spec.ts
+- M	lib/__tests__/github.test.ts
+- A	lib/__tests__/prepareBlogHero.test.ts
+- A	lib/blogContract.ts
+- M	lib/github.ts
+- A	lib/prepareBlogHero.ts
+- M	package-lock.json
+- M	package.json
+
+### Working Tree Snapshot
+
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+- A  components/BlogExportPreview.tsx
+- M  components/ConvexClientProvider.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex.json
+- A  convex/__tests__/blogExport.test.ts
+- M  convex/__tests__/queue.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/blogHero.ts
+- A  convex/blogValidators.ts
+- M  convex/githubPrSync.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- A  docs/epic-97-progress.md
+- A  e2e/blog-export.spec.ts
+- M  lib/__tests__/github.test.ts
+- A  lib/__tests__/prepareBlogHero.test.ts
+- A  lib/blogContract.ts
+- M  lib/github.ts
+- A  lib/prepareBlogHero.ts
+- M  package-lock.json
+- M  package.json
+
+### Branch
+
+- codex/epic-97-blog-contract
+
+## 09/30/2026 02:41:12 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched the main dashboard surfaces.
+
+### Staged Changes
+
+- M	app/page.tsx
+- A	app/series/page.tsx
+- M	components/PersistedPublishingPanel.tsx
+- A	components/SeriesWorkspace.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/shell/Shell.tsx
+- A	convex/__tests__/series.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- A	convex/series.ts
+- M	docs/epic-97-progress.md
+- A	e2e/series.spec.ts
+
+### Working Tree Snapshot
+
+- M  app/page.tsx
+- A  app/series/page.tsx
+- M  components/PersistedPublishingPanel.tsx
+- A  components/SeriesWorkspace.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/shell/Shell.tsx
+- A  convex/__tests__/series.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- A  convex/series.ts
+- M  docs/epic-97-progress.md
+- A  e2e/series.spec.ts
+
+### Branch
+
+- codex/epic-97-series-foundation
+
+## 09/30/2026 03:19:52 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	components/BufferDestinationPanel.tsx
+- A	components/DeliveryReceiptPanel.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/SocialConnectionsPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- A	convex/__tests__/bufferFoundations.test.ts
+- M	convex/__tests__/publishing.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/bufferDelivery.ts
+- A	convex/bufferDestinations.ts
+- M	convex/bufferLive.ts
+- A	convex/bufferValidators.ts
+- M	convex/crons.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- M	docs/epic-97-progress.md
+- A	e2e/buffer-foundations.spec.ts
+- A	lib/__tests__/bufferContracts.test.ts
+- M	lib/__tests__/providerAdapters.test.ts
+- A	lib/bufferContracts.ts
+- M	lib/domain.ts
+- M	lib/providerAdapters.ts
+- A	lib/socialPayload.ts
+- A	vercel.json
+
+### Working Tree Snapshot
+
+- A  components/BufferDestinationPanel.tsx
+- A  components/DeliveryReceiptPanel.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/SocialConnectionsPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex/__tests__/bufferFoundations.test.ts
+- M  convex/__tests__/publishing.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/bufferDelivery.ts
+- A  convex/bufferDestinations.ts
+- M  convex/bufferLive.ts
+- A  convex/bufferValidators.ts
+- M  convex/crons.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- M  docs/epic-97-progress.md
+- A  e2e/buffer-foundations.spec.ts
+- A  lib/__tests__/bufferContracts.test.ts
+- M  lib/__tests__/providerAdapters.test.ts
+- A  lib/bufferContracts.ts
+- M  lib/domain.ts
+- M  lib/providerAdapters.ts
+- A  lib/socialPayload.ts
+- A  vercel.json
+
+### Branch
+
+- codex/epic-97-buffer-foundations
+
+## 09/30/2026 03:51:16 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	app/queue/page.tsx
+- M	components/BufferDestinationPanel.tsx
+- A	components/QueuePlanningPanel.tsx
+- M	components/SeriesWorkspace.tsx
+- M	components/shell/Shell.tsx
+- A	convex/__tests__/queuePlanning.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/bufferLive.ts
+- M	convex/publishing.ts
+- A	convex/queuePlanning.ts
+- A	convex/queueValidators.ts
+- M	convex/schema.ts
+- M	docs/epic-97-progress.md
+- A	e2e/queue-planning.spec.ts
+- A	lib/__tests__/queueCapacity.test.ts
+- M	lib/bufferContracts.ts
+- M	lib/providerAdapters.ts
+- A	lib/queueCapacity.ts
+- A	lib/readBufferQueue.ts
+- A	lib/schedules.ts
+
+### Working Tree Snapshot
+
+- A  app/queue/page.tsx
+- M  components/BufferDestinationPanel.tsx
+- A  components/QueuePlanningPanel.tsx
+- M  components/SeriesWorkspace.tsx
+- M  components/shell/Shell.tsx
+- A  convex/__tests__/queuePlanning.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/bufferLive.ts
+- M  convex/publishing.ts
+- A  convex/queuePlanning.ts
+- A  convex/queueValidators.ts
+- M  convex/schema.ts
+- M  docs/epic-97-progress.md
+- A  e2e/queue-planning.spec.ts
+- A  lib/__tests__/queueCapacity.test.ts
+- M  lib/bufferContracts.ts
+- M  lib/providerAdapters.ts
+- A  lib/queueCapacity.ts
+- A  lib/readBufferQueue.ts
+- A  lib/schedules.ts
+
+### Branch
+
+- codex/epic-97-capacity-planning
+
+## 09/30/2026 04:18:24 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	components/PreparedPackageImport.tsx
+- M	components/SeriesWorkspace.tsx
+- A	convex/__tests__/preparedImports.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/preparedImportActions.ts
+- A	convex/preparedImports.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- M	docs/epic-97-progress.md
+- A	docs/examples/prepared-series-v1.json
+- A	docs/prepared-series-packages.md
+- A	e2e/prepared-import.spec.ts
+- A	lib/preparedPackage.ts
+
+### Working Tree Snapshot
+
+- A  components/PreparedPackageImport.tsx
+- M  components/SeriesWorkspace.tsx
+- A  convex/__tests__/preparedImports.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/preparedImportActions.ts
+- A  convex/preparedImports.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- M  docs/epic-97-progress.md
+- A  docs/examples/prepared-series-v1.json
+- A  docs/prepared-series-packages.md
+- A  e2e/prepared-import.spec.ts
+- A  lib/preparedPackage.ts
+
+### Branch
+
+- codex/epic-97-prepared-import
+
+## 09/30/2026 05:09:50 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	components/ArticleDependencyPanel.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/SeriesWorkspace.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- A	convex/__tests__/articleDependencies.test.ts
+- M	convex/__tests__/publishing.test.ts
+- M	convex/__tests__/queuePlanning.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/articleDependencies.ts
+- A	convex/articlePublication.ts
+- A	convex/articleValidators.ts
+- M	convex/bufferDestinations.ts
+- M	convex/publishing.ts
+- M	convex/queuePlanning.ts
+- M	convex/schema.ts
+- M	convex/series.ts
+- M	docs/epic-97-progress.md
+- A	e2e/article-dependencies.spec.ts
+- A	lib/__tests__/articlePublication.test.ts
+- A	lib/articleAvailability.ts
+- A	lib/articleContracts.ts
+- A	lib/articlePublication.ts
+- M	lib/socialPayload.ts
+- M	package-lock.json
+- M	package.json
+
+### Working Tree Snapshot
+
+- A  components/ArticleDependencyPanel.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/SeriesWorkspace.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex/__tests__/articleDependencies.test.ts
+- M  convex/__tests__/publishing.test.ts
+- M  convex/__tests__/queuePlanning.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/articleDependencies.ts
+- A  convex/articlePublication.ts
+- A  convex/articleValidators.ts
+- M  convex/bufferDestinations.ts
+- M  convex/publishing.ts
+- M  convex/queuePlanning.ts
+- M  convex/schema.ts
+- M  convex/series.ts
+- M  docs/epic-97-progress.md
+- A  e2e/article-dependencies.spec.ts
+- A  lib/__tests__/articlePublication.test.ts
+- A  lib/articleAvailability.ts
+- A  lib/articleContracts.ts
+- A  lib/articlePublication.ts
+- M  lib/socialPayload.ts
+- M  package-lock.json
+- M  package.json
+
+### Branch
+
+- codex/epic-97-article-dependencies
+
+## 09/30/2026 05:26:28 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	components/SeriesReviewPanel.tsx
+- M	components/SeriesWorkspace.tsx
+- A	convex/__tests__/seriesReview.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- A	convex/seriesReview.ts
+- M	docs/epic-97-progress.md
+- A	e2e/series-review.spec.ts
+
+### Working Tree Snapshot
+
+- A  components/SeriesReviewPanel.tsx
+- M  components/SeriesWorkspace.tsx
+- A  convex/__tests__/seriesReview.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- A  convex/seriesReview.ts
+- M  docs/epic-97-progress.md
+- A  e2e/series-review.spec.ts
+
+### Branch
+
+- codex/epic-97-batch-approval
+
+## 09/30/2026 06:40:14 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/QueuePlanningPanel.tsx
+- A	components/QueueReleasePanel.tsx
+- M	convex/__tests__/articleDependencies.test.ts
+- M	convex/__tests__/bufferFoundations.test.ts
+- M	convex/__tests__/publishing.test.ts
+- M	convex/__tests__/queuePlanning.test.ts
+- A	convex/__tests__/queueRelease.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/bufferAttempts.ts
+- M	convex/bufferDelivery.ts
+- M	convex/bufferLive.ts
+- M	convex/publishing.ts
+- A	convex/queueDispatch.ts
+- M	convex/queuePlanning.ts
+- A	convex/queueRelease.ts
+- M	convex/schema.ts
+- M	docs/epic-97-progress.md
+- A	e2e/queue-release.spec.ts
+- A	lib/__tests__/deliverySummary.test.ts
+- A	lib/deliverySummary.ts
+- M	lib/providerAdapters.ts
+- A	test-support/queueCapacityFixture.ts
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/QueuePlanningPanel.tsx
+- A  components/QueueReleasePanel.tsx
+- M  convex/__tests__/articleDependencies.test.ts
+- M  convex/__tests__/bufferFoundations.test.ts
+- M  convex/__tests__/publishing.test.ts
+- M  convex/__tests__/queuePlanning.test.ts
+- A  convex/__tests__/queueRelease.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/bufferAttempts.ts
+- M  convex/bufferDelivery.ts
+- M  convex/bufferLive.ts
+- M  convex/publishing.ts
+- A  convex/queueDispatch.ts
+- M  convex/queuePlanning.ts
+- A  convex/queueRelease.ts
+- M  convex/schema.ts
+- M  docs/epic-97-progress.md
+- A  e2e/queue-release.spec.ts
+- A  lib/__tests__/deliverySummary.test.ts
+- A  lib/deliverySummary.ts
+- M  lib/providerAdapters.ts
+- A  test-support/queueCapacityFixture.ts
+
+### Branch
+
+- codex/epic-97-reviewed-queue
+
+## 09/30/2026 12:14:18 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	.github/workflows/test.yml
+- A	convex/tsconfig.json
+- M	docs/epic-97-progress.md
+- M	lib/__tests__/articlePublication.test.ts
+
+### Working Tree Snapshot
+
+- M  .github/workflows/test.yml
+- A  convex/tsconfig.json
+- M  docs/epic-97-progress.md
+- M  lib/__tests__/articlePublication.test.ts
+
+### Branch
+
+- codex/epic-97-reviewed-queue
+
 ## 09/30/2026 08:18:02 PDT
 
 ### Summary

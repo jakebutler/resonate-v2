@@ -1,3 +1,14 @@
+import {postScheduleVersion} from "../lib/socialPayload";
+import {priorDispatchHold, priorBufferAttempts, dispatchCapacity, releasePin, allocateDispatch, reconcileAllocation, reviewReservationsHold} from "./queueDispatch";
+import {companionSubmissionHold,latestPublication} from "./articleDependencies";
+import {consumeReservation} from "./queuePlanning";
+import { linkedInPayload } from "../lib/socialPayload";
+import { destinationSubmissionHold, readDestination } from "./bufferDestinations";
+import { applyRefresh } from "./bufferDelivery";
+import { destinationValidator, deliveryStatusValidator } from "./bufferValidators";
+import { ownedSeries } from "./series";
+import { blogArtifactValidator, preparedHeroValidator } from "./blogValidators";
+import { blogEditorialFingerprint, missingBlogEditorialFields } from "../lib/blogContract";
 import { previewSeedIdeas, previewSeedPosts } from "./previewSeedData";
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -76,6 +87,8 @@ const providerIntentValidator = v.union(
 );
 
 const githubPrRecordValidator = v.object({
+  artifact: v.optional(blogArtifactValidator),
+  exportClaimKey: v.optional(v.string()),
   prUrl: v.string(),
   branchName: v.string(),
   prNumber: v.optional(v.number()),
@@ -96,6 +109,8 @@ const blogMetadataValidator = v.object({
   blogCategory: v.optional(v.string()),
   blogTags: v.optional(v.array(v.string())),
   blogSlug: v.optional(v.string()),
+  blogPublicationIntent: v.optional(v.union(v.literal("draft"), v.literal("published"))),
+  coverImageAlt: v.optional(v.string()),
   heroImageUrl: v.optional(v.string()),
   heroImageStorageId: v.optional(v.id("_storage")),
 });
@@ -252,17 +267,14 @@ async function getOwnedPost(
   return post;
 }
 
-async function latestIntent(
+export async function latestIntent(
   ctx: QueryCtx | MutationCtx,
   postId: Id<"v2Posts">
 ) {
-  const intents = await ctx.db
-    .query("v2PublishingIntents")
-    .withIndex("by_post", (q) => q.eq("postId", postId))
-    .collect();
-  return intents.sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null;
+  return await ctx.db.query("v2PublishingIntents")
+    .withIndex("by_post_and_updated_at", q => q.eq("postId", postId))
+    .order("desc").first();
 }
-export { latestIntent };
 
 async function accessibleBrandIds(ctx: QueryCtx | MutationCtx, userId: string) {
   const memberships = await ctx.db
@@ -541,6 +553,7 @@ export const listPosts = query({
           v.literal("approved"),
           v.literal("scheduled"),
           v.literal("submitted"),
+          v.literal("queued"), v.literal("publishing"), v.literal("cancel-requested"), v.literal("cancelled"), v.literal("removed"), v.literal("provider-draft"),
           v.literal("published"),
           v.literal("needs-review"),
           v.literal("failed"),
@@ -570,6 +583,7 @@ export const listPosts = query({
 
 export const listCalendarItems = query({
   args: {
+    seriesId: v.optional(v.id("postSeries")),
     brandIds: v.optional(v.array(brandIdValidator)),
     platformIds: v.optional(v.array(channelIdValidator)),
     statuses: v.optional(
@@ -579,6 +593,7 @@ export const listCalendarItems = query({
           v.literal("approved"),
           v.literal("scheduled"),
           v.literal("submitted"),
+          v.literal("queued"), v.literal("publishing"), v.literal("cancel-requested"), v.literal("cancelled"), v.literal("removed"), v.literal("provider-draft"),
           v.literal("published"),
           v.literal("needs-review"),
           v.literal("failed"),
@@ -591,6 +606,13 @@ export const listCalendarItems = query({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const accessibleBrands = await accessibleBrandIds(ctx, userId);
+    let seriesPostIds: Set<string> | null = null;
+    if (args.seriesId) {
+      await ownedSeries(ctx, userId, args.seriesId);
+      const links = await ctx.db.query("seriesPostLinks").withIndex("by_series", q => q.eq("seriesId", args.seriesId!)).take(5001);
+      if (links.length > 5000) throw new Error("Series is too large for one calendar view; use paginated series entries.");
+      seriesPostIds = new Set(links.map(link => link.postId));
+    }
     // Push the status filter into the index when provided: the calendar no
     // longer scans every post of every status and filters in JS.
     const posts = args.statuses?.length
@@ -611,6 +633,7 @@ export const listCalendarItems = query({
           .withIndex("by_user", (q) => q.eq("userId", userId))
           .collect();
     const filteredPosts = posts
+      .filter(post => !seriesPostIds || seriesPostIds.has(post._id))
       .filter((post) => accessibleBrands.has(post.brandId))
       .filter(
         (post) =>
@@ -645,6 +668,7 @@ export const listCalendarItems = query({
           post,
           intent,
           providerState,
+          articlePublication:post.channelId==="corvo-blog"?await latestPublication(ctx,post._id):null,
           attemptCount: attempts.length,
           lastAttempt: attempts.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null,
         };
@@ -698,6 +722,7 @@ export const getPostAuditTrail = query({
 
 export const getPostById = query({
   args: { postId: v.string() },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const normalizedId = ctx.db.normalizeId("v2Posts", args.postId);
@@ -731,14 +756,20 @@ async function currentVisualApprovalSignature(ctx: QueryCtx | MutationCtx, post:
   if (figures.length && !visuals?.hero) throw new Error("Approve a prepared hero before approving informational figures");
   const hero = visuals?.hero;
   if (hero) await assertVisualAssetSlug(ctx, post);
-  const proof = { metadata: publicationMetadataSignature(post), hero: hero ? { versionId: hero.versionId, storageId: hero.storageId, sha256: hero.sha256, metadata: hero.metadata, alt: hero.alt, approvedBy: hero.approvedBy, approvedAt: hero.approvedAt } : null,
+  const proof = { metadata: publicationMetadataSignature(post), editorial: blogEditorialFingerprint(post), hero: hero ? { versionId: hero.versionId, storageId: hero.storageId, sha256: hero.sha256, metadata: hero.metadata, alt: hero.alt, approvedBy: hero.approvedBy, approvedAt: hero.approvedAt } : null,
     figures: figures.map(figure => ({ candidateId: figure.candidateId, dataSignature: figure.dataSignature, presentationSignature: figure.presentationSignature, rendererVersion: figure.rendererVersion, acceptedBy: figure.acceptedBy, acceptedAt: figure.acceptedAt, evidenceSources: figure.evidenceSources })) };
   return hashVisualBytes(new TextEncoder().encode(stableInputSignature(proof)).buffer);
 }
 function assertNewPublicationLifecycle(post: Doc<"v2Posts">) {
-  if (publicationTransitionRequired(post)) {
+  if (publicationTransitionRequired({ ...post, blogExportClaimKey: undefined })) {
     throw new Error("This publication lifecycle requires a separate publishing transition");
   }
+}
+async function missingPublicationEditorialFields(ctx: QueryCtx | MutationCtx, post: Doc<"v2Posts">) {
+  const visuals = await buildPublicationVisuals(ctx, post);
+  if (!visuals?.hero) return missingBlogEditorialFields(post);
+  // The approved visual export owns its separately reviewed hero bytes and manual alt.
+  return missingBlogEditorialFields({ ...post, coverImageAlt: visuals.hero.alt }).filter(field => field !== "hero image" && field !== "reviewed prepared hero");
 }
 async function assertReviewedApproval(ctx: MutationCtx, post: Doc<"v2Posts">, expectedArticleSignature?: string, expectedVisualSignature?: string) {
   if (expectedArticleSignature !== undefined && expectedArticleSignature !== exactApprovalArticle(post)) throw new Error("Reviewed article changed; reload before final approval");
@@ -760,7 +791,7 @@ export const getApprovalReview = query({
     const articleSignature = exactApprovalArticle(post);
     const hasVisuals = await hasVisualPublication(ctx, post._id);
     const metadataSignature = publicationMetadataSignature(post);
-    try { if (hasVisuals) assertNewPublicationLifecycle(post); const visuals = await buildPublicationVisuals(ctx, post); return { articleSignature, metadataSignature, hasVisuals, publicationQualified: !hasVisuals || visuals?.hero.qualification === "live-receipt", visualSignature: await currentVisualApprovalSignature(ctx, post), blockedReason: null }; }
+    try { if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile before approval."); if (hasVisuals) assertNewPublicationLifecycle(post); const visuals = await buildPublicationVisuals(ctx, post); return { articleSignature, metadataSignature, hasVisuals, publicationQualified: !hasVisuals || visuals?.hero.qualification === "live-receipt", visualSignature: await currentVisualApprovalSignature(ctx, post), blockedReason: null }; }
     catch (error) { return { articleSignature, metadataSignature, hasVisuals, publicationQualified: false, visualSignature: null, blockedReason: error instanceof Error ? error.message : "Visual review is incomplete" }; }
   },
 });
@@ -782,8 +813,10 @@ export const getPostForPublication = query({
     if (post.channelId !== "corvo-blog") throw new Error("Only blog posts can create publication packages");
     assertNewPublicationLifecycle(post);
     if (post.approvalState !== "approved") throw new Error("Post is not approved for publishing");
+    const missing = await missingPublicationEditorialFields(ctx, post);
+    if (missing.length) throw new Error(`Review blog metadata before publishing: ${missing.join(", ")}`);
     const intent = await latestIntent(ctx, post._id);
-    if (!intent || intent.approvalState !== "approved" || intent.contentFingerprint !== fingerprintPostContent(post)) throw new Error("Publishing intent approval is stale");
+    if (!intent || intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post)) throw new Error("Publishing intent approval is stale");
     if (post.variantReviewStatus === "pending" || post.variantReviewStatus === "rejected") throw new Error("Post lifecycle does not permit a new publication");
     const visuals = await buildPublicationVisuals(ctx, post);
     const figures = await buildPublicationFigures(ctx, post);
@@ -792,20 +825,21 @@ export const getPostForPublication = query({
   },
 });
 
-export const createPostWithIntent = mutation({
+export async function createCanonicalPost(
+  ctx: MutationCtx,
+  userId: string,
   args: {
-    brandId: brandIdValidator,
-    channelId: channelIdValidator,
-    title: v.string(),
-    content: v.string(),
-    scheduledDate: v.optional(v.string()),
-    scheduledTime: v.optional(v.string()),
-    timezone: v.optional(v.string()),
-    sourceIdeaId: v.optional(v.string()),
-    sourceResearchBriefId: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx);
+    brandId: Doc<"v2Posts">["brandId"];
+    channelId: Doc<"v2Posts">["channelId"];
+    title: string;
+    content: string;
+    scheduledDate?: string;
+    scheduledTime?: string;
+    timezone?: string;
+    sourceIdeaId?: string;
+    sourceResearchBriefId?: string;
+  }
+) {
     const channel = await ensureWorkspaceChannel(
       ctx,
       userId,
@@ -822,6 +856,7 @@ export const createPostWithIntent = mutation({
       platformId: channel.platformId,
       title: args.title,
       content: args.content,
+      ...(args.channelId === "corvo-blog" ? { blogPublicationIntent: "draft" as const } : {}),
       status: args.scheduledDate ? "scheduled" : "draft",
       approvalState: "unapproved",
       scheduledDate: args.scheduledDate,
@@ -870,6 +905,23 @@ export const createPostWithIntent = mutation({
     });
 
     return { postId, intentId };
+}
+
+export const createPostWithIntent = mutation({
+  args: {
+    brandId: brandIdValidator,
+    channelId: channelIdValidator,
+    title: v.string(),
+    content: v.string(),
+    scheduledDate: v.optional(v.string()),
+    scheduledTime: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+    sourceIdeaId: v.optional(v.string()),
+    sourceResearchBriefId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    return createCanonicalPost(ctx,userId,args);
   },
 });
 
@@ -878,6 +930,12 @@ export const deletePost = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId, true);
+    if (await ctx.db.query("seriesPostLinks").withIndex("by_post", q => q.eq("postId", post._id)).first()) throw new Error("Detach the post from its series before deleting it.");
+    if(post.prUrl||post.blogArtifact||post.blogExportClaimKey)throw new Error("Publication receipts and pending exports must be retained; this post cannot be deleted.");
+    const receipt=await ctx.db.query("v2PublishAttempts").withIndex("by_post",q=>q.eq("postId",post._id)).take(101);
+    if(receipt.length>100||receipt.some(attempt=>attempt.providerId!=="mock"))throw new Error("Publication attempt history must be retained; this post cannot be deleted.");
+    const liveStates=await ctx.db.query("v2ProviderStates").withIndex("by_post",q=>q.eq("postId",post._id)).take(101);
+    if(liveStates.length>100||liveStates.some(state=>state.simulated!==true&&state.providerPostId&&!state.providerPostId.startsWith("mock-")))throw new Error("Provider receipts must be retained; this post cannot be deleted.");
     const intents = await ctx.db
       .query("v2PublishingIntents")
       .withIndex("by_post", (q) => q.eq("postId", args.postId))
@@ -933,47 +991,59 @@ export const deletePost = mutation({
   },
 });
 
-export const setApproval = mutation({
-  args: {
-    postId: v.id("v2Posts"),
-    approvalState: approvalValidator,
-    expectedArticleSignature: v.optional(v.string()),
-    expectedVisualSignature: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId, true);
-    if (args.approvalState === "approved") await assertReviewedApproval(ctx, post, args.expectedArticleSignature, args.expectedVisualSignature);
-    const intent = await latestIntent(ctx, args.postId);
+export async function applyEditorialApproval(ctx: MutationCtx, userId: string, post: Doc<"v2Posts">, approvalState: Doc<"v2Posts">["approvalState"], review?: { expectedArticleSignature?: string; expectedVisualSignature?: string }) {
+    const role = await requireBrandAccess(ctx,userId,post.brandId);
+    if(post.userId!==userId || role.role === "viewer") throw new Error("Editor access required");
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
+    if (approvalState === "approved") await assertReviewedApproval(ctx, post, review?.expectedArticleSignature, review?.expectedVisualSignature);
+    const intent = await latestIntent(ctx, post._id);
     if (!intent) throw new Error("Publishing intent not found");
+    if (approvalState === "approved" && post.channelId === "corvo-blog") {
+      const missing = await missingPublicationEditorialFields(ctx, post);
+      if (missing.length) throw new Error(`Review blog metadata before approval: ${missing.join(", ")}`);
+    }
+    const fingerprint = post.channelId === "corvo-blog"
+      ? blogEditorialFingerprint(post) : contentFingerprint(post.title, post.content, post.linkedinFirstComment);
     const now = Date.now();
     const nextStatus =
-      args.approvalState === "approved"
+      ["published","queued","publishing","submitted","cancel-requested","cancelled","removed"].includes(post.status) ? post.status :
+      approvalState === "approved"
         ? post.scheduledDate
           ? "scheduled"
           : "approved"
         : "draft";
 
-    await ctx.db.patch(args.postId, {
-      approvalState: args.approvalState,
+    await ctx.db.patch(post._id, {
+      approvalState: approvalState,
       status: nextStatus,
-      contentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
+      contentFingerprint: fingerprint,
       updatedAt: now,
     });
     await ctx.db.patch(intent._id, {
-      approvalState: args.approvalState,
-      contentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
+      approvalState: approvalState,
+      contentFingerprint: fingerprint,
       updatedAt: now,
     });
     await audit(ctx, {
       userId,
       brandId: post.brandId,
-      postId: args.postId,
+      postId: post._id,
       intentId: intent._id,
       action: "post.approval",
-      summary: `Approval changed to ${args.approvalState}.`,
+      summary: `Approval changed to ${approvalState}.`,
     });
-  },
+}
+
+export const setApproval = mutation({
+  args: {
+    postId: v.id("v2Posts"), approvalState: approvalValidator,
+    expectedArticleSignature: v.optional(v.string()), expectedVisualSignature: v.optional(v.string()),
+  }, returns: v.any(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const post = await getOwnedPost(ctx, userId, args.postId);
+    await applyEditorialApproval(ctx, userId, post, args.approvalState, args);
+  }
 });
 
 export const reschedule = mutation({
@@ -983,11 +1053,15 @@ export const reschedule = mutation({
     scheduledTime: v.optional(v.string()),
     timezone: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId, true);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
+    if (post.blogSyncPending) throw new Error("Article schedule sync is in progress; refresh before changing it again.");
+    const syncKey = JSON.stringify([args.scheduledDate, args.scheduledTime ?? null, args.timezone ?? post.timezone]);
     const now = Date.now();
     const timezone = args.timezone ?? post.timezone;
 
@@ -1019,7 +1093,12 @@ export const reschedule = mutation({
         .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
         .first();
       if (providerState?.providerId === "github-pr") {
+        await ctx.db.patch(post._id, {blogSyncPending: syncKey});
         await ctx.scheduler.runAfter(0, internal.githubPrSync.syncFrontmatterAfterReschedule, {
+          syncKey,
+          artifact: post.blogArtifact,
+          expectedTitle: post.title,
+          expectedSlug: post.blogSlug,
           postId: args.postId,
           userId,
           brandId: post.brandId,
@@ -1037,6 +1116,8 @@ export const reschedule = mutation({
 
 export const recordGithubPrFrontmatterSynced = internalMutation({
   args: {
+    syncKey: v.optional(v.string()),
+    artifact: v.optional(blogArtifactValidator),
     postId: v.id("v2Posts"),
     userId: v.string(),
     brandId: brandIdValidator,
@@ -1046,7 +1127,12 @@ export const recordGithubPrFrontmatterSynced = internalMutation({
     scheduledTime: v.optional(v.string()),
     timezone: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!args.syncKey || !post || post.blogSyncPending !== args.syncKey) return;
+    await ctx.db.patch(post._id, {blogSyncPending: undefined, ...(args.artifact ? {blogArtifact: args.artifact} : {})});
+    if (!post.blogArtifact && args.artifact) await audit(ctx, {userId: args.userId, brandId: args.brandId, postId: post._id, action: "blog.artifact_backfill", summary: "Bound a legacy article from one unambiguous PR diff match.", metadata: args.artifact});
     const now = Date.now();
     const providerState = await ctx.db
       .query("v2ProviderStates")
@@ -1080,6 +1166,8 @@ export const recordGithubPrFrontmatterSynced = internalMutation({
 
 export const markGithubPrRescheduleNeedsReview = internalMutation({
   args: {
+    syncKey: v.optional(v.string()),
+    artifact: v.optional(blogArtifactValidator),
     postId: v.id("v2Posts"),
     userId: v.string(),
     brandId: brandIdValidator,
@@ -1088,7 +1176,11 @@ export const markGithubPrRescheduleNeedsReview = internalMutation({
     prUrl: v.string(),
     branchName: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!args.syncKey || !post || post.blogSyncPending !== args.syncKey) return;
+    await ctx.db.patch(post._id, {blogSyncPending: undefined, ...(args.artifact ? {blogArtifact: args.artifact} : {})});
     const now = Date.now();
     const summary = `Reschedule could not update GitHub PR frontmatter (${args.reason}); marked Needs Review.`;
     const providerState = await ctx.db
@@ -1151,6 +1243,7 @@ export const updateContent = mutation({
     if (args.expectedArticleSignature !== undefined && args.expectedArticleSignature !== JSON.stringify({ title: post.title, content: post.content, linkedinFirstComment: post.linkedinFirstComment ?? "" })) {
       throw new Error("Article changed since this composer was loaded. Reload the saved article before saving.");
     }
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
     const title = args.title ?? post.title;
@@ -1196,6 +1289,7 @@ export const updatePlatformSettings = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId, true);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
     const now = Date.now();
@@ -1226,7 +1320,7 @@ export const submitMockProvider = mutation({
 
     const ineligibleReason = providerSubmissionIneligibilityReason({
       routable: Boolean(channel?.routable),
-      approvalState: intent.approvalState,
+      approvalState: post.approvalState==="approved"?intent.approvalState:post.approvalState,
       scheduledDate: intent.scheduledDate,
       contentFingerprint: intent.contentFingerprint,
       currentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
@@ -1257,8 +1351,7 @@ export const submitMockProvider = mutation({
     if (existingAttempt) {
       const retryable =
         args.retry &&
-        (latestAttempt?.status === "retryable-failure" ||
-          latestAttempt?.status === "ambiguous");
+        latestAttempt?.status === "retryable-failure";
       if (!retryable) {
         return {
           submitted: false,
@@ -1436,7 +1529,7 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
     }
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
-    if (trusted && (intent.approvalState !== "approved" || intent.contentFingerprint !== fingerprintPostContent(post))) throw new Error("Publication intent changed before PR recording");
+    if (trusted && (intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post))) throw new Error("Publication intent changed before PR recording");
     if (trusted) {
       const expected = args.expectedSchedule;
       const current = resolvePublicationSchedule(post, intent, expected?.scheduledDate ?? "");
@@ -1446,6 +1539,11 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
       }
     }
 
+    if ((trusted && !post.blogExportClaimKey) || (post.blogExportClaimKey && post.blogExportClaimKey !== args.result.exportClaimKey)) throw new Error("Export claim mismatch");
+    if (trusted && (!args.result.artifact || args.result.artifact.editorialFingerprint !== blogEditorialFingerprint(post) ||
+      args.result.artifact.branchName !== args.result.branchName || args.result.artifact.prNumber !== args.result.prNumber ||
+      args.result.artifact.repository !== `${process.env.BLOG_REPO_OWNER || "jakebutler"}/${process.env.BLOG_REPO_NAME || "corvo-labs-dot-com"}`)) throw new Error("Trusted publication artifact differs from the claimed editorial version");
+    if (post.prUrl === args.result.prUrl) return;
     const now = Date.now();
     const sanitizedResponse = sanitizeProviderResponse(
       args.result.sanitizedResponse &&
@@ -1510,9 +1608,11 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
 
     const prStatus = args.result.prStatus ?? "open";
     await ctx.db.patch(post._id, {
+      blogExportClaimKey: undefined,
       status: "pr-created",
       prUrl: args.result.prUrl,
       branchName: args.result.branchName,
+      blogArtifact: args.result.artifact ?? post.blogArtifact,
       blogPrNumber: args.result.prNumber,
       blogPrStatus: prStatus,
       blogPrUpdatedAt: now,
@@ -1537,7 +1637,11 @@ export const recordGithubPr = mutation({
 export const recordVisualPublicationPr = internalMutation({
   args: { postId: v.id("v2Posts"), result: githubPrRecordValidator, expectedArticleSignature: v.string(), expectedVisualSignature: v.string(), expectedIntentId: v.id("v2PublishingIntents"), expectedSchedule: publicationScheduleValidator },
   returns: v.object({ recorded: v.literal(true), attemptId: v.id("v2PublishAttempts") }),
-  handler: (ctx, args) => recordGithubPrHandler(ctx, args, true),
+  handler: async (ctx, args) => {
+    const result = await recordGithubPrHandler(ctx, args, true);
+    if (!result) throw new Error("Trusted publication receipt requires reconciliation");
+    return result;
+  },
 });
 
 export const createVariantPost = mutation({
@@ -1736,19 +1840,28 @@ export const updateBlogMetadata = mutation({
     postId: v.id("v2Posts"),
     metadata: blogMetadataValidator,
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId, true);
     if (args.metadata.heroImageStorageId && args.metadata.heroImageStorageId !== post.heroImageStorageId) await assertEditorialStorageAccess(ctx, userId, args.metadata.heroImageStorageId);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     if (post.channelId !== "corvo-blog") {
       throw new Error("Blog metadata is only available for Corvo Blog posts.");
     }
     if (args.metadata.blogSlug !== undefined && await hasVisualPublication(ctx, post._id)) await assertVisualAssetSlug(ctx, post, args.metadata.blogSlug);
     const intent = await latestIntent(ctx, args.postId);
+    const metadata = {...args.metadata, ...(args.metadata.heroImageUrl && !args.metadata.heroImageStorageId ? {heroImageStorageId: undefined, preparedHero: undefined} : {})};
+    if (args.metadata.heroImageStorageId !== undefined && args.metadata.heroImageStorageId !== post.heroImageStorageId) Object.assign(metadata, {preparedHero: undefined});
+    const merged = { ...post, ...metadata };
+    if (merged.blogSlug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(merged.blogSlug)) throw new Error("Invalid blog slug");
+    const fingerprint = blogEditorialFingerprint(merged);
+    if (fingerprint === blogEditorialFingerprint(post)) return { updated: false };
     const now = Date.now();
 
     await ctx.db.patch(args.postId, {
-      ...args.metadata,
+      ...metadata,
+      contentFingerprint: fingerprint,
       approvalState: "unapproved",
       status: "draft",
       updatedAt: now,
@@ -1757,6 +1870,7 @@ export const updateBlogMetadata = mutation({
     if (intent) {
       await ctx.db.patch(intent._id, {
         approvalState: "unapproved",
+        contentFingerprint: fingerprint,
         updatedAt: now,
       });
     }
@@ -1793,11 +1907,7 @@ async function recordBlogPrStatusHandler(ctx: MutationCtx, args: { postId: Id<"v
     if (args.prNumber !== undefined) {
       patch.blogPrNumber = args.prNumber;
     }
-    if (args.prStatus === "merged") {
-      patch.status = "published";
-    } else if (args.prStatus === "closed") {
-      patch.status = "unavailable";
-    }
+    // Legacy display-only PR receipt. Merge cannot verify Production or availability.
 
     await ctx.db.patch(args.postId, patch);
     return { updated: true as const, prStatus: args.prStatus };
@@ -1828,26 +1938,7 @@ function isBufferLiveSubmissionEnvApproved() {
   return process.env.BUFFER_LIVE_SUBMISSION === "approved";
 }
 
-function assembleLinkedInSubmissionContent(
-  content: string,
-  platformSettings: Doc<"v2Posts">["platformSettings"]
-) {
-  const settings =
-    platformSettings && typeof platformSettings === "object"
-      ? (platformSettings as { hashtags?: unknown; cta?: string })
-      : undefined;
-  // Migrated posts may store hashtags as a string; only array entries are used.
-  const rawHashtags = settings?.hashtags;
-  const hashtagList = Array.isArray(rawHashtags) ? rawHashtags : [];
-  const hashtags = hashtagList
-    .filter((tag): tag is string => typeof tag === "string")
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
-  const body = content.trim();
-  if (hashtags.length === 0) return body;
-  return `${body}\n\n${hashtags.join(" ")}`;
-}
+const assembleLinkedInSubmissionContent=linkedInPayload;
 
 function isLiveBufferProviderPostId(providerPostId: string | undefined): boolean {
   if (!providerPostId?.trim()) return false;
@@ -1857,6 +1948,7 @@ function isLiveBufferProviderPostId(providerPostId: string | undefined): boolean
 function mapProviderStateToPostStatus(
   providerStateStatus: Doc<"v2ProviderStates">["status"]
 ): Doc<"v2Posts">["status"] {
+  if (["queued","publishing","cancel-requested","cancelled","removed","provider-draft"].includes(providerStateStatus)) return providerStateStatus as Doc<"v2Posts">["status"];
   if (providerStateStatus === "published") return "published";
   if (providerStateStatus === "needs-review") return "needs-review";
   if (providerStateStatus === "unavailable") return "unavailable";
@@ -1881,48 +1973,10 @@ export const listProviderStatesByStatus = internalQuery({
 });
 
 export const recordBufferStatusRefresh = internalMutation({
-  args: {
-    providerStateId: v.id("v2ProviderStates"),
-    postId: v.id("v2Posts"),
-    providerStateStatus: v.string(),
-    providerPostId: v.optional(v.string()),
-    reason: v.optional(v.string()),
-    sanitizedResponse: v.optional(v.any()),
-  },
-  handler: async (ctx, args) => {
-    const state = await ctx.db.get(args.providerStateId);
-    if (!state) return { updated: false };
-    const post = await ctx.db.get(args.postId);
-    if (!post) return { updated: false };
-    const nextPostStatus = mapProviderStateToPostStatus(
-      args.providerStateStatus as Doc<"v2ProviderStates">["status"]
-    );
-    const now = Date.now();
-    await ctx.db.patch(args.providerStateId, {
-      status: args.providerStateStatus as Doc<"v2ProviderStates">["status"],
-      providerPostId: args.providerPostId ?? state.providerPostId,
-      lastResponseSummary: args.reason ?? state.lastResponseSummary,
-      updatedAt: now,
-    });
-    if (post.status !== nextPostStatus) {
-      await ctx.db.patch(post._id, { status: nextPostStatus, updatedAt: now });
-    }
-    await audit(ctx, {
-      userId: post.userId,
-      brandId: post.brandId,
-      postId: post._id,
-      action: "provider.status_refresh",
-      summary:
-        args.reason ??
-        `Buffer status refresh: provider ${args.providerStateStatus}, post ${nextPostStatus}.`,
-      metadata: {
-        providerStateId: String(args.providerStateId),
-        providerStateStatus: args.providerStateStatus,
-      },
-    });
-    return { updated: true };
-  },
+  args: {providerStateId:v.id("v2ProviderStates"),postId:v.id("v2Posts"),providerStateStatus:deliveryStatusValidator,providerPostId:v.optional(v.string()),reason:v.optional(v.string()),sanitizedResponse:v.optional(v.any()),checkedAt:v.optional(v.number()),expectedAttemptId:v.optional(v.id("v2PublishAttempts")),ok:v.optional(v.boolean())},
+  returns:v.any(),handler:async(ctx,args)=>applyRefresh(ctx,args),
 });
+
 
 export const bufferLiveSubmissionEnabled = query({
   args: {},
@@ -1932,130 +1986,193 @@ export const bufferLiveSubmissionEnabled = query({
   },
 });
 
+export async function bufferSubmissionContext(
+  ctx: QueryCtx | MutationCtx,
+  args: { postId: Id<"v2Posts">; userId: string; retry?: boolean },
+  sharedCapacity?: Awaited<ReturnType<typeof dispatchCapacity>>["capacity"],
+) {
+  const post = await ctx.db.get(args.postId);
+  if (!post || post.userId !== args.userId) {
+    return { eligible: false as const, reason: "Post not found" };
+  }
+  try {
+    const access = await requireBrandAccess(ctx, args.userId, post.brandId);
+    if (access.role === "viewer")
+      return {
+        eligible: false as const,
+        reason: "Editor access required for Buffer dispatch.",
+      };
+  } catch {
+    return { eligible: false as const, reason: "Brand access denied" };
+  }
+  if (post.channelId !== "linkedin") {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      reason: "Buffer live submission is only available for LinkedIn posts.",
+    };
+  }
+  if (!brandHasBufferLinkedInMapping(post.brandId)) {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      reason: `No Buffer LinkedIn channel mapping exists for brand ${post.brandId}.`,
+    };
+  }
+
+  const intent = await latestIntent(ctx, args.postId);
+  if (!intent) {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      reason: "Publishing intent not found",
+    };
+  }
+
+  const channel = await ctx.db
+    .query("v2Channels")
+    .withIndex("by_brand_and_channel", (q) =>
+      q.eq("brandId", post.brandId).eq("channelId", post.channelId),
+    )
+    .first();
+
+  const ineligibleReason = providerSubmissionIneligibilityReason({
+    routable: Boolean(channel?.routable),
+    approvalState: intent.approvalState,
+    scheduledDate: intent.scheduledDate,
+    contentFingerprint: intent.contentFingerprint,
+    currentFingerprint: contentFingerprint(
+      post.title,
+      post.content,
+      post.linkedinFirstComment,
+    ),
+  });
+
+  if (ineligibleReason) {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: ineligibleReason,
+    };
+  }
+
+  if (postScheduleVersion(post) !== postScheduleVersion(intent))
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason:
+        "Saved post and publishing intent schedules differ; review the exact date again.",
+    };
+  const articleReason = await companionSubmissionHold(ctx, post);
+  if (articleReason)
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: articleReason,
+    };
+  const destinationReason = await destinationSubmissionHold(ctx, post);
+  if (destinationReason)
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: destinationReason,
+    };
+  const reviewedDestination = (await readDestination(
+    ctx,
+    post.userId,
+    post.brandId,
+  ))!.destination!;
+
+  const priorReason = await priorDispatchHold(ctx, post._id);
+  if (priorReason)
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: priorReason,
+    };
+  const allocation = await dispatchCapacity(ctx, post, sharedCapacity);
+  if (allocation.reason)
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: allocation.reason,
+    };
+  const previousAttempts = (await priorBufferAttempts(ctx, post._id)).rows;
+  const latestAttempt = [...previousAttempts].sort(
+    (a, b) => b.createdAt - a.createdAt,
+  )[0];
+  const baseIdempotencyKey = `${intent._id}:${intent.contentFingerprint}`;
+  const existingAttempt = await ctx.db
+    .query("v2PublishAttempts")
+    .withIndex("by_idempotency_key", (q) =>
+      q.eq("idempotencyKey", baseIdempotencyKey),
+    )
+    .first();
+
+  if (existingAttempt) {
+    const retryable =
+      args.retry && latestAttempt?.status === "retryable-failure";
+    if (!retryable) {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        intentId: intent._id,
+        reason: args.retry
+          ? "Previous attempt is not retryable."
+          : "Duplicate submission prevented.",
+      };
+    }
+  }
+  if (args.retry && !existingAttempt) {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: "No previous attempt exists to retry.",
+    };
+  }
+
+  const idempotencyKey = args.retry
+    ? `${baseIdempotencyKey}:retry:${previousAttempts.length}`
+    : baseIdempotencyKey;
+
+  return {
+    eligible: true as const,
+    brandId: post.brandId,
+    intentId: intent._id,
+    retryCount: previousAttempts.length,
+    idempotencyKey,
+    submission: {
+      postId: String(post._id),
+      brandId: post.brandId,
+      channelId: post.channelId,
+      title: post.title,
+      content: assembleLinkedInSubmissionContent(
+        post.content,
+        post.platformSettings,
+      ),
+      firstComment: post.linkedinFirstComment?.trim() || undefined,
+      scheduledDate: intent.scheduledDate,
+      scheduledTime: intent.scheduledTime,
+      timezone: intent.timezone,
+      idempotencyKey,
+      expectedDestination: reviewedDestination,
+    },
+  };
+}
 export const getBufferSubmissionContext = internalQuery({
   args: {
     postId: v.id("v2Posts"),
     userId: v.string(),
     retry: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
-    const post = await ctx.db.get(args.postId);
-    if (!post || post.userId !== args.userId) {
-      return { eligible: false as const, reason: "Post not found" };
-    }
-    try {
-      await requireBrandAccess(ctx, args.userId, post.brandId);
-    } catch {
-      return { eligible: false as const, reason: "Brand access denied" };
-    }
-    if (post.channelId !== "linkedin") {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: "Buffer live submission is only available for LinkedIn posts.",
-      };
-    }
-    if (!brandHasBufferLinkedInMapping(post.brandId)) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: `No Buffer LinkedIn channel mapping exists for brand ${post.brandId}.`,
-      };
-    }
-
-    const intent = await latestIntent(ctx, args.postId);
-    if (!intent) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: "Publishing intent not found",
-      };
-    }
-
-    const channel = await ctx.db
-      .query("v2Channels")
-      .withIndex("by_brand_and_channel", (q) =>
-        q.eq("brandId", post.brandId).eq("channelId", post.channelId)
-      )
-      .first();
-
-    const ineligibleReason = providerSubmissionIneligibilityReason({
-      routable: Boolean(channel?.routable),
-      approvalState: intent.approvalState,
-      scheduledDate: intent.scheduledDate,
-      contentFingerprint: intent.contentFingerprint,
-      currentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
-    });
-
-    if (ineligibleReason) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: ineligibleReason,
-      };
-    }
-
-    const previousAttempts = await ctx.db
-      .query("v2PublishAttempts")
-      .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
-      .collect();
-    const latestAttempt = [...previousAttempts].sort((a, b) => b.createdAt - a.createdAt)[0];
-    const baseIdempotencyKey = `${intent._id}:${intent.contentFingerprint}`;
-    const existingAttempt = await ctx.db
-      .query("v2PublishAttempts")
-      .withIndex("by_idempotency_key", (q) => q.eq("idempotencyKey", baseIdempotencyKey))
-      .first();
-
-    if (existingAttempt) {
-      const retryable =
-        args.retry &&
-        (latestAttempt?.status === "retryable-failure" ||
-          latestAttempt?.status === "ambiguous");
-      if (!retryable) {
-        return {
-          eligible: false as const,
-          brandId: post.brandId,
-          intentId: intent._id,
-          reason: args.retry
-            ? "Previous attempt is not retryable."
-            : "Duplicate submission prevented.",
-        };
-      }
-    }
-    if (args.retry && !existingAttempt) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: "No previous attempt exists to retry.",
-      };
-    }
-
-    const idempotencyKey = args.retry
-      ? `${baseIdempotencyKey}:retry:${previousAttempts.length}`
-      : baseIdempotencyKey;
-
-    return {
-      eligible: true as const,
-      brandId: post.brandId,
-      intentId: intent._id,
-      retryCount: previousAttempts.length,
-      idempotencyKey,
-      submission: {
-        postId: String(post._id),
-        brandId: post.brandId,
-        channelId: post.channelId,
-        title: post.title,
-        content: assembleLinkedInSubmissionContent(post.content, post.platformSettings),
-        firstComment: post.linkedinFirstComment?.trim() || undefined,
-        scheduledDate: intent.scheduledDate,
-        scheduledTime: intent.scheduledTime,
-        timezone: intent.timezone,
-        idempotencyKey,
-      },
-    };
-  },
+  handler: (ctx, args) => bufferSubmissionContext(ctx, args),
 });
 
 export const getBufferCancelContext = internalQuery({
@@ -2069,7 +2186,8 @@ export const getBufferCancelContext = internalQuery({
       return { eligible: false as const, reason: "Post not found" };
     }
     try {
-      await requireBrandAccess(ctx, args.userId, post.brandId);
+      const access=await requireBrandAccess(ctx, args.userId, post.brandId);
+      if(access.role==="viewer")return {eligible:false as const,reason:"Editor access required for Buffer dispatch."};
     } catch {
       return { eligible: false as const, reason: "Brand access denied" };
     }
@@ -2135,21 +2253,15 @@ const bufferAttemptStatusValidator = v.union(
   v.literal("unavailable")
 );
 
-const bufferProviderStateStatusValidator = v.union(
-  v.literal("not-submitted"),
-  v.literal("submitted"),
-  v.literal("published"),
-  v.literal("needs-review"),
-  v.literal("failed"),
-  v.literal("unavailable"),
-  v.literal("cancel-intent-recorded")
-);
+const bufferProviderStateStatusValidator = deliveryStatusValidator;
 
 export const claimBufferSubmission = internalMutation({
   args: {
     postId: v.id("v2Posts"),
     userId: v.string(),
     retry: v.optional(v.boolean()),
+    reviewRowId: v.optional(v.id("queueReleaseRows")),
+    runId: v.optional(v.string()),
   },
   returns: v.union(
     v.object({
@@ -2177,117 +2289,58 @@ export const claimBufferSubmission = internalMutation({
         scheduledTime: v.optional(v.string()),
         timezone: v.string(),
         idempotencyKey: v.string(),
+        expectedDestination: destinationValidator,
       }),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
-    // Inline eligibility — same checks as getBufferSubmissionContext, then claim atomically.
-    const post = await ctx.db.get(args.postId);
-    if (!post || post.userId !== args.userId) {
-      return { eligible: false as const, reason: "Post not found" };
-    }
-    try {
-      await requireBrandAccess(ctx, args.userId, post.brandId);
-    } catch {
-      return { eligible: false as const, reason: "Brand access denied" };
-    }
-    if (post.channelId !== "linkedin") {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: "Buffer live submission is only available for LinkedIn posts.",
-      };
-    }
-    if (!brandHasBufferLinkedInMapping(post.brandId)) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: `No Buffer LinkedIn channel mapping exists for brand ${post.brandId}.`,
-      };
-    }
-
-    const intent = await latestIntent(ctx, args.postId);
-    if (!intent) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: "Publishing intent not found",
-      };
-    }
-
-    const channel = await ctx.db
-      .query("v2Channels")
-      .withIndex("by_brand_and_channel", (q) =>
-        q.eq("brandId", post.brandId).eq("channelId", post.channelId)
+    const context = await bufferSubmissionContext(ctx, args);
+    if (!context.eligible) return context;
+    const post = (await ctx.db.get(args.postId))!;
+    const intent = (await ctx.db.get(context.intentId))!;
+    const previousAttempts = (await priorBufferAttempts(ctx, post._id)).rows;
+    const idempotencyKey = context.idempotencyKey;
+    const reviewedDestination = context.submission.expectedDestination;
+    const allocation = await dispatchCapacity(ctx, post);
+    const pin = await releasePin(ctx, post, allocation.capacity);
+    let reviewRow: Doc<"queueReleaseRows"> | null = null;
+    if (args.reviewRowId) {
+      reviewRow = await ctx.db.get(args.reviewRowId);
+      const review = reviewRow ? await ctx.db.get(reviewRow.reviewId) : null;
+      const series = review?.seriesId
+        ? await ctx.db.get(review.seriesId)
+        : null;
+      if (
+        !reviewRow ||
+        reviewRow.postId !== post._id ||
+        review?.userId !== args.userId ||
+        review.status !== "running" ||
+        review.runId !== args.runId ||
+        Date.now() - review.createdAt > 300000 ||
+        reviewRow.status !== "ready" ||
+        Boolean(reviewRow.retry) !== Boolean(args.retry) ||
+        reviewRow.reviewVersion !== pin.version ||
+        (series && series.revision !== review?.seriesRevision)
       )
-      .first();
-
-    const ineligibleReason = providerSubmissionIneligibilityReason({
-      routable: Boolean(channel?.routable),
-      approvalState: intent.approvalState,
-      scheduledDate: intent.scheduledDate,
-      contentFingerprint: intent.contentFingerprint,
-      currentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
-    });
-
-    if (ineligibleReason) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: ineligibleReason,
-      };
-    }
-
-    const previousAttempts = await ctx.db
-      .query("v2PublishAttempts")
-      .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
-      .collect();
-    const latestAttempt = [...previousAttempts].sort((a, b) => b.createdAt - a.createdAt)[0];
-    const baseIdempotencyKey = `${intent._id}:${intent.contentFingerprint}`;
-    const existingAttempt = await ctx.db
-      .query("v2PublishAttempts")
-      .withIndex("by_idempotency_key", (q) => q.eq("idempotencyKey", baseIdempotencyKey))
-      .first();
-
-    if (existingAttempt && existingAttempt.status === "pending") {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: "Duplicate submission prevented.",
-      };
-    }
-
-    if (existingAttempt) {
-      const retryable =
-        args.retry &&
-        (latestAttempt?.status === "retryable-failure" ||
-          latestAttempt?.status === "ambiguous");
-      if (!retryable) {
         return {
           eligible: false as const,
           brandId: post.brandId,
           intentId: intent._id,
-          reason: args.retry
-            ? "Previous attempt is not retryable."
-            : "Duplicate submission prevented.",
+          reason: "Queue review changed or expired; prepare a new review.",
         };
-      }
+      const reservationReason = await reviewReservationsHold(
+        ctx,
+        review,
+        allocation.capacity,
+      );
+      if (reservationReason)
+        return {
+          eligible: false as const,
+          brandId: post.brandId,
+          intentId: intent._id,
+          reason: reservationReason,
+        };
     }
-    if (args.retry && !existingAttempt) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: "No previous attempt exists to retry.",
-      };
-    }
-
-    const idempotencyKey = args.retry
-      ? `${baseIdempotencyKey}:retry:${previousAttempts.length}`
-      : baseIdempotencyKey;
-
     // Serialize concurrent claims by patching the intent document.
     if (
       intent.activeBufferClaimKey &&
@@ -2316,7 +2369,10 @@ export const claimBufferSubmission = internalMutation({
       brandId: post.brandId,
       channelId: post.channelId,
       title: post.title,
-      content: assembleLinkedInSubmissionContent(post.content, post.platformSettings),
+      content: assembleLinkedInSubmissionContent(
+        post.content,
+        post.platformSettings,
+      ),
       firstComment: post.linkedinFirstComment?.trim() || undefined,
       scheduledDate: intent.scheduledDate,
       scheduledTime: intent.scheduledTime,
@@ -2342,6 +2398,23 @@ export const claimBufferSubmission = internalMutation({
       updatedAt: now,
     });
 
+    const claimId = await allocateDispatch(
+      ctx,
+      post,
+      intent._id,
+      attemptId,
+      pin,
+      allocation.capacity,
+    );
+    if (reviewRow) {
+      await ctx.db.patch(claimId, { reviewRowId: reviewRow._id });
+      await ctx.db.patch(reviewRow._id, {
+        status: "executing",
+        attemptId,
+        updatedAt: now,
+      });
+    }
+
     return {
       eligible: true as const,
       brandId: post.brandId,
@@ -2353,6 +2426,7 @@ export const claimBufferSubmission = internalMutation({
       submission: {
         ...submissionSnapshot,
         idempotencyKey,
+        expectedDestination: reviewedDestination,
       },
     };
   },
@@ -2401,51 +2475,199 @@ export const recordBufferSubmitResult = internalMutation({
     const intent = await ctx.db.get(args.intentId);
     if (!intent) throw new Error("Publishing intent not found");
 
+    const attempt = await ctx.db.get(args.attemptId);
+    if (
+      !attempt ||
+      attempt.postId !== post._id ||
+      attempt.intentId !== intent._id ||
+      attempt.idempotencyKey !== args.idempotencyKey
+    )
+      throw new Error("Submission receipt identity mismatch");
+    if (attempt.status !== "pending")
+      return {
+        recorded: true as const,
+        attemptId: attempt._id,
+        submitted: attempt.status === "success",
+        stale: false,
+      };
     const now = Date.now();
+    if (
+      args.brandId !== post.brandId ||
+      intent.postId !== post._id ||
+      intent.userId !== args.userId
+    )
+      throw new Error("Receipt ownership or brand mismatch");
+    for (const key of [
+      "postId",
+      "brandId",
+      "channelId",
+      "title",
+      "content",
+      "firstComment",
+      "scheduledDate",
+      "scheduledTime",
+      "timezone",
+    ] as const)
+      if (attempt.submissionSnapshot[key] !== args.submissionSnapshot[key])
+        throw new Error(
+          "Submission snapshot does not match the immutable claim",
+        );
+    const originalAllocation = await ctx.db
+      .query("queueDispatchClaims")
+      .withIndex("by_attempt", (q) => q.eq("attemptId", attempt._id))
+      .first();
+    const currentCapacity = (await dispatchCapacity(ctx, post)).capacity;
+    const currentRelease = await releasePin(ctx, post, currentCapacity);
+    const releaseStillValid =
+      !originalAllocation?.reviewVersion ||
+      currentRelease.version === originalAllocation.reviewVersion;
+    const allocation = await reconcileAllocation(
+      ctx,
+      args.attemptId,
+      args.ok && args.providerPostId
+        ? "confirmed"
+        : args.status === "ambiguous" ||
+            args.status === "pending" ||
+            args.providerPostId
+          ? "uncertain"
+          : "released",
+      args.providerPostId,
+    );
+    if (
+      args.sanitizedResponse?.capacityHold === true &&
+      allocation?.destination
+    ) {
+      const d = allocation.destination;
+      await ctx.db.insert("queueObservations", {
+        userId: post.userId,
+        brandId: post.brandId,
+        identity: allocation.identity,
+        checkedAt: now,
+        observation: {
+          identity: allocation.identity,
+          channelId: d.channelId,
+          organizationId: d.organizationId,
+          checkedAt: now,
+          complete: false,
+          providerPosts: [],
+          error:
+            "Buffer reported a full queue; refresh complete capacity evidence before a new review.",
+        },
+      });
+    }
+    if (args.ok && args.providerPostId)
+      await consumeReservation(
+        ctx,
+        post._id,
+        args.providerPostId,
+        allocation?.identity,
+      );
+    if (allocation?.reviewRowId)
+      await ctx.db.patch(allocation.reviewRowId, {
+        status:
+          args.ok &&
+          args.providerPostId &&
+          !args.providerPostId.startsWith("mock-") &&
+          ["queued", "publishing", "published"].includes(
+            args.providerStateStatus,
+          )
+            ? "queued"
+            : args.status === "ambiguous" || args.providerPostId
+              ? "needs-review"
+              : args.sanitizedResponse?.capacityHold ||
+                  args.sanitizedResponse?.phase === "preflight"
+                ? "held"
+                : "failed",
+        providerPostId: args.providerPostId,
+        deliveryStatus: args.providerStateStatus,
+        reason: args.reason,
+        updatedAt: now,
+      });
+    if (args.sanitizedResponse?.firstCommentUnsupported === true) {
+      const destination = await readDestination(ctx, post.userId, post.brandId);
+      if (destination?.destination && attempt.submissionSnapshot.firstComment)
+        await ctx.db.patch(destination._id, {
+          destination: {
+            ...destination.destination,
+            firstComment: {
+              value: "unsupported",
+              source: "provider-observation",
+              checkedAt: now,
+              evidence:
+                "Definitive Buffer response rejected first-comment entitlement for this account.",
+            },
+          },
+        });
+    }
     const intentStillValid =
+      releaseStillValid &&
+      post.approvalState === "approved" &&
+      postScheduleVersion(post) ===
+        postScheduleVersion(args.submissionSnapshot) &&
+      postScheduleVersion(intent) ===
+        postScheduleVersion(args.submissionSnapshot) &&
       intent.approvalState === "approved" &&
-      intent.contentFingerprint === contentFingerprint(post.title, post.content, post.linkedinFirstComment) &&
+      intent.contentFingerprint ===
+        contentFingerprint(
+          post.title,
+          post.content,
+          post.linkedinFirstComment,
+        ) &&
       assembleLinkedInSubmissionContent(post.content, post.platformSettings) ===
         args.submissionSnapshot.content &&
-      (post.linkedinFirstComment?.trim() || "") === (args.submissionSnapshot.firstComment ?? "");
+      (post.linkedinFirstComment?.trim() || "") ===
+        (args.submissionSnapshot.firstComment ?? "");
 
     const effectiveOk = args.ok && intentStillValid;
     const effectiveStatus = !intentStillValid
-      ? ("permanent-failure" as const)
+      ? args.ok
+        ? ("success" as const)
+        : args.status === "pending"
+          ? ("ambiguous" as const)
+          : args.status
       : args.status === "pending"
         ? ("ambiguous" as const)
         : args.status;
     const effectiveProviderStatus = !intentStillValid
-      ? ("failed" as const)
+      ? ("needs-review" as const)
       : args.providerStateStatus;
+    if (!intentStillValid && allocation?.reviewRowId)
+      await ctx.db.patch(allocation.reviewRowId, {
+        status: "needs-review",
+        reason:
+          "Editorial version changed during submission; the known provider receipt is retained.",
+      });
     const staleReason =
-      "Approval or content changed while Buffer submission was in flight; provider result was not applied to post state.";
+      "Approval or content changed while Buffer submission was in flight; provider receipt retained and post held for review.";
 
     const summary = !intentStillValid
       ? staleReason
       : effectiveOk
         ? `Buffer submission recorded${args.providerPostId ? ` (${args.providerPostId})` : ""}.`
-        : args.reason ?? "Buffer submission failed.";
+        : (args.reason ?? "Buffer submission failed.");
 
     await ctx.db.patch(args.attemptId, {
       status: effectiveStatus,
+      providerPostId: args.providerPostId,
+      observedDeliveryStatus: args.providerStateStatus,
       sanitizedResponse: sanitizeProviderResponse(
         args.sanitizedResponse &&
           typeof args.sanitizedResponse === "object" &&
           !Array.isArray(args.sanitizedResponse)
           ? (args.sanitizedResponse as Record<string, unknown>)
-          : { providerId: "buffer" }
+          : { providerId: "buffer" },
       ),
       updatedAt: now,
     });
 
     await ctx.db.patch(args.intentId, {
-      activeBufferClaimKey: undefined,
+      activeBufferClaimKey:
+        effectiveStatus === "ambiguous" ? args.idempotencyKey : undefined,
       updatedAt: now,
     });
 
     // Only advance provider/post state when the claimed intent is still approved & unchanged.
-    if (intentStillValid) {
+    if (intentStillValid || args.providerPostId) {
       const providerState = await ctx.db
         .query("v2ProviderStates")
         .withIndex("by_intent", (q) => q.eq("intentId", args.intentId))
@@ -2457,6 +2679,16 @@ export const recordBufferSubmitResult = internalMutation({
         providerPostId: args.providerPostId,
         lastAttemptId: args.attemptId,
         lastResponseSummary: summary,
+        lastCheckedAt: now,
+        lastReceipt: sanitizeProviderResponse(args.sanitizedResponse),
+        dueAt:
+          typeof args.sanitizedResponse?.dueAt === "string"
+            ? args.sanitizedResponse.dueAt
+            : undefined,
+        destination:
+          allocation?.destination ??
+          (await readDestination(ctx, post.userId, post.brandId))?.destination,
+
         updatedAt: now,
       };
       if (providerState) {
@@ -2487,7 +2719,10 @@ export const recordBufferSubmitResult = internalMutation({
           ? "provider.buffer_submit_stale"
           : "provider.buffer_submit_failed",
       summary,
-      metadata: { attemptId: args.attemptId, providerPostId: args.providerPostId },
+      metadata: {
+        attemptId: args.attemptId,
+        providerPostId: args.providerPostId,
+      },
     });
 
     return {
@@ -2520,7 +2755,7 @@ export const recordBufferCancelResult = internalMutation({
     await requireBrandAccess(ctx, args.userId, post.brandId);
 
     const now = Date.now();
-    const summary = args.ok
+    const provisionalSummary = args.ok
       ? args.intentType === "unpublish"
         ? "Buffer unpublish/delete recorded."
         : "Buffer cancel/delete recorded."
@@ -2531,21 +2766,19 @@ export const recordBufferCancelResult = internalMutation({
       .withIndex("by_intent", (q) => q.eq("intentId", args.intentId))
       .first();
 
-    // Failed cancels stay retryable: keep prior live Buffer state when present.
-    const nextStatus = args.ok
-      ? args.providerStateStatus
-      : providerState?.status === "cancel-intent-recorded"
-        ? providerState.status
-        : args.providerStateStatus === "cancel-intent-recorded"
-          ? "failed"
-          : args.providerStateStatus;
+    if(providerState?.providerPostId!==args.providerPostId)return {recorded:true as const,ok:false};
+    const confirmed=args.ok && args.sanitizedResponse?.deletionConfirmed===true && args.providerPostId===providerState?.providerPostId;
+    if(confirmed && providerState?.lastAttemptId)await reconcileAllocation(ctx,providerState.lastAttemptId,"released",args.providerPostId);
+    const summary=confirmed?provisionalSummary:"Cancellation lacks definitive matching proof; delivery remains unverified.";
+    const nextStatus = providerState?.status==="cancelled" ? "cancelled" as const : providerState?.status==="removed" ? "removed" as const : confirmed ? ((providerState?.publishedAt || providerState?.status === "published") ? "removed" as const : "cancelled" as const) : (providerState?.status === "published" ? "published" as const : "cancel-requested" as const);
 
     const providerPatch = {
       providerId: "buffer" as const,
       status: nextStatus,
       simulated: false,
       providerPostId: args.providerPostId ?? providerState?.providerPostId,
-      lastResponseSummary: summary,
+      lastResponseSummary: confirmed ? summary : "Cancellation remains unverified; inspect the receipt before retrying.",
+      lastReceipt:sanitizeProviderResponse(args.sanitizedResponse),lastCheckedAt:now,
       updatedAt: now,
     };
     if (providerState) {
@@ -2559,6 +2792,7 @@ export const recordBufferCancelResult = internalMutation({
       });
     }
 
+    if(nextStatus!=="published")await ctx.db.patch(post._id,{status:nextStatus,updatedAt:now});
     await audit(ctx, {
       userId: args.userId,
       brandId: args.brandId,
@@ -2566,10 +2800,10 @@ export const recordBufferCancelResult = internalMutation({
       intentId: args.intentId,
       action:
         args.intentType === "unpublish"
-          ? args.ok
+          ? confirmed
             ? "provider.buffer_unpublish"
             : "provider.buffer_unpublish_failed"
-          : args.ok
+          : confirmed
             ? "provider.buffer_cancel"
             : "provider.buffer_cancel_failed",
       summary,
@@ -2585,7 +2819,7 @@ export const recordBufferCancelResult = internalMutation({
       },
     });
 
-    return { recorded: true as const, ok: args.ok };
+    return { recorded: true as const, ok: confirmed };
   },
 });
 
@@ -2607,5 +2841,208 @@ export const auditBufferSkip = internalMutation({
       summary: args.reason,
     });
     return { recorded: true as const };
+  },
+});
+
+export const getHeroPreparationContext = internalQuery({
+  args: {postId: v.id("v2Posts"), userId: v.string()}, returns: v.any(),
+  handler: async (ctx, args) => {
+    const post = await getOwnedPost(ctx, args.userId, args.postId);
+    if (post.channelId !== "corvo-blog" || !post.heroImageStorageId) throw new Error("Save an uploaded hero in the composer first.");
+    return post;
+  },
+});
+export const recordPreparedHero = internalMutation({
+  args: {postId: v.id("v2Posts"), userId: v.string(), hero: preparedHeroValidator}, returns: v.null(),
+  handler: async (ctx, args) => {
+    const post = await getOwnedPost(ctx, args.userId, args.postId, true);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
+    if (post.heroImageStorageId !== args.hero.sourceStorageId) throw new Error("The source image changed during preparation; review the new image.");
+    if (post.preparedHero?.sourceStorageId === args.hero.sourceStorageId && post.preparedHero.sha256 === args.hero.sha256 && post.preparedHero.crop === args.hero.crop) {
+      await ctx.storage.delete(args.hero.storageId);
+      return null;
+    }
+    const intent = await latestIntent(ctx, post._id);
+    const fingerprint = blogEditorialFingerprint({...post, preparedHero: args.hero});
+    await ctx.db.patch(post._id, {preparedHero: args.hero, approvalState: "unapproved", status: "draft", contentFingerprint: fingerprint, updatedAt: Date.now()});
+    if (intent) await ctx.db.patch(intent._id, {approvalState: "unapproved", contentFingerprint: fingerprint, updatedAt: Date.now()});
+    await audit(ctx, {userId: args.userId, brandId: post.brandId, postId: post._id, action: "blog.hero_prepared", summary: "Prepared website hero; review the exported crop before approval.", metadata: args.hero});
+    return null;
+  },
+});
+
+export const claimBlogExport = mutation({
+  args: { postId: v.id("v2Posts"), fingerprint: v.string(), schedule: v.string(), key: v.string(),
+    expectedVisualSignature: v.optional(v.string()), expectedIntentId: v.optional(v.id("v2PublishingIntents")), expectedSchedule: v.optional(publicationScheduleValidator) },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
+    if (await hasVisualPublication(ctx, post._id)) {
+      assertNewPublicationLifecycle(post);
+      const intent = await latestIntent(ctx, post._id);
+      const expected = args.expectedSchedule;
+      const current = resolvePublicationSchedule(post, intent ?? {}, expected?.scheduledDate ?? "");
+      if (!args.expectedVisualSignature || args.expectedVisualSignature !== await currentVisualApprovalSignature(ctx, post)) throw new Error("Reviewed visuals changed before export claim");
+      if (!intent || intent._id !== args.expectedIntentId || intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post) || !expected ||
+        current.scheduledDate !== expected.scheduledDate || current.scheduledTime !== expected.scheduledTime || current.timezone !== expected.timezone) throw new Error("Publication intent or schedule changed before export claim");
+    }
+    if (post.channelId !== "corvo-blog" || post.approvalState !== "approved" || post.contentFingerprint !== args.fingerprint || blogEditorialFingerprint(post) !== args.fingerprint || JSON.stringify([post.scheduledDate, post.scheduledTime, post.timezone]) !== args.schedule) throw new Error("Saved approved export or schedule changed; review again.");
+    if (post.blogSyncPending || post.prUrl || (post.blogExportClaimKey && post.blogExportClaimKey !== args.key)) throw new Error("Existing article export requires reconciliation.");
+    if (!post.blogExportClaimKey) {
+      await ctx.db.patch(post._id, {blogExportClaimKey: args.key});
+      await audit(ctx, {userId, brandId: post.brandId, postId: post._id, action: "blog.export_claim", summary: "Pinned the approved article and schedule for export."});
+    }
+    return args.key;
+  },
+});
+
+export const isCurrentBlogSync = internalQuery({
+  args: {postId: v.id("v2Posts"), userId: v.string(), syncKey: v.string()}, returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const post = await getOwnedPost(ctx, args.userId, args.postId);
+    return post.blogSyncPending === args.syncKey;
+  },
+});
+
+/** Last server check after provider account discovery, immediately before createPost. */
+export const revalidateBufferClaim = internalMutation({
+  args: { attemptId: v.id("v2PublishAttempts"), userId: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    const attempt = await ctx.db.get(args.attemptId);
+    if (
+      !attempt ||
+      attempt.userId !== args.userId ||
+      attempt.status !== "pending"
+    )
+      return "Submission claim is no longer pending.";
+    const post = await ctx.db.get(attempt.postId);
+    if (!post || post.userId !== args.userId) return "Post access changed.";
+    const role = await requireBrandAccess(ctx, args.userId, post.brandId);
+    if (role.role === "viewer") return "Editor access was revoked.";
+    const intent = await latestIntent(ctx, post._id);
+    if (
+      !intent ||
+      intent._id !== attempt.intentId ||
+      post.approvalState !== "approved" ||
+      intent.approvalState !== "approved" ||
+      intent.contentFingerprint !==
+        contentFingerprint(post.title, post.content, post.linkedinFirstComment)
+    )
+      return "Editorial approval or intent changed after the claim.";
+    const channel = await ctx.db
+      .query("v2Channels")
+      .withIndex("by_brand_and_channel", (q) =>
+        q.eq("brandId", post.brandId).eq("channelId", post.channelId),
+      )
+      .first();
+    if (!channel?.routable) return "Destination routing changed.";
+    if (postScheduleVersion(post) !== postScheduleVersion(intent))
+      return "Post and intent schedule changed.";
+    const article = await companionSubmissionHold(ctx, post);
+    if (article) return article;
+    const destination = await destinationSubmissionHold(ctx, post);
+    if (destination) return destination;
+    const claim = await ctx.db
+      .query("queueDispatchClaims")
+      .withIndex("by_attempt", (q) => q.eq("attemptId", attempt._id))
+      .first();
+    if (!claim || claim.status !== "active")
+      return "Capacity claim requires reconciliation.";
+    const capacity = (await dispatchCapacity(ctx, post)).capacity;
+    if (capacity.projection.unknown) return capacity.projection.unknown;
+    const pin = await releasePin(ctx, post, capacity);
+    if (pin.version !== claim.reviewVersion)
+      return "Payload, schedule, destination, article evidence, reservation or capacity changed after the claim.";
+    if (claim.reviewRowId) {
+      const row = await ctx.db.get(claim.reviewRowId);
+      const review = row ? await ctx.db.get(row.reviewId) : null;
+      if (
+        !review ||
+        review.status !== "running" ||
+        Date.now() - review.createdAt > 300000
+      )
+        return "Queue review expired or stopped.";
+      const reservationReason = await reviewReservationsHold(
+        ctx,
+        review,
+        capacity,
+      );
+      if (reservationReason) return reservationReason;
+      if (review.seriesId) {
+        const series = await ctx.db.get(review.seriesId);
+        if (!series || series.revision !== review.seriesRevision)
+          return "Series membership changed.";
+      }
+    }
+    return null;
+  },
+});
+export const markDispatchUncertain = internalMutation({
+  args: {
+    attemptId: v.id("v2PublishAttempts"),
+    userId: v.string(),
+    providerPostId: v.optional(v.string()),
+    receipt: v.optional(v.any()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const attempt = await ctx.db.get(args.attemptId);
+    if (
+      !attempt ||
+      attempt.userId !== args.userId ||
+      attempt.status !== "pending"
+    )
+      return null;
+    await ctx.db.patch(attempt._id, {
+      status: "ambiguous",
+      providerPostId: args.providerPostId,
+      sanitizedResponse: sanitizeProviderResponse(
+        args.receipt ?? { outcome: "uncertain" },
+      ),
+      updatedAt: Date.now(),
+    });
+    const claim = await reconcileAllocation(
+      ctx,
+      attempt._id,
+      "uncertain",
+      args.providerPostId,
+    );
+    if (args.providerPostId) {
+      const state = await ctx.db
+        .query("v2ProviderStates")
+        .withIndex("by_intent", (q) => q.eq("intentId", attempt.intentId))
+        .first();
+      const patch = {
+        providerId: "buffer" as const,
+        status: "needs-review" as const,
+        providerPostId: args.providerPostId,
+        lastAttemptId: attempt._id,
+        simulated: false,
+        destination: claim?.destination,
+        lastReceipt: sanitizeProviderResponse(args.receipt ?? {}),
+        lastResponseSummary:
+          "Known accepted identifier retained after receipt persistence interruption; read status to reconcile.",
+        updatedAt: Date.now(),
+      };
+      if (state) await ctx.db.patch(state._id, patch);
+      else
+        await ctx.db.insert("v2ProviderStates", {
+          postId: attempt.postId,
+          intentId: attempt.intentId,
+          ...patch,
+          createdAt: Date.now(),
+        });
+    }
+    if (claim?.reviewRowId)
+      await ctx.db.patch(claim.reviewRowId, {
+        status: "needs-review",
+        providerPostId: args.providerPostId,
+        reason:
+          "Provider result could not be durably reconciled; inspect this attempt before any new review.",
+        updatedAt: Date.now(),
+      });
+    return null;
   },
 });

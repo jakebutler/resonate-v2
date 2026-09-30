@@ -30,7 +30,7 @@ export async function dispatchVisualImageRequest(request: PreparedVisualProvider
       body = JSON.stringify(request.request.fields);
     }
     const origin = request.route.provider === "openai" ? "https://api.openai.com" : "https://inference.do-ai.run";
-    const response = await fetch(`${origin}${request.request.path}`, { method: "POST", headers, body, signal: controller.signal });
+    const response = await fetch(`${origin}${request.request.path}`, { method: "POST", headers, body, signal: controller.signal, redirect: "error" });
     const contentLength = response.headers.get("content-length");
     if (contentLength && Number(contentLength) > MAX_RESPONSE_BYTES) throw new Error("Oversized response");
     if (!response.body) throw new Error("Missing response body");

@@ -1,3 +1,6 @@
+import {seedCapacity} from "../../test-support/queueCapacityFixture";
+import {socialReleaseVersion} from "../../lib/socialPayload";
+import {destinationIdentity} from "../../lib/bufferContracts";
 import { convexTest } from "convex-test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -139,6 +142,11 @@ describe("v2 publishing platform settings", () => {
   });
 });
 
+async function reviewFixtureDestination(t:ReturnType<typeof convexTest>,user:ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,userId:string,postId:Id<"v2Posts">){
+ const d={channelId:"fixture-channel",organizationId:"fixture-org",displayName:"Fixture Page",handle:"corvo-labs-us",accountType:"page",disconnected:false,locked:false,queuePaused:false,flagsVerified:true,checkedAt:Date.now(),firstComment:{value:"supported" as const,source:"operator-confirmed" as const,checkedAt:Date.now(),evidence:"Sanitized fixture account"}};
+ await t.mutation(internal.bufferDestinations.record,{userId,brandId:"corvo",destination:d});await seedCapacity(t,userId,"corvo",d);let post=(await t.run(ctx=>ctx.db.get(postId)))!;if(!post.scheduledTime){await user.mutation(api.publishing.reschedule,{postId,scheduledDate:post.scheduledDate!,scheduledTime:"09:00"});post=(await t.run(ctx=>ctx.db.get(postId)))!;}await user.mutation(api.bufferDestinations.pin,{postId,expectedVersion:socialReleaseVersion(post),identity:destinationIdentity(d)});
+}
+
 describe("publishing cross-brand authorization", () => {
   it("denies setApproval on a lower-db post for corvo-only members", async () => {
     const t = createTestHarness();
@@ -174,7 +182,7 @@ describe("publishing cross-brand authorization", () => {
     await expect(
       asUser.mutation(api.publishing.reschedule, {
         postId,
-        scheduledDate: "2026-06-10",
+        scheduledDate: "2030-06-10",
       })
     ).rejects.toThrow("Brand access denied");
   });
@@ -201,7 +209,7 @@ describe("publishing cross-brand authorization", () => {
       channelId: "corvo-blog",
       title: "First blog draft",
       content: "Provisioned on first create.",
-      scheduledDate: "2026-06-20",
+      scheduledDate: "2030-06-20",
     });
 
     const channel = await t.run(async (ctx) =>
@@ -300,7 +308,7 @@ describe("publishing cross-brand authorization", () => {
 
     await asUser.mutation(api.publishing.acceptVariantPost, {
       postId,
-      scheduledDate: "2026-06-20",
+      scheduledDate: "2030-06-20",
     });
 
     post = await t.run(async (ctx) => ctx.db.get(postId));
@@ -332,7 +340,7 @@ describe("publishing cross-brand authorization", () => {
       channelId: "linkedin",
       title: "Simulated post",
       content: "Body",
-      scheduledDate: "2026-06-20",
+      scheduledDate: "2030-06-20",
     });
 
     await asUser.mutation(api.publishing.setApproval, {
@@ -368,7 +376,7 @@ describe("publishing cross-brand authorization", () => {
       channelId: "linkedin",
       title: "Unapproved LinkedIn",
       content: "Must not hit Buffer",
-      scheduledDate: "2026-06-20",
+      scheduledDate: "2030-06-20",
     });
 
     const context = await asUser.query(internal.publishing.getBufferSubmissionContext, {
@@ -390,7 +398,7 @@ describe("publishing cross-brand authorization", () => {
       channelId: "linkedin",
       title: "Approved LinkedIn",
       content: "Queue me",
-      scheduledDate: "2026-06-20",
+      scheduledDate: "2030-06-20",
       scheduledTime: "09:00",
     });
     await asUser.mutation(api.publishing.updateContent, {
@@ -402,6 +410,7 @@ describe("publishing cross-brand authorization", () => {
       approvalState: "approved",
     });
 
+    await reviewFixtureDestination(t,asUser,userId,postId);
     const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, {
       postId,
       userId,
@@ -474,7 +483,7 @@ describe("publishing cross-brand authorization", () => {
     const t = createTestHarness();
     const { asUser, userId } = await setupCorvoOnlyMember(t);
     const { postId } = await asUser.mutation(api.publishing.createPostWithIntent, {
-      brandId: "corvo", channelId: "linkedin", title: "Companion", content: "Approved article copy", scheduledDate: "2026-10-06",
+      brandId: "corvo", channelId: "linkedin", title: "Companion", content: "Approved article copy", scheduledDate: "2030-10-06",
     });
     await asUser.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
     const firstComment = "https://corvolabs.com/blog/approved-article";
@@ -483,6 +492,7 @@ describe("publishing cross-brand authorization", () => {
     expect(blocked).toMatchObject({ eligible: false, reason: "Post is not approved." });
 
     await asUser.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    await reviewFixtureDestination(t,asUser,userId,postId);
     const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, { postId, userId });
     if (!claimed.eligible) throw new Error("expected approved comment to be eligible");
     expect(claimed.submission.firstComment).toBe(firstComment);
@@ -491,7 +501,7 @@ describe("publishing cross-brand authorization", () => {
 
     await asUser.mutation(api.publishing.updateContent, { postId, linkedinFirstComment: firstComment + "-changed" });
     await asUser.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
-    const { idempotencyKey, ...submissionSnapshot } = claimed.submission;
+    const { idempotencyKey, expectedDestination: _destination, ...submissionSnapshot } = claimed.submission;
     const recorded = await asUser.mutation(internal.publishing.recordBufferSubmitResult, {
       postId, userId, intentId: claimed.intentId, brandId: claimed.brandId,
       attemptId: claimed.attemptId, idempotencyKey, retryCount: claimed.retryCount,
@@ -508,13 +518,14 @@ describe("publishing cross-brand authorization", () => {
       channelId: "linkedin",
       title: "Cancel me",
       content: "Queued then cancelled",
-      scheduledDate: "2026-06-21",
+      scheduledDate: "2030-06-21",
     });
     await asUser.mutation(api.publishing.setApproval, {
       postId,
       approvalState: "approved",
     });
 
+    await reviewFixtureDestination(t,asUser,userId,postId);
     const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, {
       postId,
       userId,
@@ -543,7 +554,7 @@ describe("publishing cross-brand authorization", () => {
       status: "success",
       providerStateStatus: "submitted",
       providerPostId: "buffer-cancel-1",
-      sanitizedResponse: { providerId: "buffer" },
+      sanitizedResponse: { providerId: "buffer", deletionConfirmed:true },
     });
 
     const cancelContext = await asUser.query(internal.publishing.getBufferCancelContext, {
@@ -563,7 +574,7 @@ describe("publishing cross-brand authorization", () => {
       ok: true,
       providerStateStatus: "cancel-intent-recorded",
       providerPostId: cancelContext.providerPostId,
-      sanitizedResponse: { providerId: "buffer", deleted: true },
+      sanitizedResponse: { providerId: "buffer", deletionConfirmed: true },
     });
 
     const providerState = await t.run(async (ctx) => {
@@ -578,7 +589,7 @@ describe("publishing cross-brand authorization", () => {
             .first()
         : null;
     });
-    expect(providerState?.status).toBe("cancel-intent-recorded");
+    expect(providerState?.status).toBe("cancelled");
     expect(providerState?.simulated).toBe(false);
   });
   it("rejects Buffer claim for unapproved LinkedIn and leaves no attempts", async () => {
@@ -589,9 +600,10 @@ describe("publishing cross-brand authorization", () => {
       channelId: "linkedin",
       title: "Unapproved LinkedIn action path",
       content: "Must not hit Buffer",
-      scheduledDate: "2026-06-20",
+      scheduledDate: "2030-06-20",
     });
 
+    await reviewFixtureDestination(t,asUser,userId,postId);
     const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, {
       postId,
       userId,
@@ -646,7 +658,7 @@ describe("publishing cross-brand authorization", () => {
       channelId: "linkedin",
       title: "Personal LinkedIn",
       content: "No mapping",
-      scheduledDate: "2026-06-20",
+      scheduledDate: "2030-06-20",
     });
     await asUser.mutation(api.publishing.setApproval, {
       postId,
@@ -670,7 +682,7 @@ describe("publishing cross-brand authorization", () => {
       channelId: "linkedin",
       title: "Simulated only",
       content: "No live cancel",
-      scheduledDate: "2026-06-23",
+      scheduledDate: "2030-06-23",
     });
     await asUser.mutation(api.publishing.setApproval, {
       postId,

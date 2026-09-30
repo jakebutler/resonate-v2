@@ -1,5 +1,6 @@
 import { convexTest } from "convex-test";
 import { beforeEach, describe, expect, it } from "vitest";
+import sharp from "sharp";
 import { api } from "../_generated/api";
 import schema from "../schema";
 
@@ -113,6 +114,15 @@ async function setupGatedDraftSet(t: ReturnType<typeof convexTest>) {
   await asUser.mutation(api.cohesion.runCohesionGate, { campaignId });
 
   return { asUser, campaignId };
+}
+
+async function reviewBlogExport(t: ReturnType<typeof convexTest>, asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>, postId: string) {
+  const post = await t.run(ctx => ctx.db.get(postId as never));
+  if (!post || !("channelId" in post) || post.channelId !== "corvo-blog") return;
+  const bytes = await sharp({ create: { width: 1536, height: 1024, channels: 3, background: "#345678" } }).png().toBuffer();
+  const { storageId: source } = await asUser.action(api.v2Storage.uploadImage, { brandId: "corvo", bytes: Uint8Array.from(bytes).buffer, contentType: "image/png", fileName: "SPECULATIVE-campaign-source.png" });
+  await asUser.mutation(api.publishing.updateBlogMetadata, {postId: postId as never, metadata: {blogPublicationIntent:"draft", coverImageAlt:"Reviewed campaign hero", blogExcerpt:"Reviewed excerpt",blogAuthor:"Editor",blogCategory:"strategy",blogTags:["test"],heroImageStorageId:source}});
+  await asUser.action(api.blogHero.prepare, { postId: postId as never, crop: "centre" });
 }
 
 describe("materialize + approval queue", () => {
@@ -381,6 +391,7 @@ describe("materialize + approval queue", () => {
     const first = view!.queue[0]!;
     expect(view!.nextSeq).toBe(1);
 
+    await reviewBlogExport(t, asUser, first.postId);
     await asUser.mutation(api.publishing.setApproval, {
       postId: first.postId as never,
       approvalState: "approved",
@@ -400,6 +411,7 @@ describe("materialize + approval queue", () => {
 
     const view = await asUser.query(api.queue.getCampaignQueue, { campaignId });
     for (const entry of view!.queue) {
+      await reviewBlogExport(t, asUser, entry.postId);
       await asUser.mutation(api.publishing.setApproval, {
         postId: entry.postId as never,
         approvalState: "approved",

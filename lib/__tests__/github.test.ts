@@ -1,7 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest";
-import sharp from "sharp";
-import { createHash } from "node:crypto";
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 
 type GithubModule = typeof import("@/lib/github");
 
@@ -31,29 +29,6 @@ beforeAll(async () => {
 
 const HERO_URL = "https://healthy-platypus-553.convex.cloud/api/storage/hero-uuid";
 const SECOND_URL = "https://healthy-platypus-553.convex.cloud/api/storage/second-uuid";
-
-function mockGitHubSuccess(options?: { prUrl?: string }) {
-  vi.mocked(fetch)
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ default_branch: "main" }), { status: 200 })
-    )
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ object: { sha: "abc123" } }), { status: 200 })
-    )
-    .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
-    .mockResolvedValueOnce(new Response(JSON.stringify({ message: "not found" }), { status: 404 }))
-    .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
-    .mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          html_url: options?.prUrl ?? "https://github.com/org/repo/pull/1",
-          number: 1,
-          state: "open",
-        }),
-        { status: 200 }
-      )
-    );
-}
 
 describe("normalizeMdxBody", () => {
   it("drops H1 headings from the body so the frontmatter title is canonical", () => {
@@ -230,420 +205,6 @@ describe("validateMdxPost", () => {
   });
 });
 
-describe("createBlogPostPR", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("refuses an existing shared asset directory before any GitHub mutation", async () => {
-    const bytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2e5b60" } }).webp().toBuffer();
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(new Response(JSON.stringify({ default_branch: "main" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ object: { sha: "base" } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([{ name: "hero.webp" }]), { status: 200 }));
-    await expect(createBlogPostPR({ title: "A different article", slug: "shared-slug", tags: ["fixture"], content: "Body.", scheduledDate: "2026-10-01", status: "draft", images: [
-      { sourceUrl: HERO_URL, alt: "A reviewed hero", isCover: true, export: { bytes, sha256: createHash("sha256").update(bytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp", hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt", approvedBy: "test-reviewer", approvedAt: 1 } } },
-    ] })).rejects.toThrow("Publication asset directory already exists");
-    expect(vi.mocked(fetch).mock.calls.every(([, init]) => !init?.method || init.method === "GET")).toBe(true);
-  });
-
-  it("commits an approved hero's exact bytes together with MDX before opening its PR", async () => {
-    const bytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2e5b60" } }).webp().toBuffer();
-    const sha256 = createHash("sha256").update(bytes).digest("hex");
-    const response = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(response({ default_branch: "main" }))
-      .mockResolvedValueOnce(response({ object: { sha: "base" } }))
-      .mockResolvedValueOnce(new Response(null, { status: 404 }))
-      .mockResolvedValueOnce(response({}))
-      .mockResolvedValueOnce(response({ tree: { sha: "base-tree" } }))
-      .mockResolvedValueOnce(response({ sha: "hero-blob" }))
-      .mockResolvedValueOnce(response({ sha: "mdx-blob" }))
-      .mockResolvedValueOnce(response({ sha: "complete-tree" }))
-      .mockResolvedValueOnce(response({ sha: "complete-commit" }))
-      .mockResolvedValueOnce(response({}))
-      .mockResolvedValueOnce(response({ html_url: "https://github.com/test-owner/test-repo/pull/2", number: 2, state: "open" }));
-    await createBlogPostPR({ title: "Exact crop", slug: "exact-crop", content: "Body.", scheduledDate: "2026-09-30", status: "draft", tags: ["ai"], images: [
-      { sourceUrl: HERO_URL, alt: "Raven opening a workshop door", isCover: true, export: { bytes, sha256, fileName: "hero.webp", contentType: "image/webp", hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt", approvedBy: "test-reviewer", approvedAt: 1 } } },
-    ] });
-    const calls = vi.mocked(fetch).mock.calls;
-    expect(calls).toHaveLength(11);
-    const heroBlob = JSON.parse((calls[5][1] as RequestInit).body as string);
-    expect(Buffer.from(heroBlob.content, "base64")).toEqual(bytes);
-    const mdx = Buffer.from(JSON.parse((calls[6][1] as RequestInit).body as string).content, "base64").toString();
-    expect(mdx).toContain('coverImage: "/images/blog/exact-crop/hero.webp"');
-    expect(mdx).toContain('coverImageAlt: "Raven opening a workshop door"');
-    expect(mdx).not.toContain(HERO_URL);
-    const tree = JSON.parse((calls[7][1] as RequestInit).body as string);
-    expect(tree.tree).toEqual([
-      { path: "corvo-labs-enhanced/public/images/blog/exact-crop/hero.webp", mode: "100644", type: "blob", sha: "hero-blob" },
-      { path: "corvo-labs-enhanced/content/blog/2026-09-30-exact-crop.mdx", mode: "100644", type: "blob", sha: "mdx-blob" },
-    ]);
-    expect(String(calls[9][0])).toContain("/git/refs/heads/");
-    expect(String(calls[10][0])).toContain("/pulls");
-  });
-
-  it("returns prUrl and branchName on success", async () => {
-    mockGitHubSuccess({ prUrl: "https://github.com/org/repo/pull/42" });
-
-    const result = await createBlogPostPR({
-      title: "Hello World",
-      content: "Intro paragraph.\n",
-      scheduledDate: "2026-03-04",
-      status: "scheduled",
-      tags: ["ai"],
-      coverImageAlt: "Descriptive hero alt",
-      images: [{ sourceUrl: HERO_URL, alt: "Descriptive hero alt", isCover: true }],
-    });
-
-    expect(result.prUrl).toBe("https://github.com/org/repo/pull/42");
-    expect(result.branchName).toBe("resonate/blog-post-2026-03-04-hello-world");
-    expect(result.sanitizedResponse).toMatchObject({
-      repo: "test-owner/test-repo",
-      prUrl: "https://github.com/org/repo/pull/42",
-      branchName: "resonate/blog-post-2026-03-04-hello-world",
-      number: 1,
-      state: "open",
-      scheduleTrigger: "pr-body",
-      scheduledDate: "2026-03-04",
-    });
-  });
-
-  it("emits Corvo-compliant frontmatter and preserves plain markdown images", async () => {
-    mockGitHubSuccess();
-
-    await createBlogPostPR({
-      title: 'He said "hello"',
-      content: [
-        "# He said hello",
-        "",
-        `![hero_image](${HERO_URL})`,
-        "",
-        "Intro paragraph.",
-        "",
-        `![asset1_chart](${SECOND_URL})## The details`,
-        "",
-        "More body.",
-      ].join("\n"),
-      scheduledDate: "2026-03-04",
-      scheduledTime: "13:30",
-      timezone: "America/Los_Angeles",
-      status: "scheduled",
-      subtitle: "A subtitle",
-      excerpt: 'Line one\nLine "two"',
-      author: "Jake Butler",
-      tags: ["ai", 'quote "heavy"'],
-      category: "strategy",
-      featured: true,
-      coverImageAlt: "A descriptive hero image.",
-      images: [
-        {
-          sourceUrl: HERO_URL,
-          alt: "A descriptive hero image.",
-          isCover: true,
-        },
-        {
-          sourceUrl: SECOND_URL,
-          alt: "Flowchart of the generation workflow",
-        },
-      ],
-    });
-
-    // Six fetches: repo → branch ref → create branch → existing file lookup → create file → open PR.
-    // No image downloads and no asset commits — Convex URLs stay absolute.
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(6);
-
-    const mdxCall = vi.mocked(fetch).mock.calls[4];
-    expect(mdxCall[0]).toContain(
-      "/contents/corvo-labs-enhanced/content/blog/2026-03-04-he-said-hello.mdx"
-    );
-
-    const body = JSON.parse((mdxCall[1] as RequestInit).body as string);
-    const decoded = Buffer.from(body.content, "base64").toString("utf-8");
-
-    expect(decoded).toContain('title: "He said \\"hello\\""');
-    expect(decoded).toContain('date: "2026-03-04"');
-    expect(decoded).toContain('scheduledTime: "13:30"');
-    expect(decoded).toContain('timezone: "America/Los_Angeles"');
-    expect(decoded).toContain('subtitle: "A subtitle"');
-    expect(decoded).toContain('description: "Line one Line \\"two\\""');
-    expect(decoded).toContain('author: "Jake Butler"');
-    expect(decoded).toContain('tags: ["ai", "quote \\"heavy\\""]');
-    expect(decoded).toContain(`heroImage: "${HERO_URL}"`);
-    expect(decoded).toContain('heroImageAlt: "A descriptive hero image."');
-    expect(decoded).toContain('readTime: "1 min read"');
-    expect(decoded).toContain('category: "strategy"');
-    expect(decoded).toContain("featured: true");
-    expect(decoded).toContain('status: "scheduled"');
-
-    // Old keys must not ship.
-    expect(decoded).not.toContain("coverImage:");
-    expect(decoded).not.toContain("coverImageAlt:");
-    expect(decoded).not.toContain("excerpt:");
-    expect(decoded).not.toContain("published:");
-
-    // Body must not contain legacy BlogImage MDX or an H1 duplicate.
-    expect(decoded).not.toContain("<BlogImage");
-    expect(decoded).not.toContain("# He said hello");
-
-    // Hero image was stripped from the body (appears only in frontmatter).
-    const bodyPortion = decoded.split(/^---\n(?:[\s\S]*?)\n---\n/m)[1] ?? decoded;
-    expect(bodyPortion).not.toContain(HERO_URL);
-
-    // Inline markdown image survives with the enriched alt text and its own block.
-    expect(decoded).toContain(
-      `![Flowchart of the generation workflow](${SECOND_URL})\n\n## The details`
-    );
-  });
-
-  it("includes publish intent and preview note in the PR description", async () => {
-    mockGitHubSuccess();
-
-    await createBlogPostPR({
-      title: "Hello World",
-      content: "Body.",
-      scheduledDate: "2026-03-04",
-      scheduledTime: "09:15",
-      timezone: "America/New_York",
-      scheduleTrigger: "frontmatter",
-      status: "scheduled",
-      tags: ["ai"],
-      coverImageAlt: "Hero",
-      images: [{ sourceUrl: HERO_URL, alt: "Hero", isCover: true }],
-    });
-
-    const prCall = vi.mocked(fetch).mock.calls[5];
-    const payload = JSON.parse((prCall[1] as RequestInit).body as string);
-
-    expect(payload.body).toContain(
-      "Publish intent: merge to publish on corvo-labs-dot-com."
-    );
-    expect(payload.body).toContain("Resonate run date: 2026-03-04.");
-    expect(payload.body).toContain("Schedule trigger: frontmatter.");
-    expect(payload.body).toContain("Scheduled time: 09:15.");
-    expect(payload.body).toContain("Timezone: America/New_York.");
-    expect(payload.body).toContain(
-      "Schedule metadata is recorded in frontmatter and PR body for human review; Resonate will not auto-merge."
-    );
-    expect(payload.body).toContain(
-      "Vercel preview: pending manual review, if applicable."
-    );
-  });
-
-  it("throws before contacting GitHub when no image assets are provided", async () => {
-    await expect(
-      createBlogPostPR({
-        title: "Hello World",
-        content: "Body",
-        scheduledDate: "2026-03-04",
-        status: "scheduled",
-        tags: ["ai"],
-      })
-    ).rejects.toThrow(/requires at least one image/i);
-
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("throws before contacting GitHub when images is an empty array", async () => {
-    await expect(
-      createBlogPostPR({
-        title: "Hello World",
-        content: "Body",
-        scheduledDate: "2026-03-04",
-        status: "scheduled",
-        tags: ["ai"],
-        images: [],
-      })
-    ).rejects.toThrow(/requires at least one image/i);
-
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("throws before contacting GitHub when the caller omits tags", async () => {
-    await expect(
-      createBlogPostPR({
-        title: "Hello World",
-        content: "Body",
-        scheduledDate: "2026-03-04",
-        status: "scheduled",
-        coverImageAlt: "Hero",
-        images: [{ sourceUrl: HERO_URL, alt: "Hero", isCover: true }],
-      })
-    ).rejects.toThrow(BlogPostContractError);
-
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("throws when repo fetch fails", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response("", { status: 404 }));
-
-    await expect(
-      createBlogPostPR({
-        title: "T",
-        content: "x",
-        scheduledDate: "2026-03-04",
-        status: "scheduled",
-        tags: ["ai"],
-        images: [{ sourceUrl: HERO_URL, alt: "Hero", isCover: true }],
-      })
-    ).rejects.toThrow("GitHub repo fetch failed");
-  });
-
-  it("throws when branch ref fetch fails", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ default_branch: "main" }), { status: 200 })
-      )
-      .mockResolvedValueOnce(new Response("", { status: 404 }));
-
-    await expect(
-      createBlogPostPR({
-        title: "T",
-        content: "x",
-        scheduledDate: "2026-03-04",
-        status: "scheduled",
-        tags: ["ai"],
-        images: [{ sourceUrl: HERO_URL, alt: "Hero", isCover: true }],
-      })
-    ).rejects.toThrow("GitHub branch fetch failed");
-  });
-
-  it("throws when create branch fails", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ default_branch: "main" }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ object: { sha: "abc" } }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "already exists" }), { status: 422 })
-      );
-
-    await expect(
-      createBlogPostPR({
-        title: "T",
-        content: "x",
-        scheduledDate: "2026-03-04",
-        status: "scheduled",
-        tags: ["ai"],
-        images: [{ sourceUrl: HERO_URL, alt: "Hero", isCover: true }],
-      })
-    ).rejects.toThrow("GitHub create branch failed");
-  });
-
-  it("throws when create file fails", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ default_branch: "main" }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ object: { sha: "abc" } }), { status: 200 })
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "not found" }), { status: 404 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "conflict" }), { status: 409 })
-      );
-
-    await expect(
-      createBlogPostPR({
-        title: "T",
-        content: "x",
-        scheduledDate: "2026-03-04",
-        status: "scheduled",
-        tags: ["ai"],
-        images: [{ sourceUrl: HERO_URL, alt: "Hero", isCover: true }],
-      })
-    ).rejects.toThrow("GitHub create file failed");
-  });
-
-  it("throws when create PR fails", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ default_branch: "main" }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ object: { sha: "abc" } }), { status: 200 })
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "not found" }), { status: 404 })
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "error" }), { status: 500 })
-      );
-
-    await expect(
-      createBlogPostPR({
-        title: "T",
-        content: "x",
-        scheduledDate: "2026-03-04",
-        status: "scheduled",
-        tags: ["ai"],
-        images: [{ sourceUrl: HERO_URL, alt: "Hero", isCover: true }],
-      })
-    ).rejects.toThrow("GitHub create PR failed");
-  });
-
-  it("updates the MDX file when the retry branch already contains it", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ default_branch: "main" }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ object: { sha: "abc" } }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "Reference already exists" }), {
-          status: 422,
-        })
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ sha: "existing-file-sha" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            html_url: "https://github.com/org/repo/pull/9",
-            number: 9,
-            state: "open",
-          }),
-          {
-            status: 200,
-          }
-        )
-      );
-
-    const result = await createBlogPostPR({
-      title: "Retry Me",
-      content: "Body.",
-      scheduledDate: "2026-03-04",
-      status: "scheduled",
-      tags: ["ai"],
-      coverImageAlt: "Hero",
-      images: [{ sourceUrl: HERO_URL, alt: "Hero", isCover: true }],
-    });
-
-    const fileCall = vi.mocked(fetch).mock.calls[4];
-    const payload = JSON.parse((fileCall[1] as RequestInit).body as string);
-
-    expect(result.prUrl).toBe("https://github.com/org/repo/pull/9");
-    expect(result.sanitizedResponse).toMatchObject({
-      number: 9,
-      state: "open",
-      scheduledDate: "2026-03-04",
-    });
-    expect(payload.sha).toBe("existing-file-sha");
-  });
-});
-
 describe("patchFrontmatterSchedule", () => {
   it("updates schedule fields while preserving the MDX body", () => {
     const sample = `---\ndate: "2026-03-04"\nscheduledTime: "09:00"\n---\n\nBody.\n`;
@@ -655,6 +216,155 @@ describe("patchFrontmatterSchedule", () => {
     expect(updated).toContain('date: "2026-06-20"');
     expect(updated).toContain('scheduledTime: "14:45"');
     expect(updated).toContain("Body.");
+  });
+});
+
+
+import sharp from "sharp";
+import { createHash } from "node:crypto";
+
+function githubFixture(options: {fail?: string; ambiguous?: string; wrongHead?: boolean} = {}) {
+  const files = new Map<string, string>();
+  const blobs = new Map<string, string>();
+  let tree: {path: string; sha: string}[] = [];
+  let head = "base"; let branch = false; let prCreated = false;
+  let sequence = 0;
+  const calls: {path: string; method: string; body: unknown}[] = [];
+  let failed = false;
+  const mock = vi.fn(async (input: unknown, init?: RequestInit) => {
+    const url = new URL(String(input)); const path = url.pathname.replace("/repos/test-owner/test-repo", "");
+    const method = init?.method ?? "GET";
+    const body = init?.body ? JSON.parse(init.body as string) as {content: string; tree: {path:string;sha:string}[]} : undefined;
+    calls.push({path, method, body});
+    const response = (value: unknown, status=200) => new Response(JSON.stringify(value), {status});
+    if (options.fail === path && !failed) { failed = true; return response({}, 503); }
+    if (!path) return response({default_branch:"main"});
+    if (path === "/git/ref/heads/main") return response({object:{sha:"base"}});
+    if (path.startsWith("/git/ref/heads/")) return branch ? response({object:{sha: options.wrongHead ? "manual" : head}}) : response({},404);
+    if (path === "/git/refs") {branch = true; return response({});}
+    if (path.startsWith("/contents/")) return files.has(path.slice(10)) ? response({sha:"blob-sha", encoding:"base64", content:files.get(path.slice(10))}) : response({},404);
+    if (path.startsWith("/git/commits/") && method === "GET") return response({tree:{sha:"base-tree"}});
+    if (path === "/git/blobs") {const sha = `blob-${++sequence}`; blobs.set(sha,body!.content); return response({sha});}
+    if (path === "/git/trees") {tree=body!.tree;return response({sha:"tree"});}
+    if (path === "/git/commits") return response({sha:"commit"});
+    if (path.startsWith("/git/refs/heads/")) {head="commit";for (const f of tree) files.set(f.path,blobs.get(f.sha)!); if (options.ambiguous === "ref" && !failed) {failed=true;throw new Error("timeout");} return response({});}
+    if (path === "/pulls" && method === "GET") return response(prCreated ? [{html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open"}] : []);
+    if (path === "/pulls" && method === "POST") {prCreated=true; if(options.ambiguous === "pr" && !failed){failed=true;throw new Error("timeout");}return response({html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open"});}
+    throw new Error(`Unexpected mock request: ${method} ${path}`);
+  });
+  vi.stubGlobal("fetch",mock);
+  return {files,calls,mock,blobs,setHead(value:string){head=value;branch=true;}};
+}
+async function exportInput() {
+  const bytes = await sharp({create:{width:1600,height:900,channels:3,background:"#15616d"}}).webp().toBuffer();
+  return {title:"Prepared article",content:"Exact approved prose.\n\n## Evidence\n\nOne claim [with source](https://example.org).\n",scheduledDate:"2026-10-07",scheduledTime:"09:00",timezone:"America/Los_Angeles",status:"published",tags:["strategy"],coverImageAlt:"  Exact reviewed alt.  ",images:[{sourceUrl:HERO_URL,isCover:true}],preparedHero:{bytes,sha256:createHash("sha256").update(bytes).digest("hex")},exportIdentity:"sanitized-post-1"};
+}
+describe("complete atomic blog exports", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("refuses a foreign existing generated-visual asset directory before creating its branch", async () => {
+    const fixture = githubFixture();
+    const input = await exportInput();
+    fixture.files.set("corvo-labs-enhanced/public/images/blog/2026-10-07-prepared-article", "foreign-directory");
+    const generated = { ...input, coverImageAlt: "Reviewed hero", preparedHero: undefined, images: [{ sourceUrl: HERO_URL, alt: "Reviewed hero", isCover: true, export: { ...input.preparedHero, fileName: "hero.webp", contentType: "image/webp" as const, hero: { provider: "openai", model: "approved-model", quoteProvenance: "verified-bounded-receipt", qualification: "live-receipt" as const, approvedBy: "reviewer", approvedAt: 1 } } }] };
+    await expect(createBlogPostPR(generated)).rejects.toThrow("Publication asset directory already exists");
+    expect(fixture.calls.every(call => call.method === "GET")).toBe(true);
+  });
+  it("preserves exact approved author, category and excerpt in the merged prepared export", async () => {
+    const fixture = githubFixture();
+    const input = { ...await exportInput(), author: "  Approved Author  ", category: "  strategy  ", excerpt: "  Exact approved excerpt.  " };
+    const result = await createBlogPostPR(input);
+    const mdx = Buffer.from(fixture.files.get(result.sanitizedResponse.artifact!.mdxPath)!, "base64").toString();
+    expect(mdx).toContain(`author: ${JSON.stringify(input.author)}`);
+    expect(mdx).toContain(`category: ${JSON.stringify(input.category)}`);
+    expect(mdx).toContain(`description: ${JSON.stringify(input.excerpt)}`);
+  });
+  it("rejects a cover-alt override that differs from the generated hero approval", async () => {
+    const input = await exportInput();
+    const fixture = githubFixture();
+    await expect(createBlogPostPR({ ...input, preparedHero: undefined, coverImageAlt: "Changed, unreviewed alt", images: [{ sourceUrl: HERO_URL, alt: "Exact approved visual alt", isCover: true, export: { ...input.preparedHero, fileName: "hero.webp", contentType: "image/webp", hero: { provider: "openai", model: "approved-model", quoteProvenance: "verified-bounded-receipt", qualification: "live-receipt", approvedBy: "reviewer", approvedAt: 1 } } }] })).rejects.toThrow("Cover alternative text differs");
+    expect(fixture.mock).not.toHaveBeenCalled();
+  });
+  it.each(["qualification-probe", "offline-fixture"] as const)("rejects %s even when a matching prepared upload receipt is also supplied", async qualification => {
+    const input = await exportInput();
+    const fixture = githubFixture();
+    await expect(createBlogPostPR({ ...input, coverImageAlt: "Reviewed hero", images: [{ sourceUrl: HERO_URL, alt: "Reviewed hero", isCover: true, export: { ...input.preparedHero, fileName: "hero.webp", contentType: "image/webp", hero: { provider: "openai", model: "approved-model", quoteProvenance: "verified-bounded-receipt", qualification, approvedBy: "reviewer", approvedAt: 1 } } }] })).rejects.toThrow("cannot be published");
+    expect(fixture.mock).not.toHaveBeenCalled();
+  });
+  it("commits exactly the article and local WebP together and replays without writes", async () => {
+    const fixture=githubFixture(); const input=await exportInput(); const result=await createBlogPostPR(input);
+    expect(fixture.files.size).toBe(2);
+    const artifact=result.sanitizedResponse.artifact!;
+    const mdx=Buffer.from(fixture.files.get(artifact.mdxPath)!,"base64").toString();
+    expect(mdx).toContain('coverImage: "/images/blog/2026-10-07-prepared-article/hero.webp"');
+    expect(mdx).toContain('coverImageAlt: "  Exact reviewed alt.  "');
+    expect(mdx).toContain('status: "published"'); expect(mdx).not.toMatch(/^heroImage(?:Alt)?:/m);
+    expect(mdx.slice(mdx.indexOf("\n---\n")+5)).toBe("\n"+input.content);
+    expect(Buffer.from(fixture.files.get(artifact.heroPath!)!,"base64")).toEqual(input.preparedHero.bytes);
+    const writes=fixture.calls.filter(c=>c.method!=="GET").length;
+    expect((await createBlogPostPR(input)).prUrl).toBe(result.prUrl);
+    expect(fixture.calls.filter(c=>c.method!=="GET")).toHaveLength(writes);
+  });
+  it.each(["/git/blobs","/git/trees","/git/commits","/git/refs/heads/resonate%2Fblog-post-2026-10-07-prepared-article-PLACEHOLDER","/pulls"])("recovers a definitive failure at %s without partial PRs", async failure => {
+    const input=await exportInput(); const fixture=githubFixture({fail:failure.replace("PLACEHOLDER",createHash("sha256").update(input.exportIdentity).digest("hex").slice(0,12))});
+    await expect(createBlogPostPR(input)).rejects.toThrow();
+    expect(fixture.calls.filter(c=>c.path==="/pulls"&&c.method==="POST").length).toBeLessThanOrEqual(1);
+    await expect(createBlogPostPR(input)).resolves.toMatchObject({prUrl:expect.any(String)});
+    expect(fixture.files.size).toBe(2);
+  });
+  it.each(["ref","pr"])("reads back an ambiguous %s result before retry", async ambiguous => {
+    const fixture=githubFixture({ambiguous});const input=await exportInput();
+    await expect(createBlogPostPR(input)).rejects.toThrow();
+    const commits=fixture.calls.filter(c=>c.path==="/git/commits"&&c.method==="POST").length;
+    await createBlogPostPR(input);
+    expect(fixture.calls.filter(c=>c.path==="/git/commits"&&c.method==="POST")).toHaveLength(commits);
+    expect(fixture.calls.filter(c=>c.path==="/pulls"&&c.method==="POST")).toHaveLength(1);
+  });
+  it("refuses different remote contents, unsafe paths, invalid prose, status, hashes and the exact byte cap", async () => {
+    const fixture=githubFixture(); const input=await exportInput(); const result=await createBlogPostPR(input);
+    fixture.files.set(result.sanitizedResponse.artifact!.mdxPath,Buffer.from("manual edit").toString("base64"));
+    await expect(createBlogPostPR(input)).rejects.toThrow(/differs/);
+    for (const change of [{slug:"../private"},{status:"scheduled"},{content:"# Unreviewed normalization"},{preparedHero:{bytes:Buffer.alloc(150000),sha256:"invalid"}}]) {
+      fixture.mock.mockClear();await expect(createBlogPostPR({...input,...change})).rejects.toThrow();expect(fixture.mock).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe("bound schedule synchronization", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const path="corvo-labs-enhanced/content/blog/2026-10-07-target.mdx";
+  const artifact={repository:"test-owner/test-repo",prNumber:1,branchName:"resonate/target",mdxPath:path,canonicalUrl:"https://corvolabs.com/blog/2026-10-07-target"};
+  const params={branchName:artifact.branchName,prUrl:"https://github.com/test-owner/test-repo/pull/1",scheduledDate:"2026-10-09",scheduledTime:"09:00",timezone:"America/Los_Angeles",artifact,expectedTitle:"Prepared article",expectedSlug:"target"};
+  function setup(options:{closed?:boolean;wrongBranch?:boolean;conflict?:boolean;missing?:boolean;legacyFiles?:string[]}={}) {
+    const fixture=githubFixture({wrongHead:options.conflict});fixture.setHead("base");
+    const old="corvo-labs-enhanced/content/blog/2020-01-01-older.mdx";
+    fixture.files.set(old,Buffer.from("older article must stay byte identical").toString("base64"));
+    if(!options.missing) fixture.files.set(path,Buffer.from('---\ntitle: "Prepared article"\ndate: "2026-10-07"\ncoverImage: "/hero.webp"\ncoverImageAlt: "Reviewed"\n---\nExact prose.\n').toString("base64"));
+    const originalMock=fixture.mock.getMockImplementation()!;
+    fixture.mock.mockImplementation(async (url,init) => {
+      if(String(url).includes("/pulls/1/files")) return new Response(JSON.stringify((options.legacyFiles??[old,path]).map(filename=>({filename,status:"added"}))));
+      if(String(url).endsWith("/pulls/1")) return new Response(JSON.stringify({state:options.closed?"closed":"open",head:{ref:options.wrongBranch?"other":artifact.branchName,sha:"base",repo:{full_name:artifact.repository}},base:{repo:{full_name:artifact.repository}},body:"Human review text"}));
+      return originalMock(url,init);
+    });
+    return {fixture,old};
+  }
+  it("changes only the bound frontmatter and summary, preserving URL/prose/hero", async () => {
+    const {fixture,old}=setup();const oldBytes=fixture.files.get(old);
+    expect(await updatePrFrontmatter(params)).toMatchObject({ok:true,artifact});
+    expect(fixture.files.get(old)).toBe(oldBytes);
+    const out=Buffer.from(fixture.files.get(path)!,"base64").toString();
+    expect(out).toContain('date: "2026-10-09"');expect(out).toContain('coverImageAlt: "Reviewed"');expect(out.endsWith("Exact prose.\n")).toBe(true);
+  });
+  it.each([{closed:true},{wrongBranch:true},{conflict:true},{missing:true}])("fails closed for %j", async options => {
+    setup(options);expect(await updatePrFrontmatter(params)).toMatchObject({ok:false});
+  });
+  it("uses an unambiguous PR diff for a legacy binding and never directory-first discovery", async () => {
+    const {fixture}=setup();expect(await updatePrFrontmatter({...params,artifact:undefined})).toMatchObject({ok:true,artifact:{mdxPath:path}});
+    expect(fixture.mock.mock.calls.some(call=>String(call[0]).includes("/contents/corvo-labs-enhanced/content/blog?"))).toBe(false);
+    setup({legacyFiles:[path,path.replace("2026-10-07","2026-10-08")]});
+    expect(await updatePrFrontmatter({...params,artifact:undefined})).toEqual({ok:false,reason:"ambiguous-artifact"});
+  });
+  it("rejects wrong repositories without reading or writing", async () => {
+    const {fixture}=setup();expect(await updatePrFrontmatter({...params,artifact:{...artifact,repository:"other/repo"}})).toEqual({ok:false,reason:"identity-mismatch"});expect(fixture.mock).not.toHaveBeenCalled();
   });
 });
 
@@ -675,11 +385,23 @@ describe("offline publication package", () => {
     expect(prepared.files).toHaveLength(3);
     expect(Buffer.from(prepared.files.find(file => file.path.endsWith(".svg"))!.content, "base64").toString()).toBe(signature.svg);
     const mdx = Buffer.from(prepared.files.find(file => file.path.endsWith(".mdx"))!.content, "base64").toString();
-    expect(mdx).toContain("/images/blog/local-fixture/figure-fixture.svg");
+    expect(mdx).toContain("/images/blog/2026-09-30-local-fixture/figure-fixture.svg");
     expect(mdx).toContain(spec.presentation.caption);
     expect(mdx).toContain(spec.presentation.sourceNote);
-    expect(mdx).toContain(buildFigureMarkdownBlock("fixture", spec).replace("](resonate-figure://fixture)", "](/images/blog/local-fixture/figure-fixture.svg)"));
+    expect(mdx).toContain(buildFigureMarkdownBlock("fixture", spec).replace("](resonate-figure://fixture)", "](/images/blog/2026-09-30-local-fixture/figure-fixture.svg)"));
     expect(mdx).not.toContain("resonate-figure://");
+    expect(prepared.figureAssets).toEqual([{ sourceUrl: "resonate-figure://fixture", path: "corvo-labs-enhanced/public/images/blog/2026-09-30-local-fixture/figure-fixture.svg", sha256: signature.svgSha256 }]);
+    const fixture = githubFixture();
+    const params = { postId: "fixture-post", title: "LOCAL FIXTURE", content, scheduledDate: "2026-09-30", status: "draft", tags: ["fixture"], slug: "local-fixture", exportIdentity: "fixture-post", editorialFingerprint: "trusted-editorial-version", images: [
+      { sourceUrl: "fixture://hero", alt: "Fictional teal test pattern", isCover: true, export: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp" as const, hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt" as const, approvedBy: "test-reviewer", approvedAt: 1 } } },
+      { sourceUrl: "resonate-figure://fixture", alt: spec.presentation.alt, export: { bytes: new TextEncoder().encode(signature.svg), sha256: signature.svgSha256, fileName: "figure-fixture.svg", contentType: "image/svg+xml" as const, figure: { spec, ...signature, postId: "fixture-post", postContentSha256: createHash("sha256").update(content).digest("hex"), postContentFingerprint: `LOCAL FIXTURE\n${content}`, acceptedBy: "fixture-author", acceptedAt: 1, evidenceSources: [{ sourceId: article.id, sha256: createHash("sha256").update(article.content).digest("hex"), revision: 1, purpose: "article" as const, currentSourceId: null, currentSha256: createHash("sha256").update(content).digest("hex"), currentRevision: null }] } } },
+    ] };
+    const result = await createBlogPostPR(params);
+    expect(result.sanitizedResponse.artifact).toMatchObject({ editorialFingerprint: "trusted-editorial-version", heroSha256: params.images[0].export.sha256, coverImageAlt: params.images[0].alt, figureAssets: prepared.figureAssets });
+    expect(fixture.files.size).toBe(3);
+    const writes = fixture.calls.filter(call => call.method !== "GET").length;
+    expect((await createBlogPostPR(params)).prUrl).toBe(result.prUrl);
+    expect(fixture.calls.filter(call => call.method !== "GET")).toHaveLength(writes);
   });
   it("rejects a figure's unchanged SVG when the publication article differs from its approval snapshot", async () => {
     const { prepareBlogPublication } = await import("../github");
@@ -717,41 +439,9 @@ describe("offline publication package", () => {
     const image = prepared.files.find(file => file.path.endsWith("hero.webp"))!;
     expect(Array.from(Buffer.from(image.content, "base64"))).toEqual(Array.from(bytes));
     const mdx = Buffer.from(prepared.files.find(file => file.path.endsWith(".mdx"))!.content, "base64").toString();
-    expect(mdx).toContain('coverImage: "/images/blog/local-fixture/hero.webp"');
+    expect(mdx).toContain('coverImage: "/images/blog/2026-09-30-local-fixture/hero.webp"');
     expect(mdx).toContain('coverImageAlt: "Fictional teal test pattern"');
     expect(fetch).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
-  });
-});
-
-describe("updatePrFrontmatter", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
-
-  it("commits updated schedule frontmatter when the PR branch is open", async () => {
-    const sampleMdx = `---\ndate: "2026-03-04"\n---\n\nIntro.\n`;
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(new Response(JSON.stringify({ state: "open" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ object: { sha: "branch-sha" } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([{ name: "post.mdx", path: "corvo-labs-enhanced/content/blog/post.mdx", type: "file" }]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ sha: "file-sha", encoding: "base64", content: Buffer.from(sampleMdx).toString("base64") }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
-    const result = await updatePrFrontmatter({ branchName: "resonate/blog-post-test", prUrl: "https://github.com/test-owner/test-repo/pull/42", scheduledDate: "2026-06-20" });
-    expect(result.ok).toBe(true);
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(5);
-  });
-
-  it("returns pr-closed when the pull request is no longer open", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ state: "closed" }), { status: 200 }));
-    const result = await updatePrFrontmatter({ branchName: "resonate/blog-post-test", prUrl: "https://github.com/test-owner/test-repo/pull/42", scheduledDate: "2026-06-20" });
-    expect(result).toEqual({ ok: false, reason: "pr-closed" });
-  });
-
-  it("returns branch-missing when the PR branch ref is gone", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(new Response(JSON.stringify({ state: "open" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }));
-    const result = await updatePrFrontmatter({ branchName: "resonate/blog-post-missing", prUrl: "https://github.com/test-owner/test-repo/pull/42", scheduledDate: "2026-06-20" });
-    expect(result).toEqual({ ok: false, reason: "branch-missing" });
   });
 });

@@ -1,5 +1,15 @@
 # Editorial visuals progress
 
+## September 30 resumed current-main integration
+
+Jake resumed work after the frozen008141d pause. The changed-executor review closed INCOMPLETE (deadline expired), with two actionable findings: requested master dimensions were not enforced, and image HTTP requests followed redirects. Both now have public-interface RED/GREEN repairs. Actual1536×1024 contract-double outputs complete; decoded mismatched bytes remain uncertain with reservations retained; image dispatch uses redirect:error with no retry.
+
+Remote main advanced to df9b9f0 (PR130) during the pause. The isolated feature candidate now preserves its canonical composer, reviewed series/queue, exact blog metadata, prepared exports and verified article-publication receipts. Generated hero and evidence-bound figure files enter that same export path. Atomic visual export claims bind the current article, full editorial metadata, reviewed assets, publishing intent and resolved schedule before transport; pending claims freeze authoring. Artifacts retain hero/figure hashes and editorial versions, and article verification permits only exact figure URL projection and verifies deployed SVG bytes. A lost PR-recording response retains the created receipt without a second transport call.
+
+Focused backend106, export67, composer84 and root25 regression receipts pass (overlap; do not sum). The full suite exposed19 old fixture setup failures in three suites; owned image upload/prepared-hero and complete metadata fixtures now pass49 tests without weakening guards. Both production typechecks pass; lint has0 errors/11 warnings. Full offline coverage passes124 files/1,274 tests with one existing skip; production build passes using CI fake credentials after an initial missing-Clerk configuration failure. Exact independent review and feature-branch CI remain required; predecessor evidence does not approve this candidate.
+
+Separate cumulative provider ledgers remain spent/reserved$0 each; no key, paid call, merge, deployment, new human image approval, or real article/LinkedIn publication/scheduling has occurred. The cheaper guarded GPTImage1 functional sequence remains prepared at maximum$0.25 each/$0.50 total under the original OpenAI$5 cap. Key access, actual payload binding, provider qualification, separate Image2 quality quote and backend-first release/live validation remain outstanding.
+
 ## September 30 functional-first correction
 
 The independent retrospective confirmed the delivery error: a valid paid-dispatch guard became an implementation blocker. V03/V04/V05/V07 had durable state and guard tests, but lacked real executors; their earlier “implemented” labels overstated acceptance. They remain partial until executable integration and its independent review are complete. Figures remain requested work, while the first delivery milestone is a usable hero workflow.

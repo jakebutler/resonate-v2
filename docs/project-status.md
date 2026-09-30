@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 12:32:03 PDT
+Last updated: 09/30/2026 13:57 PDT
 
 ## State
 
@@ -13,6 +13,12 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 ## Session Focus
 
 - Updated repository documentation and handoff records.
+
+## Current Integration
+
+- Integrating current main df9b9f0 (reviewed series/queue/publishing) into isolated editorial visual branch.
+- Repaired candidate will require fresh exact-SHA independent review and CI. No provider calls, merge or deployment completed.
+- Image dimensions and HTTP redirect findings are under behavioral repair.
 
 ## Last Completed Task
 
