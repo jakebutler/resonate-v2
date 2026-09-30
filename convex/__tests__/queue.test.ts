@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import schema from "../schema";
 
 const modules = import.meta.glob("../**/*.ts");
@@ -113,6 +113,15 @@ async function setupGatedDraftSet(t: ReturnType<typeof convexTest>) {
   await asUser.mutation(api.cohesion.runCohesionGate, { campaignId });
 
   return { asUser, campaignId };
+}
+
+async function reviewBlogExport(t: ReturnType<typeof convexTest>, asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>, postId: string) {
+  const post = await t.run(ctx => ctx.db.get(postId as never));
+  if (!post || !("channelId" in post) || post.channelId !== "corvo-blog") return;
+  const source = await t.run(ctx => ctx.storage.store(new Blob(["fixture source"])));
+  const output = await t.run(ctx => ctx.storage.store(new Blob(["fixture output"])));
+  await asUser.mutation(api.publishing.updateBlogMetadata, {postId: postId as never, metadata: {blogPublicationIntent:"draft", coverImageAlt:"Reviewed campaign hero", blogExcerpt:"Reviewed excerpt",blogAuthor:"Editor",blogCategory:"strategy",blogTags:["test"],heroImageStorageId:source}});
+  await t.mutation(internal.publishing.recordPreparedHero, {postId: postId as never,userId:JAKE.subject,hero:{sourceStorageId:source,storageId:output,width:1600,height:900,mimeType:"image/webp",byteLength:100,sha256:"fixture",crop:"centre"}});
 }
 
 describe("materialize + approval queue", () => {
@@ -381,6 +390,7 @@ describe("materialize + approval queue", () => {
     const first = view!.queue[0]!;
     expect(view!.nextSeq).toBe(1);
 
+    await reviewBlogExport(t, asUser, first.postId);
     await asUser.mutation(api.publishing.setApproval, {
       postId: first.postId as never,
       approvalState: "approved",
@@ -400,6 +410,7 @@ describe("materialize + approval queue", () => {
 
     const view = await asUser.query(api.queue.getCampaignQueue, { campaignId });
     for (const entry of view!.queue) {
+      await reviewBlogExport(t, asUser, entry.postId);
       await asUser.mutation(api.publishing.setApproval, {
         postId: entry.postId as never,
         approvalState: "approved",

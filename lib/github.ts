@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
 const REPO_OWNER = process.env.BLOG_REPO_OWNER || "jakebutler";
 const REPO_NAME = process.env.BLOG_REPO_NAME || "corvo-labs-dot-com";
@@ -6,6 +7,15 @@ const CONTENT_PATH =
   process.env.BLOG_CONTENT_PATH || `${BLOG_APP_ROOT}/content/blog`;
 const DEFAULT_AUTHOR = process.env.BLOG_POST_AUTHOR?.trim() || "Jake Butler";
 const DEFAULT_CATEGORY = process.env.BLOG_DEFAULT_CATEGORY?.trim() || "strategy";
+
+export function blogDestination(post: { title: string; blogSlug?: string; scheduledDate?: string; blogArtifact?: BlogArtifact }) {
+  if (post.blogArtifact) return {repository: post.blogArtifact.repository, filePath: post.blogArtifact.mdxPath, canonicalUrl: post.blogArtifact.canonicalUrl};
+  const slug = post.blogSlug || slugify(post.title);
+  return { repository: `${REPO_OWNER}/${REPO_NAME}`,
+    filePath: `${CONTENT_PATH}/${post.scheduledDate ?? "DATE-REQUIRED"}-${slug}.mdx` };
+}
+
+export type BlogArtifact = { repository: string; prNumber: number; branchName: string; mdxPath: string; heroPath?: string; canonicalUrl: string };
 
 export interface PublishImageAsset {
   sourceUrl: string;
@@ -35,7 +45,7 @@ function slugify(title: string): string {
 }
 
 function escapeYamlString(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/"/g, '\\"');
+  return JSON.stringify(value).slice(1, -1);
 }
 
 function escapeRegExp(value: string): string {
@@ -70,9 +80,7 @@ function estimateReadTime(markdown: string): string {
 // Corvo aliases `description` to `excerpt`, but <=160 chars keeps the value
 // viable as the <meta name="description"> too. Keep a small safety margin.
 function buildDescription(markdown: string, explicit?: string): string {
-  if (explicit?.trim()) {
-    return clampText(explicit, 160);
-  }
+  if (explicit !== undefined) return explicit;
 
   const firstParagraph = markdown
     .split(/\n{2,}/)
@@ -290,7 +298,7 @@ interface BuildFrontmatterParams {
   status: string;
 }
 
-function buildFrontmatter(params: BuildFrontmatterParams): string {
+export function buildFrontmatter(params: BuildFrontmatterParams): string {
   const lines = [
     `---`,
     `title: "${escapeYamlString(params.title)}"`,
@@ -314,8 +322,8 @@ function buildFrontmatter(params: BuildFrontmatterParams): string {
   } else {
     lines.push(`tags: []`);
   }
-  lines.push(`heroImage: "${escapeYamlString(params.heroImage)}"`);
-  lines.push(`heroImageAlt: "${escapeYamlString(params.heroImageAlt)}"`);
+  lines.push(`coverImage: "${escapeYamlString(params.heroImage)}"`);
+  lines.push(`coverImageAlt: "${escapeYamlString(params.heroImageAlt)}"`);
   lines.push(`readTime: "${escapeYamlString(params.readTime)}"`);
   lines.push(`category: "${escapeYamlString(params.category)}"`);
   lines.push(`featured: ${params.featured ? "true" : "false"}`);
@@ -341,10 +349,13 @@ export async function createBlogPostPR(params: {
   featured?: boolean;
   coverImageAlt?: string;
   images?: PublishImageAsset[];
+  preparedHero?: {bytes: Buffer; sha256: string};
+  exportIdentity?: string;
 }): Promise<{
   prUrl: string;
   branchName: string;
   sanitizedResponse: {
+    artifact?: BlogArtifact;
     repo: string;
     prUrl: string;
     branchName: string;
@@ -376,23 +387,22 @@ export async function createBlogPostPR(params: {
   const timezone = params.timezone?.trim() || undefined;
   const scheduleTrigger = params.scheduleTrigger ?? "pr-body";
   const slugBase = params.slug?.trim() || slugify(params.title);
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slugBase) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BlogPostContractError(["Unsafe article slug or date"]);
+  if (!["draft", "published"].includes(params.status)) throw new BlogPostContractError(["Choose draft or published publication intent"]);
   const slug = `${date}-${slugBase}`;
   const fileName = `${slug}.mdx`;
   const filePath = `${CONTENT_PATH}/${fileName}`;
-  const branchName = `resonate/blog-post-${slug}`;
+  const identity = params.exportIdentity ? `-${createHash("sha256").update(params.exportIdentity).digest("hex").slice(0, 12)}` : "";
+  const branchName = `resonate/blog-post-${slug}${identity}`;
+  const heroPath = `${BLOG_APP_ROOT}/public/images/blog/${slug}/hero.webp`;
+  const publicHeroPath = `/images/blog/${slug}/hero.webp`;
 
-  const imagesBySourceUrl = new Map<string, PublishImageAsset>(
-    images.map((asset) => [asset.sourceUrl, asset] as const)
-  );
 
-  const body = normalizeMdxBody({
-    content: params.content,
-    heroImageUrl: hero.sourceUrl,
-    imagesBySourceUrl,
-  });
+  // The approved prose is immutable; surface invalid MDX for an explicit edit.
+  const body = params.content;
 
   const heroImageAlt =
-    params.coverImageAlt?.trim() ||
+    params.coverImageAlt ||
     hero.alt?.trim() ||
     `Cover image for ${params.title}`;
 
@@ -403,14 +413,14 @@ export async function createBlogPostPR(params: {
     timezone,
     subtitle: params.subtitle,
     description: buildDescription(params.content, params.excerpt),
-    author: params.author?.trim() || DEFAULT_AUTHOR,
+    author: params.author ?? DEFAULT_AUTHOR,
     tags: params.tags ?? [],
-    heroImage: hero.sourceUrl,
+    heroImage: publicHeroPath,
     heroImageAlt,
     readTime: estimateReadTime(params.content),
-    category: params.category?.trim() || DEFAULT_CATEGORY,
+    category: params.category ?? DEFAULT_CATEGORY,
     featured: params.featured ?? false,
-    status: params.status?.trim() || "scheduled",
+    status: params.status,
   };
 
   // Contract check before we touch GitHub so a single round trip surfaces
@@ -429,169 +439,67 @@ export async function createBlogPostPR(params: {
   });
 
   const frontmatter = buildFrontmatter(frontmatterInput);
-  const fileContent = Buffer.from(frontmatter + body).toString("base64");
-
-  const headers = {
-    Authorization: `Bearer ${GITHUB_TOKEN}`,
-    "Content-Type": "application/json",
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-
-  const repoRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`,
-    { headers }
-  );
-  if (!repoRes.ok) throw new Error(`GitHub repo fetch failed: ${repoRes.status}`);
-  const repoData = await repoRes.json();
-  const defaultBranch = repoData.default_branch;
-
-  const branchRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/ref/heads/${defaultBranch}`,
-    { headers }
-  );
-  if (!branchRes.ok) throw new Error(`GitHub branch fetch failed: ${branchRes.status}`);
-  const branchData = await branchRes.json();
-  const sha = branchData.object.sha;
-
-  const createBranchRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/refs`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha }),
-    }
-  );
-  if (!createBranchRes.ok) {
-    const err = await createBranchRes.json();
-    const branchAlreadyExists =
-      createBranchRes.status === 422 &&
-      typeof err?.message === "string" &&
-      err.message.toLowerCase().includes("reference already exists");
-
-    if (!branchAlreadyExists) {
-      throw new Error(`GitHub create branch failed: ${JSON.stringify(err)}`);
-    }
+  const mdxBytes = Buffer.from(frontmatter + body);
+  const prepared = params.preparedHero;
+  if (!prepared || prepared.bytes.byteLength >= 150_000 || createHash("sha256").update(prepared.bytes).digest("hex") !== prepared.sha256) throw new BlogPostContractError(["A verified prepared hero is required"]);
+  // Validate actual bytes, independently of the storage receipt.
+  const {default: sharp} = await import("sharp");
+  const metadata = await sharp(prepared.bytes, {limitInputPixels: 40_000_000}).metadata();
+  if (metadata.format !== "webp" || metadata.width !== 1600 || metadata.height !== 900) throw new BlogPostContractError(["Hero must decode as 1600×900 WebP"]);
+  const files = [{path: filePath, bytes: mdxBytes}, {path: heroPath, bytes: prepared.bytes}];
+  const headers = githubHeaders();
+  const base = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
+  async function read(path: string) {
+    const res = await fetch(`${base}${path}`, {headers});
+    if (!res.ok) throw new Error(`GitHub read failed (${res.status})`);
+    return res.json();
   }
-
-  const existingFileRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}?ref=${encodeURIComponent(
-      branchName
-    )}`,
-    { headers }
-  );
-  const existingFile =
-    existingFileRes.ok ? ((await existingFileRes.json()) as { sha?: string }) : null;
-
-  const createFileRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`,
-    {
-      method: "PUT",
-      headers,
-      body: JSON.stringify({
-        message: `feat: add blog post "${params.title}"`,
-        content: fileContent,
-        branch: branchName,
-        ...(existingFile?.sha ? { sha: existingFile.sha } : {}),
-      }),
-    }
-  );
-  if (!createFileRes.ok) {
-    const err = await createFileRes.json();
-    throw new Error(`GitHub create file failed: ${JSON.stringify(err)}`);
+  const repo = await read("");
+  const defaultBranch = repo.default_branch;
+  const defaultRef = await read(`/git/ref/heads/${encodeURIComponent(defaultBranch)}`);
+  let refRes = await fetch(`${base}/git/ref/heads/${encodeURIComponent(branchName)}`, {headers});
+  if (refRes.status === 404) {
+    const created = await fetch(`${base}/git/refs`, {method: "POST", headers, body: JSON.stringify({ref: `refs/heads/${branchName}`, sha: defaultRef.object.sha})});
+    if (!created.ok) throw new Error("Branch creation not confirmed; reconcile this export before retry.");
+    refRes = await fetch(`${base}/git/ref/heads/${encodeURIComponent(branchName)}`, {headers});
   }
-
-  const prRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/pulls`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        title: `Blog post: ${params.title}`,
-        body: [
-          "Publish intent: merge to publish on corvo-labs-dot-com.",
-          `Resonate run date: ${date}.`,
-          `Schedule trigger: ${scheduleTrigger}.`,
-          scheduledTime ? `Scheduled time: ${scheduledTime}.` : null,
-          timezone ? `Timezone: ${timezone}.` : null,
-          "Schedule metadata is recorded in frontmatter and PR body for human review; Resonate will not auto-merge.",
-          "Vercel preview: pending manual review, if applicable.",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        head: branchName,
-        base: defaultBranch,
-      }),
-    }
-  );
-  if (!prRes.ok) {
-    const err = await prRes.json();
-    const prAlreadyExists =
-      prRes.status === 422 &&
-      Array.isArray(err?.errors) &&
-      err.errors.some(
-        (issue: { message?: string }) =>
-          typeof issue.message === "string" &&
-          issue.message.toLowerCase().includes("pull request already exists")
-      );
-
-    if (prAlreadyExists) {
-      const existingPrRes = await fetch(
-        `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/pulls?state=open&head=${encodeURIComponent(
-          `${REPO_OWNER}:${branchName}`
-        )}&base=${encodeURIComponent(defaultBranch)}`,
-        { headers }
-      );
-      if (existingPrRes.ok) {
-        const existingPrs = (await existingPrRes.json()) as Array<{
-          html_url?: string;
-          number?: number;
-          state?: string;
-        }>;
-        const existingPr = existingPrs.find((pr) => pr.html_url);
-        if (existingPr?.html_url) {
-          return {
-            prUrl: existingPr.html_url,
-            branchName,
-            sanitizedResponse: {
-              repo: `${REPO_OWNER}/${REPO_NAME}`,
-              prUrl: existingPr.html_url,
-              branchName,
-              number: existingPr.number,
-              state: existingPr.state,
-              scheduleTrigger,
-              scheduledDate: date,
-              scheduledTime,
-              timezone,
-            },
-          };
-        }
-      }
-    }
-
-    throw new Error(`GitHub create PR failed: ${JSON.stringify(err)}`);
+  if (!refRes.ok) throw new Error("Export branch unavailable");
+  const ref = await refRes.json();
+  const head = ref.object.sha;
+  let existing = 0;
+  for (const file of files) {
+    const res = await fetch(`${base}/contents/${file.path}?ref=${encodeURIComponent(head)}`, {headers});
+    if (res.status === 404) continue;
+    if (!res.ok) throw new Error("Cannot reconcile export contents");
+    const remote = await res.json();
+    if (remote.encoding !== "base64" || !remote.content || !Buffer.from(remote.content.replace(/\s/g, ""), "base64").equals(file.bytes)) throw new Error("Remote artifact differs; Needs Review. No overwrite performed.");
+    existing++;
   }
-  const prData = (await prRes.json()) as {
-    html_url: string;
-    number?: number;
-    state?: string;
-  };
-
-  return {
-    prUrl: prData.html_url,
-    branchName,
-    sanitizedResponse: {
-      repo: `${REPO_OWNER}/${REPO_NAME}`,
-      prUrl: prData.html_url,
-      branchName,
-      number: prData.number,
-      state: prData.state,
-      scheduleTrigger,
-      scheduledDate: date,
-      scheduledTime,
-      timezone,
-    },
-  };
+  if (existing === 0 && head === defaultRef.object.sha) {
+    await commitGithubFiles({branchName, expectedHead: head, message: `feat: add article and reviewed hero`, files});
+  } else if (existing !== 2) throw new Error("Incomplete or unrelated export branch; Needs Review");
+  const existingPrs = await read(`/pulls?state=all&head=${encodeURIComponent(`${REPO_OWNER}:${branchName}`)}&base=${encodeURIComponent(defaultBranch)}`);
+  if (!Array.isArray(existingPrs) || existingPrs.length > 1 || existingPrs.some(pr => pr.state !== "open")) throw new Error("Export PR history requires review");
+  let pr = existingPrs[0];
+  if (!pr) {
+    const res = await fetch(`${base}/pulls`, {method: "POST", headers, body: JSON.stringify({
+      title: `Blog post: ${params.title}`, head: branchName, base: defaultBranch,
+      body: [
+        `Publication intent: ${params.status}. Published content becomes visible on merge, including future-dated articles.`,
+        `<!-- resonate-schedule -->\nResonate schedule: ${date} ${scheduledTime ?? ""} ${timezone ?? ""}.\n<!-- /resonate-schedule -->`,
+        "Article and reviewed hero are committed together. Resonate does not auto-merge.",
+      ].join("\n"),
+    })});
+    if (!res.ok) throw new Error("PR creation not confirmed; reconcile this export before retry");
+    pr = await res.json();
+  }
+  if (!pr.html_url || !pr.number) throw new Error("Incomplete GitHub PR receipt; Needs Review");
+  return {prUrl: pr.html_url, branchName, sanitizedResponse: {
+    repo: `${REPO_OWNER}/${REPO_NAME}`, prUrl: pr.html_url, branchName, number: pr.number, state: pr.state,
+    scheduleTrigger, scheduledDate: date, scheduledTime, timezone,
+    artifact: {repository: `${REPO_OWNER}/${REPO_NAME}`, prNumber: pr.number, branchName,
+      mdxPath: filePath, heroPath, canonicalUrl: `${process.env.BLOG_SITE_ORIGIN || "https://corvolabs.com"}/blog/${slug}`},
+  }};
 }
 
 function githubHeaders() {
@@ -638,95 +546,91 @@ export function patchFrontmatterSchedule(
 }
 
 export type UpdatePrFrontmatterFailureReason =
-  | "pr-closed" | "pr-not-found" | "branch-missing" | "file-missing";
-
+  | "pr-closed" | "pr-not-found" | "branch-missing" | "file-missing"
+  | "identity-mismatch" | "ambiguous-artifact" | "head-conflict";
 export type UpdatePrFrontmatterResult =
-  | { ok: true; filePath: string }
+  | { ok: true; filePath: string; artifact: BlogArtifact }
   | { ok: false; reason: UpdatePrFrontmatterFailureReason };
 
 function parsePullNumber(prUrl: string): number | null {
-  const match = prUrl.match(/\/pull\/(\d+)\/?$/);
-  if (!match) return null;
-  const number = Number.parseInt(match[1], 10);
-  return Number.isFinite(number) ? number : null;
-}
-
-async function findMdxFileOnBranch(
-  branchName: string,
-  headers: Record<string, string>
-): Promise<{ path: string; sha: string; content: string } | null> {
-  const listingRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CONTENT_PATH}?ref=${encodeURIComponent(branchName)}`,
-    { headers }
-  );
-  if (!listingRes.ok) return null;
-  const listing = (await listingRes.json()) as Array<{ name?: string; path?: string; type?: string }>;
-  const mdxEntry = listing.find((e) => e.type === "file" && e.name?.endsWith(".mdx") && e.path);
-  if (!mdxEntry?.path) return null;
-  const fileRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${mdxEntry.path}?ref=${encodeURIComponent(branchName)}`,
-    { headers }
-  );
-  if (!fileRes.ok) return null;
-  const fileData = (await fileRes.json()) as { sha?: string; content?: string; encoding?: string };
-  if (!fileData.sha || !fileData.content || fileData.encoding !== "base64") return null;
-  return {
-    path: mdxEntry.path,
-    sha: fileData.sha,
-    content: Buffer.from(fileData.content, "base64").toString("utf-8"),
-  };
+  const match = prUrl.match(new RegExp(`^https://github\\.com/${REPO_OWNER}/${REPO_NAME}/pull/(\\d+)/?$`));
+  return match ? Number(match[1]) : null;
 }
 
 export async function updatePrFrontmatter(params: {
-  branchName: string;
-  prUrl: string;
-  scheduledDate: string;
-  scheduledTime?: string;
-  timezone?: string;
+  branchName: string; prUrl: string; scheduledDate: string;
+  scheduledTime?: string; timezone?: string;
+  artifact?: BlogArtifact; expectedTitle?: string; expectedSlug?: string;
 }): Promise<UpdatePrFrontmatterResult> {
   if (!GITHUB_TOKEN) throw new Error("Missing required environment variable: GITHUB_TOKEN");
+  const repo = `${REPO_OWNER}/${REPO_NAME}`;
+  const base = `https://api.github.com/repos/${repo}`;
   const headers = githubHeaders();
   const pullNumber = parsePullNumber(params.prUrl);
-  if (pullNumber === null) return { ok: false, reason: "pr-not-found" };
-  const prRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/pulls/${pullNumber}`,
-    { headers }
-  );
-  if (prRes.status === 404) return { ok: false, reason: "pr-not-found" };
-  if (!prRes.ok) throw new Error(`GitHub PR fetch failed: ${prRes.status}`);
-  const prData = (await prRes.json()) as { state?: string };
-  if (prData.state === "closed") return { ok: false, reason: "pr-closed" };
-  const branchRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/ref/heads/${encodeURIComponent(params.branchName)}`,
-    { headers }
-  );
-  if (branchRes.status === 404) return { ok: false, reason: "branch-missing" };
-  if (!branchRes.ok) throw new Error(`GitHub branch fetch failed: ${branchRes.status}`);
-  const mdxFile = await findMdxFileOnBranch(params.branchName, headers);
-  if (!mdxFile) return { ok: false, reason: "file-missing" };
-  const updatedContent = patchFrontmatterSchedule(mdxFile.content, {
-    scheduledDate: params.scheduledDate,
-    scheduledTime: params.scheduledTime,
-    timezone: params.timezone,
-  });
-  const commitRes = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${mdxFile.path}`,
-    {
-      method: "PUT",
-      headers,
-      body: JSON.stringify({
-        message: `chore: reschedule blog post to ${params.scheduledDate}`,
-        content: Buffer.from(updatedContent).toString("base64"),
-        branch: params.branchName,
-        sha: mdxFile.sha,
-      }),
+  if (!pullNumber) return {ok: false, reason: "pr-not-found"};
+  if (params.artifact && (params.artifact.repository !== repo || params.artifact.prNumber !== pullNumber || params.artifact.branchName !== params.branchName)) return {ok: false, reason: "identity-mismatch"};
+  const prRes = await fetch(`${base}/pulls/${pullNumber}`, {headers});
+  if (!prRes.ok) return {ok: false, reason: "pr-not-found"};
+  const pr = await prRes.json();
+  if (pr.state !== "open" || pr.merged) return {ok: false, reason: "pr-closed"};
+  if (pr.head?.ref !== params.branchName || pr.head?.repo?.full_name !== repo || pr.base?.repo?.full_name !== repo || !pr.head?.sha) return {ok: false, reason: "identity-mismatch"};
+  const head = pr.head.sha as string;
+  let path = params.artifact?.mdxPath;
+  if (!path) {
+    if (!params.expectedTitle || !params.expectedSlug) return {ok: false, reason: "ambiguous-artifact"};
+    const candidates: string[] = [];
+    let complete = false;
+    for (let page = 1; page <= 10; page++) {
+      const res = await fetch(`${base}/pulls/${pullNumber}/files?per_page=100&page=${page}`, {headers});
+      if (!res.ok) return {ok: false, reason: "file-missing"};
+      const files = await res.json() as {filename: string; status: string}[];
+      candidates.push(...files.filter(f => f.status !== "removed" && f.filename.startsWith(`${CONTENT_PATH}/`) && f.filename.endsWith(`-${params.expectedSlug}.mdx`)).map(f => f.filename));
+      if (files.length < 100) { complete = true; break; }
     }
-  );
-  if (!commitRes.ok) {
-    const err = await commitRes.json();
-    throw new Error(`GitHub update file failed: ${JSON.stringify(err)}`);
+    if (!complete || candidates.length !== 1) return {ok: false, reason: "ambiguous-artifact"};
+    path = candidates[0];
   }
-  return { ok: true, filePath: mdxFile.path };
+  if (!path.startsWith(`${CONTENT_PATH}/`) || path.includes("..") || !path.endsWith(".mdx")) return {ok: false, reason: "identity-mismatch"};
+  const fileRes = await fetch(`${base}/contents/${path}?ref=${encodeURIComponent(head)}`, {headers});
+  if (!fileRes.ok) return {ok: false, reason: "file-missing"};
+  const file = await fileRes.json();
+  if (!file.sha || file.encoding !== "base64") return {ok: false, reason: "file-missing"};
+  const content = Buffer.from(file.content, "base64").toString();
+  if (params.expectedTitle && !new RegExp(`^title: "${escapeRegExp(escapeYamlString(params.expectedTitle))}"$`, "m").test(content.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "")) return {ok: false, reason: "identity-mismatch"};
+  const updated = patchFrontmatterSchedule(content, params);
+  try {
+    await commitGithubFiles({branchName: params.branchName, expectedHead: head, message: `chore: reschedule article to ${params.scheduledDate}`, files: [{path, bytes: Buffer.from(updated)}]});
+    const body = (typeof pr.body === "string" ? pr.body : "").replace(/\n?<!-- resonate-schedule -->[\s\S]*?<!-- \/resonate-schedule -->/g, "").replace(/^(?:Resonate run date:|Scheduled time:|Timezone:|Resonate schedule:).*$/gm, "");
+    const summary = `<!-- resonate-schedule -->\nResonate schedule: ${params.scheduledDate} ${params.scheduledTime ?? ""} ${params.timezone ?? ""}\n<!-- /resonate-schedule -->`;
+    const bodyRes = await fetch(`${base}/pulls/${pullNumber}`, {method: "PATCH", headers, body: JSON.stringify({body: `${body}\n${summary}`})});
+    if (!bodyRes.ok) return {ok: false, reason: "head-conflict"};
+  } catch { return {ok: false, reason: "head-conflict"}; }
+  const slug = path.split("/").pop()!.replace(/\.mdx$/, "");
+  return {ok: true, filePath: path, artifact: params.artifact ?? {repository: repo, prNumber: pullNumber, branchName: params.branchName, mdxPath: path, canonicalUrl: `${process.env.BLOG_SITE_ORIGIN || "https://corvolabs.com"}/blog/${slug}`}};
+}
+
+/** One tree/commit/ref boundary. No force push and no partial article/hero commit. */
+export async function commitGithubFiles(input: {branchName: string; expectedHead: string; message: string; files: {path: string; bytes: Buffer}[]}) {
+  const base = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
+  const headers = githubHeaders();
+  async function request(path: string, method = "GET", body?: unknown) {
+    const res = await fetch(`${base}${path}`, {method, headers, ...(body ? {body: JSON.stringify(body)} : {})});
+    if (!res.ok) throw new Error(`GitHub artifact operation failed (${res.status}); reconcile before retry.`);
+    return res.json();
+  }
+  const parent = await request(`/git/commits/${input.expectedHead}`);
+  const tree = [];
+  for (const file of input.files) {
+    if (file.path.startsWith("/") || file.path.split("/").some(p => p === ".." || !p)) throw new Error("Unsafe artifact path");
+    const blob = await request("/git/blobs", "POST", {content: file.bytes.toString("base64"), encoding: "base64"});
+    tree.push({path: file.path, mode: "100644", type: "blob", sha: blob.sha});
+  }
+  const createdTree = await request("/git/trees", "POST", {base_tree: parent.tree.sha, tree});
+  const commit = await request("/git/commits", "POST", {message: input.message, tree: createdTree.sha, parents: [input.expectedHead]});
+  const ref = await request(`/git/ref/heads/${encodeURIComponent(input.branchName)}`);
+  if (ref.object.sha !== input.expectedHead) throw new Error("Article head changed; Needs Review");
+  await request(`/git/refs/heads/${encodeURIComponent(input.branchName)}`, "PATCH", {sha: commit.sha, force: false});
+  return commit.sha as string;
 }
 
 export type BlogPrStatus = "open" | "merged" | "closed" | "draft";

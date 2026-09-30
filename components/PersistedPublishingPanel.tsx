@@ -1,4 +1,5 @@
 "use client";
+import { BlogExportPreview } from "./BlogExportPreview";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -68,8 +69,11 @@ type PersistedCalendarItem = {
     blogCategory?: string;
     blogTags?: string[];
     blogSlug?: string;
+    blogPublicationIntent?: "draft" | "published";
+    coverImageAlt?: string;
     heroImageUrl?: string;
     heroImageStorageId?: Id<"_storage">;
+    preparedHero?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["preparedHero"];
     blogPrNumber?: number;
     blogPrStatus?: "open" | "merged" | "closed" | "draft";
   };
@@ -165,6 +169,7 @@ function slugifyTitle(title: string) {
 }
 
 type BlogPublishSnapshot = {
+  title?: string; content?: string; publicationIntent?: "draft" | "published"; coverImageAlt?: string;
   excerpt?: string;
   author?: string;
   category?: string;
@@ -202,6 +207,8 @@ function blogPrBlockedReason(
     post.heroImageUrl?.trim() ||
     post.heroImageStorageId;
   if (!hero) return "Add a hero image before opening a PR.";
+  if (!post.blogPublicationIntent || !post.coverImageAlt?.trim()) return "Save and review publication intent and manual cover alt text.";
+  if (!post.preparedHero) return "Prepare and review the exported hero crop before approval.";
   return null;
 }
 
@@ -584,8 +591,11 @@ export function PersistedPublishingPanel({
         blogCategory?: string;
         blogTags?: string[];
         blogSlug?: string;
+    blogPublicationIntent?: "draft" | "published";
+    coverImageAlt?: string;
         heroImageUrl?: string;
         heroImageStorageId?: Id<"_storage">;
+    preparedHero?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["preparedHero"];
       };
     }
   ) {
@@ -610,7 +620,9 @@ export function PersistedPublishingPanel({
           JSON.stringify(item.post.blogTags ?? []) ||
         blogMetadata.blogSlug !== (item.post.blogSlug ?? "") ||
         blogMetadata.heroImageUrl !== (item.post.heroImageUrl ?? "") ||
-        blogMetadata.heroImageStorageId !== item.post.heroImageStorageId);
+        blogMetadata.heroImageStorageId !== item.post.heroImageStorageId ||
+        blogMetadata.blogPublicationIntent !== item.post.blogPublicationIntent ||
+        blogMetadata.coverImageAlt !== item.post.coverImageAlt);
 
     if (titleChanged || contentChanged || firstCommentChanged) {
       await updateContent({
@@ -839,7 +851,9 @@ export function PersistedPublishingPanel({
 
     const snapshotDiffers =
       Boolean(snapshot) &&
-      ((snapshot?.excerpt?.trim() || "") !== (item.post.blogExcerpt?.trim() || "") ||
+      ((snapshot?.title !== item.post.title) || (snapshot?.content !== item.post.content) ||
+        snapshot?.publicationIntent !== item.post.blogPublicationIntent || snapshot?.coverImageAlt !== item.post.coverImageAlt ||
+        (snapshot?.excerpt?.trim() || "") !== (item.post.blogExcerpt?.trim() || "") ||
         (snapshot?.author?.trim() || "") !== (item.post.blogAuthor?.trim() || "") ||
         (snapshot?.category?.trim() || "") !== (item.post.blogCategory?.trim() || "") ||
         JSON.stringify(snapshot?.tags ?? []) !== JSON.stringify(item.post.blogTags ?? []) ||
@@ -861,9 +875,6 @@ export function PersistedPublishingPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           postId: item.post._id,
-          scheduleTrigger: "pr-body",
-          status: "draft",
-          coverImageAlt: `Cover image for ${item.post.title}`,
         }),
       });
       const data = await response.json();
@@ -896,6 +907,7 @@ export function PersistedPublishingPanel({
       await recordGithubPr({
         postId: item.post._id,
         result: {
+          artifact: sanitized.artifact as import("@/lib/github").BlogArtifact | undefined,
           prUrl: data.prUrl,
           branchName: data.branchName,
           prNumber,
@@ -1652,8 +1664,11 @@ function PublishingDetailDrawer(props: {
       blogCategory?: string;
       blogTags?: string[];
       blogSlug?: string;
+    blogPublicationIntent?: "draft" | "published";
+    coverImageAlt?: string;
       heroImageUrl?: string;
       heroImageStorageId?: Id<"_storage">;
+    preparedHero?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["preparedHero"];
     };
   }) => void;
   onSubmit: (item: PersistedCalendarItem) => void;
@@ -2077,8 +2092,11 @@ function PersistedPostComposer(props: {
       blogCategory?: string;
       blogTags?: string[];
       blogSlug?: string;
+    blogPublicationIntent?: "draft" | "published";
+    coverImageAlt?: string;
       heroImageUrl?: string;
       heroImageStorageId?: Id<"_storage">;
+    preparedHero?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["preparedHero"];
     };
   }) => void;
 }) {
@@ -2088,6 +2106,9 @@ function PersistedPostComposer(props: {
   // v2-owned storage module — the legacy posts.generateUploadUrl retires at
   // the ADR 0004 cutover.
   const generateUploadUrl = useMutation(api.v2Storage.generateUploadUrl);
+  const prepareHero = useAction(api.blogHero.prepare);
+  const [heroCrop, setHeroCrop] = useState<"centre" | "north" | "south">("centre");
+  const exportedHeroUrl = useQuery(api.v2Storage.getFileUrl, post.preparedHero ? {fileId: post.preparedHero.storageId} : "skip");
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
   const [linkedinFirstComment, setLinkedinFirstComment] = useState(post.linkedinFirstComment ?? "");
@@ -2098,6 +2119,8 @@ function PersistedPostComposer(props: {
   );
   const [blogTagsInput, setBlogTagsInput] = useState((post.blogTags ?? []).join(", "));
   const [blogSlug, setBlogSlug] = useState(post.blogSlug ?? slugifyTitle(post.title));
+  const [blogPublicationIntent, setBlogPublicationIntent] = useState<"draft" | "published">(post.blogPublicationIntent ?? "draft");
+  const [coverImageAlt, setCoverImageAlt] = useState(post.coverImageAlt ?? "");
   const [slugTouched, setSlugTouched] = useState(Boolean(post.blogSlug));
   const [heroImageUrl, setHeroImageUrl] = useState(post.heroImageUrl ?? "");
   const [heroImageStorageId, setHeroImageStorageId] = useState<Id<"_storage"> | undefined>(
@@ -2139,7 +2162,8 @@ function PersistedPostComposer(props: {
       JSON.stringify(blogTags) !== JSON.stringify(post.blogTags ?? []) ||
       blogSlug !== (post.blogSlug ?? "") ||
       heroImageUrl !== (post.heroImageUrl ?? "") ||
-      heroImageStorageId !== post.heroImageStorageId);
+      heroImageStorageId !== post.heroImageStorageId ||
+      blogPublicationIntent !== post.blogPublicationIntent || coverImageAlt !== (post.coverImageAlt ?? ""));
   const heroPreviewUrl = heroImageUrl.trim() || resolvedHeroUrl || "";
   const canSave =
     (contentChanged || scheduleChanged || blogMetadataChanged) && title.trim().length > 0;
@@ -2147,6 +2171,7 @@ function PersistedPostComposer(props: {
   useEffect(() => {
     if (post.channelId !== "corvo-blog" || !props.onPublishSnapshotChange) return;
     props.onPublishSnapshotChange({
+      title, content, publicationIntent: blogPublicationIntent, coverImageAlt,
       excerpt: blogExcerpt,
       author: blogAuthor,
       category: blogCategory,
@@ -2155,6 +2180,7 @@ function PersistedPostComposer(props: {
       heroImageUrl: heroPreviewUrl || undefined,
     });
   }, [
+    title, content, blogPublicationIntent, coverImageAlt,
     blogAuthor,
     blogCategory,
     blogExcerpt,
@@ -2332,6 +2358,33 @@ function PersistedPostComposer(props: {
                 />
               </label>
               <label className="block text-xs font-semibold text-gray-600">
+                Publication intent
+                <select aria-label="Publication intent" className="mt-1 w-full rounded-md border px-2 py-1.5 text-sm" value={blogPublicationIntent} onChange={e => setBlogPublicationIntent(e.target.value as "draft" | "published")}>
+                  <option value="draft">Draft — keep hidden</option>
+                  <option value="published">Published — visible when merged</option>
+                </select>
+              </label>
+              <p className="text-xs text-amber-800">Published articles become visible when merged, even with a future date. Resonate never merges automatically.</p>
+              <label className="block text-xs font-semibold text-gray-600">
+                Cover image alt text
+                <textarea aria-label="Cover image alt text" className="mt-1 w-full rounded-md border px-2 py-1.5 text-sm" value={coverImageAlt} onChange={e => setCoverImageAlt(e.target.value)} />
+              </label>
+              <label className="block text-xs font-semibold text-gray-600">Exported crop
+                <select value={heroCrop} onChange={e => setHeroCrop(e.target.value as typeof heroCrop)} aria-label="Exported crop">
+                  <option value="centre">Centre</option><option value="north">Top</option><option value="south">Bottom</option>
+                </select>
+              </label>
+              <button type="button" disabled={!post.heroImageStorageId || heroUploading || blogMetadataChanged} className="rounded bg-[#15616d] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" onClick={async () => {
+                setHeroUploading(true); setHeroUploadError(null);
+                try { await prepareHero({postId: post._id, crop: heroCrop}); }
+                catch (error) { setHeroUploadError(error instanceof Error ? error.message : "Hero preparation failed"); }
+                finally { setHeroUploading(false); }
+              }}>Prepare exported hero</button>
+              <p className="text-xs text-gray-600">Save the original upload first, prepare the crop, then review it before approval. External URLs remain readable; new exports require an upload.</p>
+              {exportedHeroUrl && <img alt={post.coverImageAlt ?? "Export crop preview"} src={exportedHeroUrl} className="aspect-video w-full rounded object-cover" />}
+              {post.preparedHero && <p className="text-xs text-gray-600">1600×900 WebP · {post.preparedHero.byteLength.toLocaleString()} bytes · {post.preparedHero.crop}</p>}
+              <BlogExportPreview post={post} />
+              <label className="block text-xs font-semibold text-gray-600">
                 Hero image URL
                 <input
                   className="mt-1 w-full rounded-md border border-black/15 px-2 py-1.5 text-sm"
@@ -2403,14 +2456,15 @@ function PersistedPostComposer(props: {
               timezone,
               blogMetadata: blogMetadataChanged
                 ? {
-                    blogExcerpt: blogExcerpt.trim() || undefined,
-                    blogAuthor: blogAuthor.trim() || undefined,
-                    blogCategory: blogCategory.trim() || undefined,
-                    blogTags: blogTags.length ? blogTags : undefined,
-                    blogSlug: blogSlug.trim() || undefined,
+                    blogExcerpt: blogExcerpt.trim(),
+                    blogAuthor: blogAuthor.trim(),
+                    blogCategory: blogCategory.trim(),
+                    blogTags: blogTags,
+                    blogSlug: blogSlug.trim(),
                     heroImageUrl:
                       heroImageUrl.trim() || resolvedHeroUrl || undefined,
                     heroImageStorageId,
+                    blogPublicationIntent, coverImageAlt,
                   }
                 : undefined,
             })

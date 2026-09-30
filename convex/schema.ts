@@ -1,3 +1,4 @@
+import { preparedHeroValidator } from "./blogValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -233,8 +234,17 @@ export default defineSchema({
     blogCategory: v.optional(v.string()),
     blogTags: v.optional(v.array(v.string())),
     blogSlug: v.optional(v.string()),
+    blogPublicationIntent: v.optional(v.union(v.literal("draft"), v.literal("published"))),
+    coverImageAlt: v.optional(v.string()),
+    preparedHero: v.optional(preparedHeroValidator),
     heroImageUrl: v.optional(v.string()),
     heroImageStorageId: v.optional(v.id("_storage")),
+    blogArtifact: v.optional(v.object({
+      repository: v.string(), prNumber: v.number(), branchName: v.string(),
+      mdxPath: v.string(), heroPath: v.optional(v.string()), canonicalUrl: v.string(),
+    })),
+    blogSyncPending: v.optional(v.string()),
+    blogExportClaimKey: v.optional(v.string()),
     blogPrNumber: v.optional(v.number()),
     blogPrStatus: v.optional(
       v.union(
@@ -287,6 +297,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_post", ["postId"])
+    .index("by_post_and_updated_at", ["postId", "updatedAt"])
     .index("by_user", ["userId"])
     .index("by_brand", ["brandId"])
     .index("by_schedule", ["scheduledDate"]),

@@ -4236,3 +4236,68 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/linkedin-first-comment
+
+## 09/30/2026 02:27:52 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	app/api/publish/__tests__/route.test.ts
+- M	app/api/publish/route.ts
+- A	components/BlogExportPreview.tsx
+- M	components/ConvexClientProvider.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- A	convex.json
+- A	convex/__tests__/blogExport.test.ts
+- M	convex/__tests__/queue.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/blogHero.ts
+- A	convex/blogValidators.ts
+- M	convex/githubPrSync.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- A	docs/epic-97-progress.md
+- A	e2e/blog-export.spec.ts
+- M	lib/__tests__/github.test.ts
+- A	lib/__tests__/prepareBlogHero.test.ts
+- A	lib/blogContract.ts
+- M	lib/github.ts
+- A	lib/prepareBlogHero.ts
+- M	package-lock.json
+- M	package.json
+
+### Working Tree Snapshot
+
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+- A  components/BlogExportPreview.tsx
+- M  components/ConvexClientProvider.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex.json
+- A  convex/__tests__/blogExport.test.ts
+- M  convex/__tests__/queue.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/blogHero.ts
+- A  convex/blogValidators.ts
+- M  convex/githubPrSync.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- A  docs/epic-97-progress.md
+- A  e2e/blog-export.spec.ts
+- M  lib/__tests__/github.test.ts
+- A  lib/__tests__/prepareBlogHero.test.ts
+- A  lib/blogContract.ts
+- M  lib/github.ts
+- A  lib/prepareBlogHero.ts
+- M  package-lock.json
+- M  package.json
+
+### Branch
+
+- codex/epic-97-blog-contract

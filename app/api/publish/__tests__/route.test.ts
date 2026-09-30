@@ -17,6 +17,8 @@ vi.mock("convex/browser", () => ({
     return {
       setAuth: vi.fn(),
       query: mockConvexQuery,
+      action: vi.fn().mockResolvedValue({base64: "aGVybw==", sha256: "fixture-hash"}),
+      mutation: vi.fn().mockResolvedValue(null),
     }
   }),
 }))
@@ -70,227 +72,46 @@ function makeRequest(body: object): NextRequest {
   }) as unknown as NextRequest
 }
 
-const approvedPost = {
-  _id: "post_approved",
-  title: "Server Title",
-  content: "Server Content",
-  approvalState: "approved" as const,
-  scheduledDate: "2026-06-01",
-  scheduledTime: "10:00",
-  timezone: "America/New_York",
-  blogExcerpt: "Server excerpt",
-  blogAuthor: "Server Author",
-  blogTags: ["server-tag"],
-  blogCategory: "server-category",
-  blogSlug: "My Cool Post!!",
-  heroImageUrl: "https://cdn.example.com/server-hero.jpg",
-}
+import { blogEditorialFingerprint } from "@/lib/blogContract";
+const saved = {
+  _id: "post_approved", channelId: "corvo-blog", title: "Server Title", content: "Server Content",
+  approvalState: "approved", scheduledDate: "2026-06-01", scheduledTime: "10:00", timezone: "America/New_York",
+  blogExcerpt: "Server excerpt", blogAuthor: "Server Author", blogTags: ["server-tag"],
+  blogCategory: "strategy", blogSlug: "my-cool-post", blogPublicationIntent: "published" as const,
+  heroImageStorageId: "source-storage", preparedHero: {sourceStorageId:"source-storage", storageId:"derivative", width:1600, height:900, mimeType:"image/webp", byteLength:1000, sha256:"fixture-hash", crop:"centre"},
+  coverImageAlt: "  Exact approved alt.  ", heroImageUrl: "https://cdn.example.com/server-hero.jpg",
+};
+const approvedPost = { ...saved, contentFingerprint: blogEditorialFingerprint(saved) };
 
-describe("POST /api/publish", () => {
+describe("POST /api/publish saved export contract", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    process.env.NEXT_PUBLIC_CONVEX_URL = "https://example.convex.cloud"
-    mockConvexQuery.mockResolvedValue(approvedPost)
-    vi.mocked(auth).mockResolvedValue({
-      userId: "user_123",
-      getToken: vi.fn().mockResolvedValue("convex-token"),
-    } as Awaited<ReturnType<typeof auth>>)
-  })
-
-  it("returns 401 when not authenticated", async () => {
-    vi.mocked(auth).mockResolvedValueOnce({ userId: null } as Awaited<ReturnType<typeof auth>>)
-    const res = await POST(makeRequest({ postId: "post_approved" }))
-    expect(res.status).toBe(401)
-  })
-
-  it("returns 400 when postId is missing", async () => {
-    const res = await POST(makeRequest({ title: "T", content: "C" }))
-    expect(res.status).toBe(400)
-    expect(createBlogPostPR).not.toHaveBeenCalled()
-  })
-
-  it("returns 200 with prUrl and branchName on success", async () => {
-    const res = await POST(
-      makeRequest({
-        postId: "post_approved",
-        scheduleTrigger: "pr-body",
-        status: "scheduled",
-      })
-    )
-    expect(res.status).toBe(200)
-    const data = await res.json()
-    expect(data.prUrl).toBe("https://github.com/org/repo/pull/1")
-    expect(data.branchName).toBeDefined()
-    expect(data.sanitizedResponse).toMatchObject({
-      repo: "jakebutler/corvo-labs-dot-com",
-      number: 1,
-      state: "open",
-    })
-  })
-
-  it("calls createBlogPostPR with server fields and normalized slug", async () => {
-    await POST(
-      makeRequest({
-        postId: "post_approved",
-        scheduleTrigger: "pr-body",
-        status: "scheduled",
-      })
-    )
-    expect(createBlogPostPR).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Server Title",
-        content: "Server Content",
-        scheduledDate: "2026-06-01",
-        scheduledTime: "10:00",
-        timezone: "America/New_York",
-        scheduleTrigger: "pr-body",
-        status: "scheduled",
-        excerpt: "Server excerpt",
-        author: "Server Author",
-        tags: ["server-tag"],
-        category: "server-category",
-        slug: "my-cool-post",
-      })
-    )
-  })
-
-  it("forwards optional schedule/feature metadata without accepting client blog fields", async () => {
-    await POST(
-      makeRequest({
-        postId: "post_approved",
-        scheduleTrigger: "frontmatter",
-        status: "scheduled",
-        subtitle: "A subtitle",
-        excerpt: "Client SEO",
-        author: "Client Author",
-        tags: ["client-tag"],
-        category: "client-category",
-        featured: true,
-        coverImageAlt: "A descriptive cover image caption.",
-      })
-    )
-
-    expect(createBlogPostPR).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Server Title",
-        content: "Server Content",
-        scheduleTrigger: "frontmatter",
-        status: "scheduled",
-        subtitle: "A subtitle",
-        excerpt: "Server excerpt",
-        author: "Server Author",
-        tags: ["server-tag"],
-        category: "server-category",
-        featured: true,
-        coverImageAlt: "A descriptive cover image caption.",
-        images: [
-          expect.objectContaining({
-            sourceUrl: "https://cdn.example.com/server-hero.jpg",
-            isCover: true,
-          }),
-        ],
-      })
-    )
-    expect(enrichPublishImageAlts).toHaveBeenCalledWith({
-      title: "Server Title",
-      excerpt: "Server excerpt",
-      coverImageAlt: "A descriptive cover image caption.",
-      images: [
-        expect.objectContaining({
-          sourceUrl: "https://cdn.example.com/server-hero.jpg",
-          isCover: true,
-        }),
-      ],
-    })
-  })
-
-  it("returns 400 when optional metadata has the wrong shape", async () => {
-    const res = await POST(
-      makeRequest({
-        postId: "post_approved",
-        featured: "true",
-        scheduleTrigger: "auto-merge",
-      })
-    )
-
-    expect(res.status).toBe(400)
-    expect(createBlogPostPR).not.toHaveBeenCalled()
-  })
-
-  it("rejects incomplete server metadata instead of filling from the client", async () => {
-    mockConvexQuery.mockResolvedValueOnce({ ...approvedPost, blogTags: [] })
-
-    const res = await POST(
-      makeRequest({
-        postId: "post_approved",
-        tags: ["corvo-labs", "strategy"],
-      })
-    )
-
-    expect(res.status).toBe(400)
-    const data = await res.json()
-    expect(data.error).toMatch(/tags/)
-    expect(createBlogPostPR).not.toHaveBeenCalled()
-  })
-
-  it("returns 400 with contract issues for BlogPostContractError", async () => {
-    vi.mocked(createBlogPostPR).mockRejectedValueOnce(
-      new BlogPostContractError(["Frontmatter `tags` must contain at least one tag."])
-    )
-
-    const res = await POST(makeRequest({ postId: "post_approved" }))
-    expect(res.status).toBe(400)
-    const data = await res.json()
-    expect(data.issues).toEqual(["Frontmatter `tags` must contain at least one tag."])
-  })
-
-  it("returns 500 when createBlogPostPR throws", async () => {
-    vi.mocked(createBlogPostPR).mockRejectedValueOnce(new Error("GitHub API down"))
-    const res = await POST(makeRequest({ postId: "post_approved" }))
-    expect(res.status).toBe(500)
-  })
-
-  it("returns 403 when postId is provided but post is not approved", async () => {
-    mockConvexQuery.mockResolvedValueOnce({ ...approvedPost, approvalState: "unapproved" })
-
-    const res = await POST(
-      makeRequest({
-        postId: "post_approved",
-        title: "Client Title",
-        content: "Client Content",
-      })
-    )
-
-    expect(res.status).toBe(403)
-    expect(createBlogPostPR).not.toHaveBeenCalled()
-  })
-
-  it("ignores client title/content overrides for approved posts", async () => {
-    const res = await POST(
-      makeRequest({
-        postId: "post_approved",
-        title: "Client Title",
-        content: "Client Content",
-        excerpt: "Client excerpt",
-      })
-    )
-
-    expect(res.status).toBe(200)
-    expect(createBlogPostPR).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Server Title",
-        content: "Server Content",
-        excerpt: "Server excerpt",
-        author: "Server Author",
-        tags: ["server-tag"],
-        category: "server-category",
-        images: [
-          expect.objectContaining({
-            sourceUrl: "https://cdn.example.com/server-hero.jpg",
-            isCover: true,
-          }),
-        ],
-      })
-    )
-  })
-})
+    vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_CONVEX_URL = "https://example.convex.cloud";
+    mockConvexQuery.mockResolvedValue(approvedPost);
+    vi.mocked(auth).mockResolvedValue({ userId: "user_123", getToken: vi.fn().mockResolvedValue("convex-token") } as unknown as Awaited<ReturnType<typeof auth>>);
+  });
+  it("requires authentication", async () => {
+    vi.mocked(auth).mockResolvedValueOnce({userId: null} as unknown as Awaited<ReturnType<typeof auth>>);
+    expect((await POST(makeRequest({postId: "post_approved"}))).status).toBe(401);
+    expect(createBlogPostPR).not.toHaveBeenCalled();
+  });
+  it.each(["status", "content", "coverImageAlt", "scheduledDate", "featured"])("rejects a client %s override before provider writes", async key => {
+    expect((await POST(makeRequest({postId: "post_approved", [key]: "tampered"}))).status).toBe(400);
+    expect(createBlogPostPR).not.toHaveBeenCalled();
+  });
+  it("exports exact saved approved metadata with no paid alt enrichment", async () => {
+    expect((await POST(makeRequest({postId: "post_approved"}))).status).toBe(200);
+    expect(createBlogPostPR).toHaveBeenCalledWith(expect.objectContaining({status: "published", content: saved.content, coverImageAlt: saved.coverImageAlt, slug: saved.blogSlug}));
+    expect(enrichPublishImageAlts).not.toHaveBeenCalled();
+  });
+  it.each([{approvalState: "unapproved"}, {content: "Changed"}, {coverImageAlt: "Changed"}, {blogPublicationIntent: undefined}])("rejects legacy or stale approved snapshots %j", async change => {
+    mockConvexQuery.mockResolvedValueOnce({...approvedPost, ...change});
+    expect((await POST(makeRequest({postId: "post_approved"}))).status).toBe(403);
+    expect(createBlogPostPR).not.toHaveBeenCalled();
+  });
+  it("returns contract errors without raw provider data", async () => {
+    vi.mocked(createBlogPostPR).mockRejectedValueOnce(new BlogPostContractError(["Invalid MDX"]));
+    const res = await POST(makeRequest({postId: "post_approved"}));
+    expect(res.status).toBe(400); expect((await res.json()).issues).toEqual(["Invalid MDX"]);
+  });
+});

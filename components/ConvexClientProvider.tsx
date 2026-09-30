@@ -6,7 +6,13 @@ import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 
 function useE2EBypassAuth() {
-  const fetchAccessToken = useCallback(async () => null, []);
+  const fetchAccessToken = useCallback(async () => {
+    // A deliberately unsigned token for intercepted .test WebSockets only.
+    // Real Convex endpoints retain the prior null token under E2E bypass.
+    if (process.env.NEXT_PUBLIC_CONVEX_URL !== "https://convex.test") return null;
+    const now = Math.floor(Date.now() / 1000);
+    return `${btoa('{"alg":"none"}')}.${btoa(JSON.stringify({sub:"fixture-editor",iat:now,exp:now+3600}))}.fixture`;
+  }, []);
   return useMemo(
     () => ({
       isLoading: false,

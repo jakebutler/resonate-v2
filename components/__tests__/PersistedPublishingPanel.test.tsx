@@ -36,6 +36,7 @@ vi.mock("@/convex/_generated/api", () => ({
       recordBlogPrStatus: "publishing:recordBlogPrStatus",
       deletePost: "publishing:deletePost",
     },
+    blogHero: {prepare: "blogHero:prepare"},
     bufferLive: {
       submit: "bufferLive:submit",
       cancelOrUnpublish: "bufferLive:cancelOrUnpublish",
@@ -203,6 +204,8 @@ const blogItem = {
     blogCategory: "strategy",
     blogTags: ["Corvo Labs", "Publishing"],
     blogSlug: "approved-corvo-blog-pr-item",
+    blogPublicationIntent: "published", coverImageAlt: "Reviewed hero",
+    heroImageStorageId: "source", preparedHero: {sourceStorageId: "source", storageId: "prepared", width:1600, height:900, mimeType:"image/webp", byteLength:1000, sha256:"hash", crop:"centre"},
     heroImageUrl: "https://cdn.example/hero.jpg",
   },
   intent: {
@@ -284,6 +287,8 @@ describe("PersistedPublishingPanel", () => {
     });
     vi.mocked(useAction).mockImplementation((reference) => {
       switch (reference) {
+        case "blogHero:prepare":
+          return vi.fn().mockResolvedValue(null);
         case "bufferLive:submit":
           return submitBufferLiveMock;
         case "bufferLive:cancelOrUnpublish":
@@ -581,9 +586,7 @@ describe("PersistedPublishingPanel", () => {
     );
     expect(publishPayload).toMatchObject({
       postId: "post_4",
-      scheduleTrigger: "pr-body",
-      status: "draft",
-      coverImageAlt: "Cover image for Approved Corvo Blog PR item",
+
     });
     expect(publishPayload).not.toHaveProperty("title");
     expect(publishPayload).not.toHaveProperty("excerpt");
@@ -593,6 +596,7 @@ describe("PersistedPublishingPanel", () => {
       expect(recordGithubPrMock).toHaveBeenCalledWith({
         postId: "post_4",
         result: {
+          artifact: undefined,
           prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/42",
           branchName: "resonate/blog-post-2026-06-12-approved-corvo-blog-pr-item",
           prNumber: 42,

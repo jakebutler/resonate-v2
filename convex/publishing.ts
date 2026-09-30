@@ -1,3 +1,5 @@
+import { blogArtifactValidator, preparedHeroValidator } from "./blogValidators";
+import { blogEditorialFingerprint, missingBlogEditorialFields } from "../lib/blogContract";
 import { previewSeedIdeas, previewSeedPosts } from "./previewSeedData";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -67,6 +69,8 @@ const providerIntentValidator = v.union(
 );
 
 const githubPrRecordValidator = v.object({
+  artifact: v.optional(blogArtifactValidator),
+  exportClaimKey: v.optional(v.string()),
   prUrl: v.string(),
   branchName: v.string(),
   prNumber: v.optional(v.number()),
@@ -87,6 +91,8 @@ const blogMetadataValidator = v.object({
   blogCategory: v.optional(v.string()),
   blogTags: v.optional(v.array(v.string())),
   blogSlug: v.optional(v.string()),
+  blogPublicationIntent: v.optional(v.union(v.literal("draft"), v.literal("published"))),
+  coverImageAlt: v.optional(v.string()),
   heroImageUrl: v.optional(v.string()),
   heroImageStorageId: v.optional(v.id("_storage")),
 });
@@ -243,11 +249,9 @@ async function latestIntent(
   ctx: QueryCtx | MutationCtx,
   postId: Id<"v2Posts">
 ) {
-  const intents = await ctx.db
-    .query("v2PublishingIntents")
-    .withIndex("by_post", (q) => q.eq("postId", postId))
-    .collect();
-  return intents.sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null;
+  return await ctx.db.query("v2PublishingIntents")
+    .withIndex("by_post_and_updated_at", q => q.eq("postId", postId))
+    .order("desc").first();
 }
 export { latestIntent };
 
@@ -685,6 +689,7 @@ export const getPostAuditTrail = query({
 
 export const getPostById = query({
   args: { postId: v.string() },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const normalizedId = ctx.db.normalizeId("v2Posts", args.postId);
@@ -723,6 +728,7 @@ export const createPostWithIntent = mutation({
       platformId: channel.platformId,
       title: args.title,
       content: args.content,
+      ...(args.channelId === "corvo-blog" ? { blogPublicationIntent: "draft" as const } : {}),
       status: args.scheduledDate ? "scheduled" : "draft",
       approvalState: "unapproved",
       scheduledDate: args.scheduledDate,
@@ -839,11 +845,19 @@ export const setApproval = mutation({
     postId: v.id("v2Posts"),
     approvalState: approvalValidator,
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
+    if (args.approvalState === "approved" && post.channelId === "corvo-blog") {
+      const missing = missingBlogEditorialFields(post);
+      if (missing.length) throw new Error(`Review blog metadata before approval: ${missing.join(", ")}`);
+    }
+    const fingerprint = post.channelId === "corvo-blog"
+      ? blogEditorialFingerprint(post) : contentFingerprint(post.title, post.content, post.linkedinFirstComment);
     const now = Date.now();
     const nextStatus =
       args.approvalState === "approved"
@@ -855,12 +869,12 @@ export const setApproval = mutation({
     await ctx.db.patch(args.postId, {
       approvalState: args.approvalState,
       status: nextStatus,
-      contentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
+      contentFingerprint: fingerprint,
       updatedAt: now,
     });
     await ctx.db.patch(intent._id, {
       approvalState: args.approvalState,
-      contentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
+      contentFingerprint: fingerprint,
       updatedAt: now,
     });
     await audit(ctx, {
@@ -881,11 +895,15 @@ export const reschedule = mutation({
     scheduledTime: v.optional(v.string()),
     timezone: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
+    if (post.blogSyncPending) throw new Error("Article schedule sync is in progress; refresh before changing it again.");
+    const syncKey = JSON.stringify([args.scheduledDate, args.scheduledTime ?? null, args.timezone ?? post.timezone]);
     const now = Date.now();
     const timezone = args.timezone ?? post.timezone;
 
@@ -917,7 +935,12 @@ export const reschedule = mutation({
         .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
         .first();
       if (providerState?.providerId === "github-pr") {
+        await ctx.db.patch(post._id, {blogSyncPending: syncKey});
         await ctx.scheduler.runAfter(0, internal.githubPrSync.syncFrontmatterAfterReschedule, {
+          syncKey,
+          artifact: post.blogArtifact,
+          expectedTitle: post.title,
+          expectedSlug: post.blogSlug,
           postId: args.postId,
           userId,
           brandId: post.brandId,
@@ -935,6 +958,8 @@ export const reschedule = mutation({
 
 export const recordGithubPrFrontmatterSynced = internalMutation({
   args: {
+    syncKey: v.optional(v.string()),
+    artifact: v.optional(blogArtifactValidator),
     postId: v.id("v2Posts"),
     userId: v.string(),
     brandId: brandIdValidator,
@@ -944,7 +969,12 @@ export const recordGithubPrFrontmatterSynced = internalMutation({
     scheduledTime: v.optional(v.string()),
     timezone: v.optional(v.string()),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!args.syncKey || !post || post.blogSyncPending !== args.syncKey) return;
+    await ctx.db.patch(post._id, {blogSyncPending: undefined, ...(args.artifact ? {blogArtifact: args.artifact} : {})});
+    if (!post.blogArtifact && args.artifact) await audit(ctx, {userId: args.userId, brandId: args.brandId, postId: post._id, action: "blog.artifact_backfill", summary: "Bound a legacy article from one unambiguous PR diff match.", metadata: args.artifact});
     const now = Date.now();
     const providerState = await ctx.db
       .query("v2ProviderStates")
@@ -978,6 +1008,8 @@ export const recordGithubPrFrontmatterSynced = internalMutation({
 
 export const markGithubPrRescheduleNeedsReview = internalMutation({
   args: {
+    syncKey: v.optional(v.string()),
+    artifact: v.optional(blogArtifactValidator),
     postId: v.id("v2Posts"),
     userId: v.string(),
     brandId: brandIdValidator,
@@ -986,7 +1018,11 @@ export const markGithubPrRescheduleNeedsReview = internalMutation({
     prUrl: v.string(),
     branchName: v.string(),
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!args.syncKey || !post || post.blogSyncPending !== args.syncKey) return;
+    await ctx.db.patch(post._id, {blogSyncPending: undefined, ...(args.artifact ? {blogArtifact: args.artifact} : {})});
     const now = Date.now();
     const summary = `Reschedule could not update GitHub PR frontmatter (${args.reason}); marked Needs Review.`;
     const providerState = await ctx.db
@@ -1045,6 +1081,7 @@ export const updateContent = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
     const title = args.title ?? post.title;
@@ -1086,6 +1123,7 @@ export const updatePlatformSettings = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
     const now = Date.now();
@@ -1315,6 +1353,7 @@ export const recordGithubPr = mutation({
     postId: v.id("v2Posts"),
     result: githubPrRecordValidator,
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
@@ -1324,6 +1363,8 @@ export const recordGithubPr = mutation({
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
 
+    if (post.blogExportClaimKey && post.blogExportClaimKey !== args.result.exportClaimKey) throw new Error("Export claim mismatch");
+    if (post.prUrl === args.result.prUrl) return;
     const now = Date.now();
     const sanitizedResponse = sanitizeProviderResponse(
       args.result.sanitizedResponse &&
@@ -1388,9 +1429,11 @@ export const recordGithubPr = mutation({
 
     const prStatus = args.result.prStatus ?? "open";
     await ctx.db.patch(post._id, {
+      blogExportClaimKey: undefined,
       status: "pr-created",
       prUrl: args.result.prUrl,
       branchName: args.result.branchName,
+      blogArtifact: args.result.artifact ?? post.blogArtifact,
       blogPrNumber: args.result.prNumber,
       blogPrStatus: prStatus,
       blogPrUpdatedAt: now,
@@ -1601,17 +1644,26 @@ export const updateBlogMetadata = mutation({
     postId: v.id("v2Posts"),
     metadata: blogMetadataValidator,
   },
+  returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     if (post.channelId !== "corvo-blog") {
       throw new Error("Blog metadata is only available for Corvo Blog posts.");
     }
     const intent = await latestIntent(ctx, args.postId);
+    const metadata = {...args.metadata, ...(args.metadata.heroImageUrl && !args.metadata.heroImageStorageId ? {heroImageStorageId: undefined, preparedHero: undefined} : {})};
+    if (args.metadata.heroImageStorageId !== undefined && args.metadata.heroImageStorageId !== post.heroImageStorageId) Object.assign(metadata, {preparedHero: undefined});
+    const merged = { ...post, ...metadata };
+    if (merged.blogSlug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(merged.blogSlug)) throw new Error("Invalid blog slug");
+    const fingerprint = blogEditorialFingerprint(merged);
+    if (fingerprint === blogEditorialFingerprint(post)) return { updated: false };
     const now = Date.now();
 
     await ctx.db.patch(args.postId, {
-      ...args.metadata,
+      ...metadata,
+      contentFingerprint: fingerprint,
       approvalState: "unapproved",
       status: "draft",
       updatedAt: now,
@@ -1620,6 +1672,7 @@ export const updateBlogMetadata = mutation({
     if (intent) {
       await ctx.db.patch(intent._id, {
         approvalState: "unapproved",
+        contentFingerprint: fingerprint,
         updatedAt: now,
       });
     }
@@ -2457,5 +2510,56 @@ export const auditBufferSkip = internalMutation({
       summary: args.reason,
     });
     return { recorded: true as const };
+  },
+});
+
+export const getHeroPreparationContext = internalQuery({
+  args: {postId: v.id("v2Posts"), userId: v.string()}, returns: v.any(),
+  handler: async (ctx, args) => {
+    const post = await getOwnedPost(ctx, args.userId, args.postId);
+    if (post.channelId !== "corvo-blog" || !post.heroImageStorageId) throw new Error("Save an uploaded hero in the composer first.");
+    return post;
+  },
+});
+export const recordPreparedHero = internalMutation({
+  args: {postId: v.id("v2Posts"), userId: v.string(), hero: preparedHeroValidator}, returns: v.null(),
+  handler: async (ctx, args) => {
+    const post = await getOwnedPost(ctx, args.userId, args.postId);
+    if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
+    if (post.heroImageStorageId !== args.hero.sourceStorageId) throw new Error("The source image changed during preparation; review the new image.");
+    if (post.preparedHero?.sourceStorageId === args.hero.sourceStorageId && post.preparedHero.sha256 === args.hero.sha256 && post.preparedHero.crop === args.hero.crop) {
+      await ctx.storage.delete(args.hero.storageId);
+      return null;
+    }
+    const intent = await latestIntent(ctx, post._id);
+    const fingerprint = blogEditorialFingerprint({...post, preparedHero: args.hero});
+    await ctx.db.patch(post._id, {preparedHero: args.hero, approvalState: "unapproved", status: "draft", contentFingerprint: fingerprint, updatedAt: Date.now()});
+    if (intent) await ctx.db.patch(intent._id, {approvalState: "unapproved", contentFingerprint: fingerprint, updatedAt: Date.now()});
+    await audit(ctx, {userId: args.userId, brandId: post.brandId, postId: post._id, action: "blog.hero_prepared", summary: "Prepared website hero; review the exported crop before approval.", metadata: args.hero});
+    return null;
+  },
+});
+
+export const claimBlogExport = mutation({
+  args: {postId: v.id("v2Posts"), fingerprint: v.string(), schedule: v.string(), key: v.string()},
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const post = await getOwnedPost(ctx, userId, args.postId);
+    if (post.channelId !== "corvo-blog" || post.approvalState !== "approved" || post.contentFingerprint !== args.fingerprint || blogEditorialFingerprint(post) !== args.fingerprint || JSON.stringify([post.scheduledDate, post.scheduledTime, post.timezone]) !== args.schedule) throw new Error("Saved approved export or schedule changed; review again.");
+    if (post.blogSyncPending || post.prUrl || (post.blogExportClaimKey && post.blogExportClaimKey !== args.key)) throw new Error("Existing article export requires reconciliation.");
+    if (!post.blogExportClaimKey) {
+      await ctx.db.patch(post._id, {blogExportClaimKey: args.key});
+      await audit(ctx, {userId, brandId: post.brandId, postId: post._id, action: "blog.export_claim", summary: "Pinned the approved article and schedule for export."});
+    }
+    return args.key;
+  },
+});
+
+export const isCurrentBlogSync = internalQuery({
+  args: {postId: v.id("v2Posts"), userId: v.string(), syncKey: v.string()}, returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const post = await getOwnedPost(ctx, args.userId, args.postId);
+    return post.blogSyncPending === args.syncKey;
   },
 });
