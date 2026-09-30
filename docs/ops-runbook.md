@@ -1,6 +1,6 @@
 # V2 Resonate Ops Runbook
 
-Last updated: 2026-06-06
+Last updated: 2026-09-30
 
 ---
 
@@ -53,7 +53,7 @@ Keep v2 preview/production environment variables in Vercel secret scope, run the
 Project setup notes:
 - Use the Next.js framework preset. If the project is created empty, Vercel may default to an `Other` preset and serve only `public/`, which makes app routes return 404 even after a successful `next build`.
 - SSO deployment protection was disabled for the `resonate-v2` project so the side-by-side URL can be opened directly. Re-enable or add an explicit custom-domain policy if public access needs to be restricted.
-- `PIONEER_API_KEY`, `PIONEER_DRAFT_MODEL`, Z.ai keys, and `V2_OPS_SECRET` were not present in local/v1 secret scope during first seeding. Add them before validating real Pioneer/Z.ai output or the ops validation endpoint in Vercel.
+- `PIONEER_API_KEY`, `PIONEER_DRAFT_MODEL`, Z.ai keys, and `V2_OPS_SECRET` were not present in local/v1 secret scope during first seeding. Paid generation requires separately scoped approval. The legacy `/api/ops/validate-workflow` synthetic publishing smoke is retired (HTTP 410); use an approved canonical post and prepared hero in the composer for article export.
 
 ### Manual deploy trigger
 ```bash

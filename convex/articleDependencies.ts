@@ -1,4 +1,5 @@
-import { articleArtifactVersion } from "../lib/articleContracts";
+import { providerScheduleHold } from "./bufferAttempts";
+import { articleArtifactVersion, articlePublicationSourceVersion } from "../lib/articleContracts";
 import { v } from "convex/values";
 import {
   query,
@@ -49,6 +50,7 @@ export async function companionSubmissionHold(
     return null;
   }
   const link = post.companionLink;
+  if (link.placement === "first-comment" && post.channelId !== "linkedin") return "First-comment placement requires LinkedIn; review a body link.";
   const article = await ctx.db.get(link.articlePostId);
   if (
     !article ||
@@ -111,6 +113,7 @@ export const record = internalMutation({
     postId: v.id("v2Posts"),
     userId: v.string(),
     expectedArtifactVersion: v.string(),
+    expectedSourceVersion: v.string(),
     evidence: publicationEvidenceValidator,
     key: v.string(),
     artifact: v.optional(blogArtifactValidator),
@@ -119,6 +122,7 @@ export const record = internalMutation({
   handler: async (ctx, args) => {
     const post = await own(ctx, args.userId, args.postId, true);
     if (
+      articlePublicationSourceVersion(post) !== args.expectedSourceVersion ||
       post.channelId !== "corvo-blog" ||
       blogEditorialFingerprint(post) !== args.evidence.editorialVersion ||
       articleArtifactVersion(post.blogArtifact) !== args.expectedArtifactVersion
@@ -223,6 +227,7 @@ export const details = query({
               articleArtifactVersion(post.blogArtifact),
             )
           : await companionSubmissionHold(ctx, post),
+      scheduleHold: await providerScheduleHold(ctx, post._id),
       proposal:
         post.companionLink && article?.blogArtifact
           ? proposeArticleLink(
@@ -279,6 +284,7 @@ export const link = mutation({
       companionReviewVersion(post) !== args.expectedVersion
     )
       throw new Error("Companion or parent selection changed; review again.");
+    if (args.placement === "first-comment" && post.channelId !== "linkedin") throw new Error("First-comment placement requires LinkedIn; use a body link for this channel.");
     const url = article.blogArtifact?.canonicalUrl;
     const field =
       args.placement === "body" ? post.content : post.linkedinFirstComment;
@@ -333,6 +339,7 @@ export const applyLink = mutation({
     );
     if (article.blogArtifact?.canonicalUrl !== args.canonicalUrl)
       throw new Error("Canonical artifact changed; refresh the proposal.");
+    if (post.companionLink.placement === "first-comment" && post.channelId !== "linkedin") throw new Error("First-comment placement requires LinkedIn.");
     const proposal = proposeArticleLink(
       post,
       args.canonicalUrl,

@@ -8,7 +8,7 @@ export const metadata = {
 };
 
 type HomePageProps = {
-  searchParams: Promise<{ postId?: string | string[]; seriesId?: string; devMode?: string | string[] }>;
+  searchParams: Promise<{ postId?: string | string[]; seriesId?: string | string[]; devMode?: string | string[] }>;
 };
 
 export default async function HomePage({ searchParams }: HomePageProps) {
@@ -21,7 +21,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   return (
     <Shell activeSurface="calendar">
       <PublishingPanelErrorBoundary>
-        <PersistedPublishingPanel devMode={devMode} initialPostId={initialPostId} initialSeriesId={resolvedSearchParams.seriesId} />
+        <PersistedPublishingPanel devMode={devMode} initialPostId={initialPostId} initialSeriesId={Array.isArray(resolvedSearchParams.seriesId) ? resolvedSearchParams.seriesId[0] : resolvedSearchParams.seriesId} />
       </PublishingPanelErrorBoundary>
     </Shell>
   );

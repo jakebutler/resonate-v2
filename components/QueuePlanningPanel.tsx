@@ -43,15 +43,12 @@ export function QueuePlanningPanel({
     (initialBrandId ?? "corvo") as Doc<"v2Posts">["brandId"],
   );
   const [seriesId, setSeriesId] = useState(initialSeriesId ?? "");
-  const brand = brands?.some((b) => b.brandId === selectedBrand)
-    ? selectedBrand
-    : (brands?.[0]?.brandId ?? selectedBrand);
-  const authorized =
-    isAuthenticated && Boolean(brands?.some((b) => b.brandId === brand));
-  const args = {
-    brandId: brand,
-    ...(seriesId ? { seriesId: seriesId as Id<"postSeries"> } : {}),
-  };
+  const selectedSeries = series?.find(s => s._id === seriesId);
+  const seriesResolved = !seriesId || series !== undefined;
+  const brand = selectedSeries?.brandId ?? (brands?.some(b => b.brandId === selectedBrand)
+    ? selectedBrand : (brands?.[0]?.brandId ?? "corvo"));
+  const authorized = isAuthenticated && seriesResolved && Boolean(brands?.some(b => b.brandId === brand));
+  const args = {brandId: brand, ...(selectedSeries ? {seriesId: selectedSeries._id} : {})};
   const plan = useQuery(api.queuePlanning.plan, authorized ? args : "skip") as
     | Plan
     | undefined;
@@ -94,6 +91,7 @@ export function QueuePlanningPanel({
         Review capacity and held companions. Local reservations do not reserve
         slots in Buffer.
       </p>
+      {seriesId && seriesResolved && !selectedSeries && <p role="status">This series is unavailable. Showing the accessible brand queue.</p>}
       <div className="flex flex-wrap gap-4">
         <label>
           Brand
@@ -116,7 +114,7 @@ export function QueuePlanningPanel({
           Series filter
           <select
             className="ml-2 rounded border p-2"
-            value={seriesId}
+            value={selectedSeries?._id ?? ""}
             onChange={(e) => setSeriesId(e.target.value)}
           >
             <option value="">All LinkedIn posts</option>
@@ -132,7 +130,7 @@ export function QueuePlanningPanel({
       </div>
       {plan && (
         <>
-          <QueueReleasePanel key={`${brand}:${seriesId}`} brandId={brand} seriesId={seriesId?seriesId as Id<"postSeries">:undefined} candidates={plan.candidates}/>
+          <QueueReleasePanel key={`${brand}:${selectedSeries?._id ?? ""}`} brandId={brand} seriesId={selectedSeries?._id} candidates={plan.candidates}/>
           <section
             aria-label="Queue capacity"
             className="space-y-2 rounded border bg-white p-4"
@@ -346,13 +344,13 @@ export function QueuePlanningPanel({
                       Release local reservation
                     </button>
                   ) : (
-                    seriesId && (
+                    selectedSeries && (
                       <button
                         disabled={busy}
                         onClick={() =>
                           void run(() =>
                             reserve({
-                              seriesId: seriesId as Id<"postSeries">,
+                              seriesId: selectedSeries._id,
                               postId: row.post._id,
                             }),
                           )

@@ -349,7 +349,8 @@ export default defineSchema({
   })
     .index("by_post", ["postId"])
     .index("by_intent", ["intentId"])
-    .index("by_status", ["status"]).index("by_status_and_last_checked",["status","lastCheckedAt"]),
+    .index("by_status", ["status"]).index("by_status_and_last_checked",["status","lastCheckedAt"])
+    .index("by_provider_status_and_last_checked",["providerId","status","lastCheckedAt"]),
 
   v2PublishAttempts: defineTable({
     postId: v.id("v2Posts"),

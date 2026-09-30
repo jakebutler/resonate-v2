@@ -1,5 +1,5 @@
 "use node";
-import { articleArtifactVersion } from "../lib/articleContracts";
+import { articleArtifactVersion, articlePublicationSourceVersion } from "../lib/articleContracts";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -67,6 +67,7 @@ export const refresh = action({
         ...args,
         userId,
         expectedArtifactVersion: articleArtifactVersion(post.blogArtifact),
+        expectedSourceVersion: articlePublicationSourceVersion(post),
         ...result,
         key: articleEvidenceKey(result.evidence),
       },

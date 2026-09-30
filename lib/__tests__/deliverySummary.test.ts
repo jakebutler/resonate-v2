@@ -15,6 +15,9 @@ it("counts verified articles and provider IDs separately from merged-only, legac
     editorialVersion: blogEditorialFingerprint(article),
     artifactVersion: articleArtifactVersion(article.blogArtifact),
     prState: "merged" as const,
+    mergeSha: "merge",
+    deploymentSha: "merge",
+    articleBlobSha: "blob",
     deploymentState: "success",
     deploymentContainsArticle: true,
     availability: "verified" as const,
@@ -64,4 +67,48 @@ it("counts verified articles and provider IDs separately from merged-only, legac
     needsReview: 0,
     notSubmitted: 0,
   });
+});
+
+it("requires all exact publication facts and ages out stale evidence", () => {
+  const post = {
+    title: "Article",
+    content: "Saved copy",
+    channelId: "corvo-blog",
+    status: "published",
+    blogArtifact: { canonicalUrl: "https://example.com/fixture" },
+  };
+  const evidence = {
+    checkedAt: 1000000,
+    editorialVersion: blogEditorialFingerprint(post),
+    artifactVersion: articleArtifactVersion(post.blogArtifact),
+    prState: "merged" as const,
+    mergeSha: "merge",
+    deploymentSha: "merge",
+    articleBlobSha: "blob",
+    deploymentState: "success",
+    deploymentContainsArticle: true,
+    availability: "verified" as const,
+  };
+  expect(
+    deliverySummary([{ post, articlePublication: { evidence } }], 1000000)
+      .published,
+  ).toBe(1);
+  for (const changes of [
+    { checkedAt: 0 },
+    { mergeSha: undefined },
+    { deploymentSha: undefined },
+    { articleBlobSha: undefined },
+    { deploymentState: "pending" },
+  ])
+    expect(
+      deliverySummary(
+        [
+          {
+            post,
+            articlePublication: { evidence: { ...evidence, ...changes } },
+          },
+        ],
+        1000000,
+      ).published,
+    ).toBe(0);
 });

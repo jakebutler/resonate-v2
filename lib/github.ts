@@ -374,6 +374,7 @@ export interface BlogPublicationParams {
   images?: PublishImageAsset[];
   preparedHero?: { bytes: Buffer; sha256: string };
   exportIdentity?: string;
+  beforeRemoteWrite?: () => Promise<void>;
   editorialFingerprint?: string;
 }
 
@@ -576,6 +577,7 @@ export async function createBlogPostPR(params: BlogPublicationParams): Promise<{
   const heroPath = files.find(file => file.path.endsWith("/hero.webp"))!.path;
   const slug = filePath.split("/").pop()!.replace(/\.mdx$/, "");
   const heroProvenance = (params.images?.find(asset => asset.isCover) ?? params.images?.[0])?.export?.hero;
+  await params.beforeRemoteWrite?.();
 
   const headers = githubHeaders();
   const base = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
@@ -614,6 +616,12 @@ export async function createBlogPostPR(params: BlogPublicationParams): Promise<{
   if (existing === 0 && head === defaultRef.object.sha) {
     await commitGithubFiles({branchName, expectedHead: head, message: `feat: add article and reviewed hero`, files});
   } else if (existing !== files.length) throw new Error("Incomplete or unrelated export branch; Needs Review");
+  else {
+    const diff = await read(`/compare/${encodeURIComponent(defaultRef.object.sha)}...${encodeURIComponent(head)}`);
+    const expected = new Set(files.map(f => f.path));
+    if (!["ahead", "diverged"].includes(diff.status) || !Number.isSafeInteger(diff.ahead_by) || diff.ahead_by < 1 || !Number.isSafeInteger(diff.total_commits) || diff.total_commits < 1 || diff.total_commits > 250 || !Array.isArray(diff.files) || diff.files.length !== files.length || diff.files.some((f: {filename: string; status: string}) => !expected.has(f.filename) || !["added", "modified"].includes(f.status)))
+      throw new Error("Incomplete or unrelated export branch diff; Needs Review");
+  }
   const existingPrs = await read(`/pulls?state=all&head=${encodeURIComponent(`${REPO_OWNER}:${branchName}`)}&base=${encodeURIComponent(defaultBranch)}`);
   if (!Array.isArray(existingPrs) || existingPrs.length > 1 || existingPrs.some(pr => pr.state !== "open")) throw new Error("Export PR history requires review");
   let pr = existingPrs[0];

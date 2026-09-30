@@ -10,6 +10,7 @@ import { socialReleaseVersion } from "../../lib/socialPayload";
 import { blogEditorialFingerprint } from "../../lib/blogContract";
 import {
   articleArtifactVersion,
+  articlePublicationSourceVersion,
   companionReviewVersion,
 } from "../../lib/articleContracts";
 const modules = import.meta.glob("../**/*.ts");
@@ -77,6 +78,7 @@ async function fixture(count = 10, limit = 10) {
     postId: article,
     userId: "editor",
     expectedArtifactVersion: articleArtifactVersion(artifact),
+    expectedSourceVersion: articlePublicationSourceVersion(articlePost),
     key: "fixture-publication",
     evidence: {
       checkedAt: Date.now(),
@@ -146,6 +148,7 @@ function gates() {
 }
 function provider(
   options: {
+    otherOrganization?: boolean;
     fullAt?: number;
     ambiguousAt?: number;
     beforeChannels?: () => Promise<void>;
@@ -179,7 +182,7 @@ function provider(
     } else if (body.query.includes("BufferChannels")) {
       await options.beforeChannels?.();
       data = {
-        channels: [
+        channels: body.variables.organizationId === "other-org" ? [] : [
           {
             id: "fixture-page",
             name: "corvo-labs-us",
@@ -197,7 +200,7 @@ function provider(
       data = {
         account: {
           id: "account-fixture",
-          organizations: [{ id: "fixture-org", name: "Fixture organization" }],
+          organizations: [{ id: "fixture-org", name: "Fixture organization" }, ...(options.otherOrganization ? [{id:"other-org",name:"Other fixture organization"}] : [])],
         },
       };
     return new Response(JSON.stringify({ data }), { status: 200 });
@@ -778,4 +781,196 @@ describe("explicit reviewed queue execution", () => {
       else expect(p.creates()).toBe(1);
     },
   );
+});
+
+it("preparing a packet never silently reviews a destination", async () => {
+  const f = await fixture(1);
+  await f.t.run((ctx) =>
+    ctx.db.patch(f.posts[0], { destinationReview: undefined }),
+  );
+  await f.user.mutation(api.queueRelease.prepare, {
+    brandId: "corvo",
+    postIds: f.posts,
+  });
+  const packet = await f.user.query(api.queueRelease.latest, {
+    brandId: "corvo",
+  });
+  expect(packet.rows[0]).toMatchObject({ status: "held" });
+  expect(
+    (await f.t.run((ctx) => ctx.db.get(f.posts[0])))!.destinationReview,
+  ).toBeUndefined();
+});
+it("retains uncertain Buffer receipts even when an identifier resembles a mock", async () => {
+  const f = await fixture(1);
+  const claim = await f.t.mutation(internal.publishing.claimBufferSubmission, {
+    postId: f.posts[0],
+    userId: "editor",
+  });
+  await f.t.run((ctx) =>
+    ctx.db.patch(claim.attemptId, {
+      status: "ambiguous",
+      providerPostId: "mock-untrusted-response",
+    }),
+  );
+  expect(
+    await f.t.query(internal.publishing.getBufferSubmissionContext, {
+      postId: f.posts[0],
+      userId: "editor",
+      retry: true,
+    }),
+  ).toMatchObject({ eligible: false });
+});
+it("rejects rescheduling after a pending dispatch without changing dates or approval", async () => {
+  const f = await fixture(1);
+  await f.t.mutation(internal.publishing.claimBufferSubmission, {
+    postId: f.posts[0],
+    userId: "editor",
+  });
+  const before = await f.t.run((ctx) => ctx.db.get(f.posts[0]));
+  await expect(
+    f.user.mutation(api.publishing.reschedule, {
+      postId: f.posts[0],
+      scheduledDate: "2031-01-01",
+      scheduledTime: "10:00",
+    }),
+  ).rejects.toThrow(/receipt|uncertain|pending/i);
+  expect(await f.t.run((ctx) => ctx.db.get(f.posts[0]))).toEqual(before);
+});
+
+it.each(["needs-review", "executing"] as const)(
+  "recovers only executing receipts while preserving an explicit %s hold",
+  async (status) => {
+    const f = await fixture(1);
+    const reviewId = await review(f, f.posts);
+    const begin = await f.t.mutation(internal.queueRelease.begin, {
+      reviewId,
+      userId: "editor",
+      runId: "interrupted",
+    });
+    const claim = await f.t.mutation(
+      internal.publishing.claimBufferSubmission,
+      {
+        postId: f.posts[0],
+        userId: "editor",
+        reviewRowId: begin.rowIds[0],
+        runId: "interrupted",
+      },
+    );
+    if (!claim.eligible) throw new Error("Fixture held");
+    await f.t.run(async (ctx) => {
+      await ctx.db.patch(claim.attemptId, {
+        status: "success",
+        providerPostId: "accepted-before-interruption",
+        observedDeliveryStatus: "queued",
+      });
+      await ctx.db.patch(begin.rowIds[0], {
+        status,
+        reason:
+          status === "needs-review" ? "Changed while in flight" : undefined,
+      });
+      await ctx.db.patch(reviewId, { claimedUntil: 1 });
+    });
+    const next = await f.t.mutation(internal.queueRelease.begin, {
+      reviewId,
+      userId: "editor",
+      runId: "resume",
+    });
+    const row = await f.t.run((ctx) => ctx.db.get(begin.rowIds[0]));
+    expect(row!.status).toBe(
+      status === "executing" ? "queued" : "needs-review",
+    );
+    expect(next.execute).toBe(status === "executing");
+  },
+);
+it.each([
+  { scheduledDate: "2000-01-01", scheduledTime: "09:00", timezone: "UTC" },
+  { scheduledDate: "2030-02-30", scheduledTime: "09:00", timezone: "UTC" },
+  { scheduledDate: "2030-10-07", scheduledTime: "09:00", timezone: "Bad/Zone" },
+])(
+  "holds an invalid or expired exact schedule with no daily limit (%j)",
+  async (schedule) => {
+    const f = await fixture(1);
+    await f.t.run((ctx) => ctx.db.patch(f.posts[0], schedule));
+    const packetId = await review(f, f.posts);
+    const packet = await f.user.query(api.queueRelease.latest, {
+      brandId: "corvo",
+      seriesId: f.seriesId,
+    });
+    expect(packet.review._id).toBe(packetId);
+    expect(packet.rows[0].status).toBe("held");
+    expect(
+      await f.t.run((ctx) => ctx.db.query("v2PublishAttempts").collect()),
+    ).toHaveLength(0);
+  },
+);
+it.each([1, 2, 3])(
+  "releases a claim when a %s request budget runs out before create, without uncertainty or automatic retry",
+  async (remaining) => {
+    const f = await fixture(1);
+    gates();
+    const p = provider({ otherOrganization: remaining === 3 });
+    const ctx = {
+      runQuery: (
+        ref: Parameters<typeof f.t.query>[0],
+        args: Record<string, unknown>,
+      ) => f.t.query(ref, args),
+      runMutation: (
+        ref: Parameters<typeof f.t.mutation>[0],
+        args: Record<string, unknown>,
+      ) => f.t.mutation(ref, args),
+    };
+    const result = await executeBufferSubmit(
+      ctx as never,
+      { postId: f.posts[0] },
+      "editor",
+      { remaining },
+    );
+    expect(result.submitted).toBe(false);
+    expect(p.creates()).toBe(0);
+    const attempts = await f.t.run((ctx) =>
+      ctx.db.query("v2PublishAttempts").collect(),
+    );
+    expect(attempts[0].status).toBe("retryable-failure");
+    expect(
+      (await f.t.run((ctx) => ctx.db.query("queueDispatchClaims").collect()))[0]
+        .status,
+    ).toBe("released");
+    expect(attempts[0].sanitizedResponse.dispatched).toBe(false);
+  },
+);
+
+it("keeps an in-flight editorial hold during subsequent read-only receipt refresh", async () => {
+  const f = await fixture(1);
+  gates();
+  const p = provider();
+  const reviewId = await review(f, f.posts);
+  await f.user.action(api.bufferLive.queueSelected, { reviewId });
+  const packet = await f.user.query(api.queueRelease.latest, {
+    brandId: "corvo",
+    seriesId: f.seriesId,
+  });
+  const row = packet.rows[0];
+  await f.t.run((ctx) =>
+    ctx.db.patch(row._id, {
+      status: "needs-review",
+      reason: "Editorial drift requires operator review",
+    }),
+  );
+  const state = await f.t.query(internal.bufferDelivery.refreshContext, {
+    postId: f.posts[0],
+    userId: "editor",
+  });
+  await f.t.mutation(internal.publishing.recordBufferStatusRefresh, {
+    providerStateId: state._id,
+    postId: f.posts[0],
+    providerStateStatus: "queued",
+    providerPostId: row.providerPostId,
+    ok: true,
+  });
+  expect(await f.t.run((ctx) => ctx.db.get(row._id))).toMatchObject({
+    status: "needs-review",
+    reason: "Editorial drift requires operator review",
+    providerPostId: row.providerPostId,
+  });
+  expect(p.creates()).toBe(1);
 });

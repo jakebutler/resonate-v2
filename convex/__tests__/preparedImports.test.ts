@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import sharp from "sharp";
 import { convexTest } from "convex-test";
 import schema from "../schema";
@@ -282,3 +282,65 @@ describe("prepared package imports", () => {
     ).toHaveLength(1);
   });
 });
+
+it.each(["personal", "lower-db", "freshproof"] as const)(
+  "rejects unsupported blog package brand %s at dry run without creating posts or assets",
+  async (brandId) => {
+    const f = await fixture();
+    await expect(
+      f.user.action(api.preparedImportActions.reviewEntry, {
+        manifest: JSON.stringify({ ...f.manifest, brandId }),
+        entryKey: "entry-0",
+        files: f.files(0),
+      }),
+    ).rejects.toThrow(/Corvo|blog channel/);
+    expect(
+      await f.t.run((ctx) => ctx.db.query("v2Posts").collect()),
+    ).toHaveLength(0);
+    expect(
+      await f.t.run((ctx) => ctx.db.system.query("_storage").collect()),
+    ).toHaveLength(0);
+  },
+);
+it.each([true, false])(
+  "preserves uploaded blobs on an uncertain asset mutation, including committed responses (%s)",
+  async (committed) => {
+    const { storePreparedImportAsset } =
+      await import("../preparedImportActions");
+    const stored = new Map<string, Blob>();
+    let receipt: Record<string, unknown> | undefined;
+    let n = 0;
+    const ctx = {
+      storage: {
+        store: vi.fn(async (blob: Blob) => {
+          const id = `blob-${++n}`;
+          stored.set(id, blob);
+          return id;
+        }),
+        delete: vi.fn(async (id: string) => {
+          stored.delete(id);
+        }),
+      },
+      runMutation: vi.fn(
+        async (_ref: unknown, args: Record<string, unknown>) => {
+          if (committed) receipt = args;
+          throw new Error("Sanitized response interruption");
+        },
+      ),
+    };
+    await expect(
+      storePreparedImportAsset(ctx as never, {
+        assetId: "asset" as never,
+        userId: "editor",
+        bytes: new Uint8Array([1, 2]),
+        preparedBytes: new Uint8Array([3, 4]),
+      }),
+    ).rejects.toThrow(/interruption/);
+    expect(stored.size).toBe(2);
+    expect(ctx.storage.delete).not.toHaveBeenCalled();
+    if (committed) {
+      expect(stored.has(String(receipt!.sourceStorageId))).toBe(true);
+      expect(stored.has(String(receipt!.storageId))).toBe(true);
+    }
+  },
+);

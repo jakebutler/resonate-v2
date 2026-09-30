@@ -30,5 +30,5 @@ export function observeBufferRateLimit(response:Response,budget:BufferRequestBud
   if(retry&&((seconds>0)||Number.isFinite(date)))budget.backoffUntil=Math.max(budget.backoffUntil??0,seconds>0?now+seconds*1000:date);
   budget.observedWindows=[];
   for(const policy of (headers?.get?.("ratelimit")??"").split(/,\s*(?=")/)){const remaining=policy.match(/(?:^|;)\s*r\s*=\s*(\d+)/);const reset=policy.match(/(?:^|;)\s*t\s*=\s*(\d+)/);if(remaining){budget.observedWindows.push({policy:policy.match(/"([^"]+)"/)?.[1]??"unknown",remaining:Number(remaining[1]),resetsAt:now+Number(reset?.[1]??0)*1000});budget.remaining=Math.min(budget.remaining,Number(remaining[1]));if(Number(remaining[1])===0&&reset)budget.backoffUntil=Math.max(budget.backoffUntil??0,now+Number(reset[1])*1000);}}
-  if(response.status===429){budget.remaining=0;budget.backoffUntil??=now+60000;}
+  if(response.status===429){budget.remaining=0;budget.backoffUntil=Math.max(budget.backoffUntil??0,now+60000);}
 }

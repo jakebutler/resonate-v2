@@ -29,7 +29,11 @@ export const syncFrontmatterAfterReschedule = internalAction({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    if (!args.syncKey || !await ctx.runQuery(internal.publishing.isCurrentBlogSync, {postId: args.postId, userId: args.userId, syncKey: args.syncKey})) return {synced: false as const, reason: "stale-schedule"};
+    if (!args.syncKey) {
+      await ctx.runMutation(internal.publishing.markLegacyGithubScheduleNeedsReview, {postId:args.postId,userId:args.userId,intentId:args.intentId,prUrl:args.prUrl,branchName:args.branchName,scheduledDate:args.scheduledDate,scheduledTime:args.scheduledTime,timezone:args.timezone});
+      return {synced:false as const,reason:"legacy-artifact-review-required"};
+    }
+    if (!await ctx.runQuery(internal.publishing.isCurrentBlogSync, {postId: args.postId, userId: args.userId, syncKey: args.syncKey})) return {synced: false as const, reason: "stale-schedule"};
     const result = await updatePrFrontmatter({
       artifact: args.artifact, expectedTitle: args.expectedTitle, expectedSlug: args.expectedSlug,
       branchName: args.branchName,
