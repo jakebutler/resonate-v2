@@ -43,6 +43,11 @@ function githubFixture(
   } = {},
 ) {
   vi.stubEnv("GITHUB_TOKEN", "sanitized-fixture-token");
+  vi.stubEnv("BLOG_REPO_OWNER", "jakebutler");
+  vi.stubEnv("BLOG_REPO_NAME", "corvo-labs-dot-com");
+  vi.stubEnv("BLOG_CONTENT_PATH", "corvo-labs-enhanced/content/blog");
+  vi.stubEnv("BLOG_SITE_ORIGIN", "https://corvolabs.com");
+  vi.stubEnv("BLOG_PRODUCTION_ENVIRONMENT", "Production");
   const calls: string[] = [];
   const fetch = vi.fn(async (url: string) => {
     calls.push(url);

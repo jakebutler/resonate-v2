@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 06:40:14 PDT
+Last updated: 09/30/2026 12:14:18 PDT
 
 ## State
 
@@ -16,41 +16,22 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 92aad6c feat: approve exact selected series versions atomically
+- 1b77d73 feat(queue): dispatch exact reviewed batches with durable capacity claims
 
 ## Recent Commits
 
+- 1b77d73 feat(queue): dispatch exact reviewed batches with durable capacity claims
 - 92aad6c feat: approve exact selected series versions atomically
 - 9aacca7 feat: verify article publication before companion delivery
 - 3f26cdb feat(series): import reviewed prepared packages with durable recovery
 - 70c5bbb feat(queue): add verified capacity planning and local reservations
-- 520bc47 Review Buffer destinations and reconcile delivery receipts fairly
 
 ## Local Working Tree
 
-- M  components/PersistedPublishingPanel.tsx
-- M  components/QueuePlanningPanel.tsx
-- A  components/QueueReleasePanel.tsx
-- M  convex/__tests__/articleDependencies.test.ts
-- M  convex/__tests__/bufferFoundations.test.ts
-- M  convex/__tests__/publishing.test.ts
-- M  convex/__tests__/queuePlanning.test.ts
-- A  convex/__tests__/queueRelease.test.ts
-- M  convex/_generated/api.d.ts
-- A  convex/bufferAttempts.ts
-- M  convex/bufferDelivery.ts
-- M  convex/bufferLive.ts
-- M  convex/publishing.ts
-- A  convex/queueDispatch.ts
-- M  convex/queuePlanning.ts
-- A  convex/queueRelease.ts
-- M  convex/schema.ts
+- M  .github/workflows/test.yml
+- A  convex/tsconfig.json
 - M  docs/epic-97-progress.md
-- A  e2e/queue-release.spec.ts
-- A  lib/__tests__/deliverySummary.test.ts
-- A  lib/deliverySummary.ts
-- M  lib/providerAdapters.ts
-- A  test-support/queueCapacityFixture.ts
+- M  lib/__tests__/articlePublication.test.ts
 
 ## Next Agent Pickup
 

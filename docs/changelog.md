@@ -4668,3 +4668,27 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/epic-97-reviewed-queue
+
+## 09/30/2026 12:14:18 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	.github/workflows/test.yml
+- A	convex/tsconfig.json
+- M	docs/epic-97-progress.md
+- M	lib/__tests__/articlePublication.test.ts
+
+### Working Tree Snapshot
+
+- M  .github/workflows/test.yml
+- A  convex/tsconfig.json
+- M  docs/epic-97-progress.md
+- M  lib/__tests__/articlePublication.test.ts
+
+### Branch
+
+- codex/epic-97-reviewed-queue

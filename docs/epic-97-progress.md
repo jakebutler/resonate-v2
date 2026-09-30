@@ -99,3 +99,14 @@ Review and merge the PRs in stack order after maintainer authorization, retarget
 After a separately authorized deployment, inspect the configured destination and actual plan/queue evidence before preparing a release. Verify each linked article's exact Production artifact and canonical availability with the read-only controls. Existing approved copy, dates, assets and historical receipts remain preserved; any required material edit needs its own editorial review. Live qualification requires Jake's scoped approval for a disposable future post and verified cancellation. Application deployment is not approval to publish an article or queue a content batch. No plan purchase, paid generation, lower-db pipeline or production article/social submission occurred during implementation.
 
 There are no outstanding product decisions blocking implementation. Human PR review, merge authorization, deployment authorization, signed-in production verification and any scoped live-delivery qualification remain separate pending steps.
+
+
+## Authorized integrated rollout (September 30, 2026)
+
+Jake reviewed the workflow screenshot and explicitly authorized merge and deployment. He requires another review before live content writes. The release will merge the complete approved stack through #130 into main, retaining all implementation commits and PR history, so production receives the complete feature set in one release. Original checkout and unrelated worktrees remain untouched. No editorial approval, article export/publication, social submit/cancel or paid provider call is part of this rollout.
+
+Hosted integration E2E passed all 16 tests. Four article-publication unit tests initially inherited CI's placeholder repository settings; the fixture now pins its sanitized repository/path/origin/environment. The full suite with CI repository overrides passes: 99 files / 856 tests and coverage thresholds (73.74% lines). Native Convex dry-run now passes production schema validation, bundling (including external Sharp), API generation and required function TypeScript checks with zero deleted indexes. The missing Convex TypeScript config was added with the existing alias mapping; production CI now requires this native typecheck instead of silently skipping it.
+
+Production was grounded at main b8b6e44 and the matching Vercel Production deployment. Normal signed-in browser access works. Existing delivery gates were already approved; this approval does not authorize any new content write. Existing read-only receipt polling remains in place. Article evidence checks require the app's existing GitHub credential and destination configuration in Convex; that deployment configuration will be verified separately from content delivery.
+
+Merge, frontend/backend deployment and post-deployment screenshot/read-only verification remain pending until their actual receipts are recorded in the epic. Live delivery qualification remains held for Jake's next review.

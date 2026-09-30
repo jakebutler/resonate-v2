@@ -133,7 +133,7 @@ jobs:
         env:
           CLERK_JWT_ISSUER_DOMAIN: ${{ secrets.CLERK_JWT_ISSUER_DOMAIN }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        run: npx convex deploy
+        run: npx convex deploy --typecheck enable
 
   e2e:
     name: E2E Tests
