@@ -24,18 +24,30 @@ export const executeImageAttempt = action({
     if (!routes.length) return blocked("no-qualified-route-and-cost-bound");
     const parent: Doc<"v2VisualVersions"> | null = attempt.input.parentVersionId ? await ctx.runQuery(internal.visualWorkflow.getVersionForExport, { userId, versionId: attempt.input.parentVersionId }) : null;
     let totalInputBytes = 0;
-    async function retainedImage(storageId: Id<"_storage">, id: string, role: VisualImageInput["role"], sha256: string): Promise<VisualImageInput> {
+    async function retainedImage(storageId: Id<"_storage">, id: string, role: VisualImageInput["role"], sha256: string): Promise<{ image: VisualImageInput; verified: Awaited<ReturnType<typeof verifyVisualOutput>> }> {
       const blob = await ctx.storage.get(storageId);
       if (!blob || blob.size > MAX_VISUAL_IMAGE_BYTES || !["image/png", "image/jpeg", "image/webp"].includes(blob.type)) throw new Error("Pinned image bytes unavailable or invalid");
       totalInputBytes += blob.size;
       if (totalInputBytes > MAX_VISUAL_IMAGE_BYTES) throw new Error("Aggregate pinned input bytes exceed the20MiB runtime bound");
       const bytes = new Uint8Array(await blob.arrayBuffer());
-      await verifyVisualOutput(bytes, blob.type);
-      return { storageId, id, role, sha256, mimeType: blob.type as VisualImageInput["mimeType"], bytes };
+      const verified = await verifyVisualOutput(bytes, blob.type);
+      return { image: { storageId, id, role, sha256, mimeType: blob.type as VisualImageInput["mimeType"], bytes }, verified };
     }
     const references: VisualImageInput[] = [];
-    for (const reference of attempt.input.references) references.push(await retainedImage(reference.storageId, reference.referenceId, reference.role, reference.sha256));
-    const parentImage = parent ? { ...await retainedImage(parent.storageId, parent._id, "edit-parent", parent.sha256), versionId: parent._id, model: parent.model, provider: parent.provider as VisualProviderId } : undefined;
+    for (const reference of attempt.input.references) references.push((await retainedImage(reference.storageId, reference.referenceId, reference.role, reference.sha256)).image);
+    let retainedParent: Awaited<ReturnType<typeof retainedImage>> | null = null;
+    if (parent) {
+      try { retainedParent = await retainedImage(parent.storageId, parent._id, "edit-parent", parent.sha256); }
+      catch { return blocked("edit-parent-output-contract-mismatch"); }
+    }
+    if (parent && retainedParent) {
+      const [width, height] = parent.input.size.split("x").map(Number);
+      const mimeType = `image/${parent.input.outputFormat}`;
+      if (retainedParent.verified.width !== width || retainedParent.verified.height !== height ||
+        parent.width !== width || parent.height !== height || retainedParent.verified.contentType !== mimeType || parent.contentType !== mimeType ||
+        parent.input.size !== attempt.input.size || parent.input.outputFormat !== attempt.input.outputFormat) return blocked("edit-parent-output-contract-mismatch");
+    }
+    const parentImage = parent && retainedParent ? { ...retainedParent.image, versionId: parent._id, model: parent.model, provider: parent.provider as VisualProviderId } : undefined;
     const route = routes[0];
     const capabilities: VisualRouteCapability[] = [route].map(route => ({ provider: route.provider, model: route.model, apiModelId: route.apiModelId, qualification: route.qualification === "qualification-probe" ? "authorized-probe" : "live-receipt", receiptIds: route.capabilityReceiptIds, operations: route.operations, referenceInputs: route.referenceInputs, maxInputImages: route.maxInputImages, sizes: [route.size], outputFormats: [route.outputFormat] }));
     const mode = route.qualification === "qualification-probe" ? "qualification-probe" : "live";

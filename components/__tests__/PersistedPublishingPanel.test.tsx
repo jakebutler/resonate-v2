@@ -651,6 +651,22 @@ describe("PersistedPublishingPanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("retains the inspection link and branch when PR creation succeeds but recording requires review", async () => {
+    const prUrl = "https://github.com/jakebutler/corvo-labs-dot-com/pull/42";
+    const branchName = "resonate/blog-post-retained";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: "The pull request needs review before retrying.",
+      reviewReceipt: { code: "VISUAL_PR_RECORDING_REQUIRES_REVIEW", prUrl, branchName },
+    }), { status: 409 })));
+    render(<PersistedPublishingPanel devMode />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    fireEvent.click(within(screen.getByLabelText("Publishing item detail")).getByRole("button", { name: "Open PR" }));
+    expect(await screen.findByRole("link", { name: "Inspect created pull request" })).toHaveAttribute("href", prUrl);
+    expect(screen.getByRole("status")).toHaveTextContent(branchName);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(recordGithubPrMock).not.toHaveBeenCalled();
+  });
+
   it("disables Open PR and shows loading while the PR request is in flight", async () => {
     let resolveFetch: ((value: Response) => void) | undefined;
     const fetchPromise = new Promise<Response>((resolve) => {

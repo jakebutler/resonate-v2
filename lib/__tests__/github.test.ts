@@ -397,7 +397,7 @@ describe("offline publication package", () => {
       { sourceUrl: "resonate-figure://fixture", alt: spec.presentation.alt, export: { bytes: new TextEncoder().encode(signature.svg), sha256: signature.svgSha256, fileName: "figure-fixture.svg", contentType: "image/svg+xml" as const, figure: { spec, ...signature, postId: "fixture-post", postContentSha256: createHash("sha256").update(content).digest("hex"), postContentFingerprint: `LOCAL FIXTURE\n${content}`, acceptedBy: "fixture-author", acceptedAt: 1, evidenceSources: [{ sourceId: article.id, sha256: createHash("sha256").update(article.content).digest("hex"), revision: 1, purpose: "article" as const, currentSourceId: null, currentSha256: createHash("sha256").update(content).digest("hex"), currentRevision: null }] } } },
     ] };
     const result = await createBlogPostPR(params);
-    expect(result.sanitizedResponse.artifact).toMatchObject({ editorialFingerprint: "trusted-editorial-version", heroSha256: params.images[0].export.sha256, coverImageAlt: params.images[0].alt, figureAssets: prepared.figureAssets });
+    expect(result.sanitizedResponse.artifact).toMatchObject({ editorialFingerprint: "trusted-editorial-version", heroSha256: params.images[0].export.sha256, coverImageAlt: params.images[0].alt, heroSourceUrl: params.images[0].sourceUrl, figureAssets: prepared.figureAssets });
     expect(fixture.files.size).toBe(3);
     const writes = fixture.calls.filter(call => call.method !== "GET").length;
     expect((await createBlogPostPR(params)).prUrl).toBe(result.prUrl);

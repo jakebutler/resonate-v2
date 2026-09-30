@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 13:57 PDT
+Last updated: 09/30/2026 14:42:29 PDT
 
 ## State
 
@@ -14,52 +14,32 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 - Updated repository documentation and handoff records.
 
-## Current Integration
-
-- Integrating current main df9b9f0 (reviewed series/queue/publishing) into isolated editorial visual branch.
-- Repaired candidate will require fresh exact-SHA independent review and CI. No provider calls, merge or deployment completed.
-- Image dimensions and HTTP redirect findings are under behavioral repair.
-
 ## Last Completed Task
 
-- 6f0de30 fix: preserve all recorded publication identities
+- a9f6b18 Merge current main and harden image and visual export dispatch
 
 ## Recent Commits
 
+- a9f6b18 Merge current main and harden image and visual export dispatch
+- 008141d Implement guarded image and text visual executors
+- df9b9f0 Merge pull request #130 from jakebutler/codex/epic-97-reviewed-queue
+- 9986c17 fix(release): isolate article fixtures and require native Convex checks
 - 6f0de30 fix: preserve all recorded publication identities
-- 8adb3ad fix: retain terminal publication authority after rescheduling
-- ca79746 fix: pause visual admissions and preserve publication consistency
-- c390c98 docs: record visual contracts and guarded offline rehearsals
-- 4f59b60 feat: integrate opt-in visuals into the saved composer
 
 ## Local Working Tree
 
-- M  components/EditorialVisualPanel.tsx
-- M  components/__tests__/EditorialVisualPanel.test.tsx
-- A  convex/__tests__/visualProviderActions.test.ts
-- M  convex/__tests__/visualPublication.test.ts
-- A  convex/__tests__/visualTextActions.test.ts
-- M  convex/_generated/api.d.ts
-- M  convex/schema.ts
-- A  convex/visualProviderActions.ts
-- A  convex/visualProviderConfig.ts
-- M  convex/visualPublication.ts
-- A  convex/visualTextActions.ts
-- A  convex/visualTextConfig.ts
-- A  convex/visualTextTables.ts
-- M  convex/visualWorkflow.ts
-- M  convex/visualWorkflowTables.ts
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/articlePublicationVisual.test.ts
+- M  convex/__tests__/visualProviderActions.test.ts
+- M  convex/blogValidators.ts
+- M  convex/visualProviderActions.ts
 - M  docs/editorial-visuals/PROGRESS.md
-- M  docs/editorial-visuals/providers/contracts.md
-- A  docs/editorial-visuals/providers/functional-first-packet.json
-- A  docs/editorial-visuals/providers/gpt-image-1-functional-bound.md
-- A  lib/__tests__/visualProviderRuntime.test.ts
-- M  lib/__tests__/visualProviders.test.ts
-- A  lib/__tests__/visualTextRuntime.test.ts
+- M  docs/editorial-visuals/providers/functional-first-packet.json
+- M  lib/__tests__/articlePublication.test.ts
+- M  lib/__tests__/github.test.ts
+- M  lib/articlePublication.ts
 - M  lib/github.ts
-- A  lib/visualProviderRuntime.ts
-- M  lib/visualProviders.ts
-- A  lib/visualTextRuntime.ts
 
 ## Next Agent Pickup
 

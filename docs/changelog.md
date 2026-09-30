@@ -5157,3 +5157,43 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/editorial-visual-generation
+
+## 09/30/2026 14:42:29 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	convex/__tests__/articlePublicationVisual.test.ts
+- M	convex/__tests__/visualProviderActions.test.ts
+- M	convex/blogValidators.ts
+- M	convex/visualProviderActions.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- M	docs/editorial-visuals/providers/functional-first-packet.json
+- M	lib/__tests__/articlePublication.test.ts
+- M	lib/__tests__/github.test.ts
+- M	lib/articlePublication.ts
+- M	lib/github.ts
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/articlePublicationVisual.test.ts
+- M  convex/__tests__/visualProviderActions.test.ts
+- M  convex/blogValidators.ts
+- M  convex/visualProviderActions.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/providers/functional-first-packet.json
+- M  lib/__tests__/articlePublication.test.ts
+- M  lib/__tests__/github.test.ts
+- M  lib/articlePublication.ts
+- M  lib/github.ts
+
+### Branch
+
+- feat/editorial-visual-generation

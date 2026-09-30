@@ -270,6 +270,30 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
     await t.run(async ctx => { const version = (await ctx.db.query("v2VisualVersions").first())!; await ctx.db.patch(version._id, { sha256: "f".repeat(64) }); });
     await expect(user.action(api.visualProviderActions.executeImageAttempt, { attemptId: editId })).rejects.toThrow("Pinned image parent bytes changed"); expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+  it.each(["dimensions", "format", "metadata-mime", "storage-mime"] as const)("blocks a historical selected parent with mismatched %s before any reservation or HTTP", async mismatch => {
+    const { t, user, postId, attemptId } = await queued(); await reviewedTestRoute(t);
+    const fetchMock = vi.fn().mockImplementation(() => successResponse()); vi.stubGlobal("fetch", fetchMock);
+    const completed = await user.action(api.visualProviderActions.executeImageAttempt, { attemptId });
+    expect(completed.status).toBe("completed");
+    const height = mismatch === "dimensions" ? 512 : 1024;
+    const native = sharp({ create: { width: 1536, height, channels: 3, background: "#456789" } });
+    const legacyBytes = await (["format", "storage-mime"].includes(mismatch) ? native.png() : native.webp()).toBuffer();
+    const contentType = mismatch === "format" ? "image/png" : "image/webp";
+    await t.run(async ctx => {
+      const storageId = await ctx.storage.store(new Blob([Uint8Array.from(legacyBytes).buffer], { type: contentType }));
+      await ctx.db.patch(completed.versionId!, { storageId, sha256: createHash("sha256").update(legacyBytes).digest("hex"), bytes: legacyBytes.length, contentType: mismatch === "metadata-mime" ? "image/png" : contentType, width: 1536, height });
+    });
+    const editId = await user.mutation(api.visualWorkflow.requestEdit, { postId, operationKey: "historical-parent-mismatch", feedback: "Bring the gear closer." });
+    fetchMock.mockClear();
+    const envelope = () => t.run(async ctx => ({ parent: await ctx.db.get(completed.versionId!), attempt: await ctx.db.get(editId), month: await ctx.db.query("v2VisualBudgetMonths").first(), allowance: await ctx.db.query("v2VisualProviderAllowances").first(), quotes: await ctx.db.query("v2VisualDispatchQuotes").withIndex("by_attempt", q => q.eq("attemptId", editId)).collect(), versions: await ctx.db.query("v2VisualVersions").collect() }));
+    const before = await envelope();
+    expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId: editId })).toEqual({ status: "blocked", versionId: null, reason: "edit-parent-output-contract-mismatch" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await envelope()).toEqual(before);
+    const retained = await t.run(async ctx => Array.from(new Uint8Array(await (await ctx.storage.get(before.parent!.storageId))!.arrayBuffer())));
+    expect(Buffer.from(retained)).toEqual(legacyBytes);
+  });
+
   it("allows an exact operator qualification probe without inventing a live receipt and keeps probe unavailable to composer", async () => {
     const { t, user, postId, attemptId } = await queued();
     await t.mutation(api.visualProviderConfig.registerReviewedImageRoute, { provider: "openai", model: "gpt-image-2", apiModelId: "gpt-image-2-2026-04-21", operations: ["generate"], referenceInputs: true, maxInputImages: 16, size: "1536x1024", outputFormat: "webp", quality: "medium", maximumMicros: 100000, maxPromptBytes: 100000, maxInputBytes: 20*1024*1024, capabilityReceiptIds: [], boundReceiptId: "SPECULATIVE-probe-bound", reviewedBy: "offline tester", provenance: "SPECULATIVE PROBE PACKET ONLY", expiresAt: Date.now()+60000, qualification: "qualification-probe", operatorUserId: "author", probeAttemptId: attemptId, reviewedPacketId: "SPECULATIVE-exact-packet" });

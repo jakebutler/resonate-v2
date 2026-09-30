@@ -45,7 +45,7 @@
     "stream": false
   },
   "edit": {
-    "selected_parent": "Exact returned mini parent first; unavailable until generation reconciles",
+    "selected_parent": "Exact returned GPT Image 1 parent first; unavailable until generation reconciles",
     "reference_order": [
       "generated-parent",
       "raven-identity",
@@ -61,7 +61,7 @@
   },
   "estimated_output_usd_each": 0.016,
   "maximum_charge_usd": 0.25,
-  "remaining_live_gate": "Independent executor review, exact CI, secure scoped key access and user resume; verify exact request guards before reservation",
+  "remaining_live_gate": "Independent executor review, exact CI, secure scoped key access; verify exact request guards before reservation",
   "publication_qualified": false,
   "human_approved_new_output": false,
   "selection_reason": "The named GPT Image 1 low-fidelity input formula covers the exact reference and parent inputs; Mini-specific input charging remains unpublished in the checked sources.",

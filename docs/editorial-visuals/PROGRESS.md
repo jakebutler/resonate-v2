@@ -1,5 +1,13 @@
 # Editorial visuals progress
 
+## September 30 independent-review repairs
+
+Exact a9f6b18 CI passed lint/tests/build and E2E (run36778636720); production deployment was skipped. Its two independent reviews finished within30 minutes and returned CHANGES_REQUIRED for three reproduced defects. Historical parents with dimensions/encoding/MIME differing from their pinned request now block before quote/reservation/claim/HTTP while preserving bytes and accounting. Export artifacts now carry their exact approved hero source identity, so later in-body hero URLs project to the bound local WebP during verification without changing prose or unrelated image URLs. The composer visibly retains a validated created PR inspection link and branch after recording failure, without retry or client recording.
+
+Author evidence:27 image action/runtime tests,71 export/reader tests and38 composer tests pass (scopes may overlap); both production typechecks and scoped lint pass. The additive artifact identity also has actual owned upload/crop/approval/export-claim/trusted-record/query roundtrip coverage. These repairs require a new exact SHA, independent changed-scope rechecks and new CI; a9's green CI does not approve the repairs.
+
+Chrome access recovered. The isolated JakeB OpenAI project “Resonate editorial visuals” exists; its30-day key form is prepared for Images:Request and Models:Read, all other permissions off. Active browser-policy action-time confirmation is pending before credential creation. No key, provider call, spend/reservation, production merge/deployment or real article/LinkedIn publication/scheduling has occurred. Actual approved-image pixel input for text reflection remains an explicitly incomplete V07 acceptance item; metadata-only reflection is not full acceptance.
+
 ## September 30 resumed current-main integration
 
 Jake resumed work after the frozen008141d pause. The changed-executor review closed INCOMPLETE (deadline expired), with two actionable findings: requested master dimensions were not enforced, and image HTTP requests followed redirects. Both now have public-interface RED/GREEN repairs. Actual1536×1024 contract-double outputs complete; decoded mismatched bytes remain uncertain with reservations retained; image dispatch uses redirect:error with no retry.

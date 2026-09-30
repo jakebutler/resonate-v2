@@ -14,6 +14,8 @@ import {
   expectedArticleText,
 } from "../articleAvailability";
 import { createHash } from "node:crypto";
+import sharp from "sharp";
+import { prepareBlogPublication } from "../github";
 const artifact = {
   repository: "jakebutler/corvo-labs-dot-com",
   prNumber: 7,
@@ -43,6 +45,9 @@ function githubFixture(
     sourceContent?: string;
     figurePath?: string;
     figureBytes?: string;
+    mdxContent?: string;
+    heroPath?: string;
+    heroBytes?: Buffer;
   } = {},
 ) {
   vi.stubEnv("GITHUB_TOKEN", "sanitized-fixture-token");
@@ -85,6 +90,8 @@ function githubFixture(
         status: options.ancestor ? "ahead" : "diverged",
         merge_base_commit: { sha: options.ancestor ? "merge" : "other" },
       };
+    else if (options.heroPath && url.includes(`/contents/${options.heroPath}?`))
+      data = { sha: "hero-blob", encoding: "base64", size: options.heroBytes!.byteLength, content: options.heroBytes!.toString("base64") };
     else if (options.figurePath && url.includes(`/contents/${options.figurePath}?`))
       data = { sha: "figure-blob", encoding: "base64", size: Buffer.byteLength(options.figureBytes ?? ""), content: Buffer.from(options.figureBytes ?? "").toString("base64") };
     else if (url.includes("/contents/"))
@@ -96,7 +103,7 @@ function githubFixture(
         encoding: "base64",
         size: 100,
         content: Buffer.from(
-          `---\ntitle: "Reviewed article"\nstatus: "published"\n---\n\n${options.sourceContent ?? input.content}`,
+          options.mdxContent ?? `---\ntitle: "Reviewed article"\nstatus: "published"\n---\n\n${options.sourceContent ?? input.content}`,
         ).toString("base64"),
       };
     else throw new Error(`Unexpected mocked read ${url}`);
@@ -108,6 +115,38 @@ function githubFixture(
   return { calls, fetch };
 }
 describe("separate publication facts", () => {
+  it("qualifies an unchanged public preparer artifact containing its approved hero later in the body", async () => {
+    const heroSourceUrl = "https://example.org/exact-approved-hero.webp";
+    const unrelatedUrl = "https://example.org/unrelated-image.webp";
+    const content = Array.from({ length: 6 }, (_, index) => `Exact paragraph ${index + 1}.`).join("\n\n") + `\n\n![Exact approved alt](${heroSourceUrl})\n\n![Unrelated image](${unrelatedUrl})\n\nExact ending.`;
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#15616d" } }).webp().toBuffer();
+    const prepared = await prepareBlogPublication({ title: input.title, content, scheduledDate: "2030-10-07", status: "published", slug: "fixture", tags: ["fixture"], coverImageAlt: "Exact approved alt", images: [{ sourceUrl: heroSourceUrl, isCover: true }], preparedHero: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex") } });
+    const heroPath = prepared.files.find(file => file.path.endsWith("/hero.webp"))!.path;
+    const mdxContent = Buffer.from(prepared.fileContent, "base64").toString();
+    githubFixture({ mdxContent, heroPath, heroBytes });
+    const available = vi.fn(async () => ({ availability: "verified" as const, expectedHash: "expected", observedHash: "observed" }));
+    const result = await readArticlePublication({ ...input, content, artifact: { ...artifact, heroPath, heroSha256: prepared.heroSha256, coverImageAlt: prepared.coverImageAlt, heroSourceUrl: prepared.heroSourceUrl } }, available);
+    expect(result.evidence.availability).toBe("verified");
+    expect(available).toHaveBeenCalledWith(expect.objectContaining({ content: mdxContent.split("\n---\n")[1].replace(/^\n/, "") }));
+    expect(mdxContent).toContain(`![Unrelated image](${unrelatedUrl})`);
+  });
+  it.each(["source-identity", "article-copy", "artifact-identity", "asset-path"])("withholds a prepared hero publication after malicious %s drift", async failure => {
+    const heroSourceUrl = "https://example.org/exact-approved-hero.webp";
+    const content = Array.from({ length: 6 }, (_, index) => `Exact paragraph ${index + 1}.`).join("\n\n") + `\n\n![Exact approved alt](${heroSourceUrl})\n\nExact ending.`;
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#15616d" } }).webp().toBuffer();
+    const prepared = await prepareBlogPublication({ title: input.title, content, scheduledDate: "2030-10-07", status: "published", slug: "fixture", tags: ["fixture"], coverImageAlt: "Exact approved alt", images: [{ sourceUrl: heroSourceUrl, isCover: true }], preparedHero: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex") } });
+    const heroPath = prepared.files.find(file => file.path.endsWith("/hero.webp"))!.path;
+    githubFixture({ mdxContent: Buffer.from(prepared.fileContent, "base64").toString(), heroPath, heroBytes });
+    const available = vi.fn();
+    const result = await readArticlePublication({ ...input,
+      content: failure === "source-identity" ? content.replace(heroSourceUrl, "https://example.org/changed-image.webp") : failure === "article-copy" ? `${content}\nChanged claim.` : content,
+      artifact: { ...artifact, heroPath: failure === "asset-path" ? heroPath.replace("fixture/", "other/") : heroPath, heroSha256: prepared.heroSha256, coverImageAlt: prepared.coverImageAlt,
+        heroSourceUrl: failure === "artifact-identity" ? "https://example.org/changed-image.webp" : prepared.heroSourceUrl },
+    }, available);
+    expect(result.evidence.availability).not.toBe("verified");
+    expect(result.evidence.reason).toBeTruthy();
+    expect(available).not.toHaveBeenCalled();
+  });
   it("verifies the exact bound figure token projection and deployed SVG bytes without changing approved prose", async () => {
     const figurePath = "corvo-labs-enhanced/public/images/blog/2030-10-07-fixture/figure-figure1.svg";
     const figureBytes = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';

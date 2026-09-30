@@ -405,7 +405,7 @@ export function PersistedPublishingPanel({
   const [manualSelectedPostId, setManualSelectedPostId] = useState<
     Id<"v2Posts"> | null | undefined
   >(undefined);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<ReactNode>(null);
   const [openingPrPostIds, setOpeningPrPostIds] = useState<ReadonlySet<string>>(
     () => new Set()
   );
@@ -911,7 +911,13 @@ export function PersistedPublishingPanel({
       });
       const data = await response.json();
       if (!response.ok) {
-        setMessage(data.error || "GitHub PR creation failed.");
+        const error = typeof data.error === "string" ? data.error : "GitHub PR creation failed.";
+        const receipt = data.reviewReceipt;
+        if (receipt && ["BLOG_PR_RECORDING_REQUIRES_REVIEW", "VISUAL_PR_RECORDING_REQUIRES_REVIEW"].includes(receipt.code) &&
+          typeof receipt.prUrl === "string" && /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[1-9]\d*$/u.test(receipt.prUrl) &&
+          typeof receipt.branchName === "string" && receipt.branchName.length > 0 && receipt.branchName.length <= 255) {
+          setMessage(<>{error} <a href={receipt.prUrl} target="_blank" rel="noopener noreferrer" className="underline">Inspect created pull request</a>. Branch: <code>{receipt.branchName}</code>. Inspect this receipt before retrying.</>);
+        } else setMessage(error);
         return;
       }
 

@@ -29,13 +29,20 @@ const contentPath = () =>
   `${process.env.BLOG_APP_ROOT || "corvo-labs-enhanced"}/content/blog`;
 
 /** Only approved image locations change between saved Markdown and its reader artifact. */
-export function articleBodyForArtifact(content: string, artifact: Pick<BlogArtifact, "mdxPath" | "figureAssets">): string {
+export function articleBodyForArtifact(content: string, artifact: Pick<BlogArtifact, "mdxPath" | "figureAssets" | "heroPath" | "heroSha256" | "heroSourceUrl">): string {
   const figures = artifact.figureAssets ?? [];
   if (figures.length > 3 || new Set(figures.map(figure => figure.sourceUrl)).size !== figures.length || new Set(figures.map(figure => figure.path)).size !== figures.length) throw new Error("Bound figure artifact identities are invalid.");
   const slug = artifact.mdxPath.split("/").pop()?.replace(/\.mdx$/, "");
   if (!slug || !/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error("Bound figure article path is invalid.");
   const appRoot = process.env.BLOG_APP_ROOT || "corvo-labs-enhanced";
   let body = content;
+  if (artifact.heroSourceUrl !== undefined) {
+    if (!artifact.heroSourceUrl || artifact.heroSourceUrl.length > 4096 || /[\r\n\0]/u.test(artifact.heroSourceUrl) ||
+      artifact.heroPath !== `${appRoot}/public/images/blog/${slug}/hero.webp` || !/^[a-f0-9]{64}$/u.test(artifact.heroSha256 ?? "")) throw new Error("Bound hero identity or path is unverified.");
+    const source = artifact.heroSourceUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Match the preparer's exact approved image identity, never other external URLs.
+    body = body.replace(new RegExp(`(!\\[[^\\]]*]\\()${source}(\\))`, "g"), (_match, before: string, after: string) => `${before}${artifact.heroPath!.slice(`${appRoot}/public`.length)}${after}`);
+  }
   for (const figure of figures) {
     const id = figure.sourceUrl.match(/^resonate-figure:\/\/([a-zA-Z0-9]+)$/u)?.[1];
     const expectedPath = `${appRoot}/public/images/blog/${slug}/figure-${id}.svg`;
@@ -182,7 +189,7 @@ export async function readArticlePublication(
       )
     )
       throw new Error("Article artifact path is outside configured content.");
-    const publicationBody = articleBodyForArtifact(input.content, { mdxPath: path, figureAssets: artifact?.figureAssets });
+    const publicationBody = articleBodyForArtifact(input.content, { mdxPath: path, figureAssets: artifact?.figureAssets, heroSourceUrl: artifact?.heroSourceUrl, heroPath: artifact?.heroPath, heroSha256: artifact?.heroSha256 });
     const ref = evidence.mergeSha || evidence.headSha;
     const source = await read(
       `/contents/${path}?ref=${encodeURIComponent(ref!)}`,

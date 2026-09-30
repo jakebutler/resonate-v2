@@ -21,7 +21,7 @@ export function blogDestination(post: { title: string; blogSlug?: string; schedu
 
 export type BlogArtifact = {
   repository: string; prNumber: number; branchName: string; mdxPath: string; heroPath?: string; canonicalUrl: string;
-  heroSha256?: string; coverImageAlt?: string;
+  heroSha256?: string; coverImageAlt?: string; heroSourceUrl?: string;
   editorialFingerprint?: string;
   figureAssets?: Array<{ sourceUrl: string; path: string; sha256: string }>;
 };
@@ -550,7 +550,7 @@ export async function prepareBlogPublication(params: BlogPublicationParams, opti
     sourceUrl: asset.sourceUrl, path: `${BLOG_APP_ROOT}/public${localUrls.get(asset.sourceUrl)!}`, sha256: asset.export!.sha256,
   }));
   return { files, filePath, fileContent, branchName, localAssets, date, scheduledTime, timezone, scheduleTrigger,
-    heroSha256: hero.export!.sha256, coverImageAlt: heroImageAlt, figureAssets };
+    heroSha256: hero.export!.sha256, coverImageAlt: heroImageAlt, heroSourceUrl: hero.sourceUrl, figureAssets };
 }
 
 export async function createBlogPostPR(params: BlogPublicationParams): Promise<{
@@ -637,7 +637,7 @@ export async function createBlogPostPR(params: BlogPublicationParams): Promise<{
     repo: `${REPO_OWNER}/${REPO_NAME}`, prUrl: pr.html_url, branchName, number: pr.number, state: pr.state,
     scheduleTrigger, scheduledDate: date, scheduledTime, timezone,
     artifact: {repository: `${REPO_OWNER}/${REPO_NAME}`, prNumber: pr.number, branchName,
-      mdxPath: filePath, heroPath, heroSha256: prepared.heroSha256, coverImageAlt: prepared.coverImageAlt,
+      mdxPath: filePath, heroPath, heroSha256: prepared.heroSha256, coverImageAlt: prepared.coverImageAlt, heroSourceUrl: prepared.heroSourceUrl,
       ...(params.editorialFingerprint ? { editorialFingerprint: params.editorialFingerprint } : {}),
       ...(prepared.figureAssets.length ? { figureAssets: prepared.figureAssets } : {}),
       canonicalUrl: `${process.env.BLOG_SITE_ORIGIN || "https://corvolabs.com"}/blog/${slug}`},
