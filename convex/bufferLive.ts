@@ -50,6 +50,13 @@ export const submit = action({
     postId: v.id("v2Posts"),
     retry: v.optional(v.boolean()),
   },
+  returns: v.object({
+    submitted: v.boolean(),
+    liveGateOff: v.boolean(),
+    reason: v.optional(v.string()),
+    attemptId: v.optional(v.string()),
+    providerPostId: v.optional(v.string()),
+  }),
   handler: async (ctx, args): Promise<{
     submitted: boolean;
     liveGateOff: boolean;
@@ -111,6 +118,7 @@ export const submit = action({
         channelId: claimed.submission.channelId,
         title: claimed.submission.title,
         content: claimed.submission.content,
+        firstComment: claimed.submission.firstComment,
         scheduledDate: claimed.submission.scheduledDate,
         scheduledTime: claimed.submission.scheduledTime,
         timezone: claimed.submission.timezone,

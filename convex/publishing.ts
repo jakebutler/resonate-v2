@@ -11,7 +11,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { requireBrandAccess, requireUserId } from "./campaignAccess";
-import { brandHasBufferLinkedInMapping } from "@/lib/domain";
+import { brandHasBufferLinkedInMapping, fingerprintPostContent } from "@/lib/domain";
 import {
   providerForChannel as providerForChannelOrNull,
 } from "@/lib/providerAdapters";
@@ -224,8 +224,8 @@ async function ensureWorkspaceChannel(
   return await ensureBrandChannel(ctx, brandId, channelId, now);
 }
 
-function contentFingerprint(title: string, content: string) {
-  return `${title.trim()}\n${content.trim()}`;
+function contentFingerprint(title: string, content: string, linkedinFirstComment?: string) {
+  return fingerprintPostContent({ title, content, linkedinFirstComment });
 }
 
 async function getOwnedPost(
@@ -855,12 +855,12 @@ export const setApproval = mutation({
     await ctx.db.patch(args.postId, {
       approvalState: args.approvalState,
       status: nextStatus,
-      contentFingerprint: contentFingerprint(post.title, post.content),
+      contentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
       updatedAt: now,
     });
     await ctx.db.patch(intent._id, {
       approvalState: args.approvalState,
-      contentFingerprint: contentFingerprint(post.title, post.content),
+      contentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
       updatedAt: now,
     });
     await audit(ctx, {
@@ -1039,7 +1039,9 @@ export const updateContent = mutation({
     postId: v.id("v2Posts"),
     title: v.optional(v.string()),
     content: v.optional(v.string()),
+    linkedinFirstComment: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
@@ -1047,19 +1049,24 @@ export const updateContent = mutation({
     if (!intent) throw new Error("Publishing intent not found");
     const title = args.title ?? post.title;
     const content = args.content ?? post.content;
+    if (args.linkedinFirstComment !== undefined && post.channelId !== "linkedin") {
+      throw new Error("First comments are only available for LinkedIn posts.");
+    }
+    const linkedinFirstComment = args.linkedinFirstComment?.trim() ?? post.linkedinFirstComment;
     const now = Date.now();
 
     await ctx.db.patch(args.postId, {
       title,
       content,
+      linkedinFirstComment,
       approvalState: "unapproved",
       status: "draft",
-      contentFingerprint: contentFingerprint(title, content),
+      contentFingerprint: contentFingerprint(title, content, linkedinFirstComment),
       updatedAt: now,
     });
     await ctx.db.patch(intent._id, {
       approvalState: "unapproved",
-      contentFingerprint: contentFingerprint(title, content),
+      contentFingerprint: contentFingerprint(title, content, linkedinFirstComment),
       updatedAt: now,
     });
     await audit(ctx, {
@@ -1070,6 +1077,7 @@ export const updateContent = mutation({
       action: "post.content_change",
       summary: "Content change cleared approval.",
     });
+    return null;
   },
 });
 
@@ -1111,7 +1119,7 @@ export const submitMockProvider = mutation({
       approvalState: intent.approvalState,
       scheduledDate: intent.scheduledDate,
       contentFingerprint: intent.contentFingerprint,
-      currentFingerprint: contentFingerprint(post.title, post.content),
+      currentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
     });
 
     if (ineligibleReason) {
@@ -1826,7 +1834,7 @@ export const getBufferSubmissionContext = internalQuery({
       approvalState: intent.approvalState,
       scheduledDate: intent.scheduledDate,
       contentFingerprint: intent.contentFingerprint,
-      currentFingerprint: contentFingerprint(post.title, post.content),
+      currentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
     });
 
     if (ineligibleReason) {
@@ -1890,6 +1898,7 @@ export const getBufferSubmissionContext = internalQuery({
         channelId: post.channelId,
         title: post.title,
         content: assembleLinkedInSubmissionContent(post.content, post.platformSettings),
+        firstComment: post.linkedinFirstComment?.trim() || undefined,
         scheduledDate: intent.scheduledDate,
         scheduledTime: intent.scheduledTime,
         timezone: intent.timezone,
@@ -1992,6 +2001,35 @@ export const claimBufferSubmission = internalMutation({
     userId: v.string(),
     retry: v.optional(v.boolean()),
   },
+  returns: v.union(
+    v.object({
+      eligible: v.literal(false),
+      reason: v.string(),
+      brandId: v.optional(brandIdValidator),
+      intentId: v.optional(v.id("v2PublishingIntents")),
+    }),
+    v.object({
+      eligible: v.literal(true),
+      brandId: brandIdValidator,
+      intentId: v.id("v2PublishingIntents"),
+      attemptId: v.id("v2PublishAttempts"),
+      retryCount: v.number(),
+      idempotencyKey: v.string(),
+      contentFingerprint: v.string(),
+      submission: v.object({
+        postId: v.string(),
+        brandId: brandIdValidator,
+        channelId: channelIdValidator,
+        title: v.string(),
+        content: v.string(),
+        firstComment: v.optional(v.string()),
+        scheduledDate: v.optional(v.string()),
+        scheduledTime: v.optional(v.string()),
+        timezone: v.string(),
+        idempotencyKey: v.string(),
+      }),
+    })
+  ),
   handler: async (ctx, args) => {
     // Inline eligibility — same checks as getBufferSubmissionContext, then claim atomically.
     const post = await ctx.db.get(args.postId);
@@ -2039,7 +2077,7 @@ export const claimBufferSubmission = internalMutation({
       approvalState: intent.approvalState,
       scheduledDate: intent.scheduledDate,
       contentFingerprint: intent.contentFingerprint,
-      currentFingerprint: contentFingerprint(post.title, post.content),
+      currentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
     });
 
     if (ineligibleReason) {
@@ -2129,6 +2167,7 @@ export const claimBufferSubmission = internalMutation({
       channelId: post.channelId,
       title: post.title,
       content: assembleLinkedInSubmissionContent(post.content, post.platformSettings),
+      firstComment: post.linkedinFirstComment?.trim() || undefined,
       scheduledDate: intent.scheduledDate,
       scheduledTime: intent.scheduledTime,
       timezone: intent.timezone,
@@ -2184,6 +2223,7 @@ export const recordBufferSubmitResult = internalMutation({
       channelId: channelIdValidator,
       title: v.string(),
       content: v.string(),
+      firstComment: v.optional(v.string()),
       scheduledDate: v.optional(v.string()),
       scheduledTime: v.optional(v.string()),
       timezone: v.string(),
@@ -2195,6 +2235,12 @@ export const recordBufferSubmitResult = internalMutation({
     reason: v.optional(v.string()),
     sanitizedResponse: v.any(),
   },
+  returns: v.object({
+    recorded: v.literal(true),
+    attemptId: v.id("v2PublishAttempts"),
+    submitted: v.boolean(),
+    stale: v.boolean(),
+  }),
   handler: async (ctx, args) => {
     const post = await ctx.db.get(args.postId);
     if (!post || post.userId !== args.userId) {
@@ -2208,9 +2254,10 @@ export const recordBufferSubmitResult = internalMutation({
     const now = Date.now();
     const intentStillValid =
       intent.approvalState === "approved" &&
-      intent.contentFingerprint === contentFingerprint(post.title, post.content) &&
+      intent.contentFingerprint === contentFingerprint(post.title, post.content, post.linkedinFirstComment) &&
       assembleLinkedInSubmissionContent(post.content, post.platformSettings) ===
-        args.submissionSnapshot.content;
+        args.submissionSnapshot.content &&
+      (post.linkedinFirstComment?.trim() || "") === (args.submissionSnapshot.firstComment ?? "");
 
     const effectiveOk = args.ok && intentStillValid;
     const effectiveStatus = !intentStillValid

@@ -4202,3 +4202,37 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/publishing-navigation
+
+## 09/29/2026 20:37:59 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	convex/__tests__/publishing.test.ts
+- M	convex/bufferLive.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- M	lib/__tests__/providerAdapters.test.ts
+- M	lib/domain.ts
+- M	lib/providerAdapters.ts
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/publishing.test.ts
+- M  convex/bufferLive.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- M  lib/__tests__/providerAdapters.test.ts
+- M  lib/domain.ts
+- M  lib/providerAdapters.ts
+
+### Branch
+
+- codex/linkedin-first-comment

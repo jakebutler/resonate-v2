@@ -393,6 +393,10 @@ describe("publishing cross-brand authorization", () => {
       scheduledDate: "2026-06-20",
       scheduledTime: "09:00",
     });
+    await asUser.mutation(api.publishing.updateContent, {
+      postId,
+      linkedinFirstComment: "https://corvolabs.com/blog/approved-article",
+    });
     await asUser.mutation(api.publishing.setApproval, {
       postId,
       approvalState: "approved",
@@ -419,6 +423,7 @@ describe("publishing cross-brand authorization", () => {
         channelId: claimed.submission.channelId,
         title: claimed.submission.title,
         content: claimed.submission.content,
+        firstComment: claimed.submission.firstComment,
         scheduledDate: claimed.submission.scheduledDate,
         scheduledTime: claimed.submission.scheduledTime,
         timezone: claimed.submission.timezone,
@@ -463,6 +468,36 @@ describe("publishing cross-brand authorization", () => {
     expect(attempt?.providerId).toBe("buffer");
     expect(attempt?.sanitizedResponse?.accessToken).toBe("[redacted]");
     expect(audits.some((event) => event.action === "provider.buffer_submit")).toBe(true);
+  });
+
+  it("requires re-approval after a first-comment edit and detects changes during submission", async () => {
+    const t = createTestHarness();
+    const { asUser, userId } = await setupCorvoOnlyMember(t);
+    const { postId } = await asUser.mutation(api.publishing.createPostWithIntent, {
+      brandId: "corvo", channelId: "linkedin", title: "Companion", content: "Approved article copy", scheduledDate: "2026-10-06",
+    });
+    await asUser.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    const firstComment = "https://corvolabs.com/blog/approved-article";
+    await asUser.mutation(api.publishing.updateContent, { postId, linkedinFirstComment: firstComment });
+    const blocked = await asUser.mutation(internal.publishing.claimBufferSubmission, { postId, userId });
+    expect(blocked).toMatchObject({ eligible: false, reason: "Post is not approved." });
+
+    await asUser.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, { postId, userId });
+    if (!claimed.eligible) throw new Error("expected approved comment to be eligible");
+    expect(claimed.submission.firstComment).toBe(firstComment);
+    const storedAttempt = await t.run((ctx) => ctx.db.get(claimed.attemptId));
+    expect(storedAttempt?.submissionSnapshot.firstComment).toBe(firstComment);
+
+    await asUser.mutation(api.publishing.updateContent, { postId, linkedinFirstComment: firstComment + "-changed" });
+    await asUser.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    const { idempotencyKey, ...submissionSnapshot } = claimed.submission;
+    const recorded = await asUser.mutation(internal.publishing.recordBufferSubmitResult, {
+      postId, userId, intentId: claimed.intentId, brandId: claimed.brandId,
+      attemptId: claimed.attemptId, idempotencyKey, retryCount: claimed.retryCount,
+      submissionSnapshot, ok: true, status: "success", providerStateStatus: "submitted", providerPostId: "buffer-test", sanitizedResponse: {},
+    });
+    expect(recorded).toMatchObject({ submitted: false, stale: true });
   });
 
   it("records Buffer cancel round-trip against provider state", async () => {

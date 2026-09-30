@@ -473,7 +473,7 @@ describe("v2 provider adapters", () => {
     });
   });
 
-  it("submits to Buffer when live submission is approved", async () => {
+  it.each([undefined, "  https://corvolabs.com/blog/approved-article  "])("submits the approved Buffer text and first comment (%s)", async (firstComment) => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(
@@ -524,7 +524,7 @@ describe("v2 provider adapters", () => {
         )
       );
 
-    const result = await bufferProviderAdapter.submit(submission, {
+    const result = await bufferProviderAdapter.submit({ ...submission, firstComment }, {
       env: {
         BUFFER_API_KEY: "buffer-secret",
         BUFFER_LIVE_SUBMISSION: "approved",
@@ -541,6 +541,11 @@ describe("v2 provider adapters", () => {
     });
     expect(JSON.stringify(result.sanitizedResponse)).not.toContain("buffer-secret");
     expect(fetchImpl).toHaveBeenCalledTimes(3);
+    const request = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(request.variables.input.text).toBe(submission.content);
+    expect(request.variables.input.metadata).toEqual(firstComment
+      ? { linkedin: { firstComment: firstComment.trim() } }
+      : undefined);
   });
 
   it("blocks Buffer submit until BUFFER_LIVE_SUBMISSION is approved", async () => {

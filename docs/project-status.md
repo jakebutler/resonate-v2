@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/29/2026 15:07:03 PDT
+Last updated: 09/29/2026 20:37:59 PDT
 
 ## State
 
@@ -16,23 +16,27 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- c6bd2fb Merge pull request #94 from jakebutler/feat/jake-voice-profile
+- 38238c9 Merge pull request #95 from jakebutler/codex/publishing-navigation
 
 ## Recent Commits
 
+- 38238c9 Merge pull request #95 from jakebutler/codex/publishing-navigation
+- ffd3339 fix: make spawned drafts reachable in publishing workspace
 - c6bd2fb Merge pull request #94 from jakebutler/feat/jake-voice-profile
 - c3edf1b feat: wire Jake's personal voice profile into drafting as the Corvo default
 - 4dc7e07 chore: regenerate convex api bindings (v2Storage module entry from prod codegen)
-- 6f9a97b docs: land the three 2026-09-14 audit reports (architecture, code review, UI/UX)
-- b4b5d9c Merge pull request #93 from jakebutler/feat/audit-decisions
 
 ## Local Working Tree
 
-- M  components/IdeaDetail/IdeaDetail.tsx
-- M  components/IdeaDetail/__tests__/IdeaDetail.test.tsx
 - M  components/PersistedPublishingPanel.tsx
 - M  components/__tests__/PersistedPublishingPanel.test.tsx
-- M  components/shell/Shell.tsx
+- M  convex/__tests__/publishing.test.ts
+- M  convex/bufferLive.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- M  lib/__tests__/providerAdapters.test.ts
+- M  lib/domain.ts
+- M  lib/providerAdapters.ts
 
 ## Next Agent Pickup
 
@@ -41,4 +45,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- codex/publishing-navigation
+- codex/linkedin-first-comment

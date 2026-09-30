@@ -52,6 +52,7 @@ type PersistedCalendarItem = {
     platformId: string;
     title: string;
     content: string;
+    linkedinFirstComment?: string;
     status: PostStatus;
     approvalState: string;
     scheduledDate?: string;
@@ -573,6 +574,7 @@ export function PersistedPublishingPanel({
     values: {
       title: string;
       content: string;
+      linkedinFirstComment?: string;
       scheduledDate: string;
       scheduledTime: string;
       timezone: string;
@@ -589,6 +591,10 @@ export function PersistedPublishingPanel({
   ) {
     const titleChanged = values.title.trim() !== item.post.title;
     const contentChanged = values.content !== item.post.content;
+    const firstCommentChanged =
+      item.post.channelId === "linkedin" &&
+      values.linkedinFirstComment !== undefined &&
+      values.linkedinFirstComment.trim() !== (item.post.linkedinFirstComment ?? "").trim();
     const scheduleChanged =
       values.scheduledDate !== (item.intent?.scheduledDate ?? item.post.scheduledDate ?? "") ||
       values.scheduledTime !== (item.intent?.scheduledTime ?? item.post.scheduledTime ?? "") ||
@@ -606,11 +612,14 @@ export function PersistedPublishingPanel({
         blogMetadata.heroImageUrl !== (item.post.heroImageUrl ?? "") ||
         blogMetadata.heroImageStorageId !== item.post.heroImageStorageId);
 
-    if (titleChanged || contentChanged) {
+    if (titleChanged || contentChanged || firstCommentChanged) {
       await updateContent({
         postId: item.post._id,
         title: values.title.trim(),
         content: values.content,
+        ...(item.post.channelId === "linkedin" && values.linkedinFirstComment !== undefined
+          ? { linkedinFirstComment: values.linkedinFirstComment.trim() }
+          : {}),
       });
     }
     if (blogMetadataChanged && blogMetadata) {
@@ -628,7 +637,7 @@ export function PersistedPublishingPanel({
       });
     }
 
-    if (titleChanged || contentChanged || blogMetadataChanged) {
+    if (titleChanged || contentChanged || firstCommentChanged || blogMetadataChanged) {
       setMessage(
         blogMetadataChanged && !titleChanged && !contentChanged
           ? "Saved metadata changes and cleared approval for re-review."
@@ -1759,7 +1768,15 @@ function PublishingDetailDrawer(props: {
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {activeTab === "preview" ? (
-          <MarkdownPreview content={post.content} />
+          <>
+            <MarkdownPreview content={post.content} />
+            {post.channelId === "linkedin" && post.linkedinFirstComment?.trim() && (
+              <section className="mt-4 rounded-md border border-black/10 p-3">
+                <h4 className="text-sm font-semibold">First comment</h4>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm">{post.linkedinFirstComment}</p>
+              </section>
+            )}
+          </>
         ) : (
           <>
             {providerState?.simulated && (
@@ -2050,6 +2067,7 @@ function PersistedPostComposer(props: {
   onSave: (values: {
     title: string;
     content: string;
+    linkedinFirstComment?: string;
     scheduledDate: string;
     scheduledTime: string;
     timezone: string;
@@ -2072,6 +2090,7 @@ function PersistedPostComposer(props: {
   const generateUploadUrl = useMutation(api.v2Storage.generateUploadUrl);
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
+  const [linkedinFirstComment, setLinkedinFirstComment] = useState(post.linkedinFirstComment ?? "");
   const [blogExcerpt, setBlogExcerpt] = useState(post.blogExcerpt ?? "");
   const [blogAuthor, setBlogAuthor] = useState(post.blogAuthor ?? DEFAULT_BLOG_AUTHOR);
   const [blogCategory, setBlogCategory] = useState(
@@ -2100,7 +2119,11 @@ function PersistedPostComposer(props: {
     intent?.timezone ?? post.timezone ?? "America/Los_Angeles"
   );
 
-  const contentChanged = title.trim() !== post.title || content !== post.content;
+  const contentChanged =
+    title.trim() !== post.title ||
+    content !== post.content ||
+    (post.channelId === "linkedin" &&
+      linkedinFirstComment.trim() !== (post.linkedinFirstComment ?? "").trim());
   const persistedScheduleDate =
     normalizeScheduledDate(intent?.scheduledDate ?? post.scheduledDate) ?? "";
   const scheduleChanged =
@@ -2212,6 +2235,20 @@ function PersistedPostComposer(props: {
               value={content}
             />
           </label>
+          {post.channelId === "linkedin" && (
+            <label className="block text-xs font-semibold text-gray-600">
+              First comment
+              <textarea
+                aria-label="First comment"
+                className="mt-1 min-h-20 w-full rounded-md border border-black/15 px-3 py-2 text-sm outline-none focus:border-[#15616d] focus:ring-2 focus:ring-[#15616d]/15"
+                onChange={(event) => setLinkedinFirstComment(event.target.value)}
+                value={linkedinFirstComment}
+              />
+              <span className="mt-1 block font-normal text-gray-500">
+                Published with the LinkedIn post. Changes require re-approval.
+              </span>
+            </label>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -2360,6 +2397,7 @@ function PersistedPostComposer(props: {
             props.onSave({
               title,
               content,
+              linkedinFirstComment: post.channelId === "linkedin" ? linkedinFirstComment : undefined,
               scheduledDate,
               scheduledTime,
               timezone,

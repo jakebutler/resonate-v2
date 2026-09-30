@@ -898,6 +898,20 @@ describe("PersistedPublishingPanel", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("saves a LinkedIn first comment as content requiring approval", async () => {
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect Scheduled LinkedIn validation item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("First comment"), { target: { value: "https://corvolabs.com/blog/approved-article" } });
+    expect(within(detail).getByText("Content or metadata changed: saving will clear approval.")).toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole("button", { name: "Save Composer Changes" }));
+    await waitFor(() => expect(updateContentMock).toHaveBeenCalledWith({
+      postId: "post_1", title: unapprovedItem.post.title, content: unapprovedItem.post.content,
+      linkedinFirstComment: "https://corvolabs.com/blog/approved-article",
+    }));
+    expect(submitBufferLiveMock).not.toHaveBeenCalled();
+  });
+
   it("does not call GitHub when rescheduling a blog post without a PR URL", async () => {
     render(<PersistedPublishingPanel />);
     fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));

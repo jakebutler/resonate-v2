@@ -13,6 +13,7 @@ export type ProviderSubmission = {
   channelId: ChannelId;
   title: string;
   content: string;
+  firstComment?: string;
   scheduledDate?: string;
   scheduledTime?: string;
   timezone: string;
@@ -1113,6 +1114,9 @@ export const bufferProviderAdapter: ProviderAdapter = {
         input: {
           channelId: channel.channelId,
           text: submission.content.trim(),
+          ...(submission.firstComment?.trim()
+            ? { metadata: { linkedin: { firstComment: submission.firstComment.trim() } } }
+            : {}),
           schedulingType: "automatic",
           mode: "customScheduled",
           dueAt,

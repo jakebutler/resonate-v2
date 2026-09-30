@@ -117,6 +117,7 @@ export type Post = {
   title: string;
   content: string;
   status: PostStatus;
+  linkedinFirstComment?: string;
   scheduledDate?: string;
   scheduledTime?: string;
   timezone?: string;
@@ -641,8 +642,16 @@ export function getBrowserTimezone(fallback = "America/Los_Angeles"): string {
   }
 }
 
-export function fingerprintPostContent(post: Pick<Post, "title" | "content">): string {
-  return `${post.title.trim()}\n${post.content.trim()}`;
+export function fingerprintPostContent(
+  post: Pick<Post, "title" | "content" | "linkedinFirstComment">
+): string {
+  const title = post.title.trim();
+  const content = post.content.trim();
+  const linkedinFirstComment = post.linkedinFirstComment?.trim();
+  // Retain existing approvals when no first comment is present.
+  return linkedinFirstComment
+    ? JSON.stringify({ title, content, linkedinFirstComment })
+    : `${title}\n${content}`;
 }
 
 export function createPublishingIntent(
