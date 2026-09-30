@@ -1,3 +1,4 @@
+import {seedCapacity} from "../../test-support/queueCapacityFixture";
 import {socialReleaseVersion} from "../../lib/socialPayload";
 import {destinationIdentity} from "../../lib/bufferContracts";
 import { convexTest } from "convex-test";
@@ -143,7 +144,7 @@ describe("v2 publishing platform settings", () => {
 
 async function reviewFixtureDestination(t:ReturnType<typeof convexTest>,user:ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,userId:string,postId:Id<"v2Posts">){
  const d={channelId:"fixture-channel",organizationId:"fixture-org",displayName:"Fixture Page",handle:"corvo-labs-us",accountType:"page",disconnected:false,locked:false,queuePaused:false,flagsVerified:true,checkedAt:Date.now(),firstComment:{value:"supported" as const,source:"operator-confirmed" as const,checkedAt:Date.now(),evidence:"Sanitized fixture account"}};
- await t.mutation(internal.bufferDestinations.record,{userId,brandId:"corvo",destination:d});let post=(await t.run(ctx=>ctx.db.get(postId)))!;if(!post.scheduledTime){await user.mutation(api.publishing.reschedule,{postId,scheduledDate:post.scheduledDate!,scheduledTime:"09:00"});post=(await t.run(ctx=>ctx.db.get(postId)))!;}await user.mutation(api.bufferDestinations.pin,{postId,expectedVersion:socialReleaseVersion(post),identity:destinationIdentity(d)});
+ await t.mutation(internal.bufferDestinations.record,{userId,brandId:"corvo",destination:d});await seedCapacity(t,userId,"corvo",d);let post=(await t.run(ctx=>ctx.db.get(postId)))!;if(!post.scheduledTime){await user.mutation(api.publishing.reschedule,{postId,scheduledDate:post.scheduledDate!,scheduledTime:"09:00"});post=(await t.run(ctx=>ctx.db.get(postId)))!;}await user.mutation(api.bufferDestinations.pin,{postId,expectedVersion:socialReleaseVersion(post),identity:destinationIdentity(d)});
 }
 
 describe("publishing cross-brand authorization", () => {

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 05:26:28 PDT
+Last updated: 09/30/2026 06:40:14 PDT
 
 ## State
 
@@ -16,27 +16,41 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 9aacca7 feat: verify article publication before companion delivery
+- 92aad6c feat: approve exact selected series versions atomically
 
 ## Recent Commits
 
+- 92aad6c feat: approve exact selected series versions atomically
 - 9aacca7 feat: verify article publication before companion delivery
 - 3f26cdb feat(series): import reviewed prepared packages with durable recovery
 - 70c5bbb feat(queue): add verified capacity planning and local reservations
 - 520bc47 Review Buffer destinations and reconcile delivery receipts fairly
-- 454a5a7 Adopt existing posts into durable publication series
 
 ## Local Working Tree
 
-- A  components/SeriesReviewPanel.tsx
-- M  components/SeriesWorkspace.tsx
-- A  convex/__tests__/seriesReview.test.ts
+- M  components/PersistedPublishingPanel.tsx
+- M  components/QueuePlanningPanel.tsx
+- A  components/QueueReleasePanel.tsx
+- M  convex/__tests__/articleDependencies.test.ts
+- M  convex/__tests__/bufferFoundations.test.ts
+- M  convex/__tests__/publishing.test.ts
+- M  convex/__tests__/queuePlanning.test.ts
+- A  convex/__tests__/queueRelease.test.ts
 - M  convex/_generated/api.d.ts
+- A  convex/bufferAttempts.ts
+- M  convex/bufferDelivery.ts
+- M  convex/bufferLive.ts
 - M  convex/publishing.ts
+- A  convex/queueDispatch.ts
+- M  convex/queuePlanning.ts
+- A  convex/queueRelease.ts
 - M  convex/schema.ts
-- A  convex/seriesReview.ts
 - M  docs/epic-97-progress.md
-- A  e2e/series-review.spec.ts
+- A  e2e/queue-release.spec.ts
+- A  lib/__tests__/deliverySummary.test.ts
+- A  lib/deliverySummary.ts
+- M  lib/providerAdapters.ts
+- A  test-support/queueCapacityFixture.ts
 
 ## Next Agent Pickup
 
@@ -45,4 +59,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- codex/epic-97-batch-approval
+- codex/epic-97-reviewed-queue

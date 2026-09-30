@@ -4606,3 +4606,65 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/epic-97-batch-approval
+
+## 09/30/2026 06:40:14 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/QueuePlanningPanel.tsx
+- A	components/QueueReleasePanel.tsx
+- M	convex/__tests__/articleDependencies.test.ts
+- M	convex/__tests__/bufferFoundations.test.ts
+- M	convex/__tests__/publishing.test.ts
+- M	convex/__tests__/queuePlanning.test.ts
+- A	convex/__tests__/queueRelease.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/bufferAttempts.ts
+- M	convex/bufferDelivery.ts
+- M	convex/bufferLive.ts
+- M	convex/publishing.ts
+- A	convex/queueDispatch.ts
+- M	convex/queuePlanning.ts
+- A	convex/queueRelease.ts
+- M	convex/schema.ts
+- M	docs/epic-97-progress.md
+- A	e2e/queue-release.spec.ts
+- A	lib/__tests__/deliverySummary.test.ts
+- A	lib/deliverySummary.ts
+- M	lib/providerAdapters.ts
+- A	test-support/queueCapacityFixture.ts
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/QueuePlanningPanel.tsx
+- A  components/QueueReleasePanel.tsx
+- M  convex/__tests__/articleDependencies.test.ts
+- M  convex/__tests__/bufferFoundations.test.ts
+- M  convex/__tests__/publishing.test.ts
+- M  convex/__tests__/queuePlanning.test.ts
+- A  convex/__tests__/queueRelease.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/bufferAttempts.ts
+- M  convex/bufferDelivery.ts
+- M  convex/bufferLive.ts
+- M  convex/publishing.ts
+- A  convex/queueDispatch.ts
+- M  convex/queuePlanning.ts
+- A  convex/queueRelease.ts
+- M  convex/schema.ts
+- M  docs/epic-97-progress.md
+- A  e2e/queue-release.spec.ts
+- A  lib/__tests__/deliverySummary.test.ts
+- A  lib/deliverySummary.ts
+- M  lib/providerAdapters.ts
+- A  test-support/queueCapacityFixture.ts
+
+### Branch
+
+- codex/epic-97-reviewed-queue

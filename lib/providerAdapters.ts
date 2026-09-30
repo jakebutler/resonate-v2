@@ -33,6 +33,7 @@ export type ProviderAdapterContext = {
   liveProviderValidationApproved?: boolean;
   fetchImpl?: typeof fetch;
   requestBudget?: BufferRequestBudget;
+  beforeCreate?: () => Promise<string | null>;
 };
 
 export type ProviderResult = {
@@ -1084,6 +1085,9 @@ export const bufferProviderAdapter: ProviderAdapter = {
       scheduledTime: submission.scheduledTime,
       timezone: submission.timezone,
     });
+    const preflight = await context.beforeCreate?.();
+    if(preflight)return {ok:false,status:"permanent-failure",providerStateStatus:"needs-review",reason:preflight,sanitizedResponse:{providerId,phase:"preflight"}};
+    if(submission.expectedDestination && Date.parse(dueAt)<=Date.now())return {ok:false,status:"permanent-failure",providerStateStatus:"needs-review",reason:"Exact scheduled time has passed.",sanitizedResponse:{providerId,phase:"preflight"}};
     const client = createBufferGraphqlClient(context);
     const createResult = await client.graphql(
       `mutation BufferCreatePost($input: CreatePostInput!) {
@@ -1122,9 +1126,10 @@ export const bufferProviderAdapter: ProviderAdapter = {
 
     if (!createResult.response.ok || errors.length || mutationError || !providerPostId || !post) {
       const reason = mutationError ?? errors[0]?.message ?? "Buffer createPost failed.";
+      const capacityHold = !providerPostId && createResult.response.status < 500 && Boolean(mutationError) && /queue|scheduled.{0,20}posts|post.{0,20}limit/i.test(String(reason)) && /full|capacity|limit|maximum|exceed/i.test(String(reason));
       return {
         ok: false,
-        status: createResult.response.status>=500 || (!mutationError && !errors.length && !providerPostId) || Boolean(providerPostId) ? "ambiguous" : classifyProviderError({status:createResult.response.status,message:String(reason)}),
+        status: createResult.response.status>=500 || (!mutationError && !errors.length && !providerPostId) || Boolean(providerPostId) ? "ambiguous" : capacityHold ? "retryable-failure" : classifyProviderError({status:createResult.response.status,message:String(reason)}),
         providerPostId,
         providerStateStatus: "failed",
         reason: String(reason),
@@ -1136,6 +1141,7 @@ export const bufferProviderAdapter: ProviderAdapter = {
           status: createResult.response.status,
           errors,
           mutationError,
+          capacityHold,
           firstCommentUnsupported:Boolean(submission.firstComment&&/first.?comment/i.test(String(reason))&&/plan|paid|upgrade|not supported|not available/i.test(String(reason))),
         }),
       };

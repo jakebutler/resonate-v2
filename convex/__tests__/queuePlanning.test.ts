@@ -249,7 +249,9 @@ describe("durable queue planning", () => {
       channelReserved: 1,
       availableForBacklog: 8,
     });
-    expect(plan.reservations[0].status).toBe("consumed");
+    expect(
+      plan.reservations.find((r) => r.postId === posts[0].postId)?.status,
+    ).toBe("consumed");
   });
   it("holds expired dates and incomplete counts without changing copy or schedules", async () => {
     const { t, user, posts, identity } = await fixture();

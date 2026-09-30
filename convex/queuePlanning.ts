@@ -1,3 +1,4 @@
+import {priorDispatchHold} from "./bufferAttempts";
 import {companionSubmissionHold} from "./articleDependencies";
 import { v } from "convex/values";
 import {
@@ -54,16 +55,13 @@ export async function queueCapacity(
     .first();
   const reservations = await ctx.db
     .query("queueReservations")
-    .withIndex("by_organization", (q) =>
-      q.eq("organizationId", destination.organizationId),
+    .withIndex("by_org_and_status", (q) =>
+      q.eq("organizationId", destination.organizationId).eq("status","reserved"),
     )
     .take(1001);
-  const claims = await ctx.db
-    .query("queueDispatchClaims")
-    .withIndex("by_organization", (q) =>
-      q.eq("organizationId", destination.organizationId),
-    )
-    .take(1001);
+  const claims:Doc<"queueDispatchClaims">[]=[];
+  for(const status of ["active","uncertain","confirmed"] as const)claims.push(...await ctx.db.query("queueDispatchClaims").withIndex("by_org_and_status",q=>q.eq("organizationId",destination.organizationId).eq("status",status)).take(1001));
+
   const legacy = [];
   let legacyComplete = true;
   for (const status of ["pending", "ambiguous"] as const) {
@@ -75,6 +73,13 @@ export async function queueCapacity(
       .take(201);
     if (attempts.length > 200) legacyComplete = false;
     for (const attempt of attempts) {
+      if (claims.some((c) => c.attemptId === attempt._id) || attempt.providerPostId?.startsWith("mock-")) continue;
+      const attributed = await ctx.db.query("queueDispatchClaims")
+        .withIndex("by_attempt", (q) => q.eq("attemptId", attempt._id)).first();
+      if (attributed && attributed.organizationId !== destination.organizationId) continue;
+      // Only unattributed legacy uncertainty can affect every organization.
+      // A pending same-organization attempt without an active claim also holds.
+      legacyComplete = false;
       if (
         attempt.userId === userId &&
         attempt.submissionSnapshot.brandId === brandId &&
@@ -143,11 +148,11 @@ export async function consumeReservation(
   if (!post) return;
   const d = (await readDestination(ctx, post.userId, post.brandId))
     ?.destination;
-  if (!d) return;
+  if (!d && !identity) return;
   const row = await ctx.db
     .query("queueReservations")
     .withIndex("by_post_and_identity", (q) =>
-      q.eq("postId", postId).eq("identity", identity ?? destinationIdentity(d)),
+      q.eq("postId", postId).eq("identity", identity ?? destinationIdentity(d!)),
     )
     .first();
   if (row?.status === "reserved") {
@@ -401,11 +406,7 @@ export async function buildQueuePlan(
       .withIndex("by_post", (q) => q.eq("postId", post._id))
       .order("desc")
       .first();
-    const last = await ctx.db
-      .query("v2PublishAttempts")
-      .withIndex("by_post", (q) => q.eq("postId", post._id))
-      .order("desc")
-      .first();
+    const priorHold=await priorDispatchHold(ctx,post._id);
     const reservation = capacity.reservations.find(
       (r) => r.postId === post._id && r.status === "reserved",
     );
@@ -422,8 +423,7 @@ export async function buildQueuePlan(
         })
     )
       reason = "Editorial approval required.";
-    else if (last && ["pending", "ambiguous"].includes(last.status))
-      reason = "Prior attempt is uncertain; reconcile before retrying.";
+    else if (priorHold) reason=priorHold;
     else if (
       state?.providerPostId &&
       !["cancelled", "removed"].includes(state.status)
@@ -469,15 +469,16 @@ export async function buildQueuePlan(
       providerState: state,
     });
   }
+  const ownReservations=capacity.destination?await ctx.db.query("queueReservations").withIndex("by_identity",q=>q.eq("identity",destinationIdentity(capacity.destination!))).order("desc").take(501):[];
   return {
     ...capacity,
-    reservations: capacity.reservations.filter((r) => r.userId === userId),
+    reservations: ownReservations.slice(0,500).filter((r) => r.userId === userId),
     claims: capacity.claims.map((c) => ({
       status: c.status,
       providerPostId: c.providerPostId,
     })),
     candidates,
-    partial: rows.length > 500,
+    partial: rows.length > 500||ownReservations.length>500,
   };
 }
 export const plan = query({

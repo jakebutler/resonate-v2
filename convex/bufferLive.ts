@@ -1,5 +1,6 @@
 "use node";
 
+import type {Id} from "./_generated/dataModel";
 import { v } from "convex/values";
 import { type BufferRequestBudget, BufferRequestBudgetError } from "../lib/bufferContracts";
 import { brandIdValidator } from "./campaignAccess";
@@ -7,7 +8,7 @@ import {readBufferQueue} from "../lib/readBufferQueue";
 import {destinationHold,destinationIdentity,type BufferDestination} from "../lib/bufferContracts";
 import { resolveBufferLinkedInChannelId } from "../lib/providerAdapters";
 import { internal } from "./_generated/api";
-import { action, internalAction } from "./_generated/server";
+import { action, internalAction, type ActionCtx } from "./_generated/server";
 import {
   bufferProviderAdapter,
   type ProviderResult,
@@ -41,104 +42,183 @@ function providerFailureFromError(_error: unknown): ProviderResult {
   return {ok:false,status:"ambiguous",providerStateStatus:"needs-review",reason:"Provider call did not return a definitive receipt; reconcile before retrying.",sanitizedResponse:{providerId:"buffer",outcome:"uncertain"}};
 }
 
-export const submit = action({
+type SubmitResult = {
+  submitted: boolean;
+  liveGateOff: boolean;
+  reason?: string;
+  attemptId?: string;
+  providerPostId?: string;
+  deliveryStatus?: ProviderResult["providerStateStatus"];
+};
+export async function executeBufferSubmit(
+  ctx: ActionCtx,
   args: {
-    postId: v.id("v2Posts"),
-    retry: v.optional(v.boolean()),
+    postId: Id<"v2Posts">;
+    retry?: boolean;
+    reviewRowId?: Id<"queueReleaseRows">;
+    runId?: string;
   },
+  userId: string,
+  budget: BufferRequestBudget = { remaining: 20 },
+): Promise<SubmitResult> {
+  if (!isBufferLiveGateOn()) {
+    return {
+      submitted: false,
+      liveGateOff: true,
+      reason:
+        "Buffer live submission requires BUFFER_LIVE_SUBMISSION=approved.",
+    };
+  }
+
+  if (
+    !isFlagApproved(process.env.LIVE_PROVIDER_VALIDATION_APPROVED) ||
+    !process.env.BUFFER_API_KEY?.trim()
+  )
+    return {
+      submitted: false,
+      liveGateOff: true,
+      reason:
+        "Live provider validation approval and configured server credential are required.",
+    };
+  const control = await ctx.runQuery(internal.bufferDelivery.control, {});
+  if ((control?.backoffUntil ?? 0) > Date.now())
+    return {
+      submitted: false,
+      liveGateOff: false,
+      reason: "Buffer API backoff is active; wait and prepare a fresh review.",
+    };
+  const claimed = await ctx.runMutation(
+    internal.publishing.claimBufferSubmission,
+    {
+      postId: args.postId,
+      userId,
+      retry: args.retry,
+      reviewRowId: args.reviewRowId,
+      runId: args.runId,
+    },
+  );
+
+  if (!claimed.eligible) {
+    if ("brandId" in claimed && claimed.brandId) {
+      await ctx.runMutation(internal.publishing.auditBufferSkip, {
+        postId: args.postId,
+        userId,
+        brandId: claimed.brandId,
+        intentId: "intentId" in claimed ? claimed.intentId : undefined,
+        reason: claimed.reason,
+      });
+    }
+    return {
+      submitted: false,
+      liveGateOff: false,
+      reason: claimed.reason,
+    };
+  }
+
+  let result: ProviderResult;
+  try {
+    result = await bufferProviderAdapter.submit(claimed.submission, {
+      ...bufferAdapterContext(budget),
+      beforeCreate: () =>
+        ctx.runMutation(internal.publishing.revalidateBufferClaim, {
+          attemptId: claimed.attemptId,
+          userId,
+        }),
+    });
+  } catch (error) {
+    result = providerFailureFromError(error);
+  }
+
+  if (result.providerPostId?.startsWith("mock-"))
+    result = {
+      ...result,
+      ok: false,
+      status: "ambiguous",
+      providerStateStatus: "needs-review",
+      reason:
+        "Provider identifier is simulated; no real queued delivery is verified.",
+    };
+  if (budget.backoffUntil)
+    await ctx.runMutation(internal.bufferDelivery.recordBackoff, {
+      backoffUntil: budget.backoffUntil,
+    });
+  let recorded;
+  try {
+    recorded = await ctx.runMutation(
+      internal.publishing.recordBufferSubmitResult,
+      {
+        postId: args.postId,
+        userId,
+        intentId: claimed.intentId,
+        brandId: claimed.brandId,
+        attemptId: claimed.attemptId,
+        idempotencyKey: claimed.idempotencyKey,
+        retryCount: claimed.retryCount,
+        submissionSnapshot: {
+          postId: claimed.submission.postId,
+          brandId: claimed.submission.brandId,
+          channelId: claimed.submission.channelId,
+          title: claimed.submission.title,
+          content: claimed.submission.content,
+          firstComment: claimed.submission.firstComment,
+          scheduledDate: claimed.submission.scheduledDate,
+          scheduledTime: claimed.submission.scheduledTime,
+          timezone: claimed.submission.timezone,
+        },
+        ok: result.ok,
+        status: result.status,
+        providerStateStatus: result.providerStateStatus,
+        providerPostId: result.providerPostId,
+        reason: result.reason,
+        sanitizedResponse: result.sanitizedResponse,
+      },
+    );
+  } catch {
+    try {
+      await ctx.runMutation(internal.publishing.markDispatchUncertain, {
+        attemptId: claimed.attemptId,
+        userId,
+        providerPostId: result.providerPostId,
+        receipt: result.sanitizedResponse,
+      });
+    } catch {
+      /* The initial pending claim remains durable; never replay the create. */
+    }
+    return {
+      submitted: false,
+      liveGateOff: false,
+      attemptId: claimed.attemptId,
+      providerPostId: result.providerPostId,
+      reason:
+        "Receipt persistence is uncertain; reconcile the retained attempt before retrying.",
+    };
+  }
+
+  return {
+    submitted: recorded.submitted,
+    liveGateOff: false,
+    attemptId: recorded.attemptId,
+    providerPostId: result.providerPostId,
+    deliveryStatus: result.providerStateStatus,
+    reason: recorded.submitted
+      ? undefined
+      : recorded.stale
+        ? "Approval or content changed while Buffer submission was in flight."
+        : result.reason,
+  };
+}
+export const submit = action({
+  args: { postId: v.id("v2Posts"), retry: v.optional(v.boolean()) },
   returns: v.object({
     submitted: v.boolean(),
     liveGateOff: v.boolean(),
     reason: v.optional(v.string()),
     attemptId: v.optional(v.string()),
     providerPostId: v.optional(v.string()),
+    deliveryStatus: v.optional(v.string()),
   }),
-  handler: async (ctx, args): Promise<{
-    submitted: boolean;
-    liveGateOff: boolean;
-    reason?: string;
-    attemptId?: string;
-    providerPostId?: string;
-  }> => {
-    const userId = await requireActionUserId(ctx);
-
-    if (!isBufferLiveGateOn()) {
-      return {
-        submitted: false,
-        liveGateOff: true,
-        reason: "Buffer live submission requires BUFFER_LIVE_SUBMISSION=approved.",
-      };
-    }
-
-    const claimed = await ctx.runMutation(internal.publishing.claimBufferSubmission, {
-      postId: args.postId,
-      userId,
-      retry: args.retry,
-    });
-
-    if (!claimed.eligible) {
-      if ("brandId" in claimed && claimed.brandId) {
-        await ctx.runMutation(internal.publishing.auditBufferSkip, {
-          postId: args.postId,
-          userId,
-          brandId: claimed.brandId,
-          intentId: "intentId" in claimed ? claimed.intentId : undefined,
-          reason: claimed.reason,
-        });
-      }
-      return {
-        submitted: false,
-        liveGateOff: false,
-        reason: claimed.reason,
-      };
-    }
-
-    let result: ProviderResult;
-    try {
-      result = await bufferProviderAdapter.submit(claimed.submission, bufferAdapterContext());
-    } catch (error) {
-      result = providerFailureFromError(error);
-    }
-
-    const recorded = await ctx.runMutation(internal.publishing.recordBufferSubmitResult, {
-      postId: args.postId,
-      userId,
-      intentId: claimed.intentId,
-      brandId: claimed.brandId,
-      attemptId: claimed.attemptId,
-      idempotencyKey: claimed.idempotencyKey,
-      retryCount: claimed.retryCount,
-      submissionSnapshot: {
-        postId: claimed.submission.postId,
-        brandId: claimed.submission.brandId,
-        channelId: claimed.submission.channelId,
-        title: claimed.submission.title,
-        content: claimed.submission.content,
-        firstComment: claimed.submission.firstComment,
-        scheduledDate: claimed.submission.scheduledDate,
-        scheduledTime: claimed.submission.scheduledTime,
-        timezone: claimed.submission.timezone,
-      },
-      ok: result.ok,
-      status: result.status,
-      providerStateStatus: result.providerStateStatus,
-      providerPostId: result.providerPostId,
-      reason: result.reason,
-      sanitizedResponse: result.sanitizedResponse,
-    });
-
-    return {
-      submitted: recorded.submitted,
-      liveGateOff: false,
-      attemptId: recorded.attemptId,
-      providerPostId: result.providerPostId,
-      reason: recorded.submitted
-        ? undefined
-        : recorded.stale
-          ? "Approval or content changed while Buffer submission was in flight."
-          : result.reason,
-    };
-  },
+  handler: async (ctx, args): Promise<SubmitResult> =>
+    executeBufferSubmit(ctx, args, await requireActionUserId(ctx)),
 });
 
 export const cancelOrUnpublish = action({
@@ -265,3 +345,99 @@ export const refreshCapacity=action({args:{brandId:brandIdValidator},returns:v.a
  }catch{return {complete:false,reason:"Capacity check failed; capacity remains unknown."};}
  finally{if(context.requestBudget?.backoffUntil)await ctx.runMutation(internal.bufferDelivery.recordBackoff,{backoffUntil:context.requestBudget.backoffUntil});}
 }});
+
+export const queueSelected = action({
+  args: { reviewId: v.id("queueReleaseReviews") },
+  returns: v.any(),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ started: boolean; reason?: string }> => {
+    const userId = await requireActionUserId(ctx);
+    if (
+      !isBufferLiveGateOn() ||
+      !isFlagApproved(process.env.LIVE_PROVIDER_VALIDATION_APPROVED) ||
+      !process.env.BUFFER_API_KEY?.trim()
+    )
+      return {
+        started: false,
+        reason:
+          "Live Buffer submission, provider validation approval and configured server credential are required.",
+      };
+    const runId = crypto.randomUUID();
+    const begin = await ctx.runMutation(internal.queueRelease.begin, {
+      ...args,
+      userId,
+      runId,
+    });
+    if (!begin.execute) return { started: false, reason: begin.reason };
+    const packet = await ctx.runQuery(internal.queueRelease.read, {
+      ...args,
+      userId,
+    });
+    const budget: BufferRequestBudget = {
+      remaining: Math.min(
+        30,
+        ...(packet.observation?.observation.apiWindows ?? [])
+          .filter((w: { resetsAt: number }) => w.resetsAt > Date.now())
+          .map((w: { remaining: number }) => w.remaining),
+      ),
+    };
+    let reason: string | undefined;
+    try {
+      for (const rowId of begin.rowIds ?? []) {
+        const row = packet.rows.find(
+          (r: { _id: Id<"queueReleaseRows"> }) => r._id === rowId,
+        );
+        if (!row) continue;
+        if (budget.remaining < 3 || (budget.backoffUntil ?? 0) > Date.now()) {
+          reason =
+            "Provider request budget or backoff reached; refresh and review remaining posts.";
+          await ctx.runMutation(internal.queueRelease.hold, {
+            rowId,
+            userId,
+            reason,
+          });
+          break;
+        }
+        const result = await executeBufferSubmit(
+          ctx,
+          { postId: row.postId, reviewRowId: row._id, runId, retry: row.retry },
+          userId,
+          budget,
+        );
+        if (
+          !result.submitted ||
+          !["queued", "publishing", "published"].includes(
+            result.deliveryStatus ?? "",
+          )
+        ) {
+          reason =
+            result.reason ??
+            "Submission held; inspect its receipt and review remaining posts.";
+          await ctx.runMutation(internal.queueRelease.hold, {
+            rowId,
+            userId,
+            reason,
+          });
+          break;
+        }
+      }
+    } catch {
+      reason =
+        "Execution interrupted; inspect retained attempts and receipts before reviewing remaining posts.";
+    } finally {
+      if (budget.backoffUntil)
+        await ctx.runMutation(internal.bufferDelivery.recordBackoff, {
+          backoffUntil: budget.backoffUntil,
+        });
+      await ctx.runMutation(internal.queueRelease.finish, {
+        ...args,
+        userId,
+        runId,
+        reason,
+      });
+    }
+    return { started: true, reason };
+  },
+});

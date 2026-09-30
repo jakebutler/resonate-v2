@@ -1,4 +1,5 @@
 "use client";
+import {QueueReleasePanel} from "./QueueReleasePanel";
 import { useState } from "react";
 import Link from "next/link";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
@@ -131,6 +132,7 @@ export function QueuePlanningPanel({
       </div>
       {plan && (
         <>
+          <QueueReleasePanel key={`${brand}:${seriesId}`} brandId={brand} seriesId={seriesId?seriesId as Id<"postSeries">:undefined} candidates={plan.candidates}/>
           <section
             aria-label="Queue capacity"
             className="space-y-2 rounded border bg-white p-4"

@@ -1,4 +1,6 @@
-import {companionSubmissionHold} from "./articleDependencies";
+import {postScheduleVersion} from "../lib/socialPayload";
+import {priorDispatchHold, priorBufferAttempts, dispatchCapacity, releasePin, allocateDispatch, reconcileAllocation, reviewReservationsHold} from "./queueDispatch";
+import {companionSubmissionHold,latestPublication} from "./articleDependencies";
 import {consumeReservation} from "./queuePlanning";
 import { linkedInPayload } from "../lib/socialPayload";
 import { destinationSubmissionHold, readDestination } from "./bufferDestinations";
@@ -654,6 +656,7 @@ export const listCalendarItems = query({
           post,
           intent,
           providerState,
+          articlePublication:post.channelId==="corvo-blog"?await latestPublication(ctx,post._id):null,
           attemptCount: attempts.length,
           lastAttempt: attempts.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null,
         };
@@ -1195,7 +1198,7 @@ export const submitMockProvider = mutation({
 
     const ineligibleReason = providerSubmissionIneligibilityReason({
       routable: Boolean(channel?.routable),
-      approvalState: intent.approvalState,
+      approvalState: post.approvalState==="approved"?intent.approvalState:post.approvalState,
       scheduledDate: intent.scheduledDate,
       contentFingerprint: intent.contentFingerprint,
       currentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
@@ -1815,137 +1818,193 @@ export const bufferLiveSubmissionEnabled = query({
   },
 });
 
+export async function bufferSubmissionContext(
+  ctx: QueryCtx | MutationCtx,
+  args: { postId: Id<"v2Posts">; userId: string; retry?: boolean },
+  sharedCapacity?: Awaited<ReturnType<typeof dispatchCapacity>>["capacity"],
+) {
+  const post = await ctx.db.get(args.postId);
+  if (!post || post.userId !== args.userId) {
+    return { eligible: false as const, reason: "Post not found" };
+  }
+  try {
+    const access = await requireBrandAccess(ctx, args.userId, post.brandId);
+    if (access.role === "viewer")
+      return {
+        eligible: false as const,
+        reason: "Editor access required for Buffer dispatch.",
+      };
+  } catch {
+    return { eligible: false as const, reason: "Brand access denied" };
+  }
+  if (post.channelId !== "linkedin") {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      reason: "Buffer live submission is only available for LinkedIn posts.",
+    };
+  }
+  if (!brandHasBufferLinkedInMapping(post.brandId)) {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      reason: `No Buffer LinkedIn channel mapping exists for brand ${post.brandId}.`,
+    };
+  }
+
+  const intent = await latestIntent(ctx, args.postId);
+  if (!intent) {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      reason: "Publishing intent not found",
+    };
+  }
+
+  const channel = await ctx.db
+    .query("v2Channels")
+    .withIndex("by_brand_and_channel", (q) =>
+      q.eq("brandId", post.brandId).eq("channelId", post.channelId),
+    )
+    .first();
+
+  const ineligibleReason = providerSubmissionIneligibilityReason({
+    routable: Boolean(channel?.routable),
+    approvalState: intent.approvalState,
+    scheduledDate: intent.scheduledDate,
+    contentFingerprint: intent.contentFingerprint,
+    currentFingerprint: contentFingerprint(
+      post.title,
+      post.content,
+      post.linkedinFirstComment,
+    ),
+  });
+
+  if (ineligibleReason) {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: ineligibleReason,
+    };
+  }
+
+  if (postScheduleVersion(post) !== postScheduleVersion(intent))
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason:
+        "Saved post and publishing intent schedules differ; review the exact date again.",
+    };
+  const articleReason = await companionSubmissionHold(ctx, post);
+  if (articleReason)
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: articleReason,
+    };
+  const destinationReason = await destinationSubmissionHold(ctx, post);
+  if (destinationReason)
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: destinationReason,
+    };
+  const reviewedDestination = (await readDestination(
+    ctx,
+    post.userId,
+    post.brandId,
+  ))!.destination!;
+
+  const priorReason = await priorDispatchHold(ctx, post._id);
+  if (priorReason)
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: priorReason,
+    };
+  const allocation = await dispatchCapacity(ctx, post, sharedCapacity);
+  if (allocation.reason)
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: allocation.reason,
+    };
+  const previousAttempts = (await priorBufferAttempts(ctx, post._id)).rows;
+  const latestAttempt = [...previousAttempts].sort(
+    (a, b) => b.createdAt - a.createdAt,
+  )[0];
+  const baseIdempotencyKey = `${intent._id}:${intent.contentFingerprint}`;
+  const existingAttempt = await ctx.db
+    .query("v2PublishAttempts")
+    .withIndex("by_idempotency_key", (q) =>
+      q.eq("idempotencyKey", baseIdempotencyKey),
+    )
+    .first();
+
+  if (existingAttempt) {
+    const retryable =
+      args.retry && latestAttempt?.status === "retryable-failure";
+    if (!retryable) {
+      return {
+        eligible: false as const,
+        brandId: post.brandId,
+        intentId: intent._id,
+        reason: args.retry
+          ? "Previous attempt is not retryable."
+          : "Duplicate submission prevented.",
+      };
+    }
+  }
+  if (args.retry && !existingAttempt) {
+    return {
+      eligible: false as const,
+      brandId: post.brandId,
+      intentId: intent._id,
+      reason: "No previous attempt exists to retry.",
+    };
+  }
+
+  const idempotencyKey = args.retry
+    ? `${baseIdempotencyKey}:retry:${previousAttempts.length}`
+    : baseIdempotencyKey;
+
+  return {
+    eligible: true as const,
+    brandId: post.brandId,
+    intentId: intent._id,
+    retryCount: previousAttempts.length,
+    idempotencyKey,
+    submission: {
+      postId: String(post._id),
+      brandId: post.brandId,
+      channelId: post.channelId,
+      title: post.title,
+      content: assembleLinkedInSubmissionContent(
+        post.content,
+        post.platformSettings,
+      ),
+      firstComment: post.linkedinFirstComment?.trim() || undefined,
+      scheduledDate: intent.scheduledDate,
+      scheduledTime: intent.scheduledTime,
+      timezone: intent.timezone,
+      idempotencyKey,
+      expectedDestination: reviewedDestination,
+    },
+  };
+}
 export const getBufferSubmissionContext = internalQuery({
   args: {
     postId: v.id("v2Posts"),
     userId: v.string(),
     retry: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
-    const post = await ctx.db.get(args.postId);
-    if (!post || post.userId !== args.userId) {
-      return { eligible: false as const, reason: "Post not found" };
-    }
-    try {
-      const access=await requireBrandAccess(ctx, args.userId, post.brandId);
-      if(access.role==="viewer")return {eligible:false as const,reason:"Editor access required for Buffer dispatch."};
-    } catch {
-      return { eligible: false as const, reason: "Brand access denied" };
-    }
-    if (post.channelId !== "linkedin") {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: "Buffer live submission is only available for LinkedIn posts.",
-      };
-    }
-    if (!brandHasBufferLinkedInMapping(post.brandId)) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: `No Buffer LinkedIn channel mapping exists for brand ${post.brandId}.`,
-      };
-    }
-
-    const intent = await latestIntent(ctx, args.postId);
-    if (!intent) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: "Publishing intent not found",
-      };
-    }
-
-    const channel = await ctx.db
-      .query("v2Channels")
-      .withIndex("by_brand_and_channel", (q) =>
-        q.eq("brandId", post.brandId).eq("channelId", post.channelId)
-      )
-      .first();
-
-    const ineligibleReason = providerSubmissionIneligibilityReason({
-      routable: Boolean(channel?.routable),
-      approvalState: intent.approvalState,
-      scheduledDate: intent.scheduledDate,
-      contentFingerprint: intent.contentFingerprint,
-      currentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
-    });
-
-    if (ineligibleReason) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: ineligibleReason,
-      };
-    }
-
-    const articleReason=await companionSubmissionHold(ctx,post);
-    if(articleReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:articleReason};
-    const destinationReason=await destinationSubmissionHold(ctx,post);
-    if(destinationReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:destinationReason};
-    const reviewedDestination=(await readDestination(ctx,post.userId,post.brandId))!.destination!;
-
-    const previousAttempts = await ctx.db
-      .query("v2PublishAttempts")
-      .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
-      .collect();
-    const latestAttempt = [...previousAttempts].sort((a, b) => b.createdAt - a.createdAt)[0];
-    const baseIdempotencyKey = `${intent._id}:${intent.contentFingerprint}`;
-    const existingAttempt = await ctx.db
-      .query("v2PublishAttempts")
-      .withIndex("by_idempotency_key", (q) => q.eq("idempotencyKey", baseIdempotencyKey))
-      .first();
-
-    if (existingAttempt) {
-      const retryable =
-        args.retry &&
-        latestAttempt?.status === "retryable-failure";
-      if (!retryable) {
-        return {
-          eligible: false as const,
-          brandId: post.brandId,
-          intentId: intent._id,
-          reason: args.retry
-            ? "Previous attempt is not retryable."
-            : "Duplicate submission prevented.",
-        };
-      }
-    }
-    if (args.retry && !existingAttempt) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: "No previous attempt exists to retry.",
-      };
-    }
-
-    const idempotencyKey = args.retry
-      ? `${baseIdempotencyKey}:retry:${previousAttempts.length}`
-      : baseIdempotencyKey;
-
-    return {
-      eligible: true as const,
-      brandId: post.brandId,
-      intentId: intent._id,
-      retryCount: previousAttempts.length,
-      idempotencyKey,
-      submission: {
-        postId: String(post._id),
-        brandId: post.brandId,
-        channelId: post.channelId,
-        title: post.title,
-        content: assembleLinkedInSubmissionContent(post.content, post.platformSettings),
-        firstComment: post.linkedinFirstComment?.trim() || undefined,
-        scheduledDate: intent.scheduledDate,
-        scheduledTime: intent.scheduledTime,
-        timezone: intent.timezone,
-        idempotencyKey,
-        expectedDestination:reviewedDestination,
-      },
-    };
-  },
+  handler: (ctx, args) => bufferSubmissionContext(ctx, args),
 });
 
 export const getBufferCancelContext = internalQuery({
@@ -2033,6 +2092,8 @@ export const claimBufferSubmission = internalMutation({
     postId: v.id("v2Posts"),
     userId: v.string(),
     retry: v.optional(v.boolean()),
+    reviewRowId: v.optional(v.id("queueReleaseRows")),
+    runId: v.optional(v.string()),
   },
   returns: v.union(
     v.object({
@@ -2062,122 +2123,56 @@ export const claimBufferSubmission = internalMutation({
         idempotencyKey: v.string(),
         expectedDestination: destinationValidator,
       }),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
-    // Inline eligibility — same checks as getBufferSubmissionContext, then claim atomically.
-    const post = await ctx.db.get(args.postId);
-    if (!post || post.userId !== args.userId) {
-      return { eligible: false as const, reason: "Post not found" };
-    }
-    try {
-      const access=await requireBrandAccess(ctx, args.userId, post.brandId);
-      if(access.role==="viewer")return {eligible:false as const,reason:"Editor access required for Buffer dispatch."};
-    } catch {
-      return { eligible: false as const, reason: "Brand access denied" };
-    }
-    if (post.channelId !== "linkedin") {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: "Buffer live submission is only available for LinkedIn posts.",
-      };
-    }
-    if (!brandHasBufferLinkedInMapping(post.brandId)) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: `No Buffer LinkedIn channel mapping exists for brand ${post.brandId}.`,
-      };
-    }
-
-    const intent = await latestIntent(ctx, args.postId);
-    if (!intent) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        reason: "Publishing intent not found",
-      };
-    }
-
-    const channel = await ctx.db
-      .query("v2Channels")
-      .withIndex("by_brand_and_channel", (q) =>
-        q.eq("brandId", post.brandId).eq("channelId", post.channelId)
+    const context = await bufferSubmissionContext(ctx, args);
+    if (!context.eligible) return context;
+    const post = (await ctx.db.get(args.postId))!;
+    const intent = (await ctx.db.get(context.intentId))!;
+    const previousAttempts = (await priorBufferAttempts(ctx, post._id)).rows;
+    const idempotencyKey = context.idempotencyKey;
+    const reviewedDestination = context.submission.expectedDestination;
+    const allocation = await dispatchCapacity(ctx, post);
+    const pin = await releasePin(ctx, post, allocation.capacity);
+    let reviewRow: Doc<"queueReleaseRows"> | null = null;
+    if (args.reviewRowId) {
+      reviewRow = await ctx.db.get(args.reviewRowId);
+      const review = reviewRow ? await ctx.db.get(reviewRow.reviewId) : null;
+      const series = review?.seriesId
+        ? await ctx.db.get(review.seriesId)
+        : null;
+      if (
+        !reviewRow ||
+        reviewRow.postId !== post._id ||
+        review?.userId !== args.userId ||
+        review.status !== "running" ||
+        review.runId !== args.runId ||
+        Date.now() - review.createdAt > 300000 ||
+        reviewRow.status !== "ready" ||
+        Boolean(reviewRow.retry) !== Boolean(args.retry) ||
+        reviewRow.reviewVersion !== pin.version ||
+        (series && series.revision !== review?.seriesRevision)
       )
-      .first();
-
-    const ineligibleReason = providerSubmissionIneligibilityReason({
-      routable: Boolean(channel?.routable),
-      approvalState: intent.approvalState,
-      scheduledDate: intent.scheduledDate,
-      contentFingerprint: intent.contentFingerprint,
-      currentFingerprint: contentFingerprint(post.title, post.content, post.linkedinFirstComment),
-    });
-
-    if (ineligibleReason) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: ineligibleReason,
-      };
-    }
-
-    const articleReason=await companionSubmissionHold(ctx,post);
-    if(articleReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:articleReason};
-    const destinationReason=await destinationSubmissionHold(ctx,post);
-    if(destinationReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:destinationReason};
-    const reviewedDestination=(await readDestination(ctx,post.userId,post.brandId))!.destination!;
-
-    const previousAttempts = await ctx.db
-      .query("v2PublishAttempts")
-      .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
-      .collect();
-    const latestAttempt = [...previousAttempts].sort((a, b) => b.createdAt - a.createdAt)[0];
-    const baseIdempotencyKey = `${intent._id}:${intent.contentFingerprint}`;
-    const existingAttempt = await ctx.db
-      .query("v2PublishAttempts")
-      .withIndex("by_idempotency_key", (q) => q.eq("idempotencyKey", baseIdempotencyKey))
-      .first();
-
-    if (existingAttempt && existingAttempt.status === "pending") {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: "Duplicate submission prevented.",
-      };
-    }
-
-    if (existingAttempt) {
-      const retryable =
-        args.retry &&
-        latestAttempt?.status === "retryable-failure";
-      if (!retryable) {
         return {
           eligible: false as const,
           brandId: post.brandId,
           intentId: intent._id,
-          reason: args.retry
-            ? "Previous attempt is not retryable."
-            : "Duplicate submission prevented.",
+          reason: "Queue review changed or expired; prepare a new review.",
         };
-      }
+      const reservationReason = await reviewReservationsHold(
+        ctx,
+        review,
+        allocation.capacity,
+      );
+      if (reservationReason)
+        return {
+          eligible: false as const,
+          brandId: post.brandId,
+          intentId: intent._id,
+          reason: reservationReason,
+        };
     }
-    if (args.retry && !existingAttempt) {
-      return {
-        eligible: false as const,
-        brandId: post.brandId,
-        intentId: intent._id,
-        reason: "No previous attempt exists to retry.",
-      };
-    }
-
-    const idempotencyKey = args.retry
-      ? `${baseIdempotencyKey}:retry:${previousAttempts.length}`
-      : baseIdempotencyKey;
-
     // Serialize concurrent claims by patching the intent document.
     if (
       intent.activeBufferClaimKey &&
@@ -2206,7 +2201,10 @@ export const claimBufferSubmission = internalMutation({
       brandId: post.brandId,
       channelId: post.channelId,
       title: post.title,
-      content: assembleLinkedInSubmissionContent(post.content, post.platformSettings),
+      content: assembleLinkedInSubmissionContent(
+        post.content,
+        post.platformSettings,
+      ),
       firstComment: post.linkedinFirstComment?.trim() || undefined,
       scheduledDate: intent.scheduledDate,
       scheduledTime: intent.scheduledTime,
@@ -2232,6 +2230,23 @@ export const claimBufferSubmission = internalMutation({
       updatedAt: now,
     });
 
+    const claimId = await allocateDispatch(
+      ctx,
+      post,
+      intent._id,
+      attemptId,
+      pin,
+      allocation.capacity,
+    );
+    if (reviewRow) {
+      await ctx.db.patch(claimId, { reviewRowId: reviewRow._id });
+      await ctx.db.patch(reviewRow._id, {
+        status: "executing",
+        attemptId,
+        updatedAt: now,
+      });
+    }
+
     return {
       eligible: true as const,
       brandId: post.brandId,
@@ -2243,7 +2258,7 @@ export const claimBufferSubmission = internalMutation({
       submission: {
         ...submissionSnapshot,
         idempotencyKey,
-        expectedDestination:reviewedDestination,
+        expectedDestination: reviewedDestination,
       },
     };
   },
@@ -2292,28 +2307,168 @@ export const recordBufferSubmitResult = internalMutation({
     const intent = await ctx.db.get(args.intentId);
     if (!intent) throw new Error("Publishing intent not found");
 
-    const attempt=await ctx.db.get(args.attemptId);
-    if(!attempt || attempt.postId!==post._id || attempt.intentId!==intent._id || attempt.idempotencyKey!==args.idempotencyKey)throw new Error("Submission receipt identity mismatch");
-    if(attempt.status!=="pending")return {recorded:true as const,attemptId:attempt._id,submitted:attempt.status==="success",stale:false};
+    const attempt = await ctx.db.get(args.attemptId);
+    if (
+      !attempt ||
+      attempt.postId !== post._id ||
+      attempt.intentId !== intent._id ||
+      attempt.idempotencyKey !== args.idempotencyKey
+    )
+      throw new Error("Submission receipt identity mismatch");
+    if (attempt.status !== "pending")
+      return {
+        recorded: true as const,
+        attemptId: attempt._id,
+        submitted: attempt.status === "success",
+        stale: false,
+      };
     const now = Date.now();
-    if(args.ok&&args.providerPostId)await consumeReservation(ctx,post._id,args.providerPostId,post.destinationReview?.identity);
-    if(args.sanitizedResponse?.firstCommentUnsupported===true){const destination=await readDestination(ctx,post.userId,post.brandId);if(destination?.destination && attempt.submissionSnapshot.firstComment)await ctx.db.patch(destination._id,{destination:{...destination.destination,firstComment:{value:"unsupported",source:"provider-observation",checkedAt:now,evidence:"Definitive Buffer response rejected first-comment entitlement for this account."}}});}
+    if (
+      args.brandId !== post.brandId ||
+      intent.postId !== post._id ||
+      intent.userId !== args.userId
+    )
+      throw new Error("Receipt ownership or brand mismatch");
+    for (const key of [
+      "postId",
+      "brandId",
+      "channelId",
+      "title",
+      "content",
+      "firstComment",
+      "scheduledDate",
+      "scheduledTime",
+      "timezone",
+    ] as const)
+      if (attempt.submissionSnapshot[key] !== args.submissionSnapshot[key])
+        throw new Error(
+          "Submission snapshot does not match the immutable claim",
+        );
+    const originalAllocation = await ctx.db
+      .query("queueDispatchClaims")
+      .withIndex("by_attempt", (q) => q.eq("attemptId", attempt._id))
+      .first();
+    const currentCapacity = (await dispatchCapacity(ctx, post)).capacity;
+    const currentRelease = await releasePin(ctx, post, currentCapacity);
+    const releaseStillValid =
+      !originalAllocation?.reviewVersion ||
+      currentRelease.version === originalAllocation.reviewVersion;
+    const allocation = await reconcileAllocation(
+      ctx,
+      args.attemptId,
+      args.ok && args.providerPostId
+        ? "confirmed"
+        : args.status === "ambiguous" ||
+            args.status === "pending" ||
+            args.providerPostId
+          ? "uncertain"
+          : "released",
+      args.providerPostId,
+    );
+    if (
+      args.sanitizedResponse?.capacityHold === true &&
+      allocation?.destination
+    ) {
+      const d = allocation.destination;
+      await ctx.db.insert("queueObservations", {
+        userId: post.userId,
+        brandId: post.brandId,
+        identity: allocation.identity,
+        checkedAt: now,
+        observation: {
+          identity: allocation.identity,
+          channelId: d.channelId,
+          organizationId: d.organizationId,
+          checkedAt: now,
+          complete: false,
+          providerPosts: [],
+          error:
+            "Buffer reported a full queue; refresh complete capacity evidence before a new review.",
+        },
+      });
+    }
+    if (args.ok && args.providerPostId)
+      await consumeReservation(
+        ctx,
+        post._id,
+        args.providerPostId,
+        allocation?.identity,
+      );
+    if (allocation?.reviewRowId)
+      await ctx.db.patch(allocation.reviewRowId, {
+        status:
+          args.ok &&
+          args.providerPostId &&
+          !args.providerPostId.startsWith("mock-") &&
+          ["queued", "publishing", "published"].includes(
+            args.providerStateStatus,
+          )
+            ? "queued"
+            : args.status === "ambiguous" || args.providerPostId
+              ? "needs-review"
+              : args.sanitizedResponse?.capacityHold ||
+                  args.sanitizedResponse?.phase === "preflight"
+                ? "held"
+                : "failed",
+        providerPostId: args.providerPostId,
+        deliveryStatus: args.providerStateStatus,
+        reason: args.reason,
+        updatedAt: now,
+      });
+    if (args.sanitizedResponse?.firstCommentUnsupported === true) {
+      const destination = await readDestination(ctx, post.userId, post.brandId);
+      if (destination?.destination && attempt.submissionSnapshot.firstComment)
+        await ctx.db.patch(destination._id, {
+          destination: {
+            ...destination.destination,
+            firstComment: {
+              value: "unsupported",
+              source: "provider-observation",
+              checkedAt: now,
+              evidence:
+                "Definitive Buffer response rejected first-comment entitlement for this account.",
+            },
+          },
+        });
+    }
     const intentStillValid =
+      releaseStillValid &&
+      post.approvalState === "approved" &&
+      postScheduleVersion(post) ===
+        postScheduleVersion(args.submissionSnapshot) &&
+      postScheduleVersion(intent) ===
+        postScheduleVersion(args.submissionSnapshot) &&
       intent.approvalState === "approved" &&
-      intent.contentFingerprint === contentFingerprint(post.title, post.content, post.linkedinFirstComment) &&
+      intent.contentFingerprint ===
+        contentFingerprint(
+          post.title,
+          post.content,
+          post.linkedinFirstComment,
+        ) &&
       assembleLinkedInSubmissionContent(post.content, post.platformSettings) ===
         args.submissionSnapshot.content &&
-      (post.linkedinFirstComment?.trim() || "") === (args.submissionSnapshot.firstComment ?? "");
+      (post.linkedinFirstComment?.trim() || "") ===
+        (args.submissionSnapshot.firstComment ?? "");
 
     const effectiveOk = args.ok && intentStillValid;
     const effectiveStatus = !intentStillValid
-      ? (args.ok ? "success" as const : args.status === "pending" ? "ambiguous" as const : args.status)
+      ? args.ok
+        ? ("success" as const)
+        : args.status === "pending"
+          ? ("ambiguous" as const)
+          : args.status
       : args.status === "pending"
         ? ("ambiguous" as const)
         : args.status;
     const effectiveProviderStatus = !intentStillValid
       ? ("needs-review" as const)
       : args.providerStateStatus;
+    if (!intentStillValid && allocation?.reviewRowId)
+      await ctx.db.patch(allocation.reviewRowId, {
+        status: "needs-review",
+        reason:
+          "Editorial version changed during submission; the known provider receipt is retained.",
+      });
     const staleReason =
       "Approval or content changed while Buffer submission was in flight; provider receipt retained and post held for review.";
 
@@ -2321,23 +2476,25 @@ export const recordBufferSubmitResult = internalMutation({
       ? staleReason
       : effectiveOk
         ? `Buffer submission recorded${args.providerPostId ? ` (${args.providerPostId})` : ""}.`
-        : args.reason ?? "Buffer submission failed.";
+        : (args.reason ?? "Buffer submission failed.");
 
     await ctx.db.patch(args.attemptId, {
       status: effectiveStatus,
-      providerPostId:args.providerPostId,observedDeliveryStatus:args.providerStateStatus,
+      providerPostId: args.providerPostId,
+      observedDeliveryStatus: args.providerStateStatus,
       sanitizedResponse: sanitizeProviderResponse(
         args.sanitizedResponse &&
           typeof args.sanitizedResponse === "object" &&
           !Array.isArray(args.sanitizedResponse)
           ? (args.sanitizedResponse as Record<string, unknown>)
-          : { providerId: "buffer" }
+          : { providerId: "buffer" },
       ),
       updatedAt: now,
     });
 
     await ctx.db.patch(args.intentId, {
-      activeBufferClaimKey: effectiveStatus==="ambiguous" ? args.idempotencyKey : undefined,
+      activeBufferClaimKey:
+        effectiveStatus === "ambiguous" ? args.idempotencyKey : undefined,
       updatedAt: now,
     });
 
@@ -2354,9 +2511,15 @@ export const recordBufferSubmitResult = internalMutation({
         providerPostId: args.providerPostId,
         lastAttemptId: args.attemptId,
         lastResponseSummary: summary,
-        lastCheckedAt:now, lastReceipt:sanitizeProviderResponse(args.sanitizedResponse),
-        dueAt: typeof args.sanitizedResponse?.dueAt === "string" ? args.sanitizedResponse.dueAt : undefined,
-        destination:(await readDestination(ctx,post.userId,post.brandId))?.destination,
+        lastCheckedAt: now,
+        lastReceipt: sanitizeProviderResponse(args.sanitizedResponse),
+        dueAt:
+          typeof args.sanitizedResponse?.dueAt === "string"
+            ? args.sanitizedResponse.dueAt
+            : undefined,
+        destination:
+          allocation?.destination ??
+          (await readDestination(ctx, post.userId, post.brandId))?.destination,
 
         updatedAt: now,
       };
@@ -2388,7 +2551,10 @@ export const recordBufferSubmitResult = internalMutation({
           ? "provider.buffer_submit_stale"
           : "provider.buffer_submit_failed",
       summary,
-      metadata: { attemptId: args.attemptId, providerPostId: args.providerPostId },
+      metadata: {
+        attemptId: args.attemptId,
+        providerPostId: args.providerPostId,
+      },
     });
 
     return {
@@ -2434,6 +2600,7 @@ export const recordBufferCancelResult = internalMutation({
 
     if(providerState?.providerPostId!==args.providerPostId)return {recorded:true as const,ok:false};
     const confirmed=args.ok && args.sanitizedResponse?.deletionConfirmed===true && args.providerPostId===providerState?.providerPostId;
+    if(confirmed && providerState?.lastAttemptId)await reconcileAllocation(ctx,providerState.lastAttemptId,"released",args.providerPostId);
     const summary=confirmed?provisionalSummary:"Cancellation lacks definitive matching proof; delivery remains unverified.";
     const nextStatus = providerState?.status==="cancelled" ? "cancelled" as const : providerState?.status==="removed" ? "removed" as const : confirmed ? ((providerState?.publishedAt || providerState?.status === "published") ? "removed" as const : "cancelled" as const) : (providerState?.status === "published" ? "published" as const : "cancel-requested" as const);
 
@@ -2557,5 +2724,147 @@ export const isCurrentBlogSync = internalQuery({
   handler: async (ctx, args) => {
     const post = await getOwnedPost(ctx, args.userId, args.postId);
     return post.blogSyncPending === args.syncKey;
+  },
+});
+
+/** Last server check after provider account discovery, immediately before createPost. */
+export const revalidateBufferClaim = internalMutation({
+  args: { attemptId: v.id("v2PublishAttempts"), userId: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    const attempt = await ctx.db.get(args.attemptId);
+    if (
+      !attempt ||
+      attempt.userId !== args.userId ||
+      attempt.status !== "pending"
+    )
+      return "Submission claim is no longer pending.";
+    const post = await ctx.db.get(attempt.postId);
+    if (!post || post.userId !== args.userId) return "Post access changed.";
+    const role = await requireBrandAccess(ctx, args.userId, post.brandId);
+    if (role.role === "viewer") return "Editor access was revoked.";
+    const intent = await latestIntent(ctx, post._id);
+    if (
+      !intent ||
+      intent._id !== attempt.intentId ||
+      post.approvalState !== "approved" ||
+      intent.approvalState !== "approved" ||
+      intent.contentFingerprint !==
+        contentFingerprint(post.title, post.content, post.linkedinFirstComment)
+    )
+      return "Editorial approval or intent changed after the claim.";
+    const channel = await ctx.db
+      .query("v2Channels")
+      .withIndex("by_brand_and_channel", (q) =>
+        q.eq("brandId", post.brandId).eq("channelId", post.channelId),
+      )
+      .first();
+    if (!channel?.routable) return "Destination routing changed.";
+    if (postScheduleVersion(post) !== postScheduleVersion(intent))
+      return "Post and intent schedule changed.";
+    const article = await companionSubmissionHold(ctx, post);
+    if (article) return article;
+    const destination = await destinationSubmissionHold(ctx, post);
+    if (destination) return destination;
+    const claim = await ctx.db
+      .query("queueDispatchClaims")
+      .withIndex("by_attempt", (q) => q.eq("attemptId", attempt._id))
+      .first();
+    if (!claim || claim.status !== "active")
+      return "Capacity claim requires reconciliation.";
+    const capacity = (await dispatchCapacity(ctx, post)).capacity;
+    if (capacity.projection.unknown) return capacity.projection.unknown;
+    const pin = await releasePin(ctx, post, capacity);
+    if (pin.version !== claim.reviewVersion)
+      return "Payload, schedule, destination, article evidence, reservation or capacity changed after the claim.";
+    if (claim.reviewRowId) {
+      const row = await ctx.db.get(claim.reviewRowId);
+      const review = row ? await ctx.db.get(row.reviewId) : null;
+      if (
+        !review ||
+        review.status !== "running" ||
+        Date.now() - review.createdAt > 300000
+      )
+        return "Queue review expired or stopped.";
+      const reservationReason = await reviewReservationsHold(
+        ctx,
+        review,
+        capacity,
+      );
+      if (reservationReason) return reservationReason;
+      if (review.seriesId) {
+        const series = await ctx.db.get(review.seriesId);
+        if (!series || series.revision !== review.seriesRevision)
+          return "Series membership changed.";
+      }
+    }
+    return null;
+  },
+});
+export const markDispatchUncertain = internalMutation({
+  args: {
+    attemptId: v.id("v2PublishAttempts"),
+    userId: v.string(),
+    providerPostId: v.optional(v.string()),
+    receipt: v.optional(v.any()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const attempt = await ctx.db.get(args.attemptId);
+    if (
+      !attempt ||
+      attempt.userId !== args.userId ||
+      attempt.status !== "pending"
+    )
+      return null;
+    await ctx.db.patch(attempt._id, {
+      status: "ambiguous",
+      providerPostId: args.providerPostId,
+      sanitizedResponse: sanitizeProviderResponse(
+        args.receipt ?? { outcome: "uncertain" },
+      ),
+      updatedAt: Date.now(),
+    });
+    const claim = await reconcileAllocation(
+      ctx,
+      attempt._id,
+      "uncertain",
+      args.providerPostId,
+    );
+    if (args.providerPostId) {
+      const state = await ctx.db
+        .query("v2ProviderStates")
+        .withIndex("by_intent", (q) => q.eq("intentId", attempt.intentId))
+        .first();
+      const patch = {
+        providerId: "buffer" as const,
+        status: "needs-review" as const,
+        providerPostId: args.providerPostId,
+        lastAttemptId: attempt._id,
+        simulated: false,
+        destination: claim?.destination,
+        lastReceipt: sanitizeProviderResponse(args.receipt ?? {}),
+        lastResponseSummary:
+          "Known accepted identifier retained after receipt persistence interruption; read status to reconcile.",
+        updatedAt: Date.now(),
+      };
+      if (state) await ctx.db.patch(state._id, patch);
+      else
+        await ctx.db.insert("v2ProviderStates", {
+          postId: attempt.postId,
+          intentId: attempt.intentId,
+          ...patch,
+          createdAt: Date.now(),
+        });
+    }
+    if (claim?.reviewRowId)
+      await ctx.db.patch(claim.reviewRowId, {
+        status: "needs-review",
+        providerPostId: args.providerPostId,
+        reason:
+          "Provider result could not be durably reconciled; inspect this attempt before any new review.",
+        updatedAt: Date.now(),
+      });
+    return null;
   },
 });

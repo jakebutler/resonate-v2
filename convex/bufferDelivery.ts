@@ -1,3 +1,4 @@
+import {reconcileAllocation} from "./queueDispatch";
 import { linkedInPayload } from "../lib/socialPayload";
 import {v} from "convex/values";
 import {internalMutation,internalQuery,type MutationCtx,query} from "./_generated/server";
@@ -15,6 +16,12 @@ export async function applyRefresh(ctx:MutationCtx,args:{providerStateId:Id<"v2P
  const publishedUrl=typeof receipt.publishedUrl==="string"&&/^https:\/\/(www\.)?linkedin\.com\//.test(receipt.publishedUrl)?receipt.publishedUrl:undefined;
  await ctx.db.patch(state._id,{status:args.providerStateStatus,lastCheckedAt:checkedAt,providerUpdatedAt:updated&&Number.isFinite(updated)?updated:state.providerUpdatedAt,dueAt:typeof receipt.dueAt==="string"?receipt.dueAt:state.dueAt,publishedAt:typeof receipt.publishedAt==="string"?receipt.publishedAt:state.publishedAt,publishedUrl:publishedUrl??state.publishedUrl,lastReceipt:receipt,lastReadError:undefined,lastResponseSummary:args.reason??`Verified Buffer ${args.providerStateStatus}`,updatedAt:Date.now()});
  const attempt=state.lastAttemptId?await ctx.db.get(state.lastAttemptId):null;
+ if(attempt && ["queued","publishing","published","cancelled","removed","failed"].includes(args.providerStateStatus)){
+  const terminal=["published","cancelled","removed","failed"].includes(args.providerStateStatus);
+  const claim=await reconcileAllocation(ctx,attempt._id,terminal?"released":"confirmed",state.providerPostId);
+  if(["pending","ambiguous"].includes(attempt.status)){await ctx.db.patch(attempt._id,{status:args.providerStateStatus==="failed"?"permanent-failure":"success",providerPostId:state.providerPostId,observedDeliveryStatus:args.providerStateStatus,updatedAt:Date.now()});const intent=await ctx.db.get(attempt.intentId);if(intent?.activeBufferClaimKey===attempt.idempotencyKey)await ctx.db.patch(intent._id,{activeBufferClaimKey:undefined});}
+  if(claim?.reviewRowId)await ctx.db.patch(claim.reviewRowId,{status:["queued","publishing","published"].includes(args.providerStateStatus)?"queued":"held",providerPostId:state.providerPostId,deliveryStatus:args.providerStateStatus,reason:terminal?`Verified ${args.providerStateStatus}; no replay of this accepted post.`:undefined,updatedAt:Date.now()});
+ }
  const currentVersionMatches=!attempt || attempt.submissionSnapshot.title===post.title&&attempt.submissionSnapshot.content===linkedInPayload(post.content,post.platformSettings)&&(attempt.submissionSnapshot.firstComment??"")===(post.linkedinFirstComment?.trim()??"");
  const status=!currentVersionMatches?"needs-review":args.providerStateStatus==="not-submitted"?post.status:args.providerStateStatus==="cancel-intent-recorded"?"needs-review":args.providerStateStatus;
  await ctx.db.patch(post._id,{status,updatedAt:Date.now()});await audit(ctx,{userId:post.userId,brandId:post.brandId,postId:post._id,action:"provider.status_refresh",summary:`Verified Buffer ${args.providerStateStatus}; editorial approval retained.`,metadata:{receipt,checkedAt,attemptId:state.lastAttemptId}});return {updated:true};

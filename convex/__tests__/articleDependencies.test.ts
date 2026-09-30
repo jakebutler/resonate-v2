@@ -1,3 +1,4 @@
+import {seedCapacity} from "../../test-support/queueCapacityFixture";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { convexTest } from "convex-test";
 import schema from "../schema";
@@ -77,6 +78,7 @@ async function fixture() {
     brandId: "corvo",
     destination,
   });
+  await seedCapacity(t,"editor","corvo",destination);
   return { t, user, articleId, postId, artifact, destination };
 }
 async function resolve(f: Awaited<ReturnType<typeof fixture>>) {

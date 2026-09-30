@@ -1,4 +1,5 @@
 "use client";
+import {deliverySummary} from "@/lib/deliverySummary";
 import {ArticleDependencyPanel} from "./ArticleDependencyPanel";
 import { BufferDestinationPanel } from "./BufferDestinationPanel";
 import { DeliveryReceiptPanel } from "./DeliveryReceiptPanel";
@@ -78,9 +79,11 @@ type PersistedCalendarItem = {
     heroImageUrl?: string;
     heroImageStorageId?: Id<"_storage">;
     preparedHero?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["preparedHero"];
+    blogArtifact?: import("@/convex/_generated/dataModel").Doc<"v2Posts">["blogArtifact"];
     blogPrNumber?: number;
     blogPrStatus?: "open" | "merged" | "closed" | "draft";
   };
+  articlePublication?: import("@/convex/_generated/dataModel").Doc<"articlePublications">|null;
   intent?: {
     _id?: Id<"v2PublishingIntents">;
     scheduledDate?: string;
@@ -514,18 +517,7 @@ export function PersistedPublishingPanel({
         }),
     [visibleDateKeys, visibleItems]
   );
-  const providerSummary = useMemo(() => {
-    const submitted=visibleItems.filter(item=>item.providerState?.status==="submitted").length;
-    const queued=visibleItems.filter(item=>["queued","publishing"].includes(item.providerState?.status??"")).length;
-    const published=visibleItems.filter(item=>item.providerState?.status==="published").length;
-    const needsReview = visibleItems.filter(
-      (item) => item.providerState?.status === "needs-review"
-    ).length;
-    const notSubmitted = visibleItems.filter(
-      (item) => item.providerState?.status === "not-submitted"
-    ).length;
-    return { submitted, queued, published, needsReview, notSubmitted };
-  }, [visibleItems]);
+  const providerSummary = useMemo(() => deliverySummary(visibleItems), [visibleItems]);
   const autoSelectedPostId = useMemo(() => {
     if (!initialPostId || loading) return null;
     return visibleItems.find((item) => item.post._id === initialPostId)?.post._id ?? null;
@@ -1017,7 +1009,7 @@ export function PersistedPublishingPanel({
         <MainCard className={selectedItem ? "order-2 min-w-0 lg:order-1" : undefined}>
             <div className="grid gap-3 border-b border-black/10 p-4 sm:grid-cols-3">
               <Metric label="Not submitted" value={providerSummary.notSubmitted} />
-              <Metric label="Queued / publishing" value={providerSummary.queued} /><Metric label="Published" value={providerSummary.published} /><Metric label="Legacy unverified" value={providerSummary.submitted} />
+              <Metric label="Queued / publishing" value={providerSummary.queued} /><Metric label="Published" value={providerSummary.published} /><Metric label="Legacy unverified" value={providerSummary.submitted} /><Metric label="Simulated" value={providerSummary.simulated} />
               <Metric label="Needs review" value={providerSummary.needsReview} />
             </div>
 
