@@ -613,17 +613,20 @@ export async function createBlogPostPR(params: BlogPublicationParams): Promise<{
     if (remote.encoding !== "base64" || !remote.content || !Buffer.from(remote.content.replace(/\s/g, ""), "base64").equals(file.bytes)) throw new Error("Remote artifact differs; Needs Review. No overwrite performed.");
     existing++;
   }
+  let verifiedHead = head;
   if (existing === 0 && head === defaultRef.object.sha) {
-    await commitGithubFiles({branchName, expectedHead: head, message: `feat: add article and reviewed hero`, files});
+    verifiedHead = await commitGithubFiles({branchName, expectedHead: head, message: `feat: add article and reviewed hero`, files});
   } else if (existing !== files.length) throw new Error("Incomplete or unrelated export branch; Needs Review");
   else {
     const diff = await read(`/compare/${encodeURIComponent(defaultRef.object.sha)}...${encodeURIComponent(head)}`);
     const expected = new Set(files.map(f => f.path));
-    if (!["ahead", "diverged"].includes(diff.status) || !Number.isSafeInteger(diff.ahead_by) || diff.ahead_by < 1 || !Number.isSafeInteger(diff.total_commits) || diff.total_commits < 1 || diff.total_commits > 250 || !Array.isArray(diff.files) || diff.files.length !== files.length || diff.files.some((f: {filename: string; status: string}) => !expected.has(f.filename) || !["added", "modified"].includes(f.status)))
+    if (!["ahead", "diverged"].includes(diff.status) || !Number.isSafeInteger(diff.ahead_by) || diff.ahead_by < 1 || !Number.isSafeInteger(diff.total_commits) || diff.total_commits < 1 || diff.total_commits > 250 || !Array.isArray(diff.files) || diff.files.length !== files.length || new Set(diff.files.map((file: {filename: string}) => file.filename)).size !== expected.size || diff.files.some((f: {filename: string; status: string}) => !expected.has(f.filename) || !["added", "modified"].includes(f.status)))
       throw new Error("Incomplete or unrelated export branch diff; Needs Review");
   }
   const existingPrs = await read(`/pulls?state=all&head=${encodeURIComponent(`${REPO_OWNER}:${branchName}`)}&base=${encodeURIComponent(defaultBranch)}`);
   if (!Array.isArray(existingPrs) || existingPrs.length > 1 || existingPrs.some(pr => pr.state !== "open")) throw new Error("Export PR history requires review");
+  const currentRef = await read(`/git/ref/heads/${encodeURIComponent(branchName)}`);
+  if (currentRef.object?.sha !== verifiedHead) throw new Error("Export branch changed after verification; Needs Review");
   let pr = existingPrs[0];
   if (!pr) {
     const res = await fetch(`${base}/pulls`, {method: "POST", headers, body: JSON.stringify({
@@ -641,6 +644,7 @@ export async function createBlogPostPR(params: BlogPublicationParams): Promise<{
     pr = await res.json();
   }
   if (!pr.html_url || !pr.number) throw new Error("Incomplete GitHub PR receipt; Needs Review");
+  if (pr.head?.sha !== verifiedHead || pr.head?.ref !== branchName || pr.head?.repo?.full_name !== `${REPO_OWNER}/${REPO_NAME}` || pr.base?.repo?.full_name !== `${REPO_OWNER}/${REPO_NAME}`) throw new Error("Export PR identity changed after verification; Needs Review");
   return {prUrl: pr.html_url, branchName, sanitizedResponse: {
     repo: `${REPO_OWNER}/${REPO_NAME}`, prUrl: pr.html_url, branchName, number: pr.number, state: pr.state,
     scheduleTrigger, scheduledDate: date, scheduledTime, timezone,

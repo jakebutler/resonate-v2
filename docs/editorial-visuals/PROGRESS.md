@@ -1,3 +1,9 @@
+## Integrated review repair — September 30, 15:30 PDT
+
+The independent backend/text-pixel review approved exact `3e69417` with 391 passing tests, one existing skip, both production typechecks and all 581 frozen file hashes verified. The separate export/UI/reader review requested two fail-closed replay repairs: distinct complete compare filenames and a current branch/PR head bound to the verified artifact. Public regression tests reproduced both failures; the repaired helper now rejects them without an additional remote write. The publication-route test double also invokes main’s before-write callback and resets per-test mutation state. Ninety-four affected tests, configured typecheck and scoped lint pass. Fresh independent repair review and exact-candidate hosted CI are required.
+
+The `3e69417` CI result is a failure: two publication-route callback test-double failures, now repaired; lint, typecheck and E2E passed. No predecessor CI/review is approval of this repair. Provider spend/reservations remain zero under the separate $5 caps; restricted key confirmation, real functional generation/edit qualification and release ordering remain pending. No real article publication, merge or production deployment has occurred.
+
 ## Approved-image reflection and current reader rehearsal — 2026-09-30
 
 - V07 now carries exact approved final WebP pixels with the full ordered lineage; optional vision bounds and separate `OPENAI_TEXT_API_KEY` are required before text/vision dispatch. 106 focused offline tests, both production typechecks and scoped lint passed. Independent integrated review remains pending; no live text route or separately billed text experiment is authorized.

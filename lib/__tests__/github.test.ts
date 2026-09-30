@@ -223,34 +223,40 @@ describe("patchFrontmatterSchedule", () => {
 import sharp from "sharp";
 import { createHash } from "node:crypto";
 
-function githubFixture(options: {fail?: string; ambiguous?: string; wrongHead?: boolean; advancedMain?: boolean; rename?: boolean} = {}) {
+function githubFixture(options: {fail?: string; ambiguous?: string; wrongHead?: boolean; advancedMain?: boolean; rename?: boolean; duplicateCompare?: boolean; raceAfterCompare?: boolean} = {}) {
   const files = new Map<string, string>();
   const blobs = new Map<string, string>();
   let tree: {path: string; sha: string}[] = [];
-  let head = "base"; let branch = false; let prCreated = false;
+  let head = "base"; let branch = false; let prCreated = false; let branchRef = "";
   let sequence = 0;
   const calls: {path: string; method: string; body: unknown}[] = [];
   let failed = false;
   const mock = vi.fn(async (input: unknown, init?: RequestInit) => {
     const url = new URL(String(input)); const path = url.pathname.replace("/repos/test-owner/test-repo", "");
     const method = init?.method ?? "GET";
-    const body = init?.body ? JSON.parse(init.body as string) as {content: string; tree: {path:string;sha:string}[]} : undefined;
+    const body = init?.body ? JSON.parse(init.body as string) as {ref?: string; content: string; tree: {path:string;sha:string}[]} : undefined;
     calls.push({path, method, body});
     const response = (value: unknown, status=200) => new Response(JSON.stringify(value), {status});
     if (options.fail === path && !failed) { failed = true; return response({}, 503); }
     if (!path) return response({default_branch:"main"});
     if (path === "/git/ref/heads/main") return response({object:{sha:options.advancedMain && prCreated ? "new-base" : "base"}});
     if (path.startsWith("/git/ref/heads/")) return branch ? response({object:{sha: options.wrongHead ? "manual" : head}}) : response({},404);
-    if (path === "/git/refs") {branch = true; return response({});}
+    if (path === "/git/refs") {branch = true; branchRef = body!.ref!.replace(/^refs\/heads\//, ""); return response({});}
     if (path.startsWith("/contents/")) return files.has(path.slice(10)) ? response({sha:"blob-sha", encoding:"base64", content:files.get(path.slice(10))}) : response({},404);
-    if (path.startsWith("/compare/")) return response({status:options.advancedMain && prCreated ? "diverged" : "ahead",ahead_by:1,merge_base_commit:{sha:"base"},total_commits:1,files:[...files.keys()].map(filename=>({filename,status:options.rename && prCreated ? "renamed" : "added",...(options.rename ? {previous_filename:"unrelated.txt"} : {})}))});
+    if (path.startsWith("/compare/")) {
+      const changed = [...files.keys()].map(filename=>({filename,status:options.rename && prCreated ? "renamed" : "added",...(options.rename ? {previous_filename:"unrelated.txt"} : {})}));
+      if (options.duplicateCompare && prCreated) changed[changed.length - 1] = changed[0];
+      const result = {status:options.advancedMain && prCreated ? "diverged" : "ahead",ahead_by:1,merge_base_commit:{sha:"base"},total_commits:1,files:changed};
+      if (options.raceAfterCompare && prCreated) { head = "changed-with-unrelated-commit"; files.set("unrelated.txt", "dW5yZWxhdGVk"); }
+      return response(result);
+    }
     if (path.startsWith("/git/commits/") && method === "GET") return response({tree:{sha:"base-tree"}});
     if (path === "/git/blobs") {const sha = `blob-${++sequence}`; blobs.set(sha,body!.content); return response({sha});}
     if (path === "/git/trees") {tree=body!.tree;return response({sha:"tree"});}
     if (path === "/git/commits") return response({sha:"commit"});
     if (path.startsWith("/git/refs/heads/")) {head="commit";for (const f of tree) files.set(f.path,blobs.get(f.sha)!); if (options.ambiguous === "ref" && !failed) {failed=true;throw new Error("timeout");} return response({});}
-    if (path === "/pulls" && method === "GET") return response(prCreated ? [{html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open"}] : []);
-    if (path === "/pulls" && method === "POST") {prCreated=true; if(options.ambiguous === "pr" && !failed){failed=true;throw new Error("timeout");}return response({html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open"});}
+    if (path === "/pulls" && method === "GET") return response(prCreated ? [{html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open",head:{sha:head,ref:branchRef,repo:{full_name:"test-owner/test-repo"}},base:{ref:"main",repo:{full_name:"test-owner/test-repo"}}}] : []);
+    if (path === "/pulls" && method === "POST") {prCreated=true; if(options.ambiguous === "pr" && !failed){failed=true;throw new Error("timeout");}return response({html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open",head:{sha:head,ref:branchRef,repo:{full_name:"test-owner/test-repo"}},base:{ref:"main",repo:{full_name:"test-owner/test-repo"}}});}
     throw new Error(`Unexpected mock request: ${method} ${path}`);
   });
   vi.stubGlobal("fetch",mock);
@@ -304,6 +310,13 @@ describe("complete atomic blog exports", () => {
     const writes=fixture.calls.filter(c=>c.method!=="GET").length;
     expect((await createBlogPostPR(input)).prUrl).toBe(result.prUrl);
     expect(fixture.calls.filter(c=>c.method!=="GET")).toHaveLength(writes);
+  });
+  it.each(["duplicateCompare", "raceAfterCompare"] as const)("withholds recovered export on %s without additional writes", async option => {
+    const fixture = githubFixture({ [option]: true }); const input = await exportInput();
+    await createBlogPostPR(input);
+    const writes = fixture.calls.filter(call => call.method !== "GET").length;
+    await expect(createBlogPostPR(input)).rejects.toThrow(/Needs Review/);
+    expect(fixture.calls.filter(call => call.method !== "GET")).toHaveLength(writes);
   });
   it.each(["/git/blobs","/git/trees","/git/commits","/git/refs/heads/resonate%2Fblog-post-2026-10-07-prepared-article-PLACEHOLDER","/pulls"])("recovers a definitive failure at %s without partial PRs", async failure => {
     const input=await exportInput(); const fixture=githubFixture({fail:failure.replace("PLACEHOLDER",createHash("sha256").update(input.exportIdentity).digest("hex").slice(0,12))});
