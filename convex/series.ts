@@ -51,7 +51,7 @@ export const get = query({args:{seriesId:v.id("postSeries")},returns:v.any(),han
 export const entries = query({args:{seriesId:v.id("postSeries"),paginationOpts:paginationOptsValidator},returns:v.any(),handler:async(ctx,args)=>{
   const userId=await requireUserId(ctx);const series=await ownedSeries(ctx,userId,args.seriesId);
   const result=await ctx.db.query("seriesEntries").withIndex("by_series_and_sequence",q=>q.eq("seriesId",args.seriesId)).paginate({...args.paginationOpts,numItems:Math.min(args.paginationOpts.numItems,50)});
-  const page=[];for(const entry of result.page){const posts=[];for(const id of [entry.articlePostId,...entry.companionPostIds]){const post=await seriesPost(ctx,userId,series.brandId,id);const state=await ctx.db.query("v2ProviderStates").withIndex("by_post",q=>q.eq("postId",id)).order("desc").first();posts.push({post,providerState:state});}page.push({...entry,posts});}
+  const page=[];for(const entry of result.page){const posts=[];for(const id of [entry.articlePostId,...entry.companionPostIds]){const post=await seriesPost(ctx,userId,series.brandId,id);const state=await ctx.db.query("v2ProviderStates").withIndex("by_post",q=>q.eq("postId",id)).order("desc").first();const articlePublication=post.channelId === "corvo-blog" ? await ctx.db.query("articlePublications").withIndex("by_post_and_time",q=>q.eq("postId",id)).order("desc").first() : null;posts.push({post,providerState:state,articlePublication});}page.push({...entry,posts});}
   return {...result,page};
 }});
 export const picker = query({args:{seriesId:v.id("postSeries"),paginationOpts:paginationOptsValidator},returns:v.any(),handler:async(ctx,args)=>{

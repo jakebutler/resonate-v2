@@ -1,3 +1,4 @@
+import {companionSubmissionHold} from "./articleDependencies";
 import {consumeReservation} from "./queuePlanning";
 import { linkedInPayload } from "../lib/socialPayload";
 import { destinationSubmissionHold, readDestination } from "./bufferDestinations";
@@ -1756,11 +1757,7 @@ export const recordBlogPrStatus = mutation({
     if (args.prNumber !== undefined) {
       patch.blogPrNumber = args.prNumber;
     }
-    if (args.prStatus === "merged") {
-      patch.status = "published";
-    } else if (args.prStatus === "closed") {
-      patch.status = "unavailable";
-    }
+    // Legacy display-only PR receipt. Merge cannot verify Production or availability.
 
     await ctx.db.patch(args.postId, patch);
     return { updated: true, prStatus: args.prStatus };
@@ -1884,6 +1881,8 @@ export const getBufferSubmissionContext = internalQuery({
       };
     }
 
+    const articleReason=await companionSubmissionHold(ctx,post);
+    if(articleReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:articleReason};
     const destinationReason=await destinationSubmissionHold(ctx,post);
     if(destinationReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:destinationReason};
     const reviewedDestination=(await readDestination(ctx,post.userId,post.brandId))!.destination!;
@@ -2126,6 +2125,8 @@ export const claimBufferSubmission = internalMutation({
       };
     }
 
+    const articleReason=await companionSubmissionHold(ctx,post);
+    if(articleReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:articleReason};
     const destinationReason=await destinationSubmissionHold(ctx,post);
     if(destinationReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:destinationReason};
     const reviewedDestination=(await readDestination(ctx,post.userId,post.brandId))!.destination!;

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 04:18:24 PDT
+Last updated: 09/30/2026 05:09:50 PDT
 
 ## State
 
@@ -16,31 +16,43 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 70c5bbb feat(queue): add verified capacity planning and local reservations
+- 3f26cdb feat(series): import reviewed prepared packages with durable recovery
 
 ## Recent Commits
 
+- 3f26cdb feat(series): import reviewed prepared packages with durable recovery
 - 70c5bbb feat(queue): add verified capacity planning and local reservations
 - 520bc47 Review Buffer destinations and reconcile delivery receipts fairly
 - 454a5a7 Adopt existing posts into durable publication series
 - bbe7d67 Complete approved blog exports with prepared heroes and bound artifacts
-- b8b6e44 Merge pull request #96 from jakebutler/codex/linkedin-first-comment
 
 ## Local Working Tree
 
-- A  components/PreparedPackageImport.tsx
+- A  components/ArticleDependencyPanel.tsx
+- M  components/PersistedPublishingPanel.tsx
 - M  components/SeriesWorkspace.tsx
-- A  convex/__tests__/preparedImports.test.ts
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex/__tests__/articleDependencies.test.ts
+- M  convex/__tests__/publishing.test.ts
+- M  convex/__tests__/queuePlanning.test.ts
 - M  convex/_generated/api.d.ts
-- A  convex/preparedImportActions.ts
-- A  convex/preparedImports.ts
+- A  convex/articleDependencies.ts
+- A  convex/articlePublication.ts
+- A  convex/articleValidators.ts
+- M  convex/bufferDestinations.ts
 - M  convex/publishing.ts
+- M  convex/queuePlanning.ts
 - M  convex/schema.ts
+- M  convex/series.ts
 - M  docs/epic-97-progress.md
-- A  docs/examples/prepared-series-v1.json
-- A  docs/prepared-series-packages.md
-- A  e2e/prepared-import.spec.ts
-- A  lib/preparedPackage.ts
+- A  e2e/article-dependencies.spec.ts
+- A  lib/__tests__/articlePublication.test.ts
+- A  lib/articleAvailability.ts
+- A  lib/articleContracts.ts
+- A  lib/articlePublication.ts
+- M  lib/socialPayload.ts
+- M  package-lock.json
+- M  package.json
 
 ## Next Agent Pickup
 
@@ -49,4 +61,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- codex/epic-97-prepared-import
+- codex/epic-97-article-dependencies

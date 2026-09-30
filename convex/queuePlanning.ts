@@ -1,3 +1,4 @@
+import {companionSubmissionHold} from "./articleDependencies";
 import { v } from "convex/values";
 import {
   query,
@@ -443,6 +444,7 @@ export async function buildQueuePlan(
         reason = "Invalid date, IANA timezone or DST local time.";
       }
     }
+    reason ??= await companionSubmissionHold(ctx,post);
     reason ??= destinationHold(
       capacity.destination,
       Boolean(post.linkedinFirstComment?.trim()),

@@ -14,6 +14,9 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as __tests___helpers_mockMutationCtx from "../__tests__/helpers/mockMutationCtx.js";
+import type * as articleDependencies from "../articleDependencies.js";
+import type * as articlePublication from "../articlePublication.js";
+import type * as articleValidators from "../articleValidators.js";
 import type * as backfill from "../backfill.js";
 import type * as blogHero from "../blogHero.js";
 import type * as blogValidators from "../blogValidators.js";
@@ -57,6 +60,9 @@ import type * as workflow from "../workflow.js";
  */
 declare const fullApi: ApiFromModules<{
   "__tests__/helpers/mockMutationCtx": typeof __tests___helpers_mockMutationCtx;
+  articleDependencies: typeof articleDependencies;
+  articlePublication: typeof articlePublication;
+  articleValidators: typeof articleValidators;
   backfill: typeof backfill;
   blogHero: typeof blogHero;
   blogValidators: typeof blogValidators;

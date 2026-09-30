@@ -4506,3 +4506,69 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/epic-97-prepared-import
+
+## 09/30/2026 05:09:50 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	components/ArticleDependencyPanel.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/SeriesWorkspace.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- A	convex/__tests__/articleDependencies.test.ts
+- M	convex/__tests__/publishing.test.ts
+- M	convex/__tests__/queuePlanning.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/articleDependencies.ts
+- A	convex/articlePublication.ts
+- A	convex/articleValidators.ts
+- M	convex/bufferDestinations.ts
+- M	convex/publishing.ts
+- M	convex/queuePlanning.ts
+- M	convex/schema.ts
+- M	convex/series.ts
+- M	docs/epic-97-progress.md
+- A	e2e/article-dependencies.spec.ts
+- A	lib/__tests__/articlePublication.test.ts
+- A	lib/articleAvailability.ts
+- A	lib/articleContracts.ts
+- A	lib/articlePublication.ts
+- M	lib/socialPayload.ts
+- M	package-lock.json
+- M	package.json
+
+### Working Tree Snapshot
+
+- A  components/ArticleDependencyPanel.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/SeriesWorkspace.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex/__tests__/articleDependencies.test.ts
+- M  convex/__tests__/publishing.test.ts
+- M  convex/__tests__/queuePlanning.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/articleDependencies.ts
+- A  convex/articlePublication.ts
+- A  convex/articleValidators.ts
+- M  convex/bufferDestinations.ts
+- M  convex/publishing.ts
+- M  convex/queuePlanning.ts
+- M  convex/schema.ts
+- M  convex/series.ts
+- M  docs/epic-97-progress.md
+- A  e2e/article-dependencies.spec.ts
+- A  lib/__tests__/articlePublication.test.ts
+- A  lib/articleAvailability.ts
+- A  lib/articleContracts.ts
+- A  lib/articlePublication.ts
+- M  lib/socialPayload.ts
+- M  package-lock.json
+- M  package.json
+
+### Branch
+
+- codex/epic-97-article-dependencies

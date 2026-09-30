@@ -4,6 +4,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { PersistedPublishingPanel } from "@/components/PersistedPublishingPanel";
 
 vi.mock("@/components/BufferDestinationPanel",()=>({BufferDestinationPanel:()=>null}));
+vi.mock("@/components/ArticleDependencyPanel",()=>({ArticleDependencyPanel:()=>null}));
 vi.mock("@/components/DeliveryReceiptPanel",()=>({DeliveryReceiptPanel:()=>null}));
 vi.mock("convex/react", () => ({
   useAction: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock("@/components/SocialConnectionsPanel", () => ({
 
 vi.mock("@/convex/_generated/api", () => ({
   api: {
+    articlePublication:{refresh:"articlePublication:refresh"},
     series: {list:"series:list"},
     publishing: {
       listBrands: "publishing:listBrands",
@@ -88,6 +90,7 @@ const recordGithubPrMock = vi.fn().mockResolvedValue({
   attemptId: "attempt_pr_1",
 });
 const updateBlogMetadataMock = vi.fn().mockResolvedValue({ updated: true });
+const checkArticlePublicationMock=vi.fn().mockResolvedValue({recorded:true,reason:"Production deployment is pending."});
 const recordBlogPrStatusMock = vi.fn().mockResolvedValue({
   updated: true,
   prStatus: "open",
@@ -290,6 +293,7 @@ describe("PersistedPublishingPanel", () => {
     });
     vi.mocked(useAction).mockImplementation((reference) => {
       switch (reference) {
+        case "articlePublication:refresh":return checkArticlePublicationMock;
         case "blogHero:prepare":
           return vi.fn().mockResolvedValue(null);
         case "bufferLive:submit":
@@ -799,7 +803,7 @@ describe("PersistedPublishingPanel", () => {
     });
   }, 15000);
 
-  it("checks blog PR status and records it in Convex", async () => {
+  it("checks server-owned article publication evidence without trusting a client merge receipt", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -829,24 +833,8 @@ describe("PersistedPublishingPanel", () => {
       })
     );
 
-    await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        "/api/blog-pr-status",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/53",
-          }),
-        })
-      )
-    );
-    await waitFor(() =>
-      expect(recordBlogPrStatusMock).toHaveBeenCalledWith({
-        postId: "post_5",
-        prStatus: "merged",
-        prNumber: 53,
-      })
-    );
+    await waitFor(()=>expect(checkArticlePublicationMock).toHaveBeenCalledWith({postId:"post_5"}));
+    expect(recordBlogPrStatusMock).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled();
   });
 
   it("saves content edits through the single composer and clears approval", async () => {

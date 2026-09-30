@@ -3,6 +3,11 @@ import { convexTest } from "convex-test";
 import schema from "../schema";
 import { api, internal } from "../_generated/api";
 import { destinationIdentity } from "../../lib/bufferContracts";
+import { blogEditorialFingerprint } from "../../lib/blogContract";
+import {
+  companionReviewVersion,
+  articleArtifactVersion,
+} from "../../lib/articleContracts";
 import { socialReleaseVersion } from "../../lib/socialPayload";
 const modules = import.meta.glob("../**/*.ts");
 async function fixture() {
@@ -138,7 +143,56 @@ describe("durable queue planning", () => {
   });
   it("consumes only a confirmed reservation outcome without counting the provider item twice", async () => {
     const { t, user, posts, identity } = await fixture();
-    const post = (await t.run((ctx) => ctx.db.get(posts[0].postId)))!;
+    const original = (await t.run((ctx) => ctx.db.get(posts[0].postId)))!;
+    const articleId = (await t.run((ctx) =>
+      ctx.db.query("seriesEntries").first(),
+    ))!.articlePostId;
+    await t.run(async (ctx) => {
+      await ctx.db.patch(articleId, {
+        blogArtifact: {
+          repository: "fixture/site",
+          prNumber: 7,
+          branchName: "fixture",
+          mdxPath: "content/blog/2030-10-07-fixture.mdx",
+          canonicalUrl: "https://corvolabs.com/blog/2030-10-07-fixture",
+        },
+      });
+      const article = (await ctx.db.get(articleId))!;
+      await ctx.db.insert("articlePublications", {
+        userId: "editor",
+        postId: articleId,
+        key: "fixture",
+        evidence: {
+          checkedAt: Date.now(),
+          editorialVersion: blogEditorialFingerprint(article),
+          artifactVersion: articleArtifactVersion(article.blogArtifact),
+          prState: "merged",
+          mergeSha: "fixture-merge",
+          deploymentSha: "fixture-merge",
+          deploymentState: "success",
+          deploymentContainsArticle: true,
+          articleBlobSha: "fixture-blob",
+          availability: "verified",
+        },
+      });
+    });
+    await user.mutation(api.articleDependencies.link, {
+      postId: original._id,
+      articlePostId: articleId,
+      placement: "body",
+      expectedVersion: companionReviewVersion(original),
+    });
+    const reviewed = (await t.run((ctx) => ctx.db.get(original._id)))!;
+    await user.mutation(api.articleDependencies.applyLink, {
+      postId: original._id,
+      expectedVersion: companionReviewVersion(reviewed),
+      canonicalUrl: "https://corvolabs.com/blog/2030-10-07-fixture",
+    });
+    await user.mutation(api.publishing.setApproval, {
+      postId: original._id,
+      approvalState: "approved",
+    });
+    const post = (await t.run((ctx) => ctx.db.get(original._id)))!;
     await user.mutation(api.bufferDestinations.pin, {
       postId: post._id,
       identity,

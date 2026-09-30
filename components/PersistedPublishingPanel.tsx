@@ -1,4 +1,5 @@
 "use client";
+import {ArticleDependencyPanel} from "./ArticleDependencyPanel";
 import { BufferDestinationPanel } from "./BufferDestinationPanel";
 import { DeliveryReceiptPanel } from "./DeliveryReceiptPanel";
 import { BlogExportPreview } from "./BlogExportPreview";
@@ -452,7 +453,7 @@ export function PersistedPublishingPanel({
   const cancelBufferLive = useAction(api.bufferLive.cancelOrUnpublish);
   const recordGithubPr = useMutation(api.publishing.recordGithubPr);
   const updateBlogMetadata = useMutation(api.publishing.updateBlogMetadata);
-  const recordBlogPrStatus = useMutation(api.publishing.recordBlogPrStatus);
+  const checkArticlePublication = useAction(api.articlePublication.refresh);
   const deletePost = useMutation(api.publishing.deletePost);
   const bufferLiveGateResolved = bufferLiveGate !== undefined;
   const bufferLiveEnabled = bufferLiveGate?.enabled === true;
@@ -943,24 +944,8 @@ export function PersistedPublishingPanel({
       return;
     }
 
-    setMessage("Checking pull request status...");
-    const response = await fetch("/api/blog-pr-status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prUrl }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setMessage(data.error || "PR status check failed.");
-      return;
-    }
-
-    await recordBlogPrStatus({
-      postId: item.post._id,
-      prStatus: data.prStatus,
-      prNumber: data.prNumber ?? undefined,
-    });
-    setMessage(`PR status updated: ${prStatusLabel(data.prStatus)}.`);
+    setMessage("Checking PR, exact Production deployment and canonical article...");
+    try{const result=await checkArticlePublication({postId:item.post._id});setMessage(result.reason??"Article publication evidence checked.");}catch{setMessage("Article publication check failed; companion delivery remains held.");}
   }
 
   function moveCalendar(direction: -1 | 1) {
@@ -1818,6 +1803,7 @@ function PublishingDetailDrawer(props: {
               </div>
             )}
 
+            {(isLinkedIn||post.channelId==="corvo-blog")&&<ArticleDependencyPanel postId={post._id}/>}
             {isLinkedIn && <><BufferDestinationPanel brandId={post.brandId} post={post}/><DeliveryReceiptPanel postId={post._id}/></>}
             <PersistedPostComposer
               embedded
@@ -2156,6 +2142,21 @@ function PersistedPostComposer(props: {
   const [timezone, setTimezone] = useState(
     intent?.timezone ?? post.timezone ?? "America/Los_Angeles"
   );
+
+  // Server-side link/fallback edits update an untouched composer field. Preserve
+  // local typing when it already differs from the last saved value.
+  const previousSaved = useRef({title:post.title, content:post.content, comment:post.linkedinFirstComment ?? "", date:normalizeScheduledDate(intent?.scheduledDate ?? post.scheduledDate) ?? "", time:intent?.scheduledTime ?? post.scheduledTime ?? "", timezone:intent?.timezone ?? post.timezone ?? "America/Los_Angeles"});
+  useEffect(() => {
+    const old=previousSaved.current;
+    const next={title:post.title, content:post.content, comment:post.linkedinFirstComment ?? "", date:normalizeScheduledDate(intent?.scheduledDate ?? post.scheduledDate) ?? "", time:intent?.scheduledTime ?? post.scheduledTime ?? "", timezone:intent?.timezone ?? post.timezone ?? "America/Los_Angeles"};
+    setTitle(current=>current===old.title?next.title:current);
+    setContent(current=>current===old.content?next.content:current);
+    setLinkedinFirstComment(current=>current===old.comment?next.comment:current);
+    setScheduledDate(current=>current===old.date?next.date:current);
+    setScheduledTime(current=>current===old.time?next.time:current);
+    setTimezone(current=>current===old.timezone?next.timezone:current);
+    previousSaved.current=next;
+  },[post.title,post.content,post.linkedinFirstComment,post.scheduledDate,post.scheduledTime,post.timezone,intent?.scheduledDate,intent?.scheduledTime,intent?.timezone]);
 
   const contentChanged =
     title.trim() !== post.title ||

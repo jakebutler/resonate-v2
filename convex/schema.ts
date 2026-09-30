@@ -1,3 +1,4 @@
+import {companionLinkValidator,publicationEvidenceValidator} from "./articleValidators";
 import {queueObservationValidator} from "./queueValidators";
 import { destinationValidator, deliveryStatusValidator } from "./bufferValidators";
 import { preparedHeroValidator } from "./blogValidators";
@@ -174,6 +175,7 @@ const ideaFlavor = v.union(
 );
 
 export default defineSchema({
+  articlePublications:defineTable({userId:v.string(),postId:v.id("v2Posts"),key:v.string(),evidence:publicationEvidenceValidator}).index("by_post_and_time",["postId","evidence.checkedAt"]).index("by_post_and_key",["postId","key"]),
   preparedImportPackages:defineTable({userId:v.string(),brandId:v2BrandId,packageKey:v.string(),title:v.string(),seriesId:v.optional(v.id("postSeries")),reviewBytes:v.optional(v.number()),createdAt:v.number()}).index("by_user_and_key",["userId","packageKey"]),
   preparedImportReviews:defineTable({userId:v.string(),brandId:v2BrandId,packageId:v.id("preparedImportPackages"),packageKey:v.string(),entryKey:v.string(),sourceHash:v.string(),items:v.any(),hero:v.any(),heroSourceHash:v.string(),attachedHeroStorageId:v.optional(v.id("_storage")),actions:v.array(v.string()),reason:v.optional(v.string()),checkedAt:v.number()}).index("by_user_entry_hash",["userId","packageKey","entryKey","sourceHash"]).index("by_user_package",["userId","packageKey"]),
   preparedImportAssets:defineTable({userId:v.string(),sourceHash:v.string(),preparedHash:v.string(),status:v.union(v.literal("pending"),v.literal("ready")),sourceStorageId:v.optional(v.id("_storage")),storageId:v.optional(v.id("_storage")),createdAt:v.number()}).index("by_user_source",["userId","sourceHash","preparedHash"]),
@@ -230,6 +232,7 @@ export default defineSchema({
     title: v.string(),
     content: v.string(),
     linkedinFirstComment: v.optional(v.string()),
+    companionLink:v.optional(companionLinkValidator),
     destinationReview:v.optional(v.object({identity:v.string(),fingerprint:v.string(),schedule:v.string(),checkedAt:v.number(),actor:v.string()})),
     status: v2PostStatus,
     approvalState: v2ApprovalState,
