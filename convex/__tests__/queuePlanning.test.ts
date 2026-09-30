@@ -288,3 +288,51 @@ describe("durable queue planning", () => {
     ).toBe("2000-01-01");
   });
 });
+
+it("rejects mismatched observation channel or organization even with a matching identity", async () => {
+  const f = await fixture();
+  for (const mismatch of [{ channelId: "other" }, { organizationId: "other" }])
+    await expect(
+      f.t.mutation(internal.queuePlanning.record, {
+        userId: "editor",
+        brandId: "corvo",
+        observation: {
+          identity: f.identity,
+          channelId: "page",
+          organizationId: "org",
+          checkedAt: Date.now(),
+          complete: true,
+          organizationLimit: 100,
+          providerPosts: [],
+          ...mismatch,
+        },
+      }),
+    ).rejects.toThrow(/Destination/);
+});
+it("preserves consumed reservation receipts when release is requested", async () => {
+  const f = await fixture();
+  const id = f.reservations[0];
+  await f.t.run((ctx) =>
+    ctx.db.patch(id, { status: "consumed", providerPostId: "receipt" }),
+  );
+  const before = await f.t.run((ctx) => ctx.db.get(id));
+  await expect(
+    f.user.mutation(api.queuePlanning.release, { reservationId: id }),
+  ).rejects.toThrow(/consumed/);
+  expect(await f.t.run((ctx) => ctx.db.get(id))).toEqual(before);
+});
+it("preserves destination capability facts after a transient failed refresh and holds dispatch", async () => {
+  const f = await fixture();
+  await f.t.mutation(internal.bufferDestinations.record, {
+    userId: "editor",
+    brandId: "corvo",
+    error: "Transient fixture error",
+  });
+  const row = await f.user.query(api.bufferDestinations.get, {
+    brandId: "corvo",
+  });
+  expect(row.destination).toEqual(f.destination);
+  expect(row.error).toContain("Transient");
+  const plan = await f.user.query(api.queuePlanning.plan, { brandId: "corvo" });
+  expect(plan.projection.unknown).toMatch(/refresh|failed/i);
+});

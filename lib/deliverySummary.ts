@@ -1,5 +1,6 @@
 import {
   articleArtifactVersion,
+  publicationEvidenceHold,
   type ArticlePublicationEvidence,
 } from "./articleContracts";
 import {
@@ -9,13 +10,9 @@ import {
 export function verifiedArticleReceipt(
   post: BlogEditorialPost & { blogArtifact?: unknown },
   evidence?: ArticlePublicationEvidence | null,
+  now = Date.now(),
 ) {
-  return (
-    evidence?.availability === "verified" &&
-    evidence.deploymentContainsArticle === true &&
-    evidence.editorialVersion === blogEditorialFingerprint(post) &&
-    evidence.artifactVersion === articleArtifactVersion(post.blogArtifact)
-  );
+  return !publicationEvidenceHold(evidence, blogEditorialFingerprint(post), articleArtifactVersion(post.blogArtifact), now);
 }
 export function deliverySummary(
   items: {
@@ -27,6 +24,7 @@ export function deliverySummary(
       providerPostId?: string;
     } | null;
   }[],
+  now = Date.now(),
 ) {
   const result = {
     submitted: 0,
@@ -44,7 +42,7 @@ export function deliverySummary(
     }
     if (item.post.channelId === "corvo-blog") {
       if (
-        verifiedArticleReceipt(item.post, item.articlePublication?.evidence)
+        verifiedArticleReceipt(item.post, item.articlePublication?.evidence, now)
       ) {
         result.published++;
         continue;

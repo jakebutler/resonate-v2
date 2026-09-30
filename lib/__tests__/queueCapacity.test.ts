@@ -248,3 +248,8 @@ describe("exact calendar schedules", () => {
     expect(() => scheduleToUtcIso(value)).toThrow(),
   );
 });
+
+it('does not count a reservation again when its confirmed claim appears in provider observations',()=>{
+ const result=capacityProjection(observation([{id:'receipt',channelId:'page',status:'scheduled'}]),10,[reservation('launch')],[{postId:'launch',providerPostId:'receipt',status:'confirmed',channelId:'page',organizationId:'org'}]);
+ expect(result).toMatchObject({channelUsed:1,channelClaims:0,channelReserved:0,availableForBacklog:9});
+});

@@ -28,8 +28,8 @@ export async function queueCapacity(
   userId: string,
   brandId: Doc<"v2Posts">["brandId"],
 ) {
-  const destination = (await readDestination(ctx, userId, brandId))
-    ?.destination;
+  const destinationRecord = await readDestination(ctx, userId, brandId);
+  const destination = destinationRecord?.destination;
   if (!destination)
     return {
       projection: capacityProjection(null, undefined, [], []),
@@ -73,7 +73,7 @@ export async function queueCapacity(
       .take(201);
     if (attempts.length > 200) legacyComplete = false;
     for (const attempt of attempts) {
-      if (claims.some((c) => c.attemptId === attempt._id) || attempt.providerPostId?.startsWith("mock-")) continue;
+      if (claims.some((c) => c.attemptId === attempt._id)) continue;
       const attributed = await ctx.db.query("queueDispatchClaims")
         .withIndex("by_attempt", (q) => q.eq("attemptId", attempt._id)).first();
       if (attributed && attributed.organizationId !== destination.organizationId) continue;
@@ -124,7 +124,7 @@ export async function queueCapacity(
     reservations,
     [...claims, ...legacy],
   );
-  const hold = destinationHold(destination, false);
+  const hold = destinationRecord?.error ? "Destination refresh failed; refresh Connections." : destinationHold(destination, false);
   if (hold) {
     projection.unknown = hold;
     projection.availableForBacklog = null;
@@ -182,7 +182,7 @@ export const record = internalMutation({
     await requireBrandAccess(ctx, args.userId, args.brandId);
     const d = (await readDestination(ctx, args.userId, args.brandId))
       ?.destination;
-    if (!d || destinationIdentity(d) !== args.observation.identity)
+    if (!d || destinationIdentity(d) !== args.observation.identity || d.channelId !== args.observation.channelId || d.organizationId !== args.observation.organizationId)
       throw new Error("Destination changed during capacity refresh.");
     if (args.observation.providerPosts.length > 1000)
       throw new Error("Queue observation exceeds bounded storage.");
@@ -347,6 +347,8 @@ export const release = mutation({
     const row = await ctx.db.get(args.reservationId);
     if (!row || row.userId !== userId) throw new Error("Reservation not found");
     await ownedSeries(ctx, userId, row.seriesId, true);
+    if (row.status === "consumed") throw new Error("A consumed reservation is a retained provider receipt and cannot be released.");
+    if (row.status === "released") return null;
     await ctx.db.patch(row._id, {
       status: "released",
       actor: userId,

@@ -1179,3 +1179,10 @@ describe("PersistedPublishingPanel", () => {
   });
 
 });
+
+it('derives calendar brand filters from the selected owned non-Corvo series',()=>{
+ const original=vi.mocked(useQuery).getMockImplementation()!;
+ vi.mocked(useQuery).mockImplementation((reference,args)=>reference==='series:list'?[{_id:'series-lower-db',brandId:'lower-db',title:'Lower DB series'}]:original(reference,args));
+ render(<PersistedPublishingPanel initialSeriesId='series-lower-db'/>);
+ expect(vi.mocked(useQuery).mock.calls.some(([reference,args])=>reference==='publishing:listCalendarItems'&&JSON.stringify(args).includes('"brandIds":["lower-db"]')&&JSON.stringify(args).includes('series-lower-db'))).toBe(true);
+});

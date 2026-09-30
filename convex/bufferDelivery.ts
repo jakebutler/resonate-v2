@@ -16,19 +16,24 @@ export async function applyRefresh(ctx:MutationCtx,args:{providerStateId:Id<"v2P
  const publishedUrl=typeof receipt.publishedUrl==="string"&&/^https:\/\/(www\.)?linkedin\.com\//.test(receipt.publishedUrl)?receipt.publishedUrl:undefined;
  await ctx.db.patch(state._id,{status:args.providerStateStatus,lastCheckedAt:checkedAt,providerUpdatedAt:updated&&Number.isFinite(updated)?updated:state.providerUpdatedAt,dueAt:typeof receipt.dueAt==="string"?receipt.dueAt:state.dueAt,publishedAt:typeof receipt.publishedAt==="string"?receipt.publishedAt:state.publishedAt,publishedUrl:publishedUrl??state.publishedUrl,lastReceipt:receipt,lastReadError:undefined,lastResponseSummary:args.reason??`Verified Buffer ${args.providerStateStatus}`,updatedAt:Date.now()});
  const attempt=state.lastAttemptId?await ctx.db.get(state.lastAttemptId):null;
+ const currentVersionMatches=!attempt || attempt.submissionSnapshot.title===post.title&&attempt.submissionSnapshot.content===linkedInPayload(post.content,post.platformSettings)&&(attempt.submissionSnapshot.firstComment??"")===(post.linkedinFirstComment?.trim()??"");
  if(attempt && ["queued","publishing","published","cancelled","removed","failed"].includes(args.providerStateStatus)){
   const terminal=["published","cancelled","removed","failed"].includes(args.providerStateStatus);
   const claim=await reconcileAllocation(ctx,attempt._id,terminal?"released":"confirmed",state.providerPostId);
   if(["pending","ambiguous"].includes(attempt.status)){await ctx.db.patch(attempt._id,{status:args.providerStateStatus==="failed"?"permanent-failure":"success",providerPostId:state.providerPostId,observedDeliveryStatus:args.providerStateStatus,updatedAt:Date.now()});const intent=await ctx.db.get(attempt.intentId);if(intent?.activeBufferClaimKey===attempt.idempotencyKey)await ctx.db.patch(intent._id,{activeBufferClaimKey:undefined});}
-  if(claim?.reviewRowId)await ctx.db.patch(claim.reviewRowId,{status:["queued","publishing","published"].includes(args.providerStateStatus)?"queued":"held",providerPostId:state.providerPostId,deliveryStatus:args.providerStateStatus,reason:terminal?`Verified ${args.providerStateStatus}; no replay of this accepted post.`:undefined,updatedAt:Date.now()});
+  if(claim?.reviewRowId){
+   const row=await ctx.db.get(claim.reviewRowId);
+   const retainHold=!currentVersionMatches || row?.status==="needs-review";
+   await ctx.db.patch(claim.reviewRowId,{status:retainHold?"needs-review":["queued","publishing","published"].includes(args.providerStateStatus)?"queued":"held",providerPostId:state.providerPostId,deliveryStatus:args.providerStateStatus,reason:retainHold?row?.reason??"Saved editorial version differs from the accepted receipt; review required.":terminal?`Verified ${args.providerStateStatus}; no replay of this accepted post.`:undefined,updatedAt:Date.now()});
+  }
  }
- const currentVersionMatches=!attempt || attempt.submissionSnapshot.title===post.title&&attempt.submissionSnapshot.content===linkedInPayload(post.content,post.platformSettings)&&(attempt.submissionSnapshot.firstComment??"")===(post.linkedinFirstComment?.trim()??"");
+
  const status=!currentVersionMatches?"needs-review":args.providerStateStatus==="not-submitted"?post.status:args.providerStateStatus==="cancel-intent-recorded"?"needs-review":args.providerStateStatus;
  await ctx.db.patch(post._id,{status,updatedAt:Date.now()});await audit(ctx,{userId:post.userId,brandId:post.brandId,postId:post._id,action:"provider.status_refresh",summary:`Verified Buffer ${args.providerStateStatus}; editorial approval retained.`,metadata:{receipt,checkedAt,attemptId:state.lastAttemptId}});return {updated:true};
 }
 export const oldestActive=internalQuery({args:{limit:v.number()},returns:v.any(),handler:async(ctx,args)=>{
  const limit=Math.min(50,Math.max(1,args.limit));const rows=[];
- for(const status of ACTIVE_BUFFER_STATES){const page=await ctx.db.query("v2ProviderStates").withIndex("by_status_and_last_checked",q=>q.eq("status",status)).take(limit);rows.push(...page.filter(s=>s.providerId==="buffer"&&s.simulated!==true&&s.providerPostId&&!s.providerPostId.startsWith("mock-")));}
+ for(const status of ACTIVE_BUFFER_STATES){const page=await ctx.db.query("v2ProviderStates").withIndex("by_provider_status_and_last_checked",q=>q.eq("providerId","buffer").eq("status",status)).take(limit);rows.push(...page.filter(s=>s.providerId==="buffer"&&s.simulated!==true&&s.providerPostId&&!s.providerPostId.startsWith("mock-")));}
  return rows.sort((a,b)=>(a.lastCheckedAt??0)-(b.lastCheckedAt??0)||a._creationTime-b._creationTime).slice(0,limit);
 }});
 export const control=internalQuery({args:{},returns:v.any(),handler:async(ctx)=>ctx.db.query("bufferPollControl").withIndex("by_key",q=>q.eq("key","buffer")).first()});
@@ -46,6 +51,8 @@ export const reconcileLegacyCancellation=internalMutation({args:{providerStateId
  const state=await ctx.db.get(args.providerStateId);if(!state||state.status!=="cancel-intent-recorded"||state.providerId!=="buffer"||state.simulated===true)return false;const post=await ctx.db.get(state.postId);if(!post)return false;
  const events=await ctx.db.query("v2AuditEvents").withIndex("by_post",q=>q.eq("postId",post._id)).order("desc").take(50);
  const proof=events.find(e=>["provider.buffer_cancel","provider.buffer_unpublish"].includes(e.action)&&e.metadata?.providerPostId===state.providerPostId&&e.metadata?.sanitizedResponse?.providerId==="buffer");const next=proof?(proof.action==="provider.buffer_unpublish"?"removed":"cancelled"):"needs-review";
- await ctx.db.patch(state._id,{status:next,lastCheckedAt:Date.now(),lastResponseSummary:proof?"Confirmed from the recorded Buffer deletion receipt.":"Legacy cancel intent lacks a definitive matching deletion receipt; review required."});await ctx.db.patch(post._id,{status:next});await audit(ctx,{userId:post.userId,brandId:post.brandId,postId:post._id,action:"provider.legacy_cancel_reconciled",summary:proof?"Reconciled recorded deletion proof; no provider write.":"No deletion proof; cancellation remains unverified.",metadata:{evidenceEventId:proof?._id}});return Boolean(proof);
+ await ctx.db.patch(state._id,{status:next,lastCheckedAt:Date.now(),lastResponseSummary:proof?"Confirmed from the recorded Buffer deletion receipt.":"Legacy cancel intent lacks a definitive matching deletion receipt; review required."});await ctx.db.patch(post._id,{status:next});
+ if(proof && state.lastAttemptId){const attempt=await ctx.db.get(state.lastAttemptId);if(attempt?.postId===post._id){const claim=await reconcileAllocation(ctx,attempt._id,"released",state.providerPostId);if(claim?.reviewRowId)await ctx.db.patch(claim.reviewRowId,{status:"held",providerPostId:state.providerPostId,deliveryStatus:next,reason:`Verified ${next}; no replay of this accepted post.`,updatedAt:Date.now()});}}
+ await audit(ctx,{userId:post.userId,brandId:post.brandId,postId:post._id,action:"provider.legacy_cancel_reconciled",summary:proof?"Reconciled recorded deletion proof; no provider write.":"No deletion proof; cancellation remains unverified.",metadata:{evidenceEventId:proof?._id}});return Boolean(proof);
 }});
 export const recordBackoff=internalMutation({args:{backoffUntil:v.number()},returns:v.null(),handler:async(ctx,args)=>{const row=await ctx.db.query("bufferPollControl").withIndex("by_key",q=>q.eq("key","buffer")).first();if(row)await ctx.db.patch(row._id,{backoffUntil:Math.max(row.backoffUntil??0,args.backoffUntil)});else await ctx.db.insert("bufferPollControl",{key:"buffer",backoffUntil:args.backoffUntil});return null;}});

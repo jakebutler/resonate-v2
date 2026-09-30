@@ -12,7 +12,7 @@ export async function priorBufferAttempts(
   return {
     rows: rows.filter(
       (r) =>
-        r.providerId === "buffer" && !r.providerPostId?.startsWith("mock-"),
+        r.providerId === "buffer",
     ),
     overflow: rows.length > 100,
   };

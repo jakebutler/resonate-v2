@@ -139,7 +139,7 @@ export function publicationEvidenceHold(
 }
 
 export function hasCanonicalLink(text: string, url: string) {
-  return (text.match(/https:\/\/[^\s<>()"']+/g) ?? []).some(
+  return (text.match(/(?<![\p{L}\p{N}_:/.-])https:\/\/[^\s<>()"']+/gu) ?? []).some(
     (token) => token.replace(/[.,;!?]+$/, "") === url,
   );
 }
@@ -157,4 +157,8 @@ export function articleArtifactVersion(artifact: unknown) {
     return value;
   }
   return JSON.stringify(canonical(artifact ?? null));
+}
+
+export function articlePublicationSourceVersion(post: {prUrl?: string; branchName?: string; blogArtifact?: unknown}) {
+  return JSON.stringify([post.prUrl ?? null, post.branchName ?? null, articleArtifactVersion(post.blogArtifact)]);
 }

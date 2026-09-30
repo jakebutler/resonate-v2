@@ -65,6 +65,7 @@ function githubFixture(
         },
         base: { repo: { full_name: artifact.repository } },
       };
+    else if (url.includes("/files?")) data = [{filename:artifact.mdxPath,status:"added"}];
     else if (url.includes("/deployments?"))
       data = [
         {
@@ -330,4 +331,34 @@ describe("exact link and review contracts", () => {
       ),
     ).toMatch(/unverified/);
   });
+});
+
+it("rejects a supplied artifact that is absent from the bound PR changed files", async () => {
+  const { fetch } = githubFixture();
+  const base = fetch.getMockImplementation()!;
+  fetch.mockImplementation(async (url: string) =>
+    url.includes("/files?") ? new Response("[]") : base(url),
+  );
+  const available = vi.fn();
+  const result = await readArticlePublication(input, available);
+  expect(result.evidence.reason).toMatch(/changed files|bound PR/i);
+  expect(available).not.toHaveBeenCalled();
+});
+it("treats a Markdown hard break as a rendered word boundary", () =>
+  expect(expectedArticleText("First line  \nSecond line")).toBe(
+    "First line Second line",
+  ));
+it("rejects canonical URLs glued to preceding non-boundary text", () => {
+  expect(
+    hasCanonicalLink(
+      "xhttps://corvolabs.com/blog/fixture",
+      "https://corvolabs.com/blog/fixture",
+    ),
+  ).toBe(false);
+  expect(
+    hasCanonicalLink(
+      "[Read](https://corvolabs.com/blog/fixture).",
+      "https://corvolabs.com/blog/fixture",
+    ),
+  ).toBe(true);
 });

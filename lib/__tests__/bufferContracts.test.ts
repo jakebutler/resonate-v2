@@ -15,3 +15,8 @@ describe("Buffer destination and request contracts",()=>{
  it.each([["scheduled","queued"],["sending","publishing"],["sent","published"],["error","failed"],["needs_approval","needs-review"],["draft","provider-draft"],["new-state","needs-review"]])("normalizes %s to %s",(provider,status)=>expect(mapBufferPostStatus(provider)).toBe(status));
  it("honors all rate windows and Retry-After without retrying",()=>{const budget={remaining:20,backoffUntil:undefined as number|undefined};observeBufferRateLimit(new Response("{}",{status:429,headers:{RateLimit:'"15min"; r=8; t=20, "1day"; r=0; t=86400',"Retry-After":"86400"}}),budget,now);expect(budget.remaining).toBe(0);expect(budget.backoffUntil).toBe(now+86400000);});
 });
+
+it('backs off into the future on a 429 whose exhausted rate window resets at zero',()=>{
+ const budget={remaining:3,backoffUntil:undefined as number|undefined};observeBufferRateLimit(new Response('{}',{status:429,headers:{RateLimit:'"15min"; r=0; t=0','Retry-After':'0'}}),budget,now);
+ expect(budget.remaining).toBe(0);expect(budget.backoffUntil).toBeGreaterThan(now);
+});

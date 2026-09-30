@@ -11,6 +11,7 @@ type Detail = {
   article: Doc<"v2Posts"> | null;
   receipt: Doc<"articlePublications"> | null;
   hold: string | null;
+  scheduleHold?: string | null;
   proposal: { content: string; linkedinFirstComment?: string } | null;
   version: string;
 };
@@ -110,7 +111,7 @@ export function ArticleDependencyPanel({ postId }: { postId: Id<"v2Posts"> }) {
               }
             >
               <option value="body">Body</option>
-              <option value="first-comment">First comment</option>
+              {post.channelId === "linkedin" && <option value="first-comment">First comment</option>}
             </select>
           </label>
           <button
@@ -250,8 +251,9 @@ export function ArticleDependencyPanel({ postId }: { postId: Id<"v2Posts"> }) {
             </p>
           )}
           {offsetError && <p>{offsetError}</p>}
+          {detail.scheduleHold && <p role="status">Provider schedule is locked: {detail.scheduleHold}</p>}
           <button
-            disabled={busy || !offsetPreview}
+            disabled={busy || !offsetPreview || Boolean(detail.scheduleHold)}
             onClick={() =>
               void run(() =>
                 reschedule({

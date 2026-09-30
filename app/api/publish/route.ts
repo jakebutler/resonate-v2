@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
     const hero = await client.action(api.blogHero.getApprovedBytes, {postId: post._id});
     const schedule = JSON.stringify([post.scheduledDate, post.scheduledTime, post.timezone]);
     const key = createHash("sha256").update(`${post._id}:${post.contentFingerprint}:${schedule}`).digest("hex");
-    await client.mutation(api.publishing.claimBlogExport, {postId: post._id, fingerprint: post.contentFingerprint, schedule, key});
     const result = await createBlogPostPR({
+      beforeRemoteWrite: async () => { await client.mutation(api.publishing.claimBlogExport, {postId: post._id, fingerprint: post.contentFingerprint, schedule, key}); },
       preparedHero: {bytes: Buffer.from(hero.base64, "base64"), sha256: hero.sha256},
       exportIdentity: String(post._id),
       title: post.title, content: post.content,

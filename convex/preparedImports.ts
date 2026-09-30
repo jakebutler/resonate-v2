@@ -58,6 +58,7 @@ export async function assessEntry(
   items: ResolvedPreparedItem[],
 ) {
   await authorized(ctx, userId, manifest.brandId);
+  if (manifest.brandId !== "corvo") throw new Error("brandId: prepared blog packages require the Corvo brand with its enabled blog channel.");
   const pkg = await ctx.db
     .query("preparedImportPackages")
     .withIndex("by_user_and_key", (q) =>

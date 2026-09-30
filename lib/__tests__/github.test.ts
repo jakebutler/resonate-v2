@@ -243,6 +243,7 @@ function githubFixture(options: {fail?: string; ambiguous?: string; wrongHead?: 
     if (path.startsWith("/git/ref/heads/")) return branch ? response({object:{sha: options.wrongHead ? "manual" : head}}) : response({},404);
     if (path === "/git/refs") {branch = true; return response({});}
     if (path.startsWith("/contents/")) return files.has(path.slice(10)) ? response({sha:"blob-sha", encoding:"base64", content:files.get(path.slice(10))}) : response({},404);
+    if (path.startsWith("/compare/")) return response({status:"ahead",merge_base_commit:{sha:"base"},total_commits:1,files:[...files.keys()].map(filename=>({filename,status:"added"}))});
     if (path.startsWith("/git/commits/") && method === "GET") return response({tree:{sha:"base-tree"}});
     if (path === "/git/blobs") {const sha = `blob-${++sequence}`; blobs.set(sha,body!.content); return response({sha});}
     if (path === "/git/trees") {tree=body!.tree;return response({sha:"tree"});}
@@ -337,4 +338,34 @@ describe("bound schedule synchronization", () => {
   it("rejects wrong repositories without reading or writing", async () => {
     const {fixture}=setup();expect(await updatePrFrontmatter({...params,artifact:{...artifact,repository:"other/repo"}})).toEqual({ok:false,reason:"identity-mismatch"});expect(fixture.mock).not.toHaveBeenCalled();
   });
+});
+
+it("validates copy and hero bytes before claiming the export", async () => {
+  const fixture = githubFixture();
+  const input = await exportInput();
+  const beforeRemoteWrite = vi.fn();
+  await expect(
+    createBlogPostPR({
+      ...input,
+      content: "# Invalid body heading",
+      beforeRemoteWrite,
+    }),
+  ).rejects.toThrow();
+  expect(beforeRemoteWrite).not.toHaveBeenCalled();
+  expect(fixture.mock).not.toHaveBeenCalled();
+  await createBlogPostPR({ ...input, beforeRemoteWrite });
+  expect(beforeRemoteWrite).toHaveBeenCalledOnce();
+});
+
+it("rejects unrelated changes on a recovered export branch even when both artifacts match", async () => {
+  const fixture = githubFixture();
+  const input = await exportInput();
+  await createBlogPostPR(input);
+  fixture.files.set(
+    "unrelated.txt",
+    Buffer.from("Unreviewed change").toString("base64"),
+  );
+  const before = fixture.calls.filter((c) => c.method !== "GET").length;
+  await expect(createBlogPostPR(input)).rejects.toThrow(/unrelated.*diff/);
+  expect(fixture.calls.filter((c) => c.method !== "GET")).toHaveLength(before);
 });

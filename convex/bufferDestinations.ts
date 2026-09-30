@@ -10,7 +10,7 @@ export const releaseVersion=socialReleaseVersion;
 export const scheduleVersion=postScheduleVersion;
 export async function readDestination(ctx:QueryCtx|MutationCtx,userId:string,brandId:Doc<"v2Posts">["brandId"]){return await ctx.db.query("bufferDestinations").withIndex("by_user_and_brand",q=>q.eq("userId",userId).eq("brandId",brandId)).first();}
 export async function destinationSubmissionHold(ctx:QueryCtx|MutationCtx,post:Doc<"v2Posts">){
- const row=await readDestination(ctx,post.userId,post.brandId);const d=row?.destination;const hold=destinationHold(d,Boolean(post.linkedinFirstComment?.trim()));if(hold)return hold;
+ const row=await readDestination(ctx,post.userId,post.brandId);if(row?.error)return "Destination refresh failed; refresh Connections before dispatch.";const d=row?.destination;const hold=destinationHold(d,Boolean(post.linkedinFirstComment?.trim()));if(hold)return hold;
  if(!post.destinationReview||post.destinationReview.identity!==destinationIdentity(d!)||post.destinationReview.fingerprint!==releaseVersion(post)||post.destinationReview.schedule!==scheduleVersion(post))return "Review the current destination, final payload and schedule before queueing.";
  return null;
 }
@@ -19,7 +19,7 @@ export const authorized=internalQuery({args:{brandId:brandIdValidator,userId:v.s
 export const record=internalMutation({args:{brandId:brandIdValidator,userId:v.string(),destination:v.optional(destinationValidator),error:v.optional(v.string())},returns:v.null(),handler:async(ctx,args)=>{
  await requireBrandAccess(ctx,args.userId,args.brandId);const old=await readDestination(ctx,args.userId,args.brandId);let destination=args.destination;
  if(destination&&old?.destination&&destinationIdentity(destination)===destinationIdentity(old.destination))destination={...destination,firstComment:old.destination.firstComment};
- const patch={destination,error:args.error,updatedAt:Date.now()};if(old)await ctx.db.patch(old._id,patch);else await ctx.db.insert("bufferDestinations",{userId:args.userId,brandId:args.brandId,...patch});return null;
+ const patch={...(destination ? {destination} : {}),error:args.error,updatedAt:Date.now()};if(old)await ctx.db.patch(old._id,patch);else await ctx.db.insert("bufferDestinations",{userId:args.userId,brandId:args.brandId,...patch});return null;
 }});
 export const confirmFirstComment=mutation({args:{brandId:brandIdValidator,channelId:v.string(),value:capabilityValidator.fields.value,evidence:v.string()},returns:v.null(),handler:async(ctx,args)=>{
  const userId=await requireUserId(ctx);const access=await requireBrandAccess(ctx,userId,args.brandId);const row=await readDestination(ctx,userId,args.brandId);
@@ -28,7 +28,7 @@ export const confirmFirstComment=mutation({args:{brandId:brandIdValidator,channe
 }});
 export const pin=mutation({args:{postId:v.id("v2Posts"),expectedVersion:v.string(),identity:v.string()},returns:v.null(),handler:async(ctx,args)=>{
  const userId=await requireUserId(ctx);const post=await ctx.db.get(args.postId);if(!post||post.userId!==userId||post.channelId!=="linkedin")throw new Error("Post not found");const access=await requireBrandAccess(ctx,userId,post.brandId);if(access.role==="viewer")throw new Error("Editor access required");
- const row=await readDestination(ctx,userId,post.brandId);const hold=destinationHold(row?.destination,Boolean(post.linkedinFirstComment?.trim()));if(hold)throw new Error(hold);
+ const row=await readDestination(ctx,userId,post.brandId);if(row?.error)throw new Error("Destination refresh failed; refresh Connections.");const hold=destinationHold(row?.destination,Boolean(post.linkedinFirstComment?.trim()));if(hold)throw new Error(hold);
  if(args.expectedVersion!==releaseVersion(post)||args.identity!==destinationIdentity(row!.destination!))throw new Error("Destination or copy changed; review again.");
  await ctx.db.patch(post._id,{destinationReview:{identity:args.identity,fingerprint:args.expectedVersion,schedule:scheduleVersion(post),checkedAt:Date.now(),actor:userId}});await audit(ctx,{userId,brandId:post.brandId,postId:post._id,action:"buffer.destination_review",summary:"Reviewed exact destination, final payload and schedule; this action sends nothing.",metadata:{identity:args.identity,schedule:scheduleVersion(post)}});return null;
 }});

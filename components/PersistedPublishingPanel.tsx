@@ -430,12 +430,15 @@ export function PersistedPublishingPanel({
   }, [linkedBrandId, linkedChannelId, linkedStatus]);
 
   const seriesList = useQuery(api.series.list, isConvexAuthenticated ? {} : "skip") as import("@/convex/_generated/dataModel").Doc<"postSeries">[] | undefined;
+  const activeSeries = seriesList?.find(s => s._id === seriesFilter);
+  const seriesResolved = !seriesFilter || seriesList !== undefined;
+  const effectiveBrandFilters = activeSeries ? [activeSeries.brandId] : brandFilters;
   const items = useQuery(
     api.publishing.listCalendarItems,
-    isConvexAuthenticated
+    isConvexAuthenticated && seriesResolved
       ? {
-          ...(seriesFilter ? {seriesId: seriesFilter as Id<"postSeries">} : {}),
-          brandIds: brandFilters,
+          ...(activeSeries ? {seriesId: activeSeries._id} : {}),
+          brandIds: effectiveBrandFilters,
           platformIds: platformFilters,
           statuses: statusFilters,
         }
@@ -517,7 +520,12 @@ export function PersistedPublishingPanel({
         }),
     [visibleDateKeys, visibleItems]
   );
-  const providerSummary = useMemo(() => deliverySummary(visibleItems), [visibleItems]);
+  const [deliveryClock, setDeliveryClock] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setDeliveryClock(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+  const providerSummary = useMemo(() => deliverySummary(visibleItems, deliveryClock), [visibleItems, deliveryClock]);
   const autoSelectedPostId = useMemo(() => {
     if (!initialPostId || loading) return null;
     return visibleItems.find((item) => item.post._id === initialPostId)?.post._id ?? null;
@@ -973,12 +981,12 @@ export function PersistedPublishingPanel({
       sidebar={
         <>
           <SidebarCard className="space-y-3">
-            <label className="block text-sm">Series<select aria-label="Calendar series filter" className="w-full rounded border p-2" value={seriesFilter} onChange={e => setSeriesFilter(e.target.value)}><option value="">All series</option>{seriesList?.map(series => <option key={series._id} value={series._id}>{series.title}</option>)}</select></label>
+            <label className="block text-sm">Series<select aria-label="Calendar series filter" className="w-full rounded border p-2" value={activeSeries?._id ?? ""} onChange={e => setSeriesFilter(e.target.value)}><option value="">All series</option>{seriesList?.map(series => <option key={series._id} value={series._id}>{series.title}</option>)}</select></label>
             <FilterGroup
               label="Brands"
-              onChange={(id) => setBrandFilters(toggleFilterSet(brandFilters, id))}
+              onChange={(id) => { setSeriesFilter(""); setBrandFilters(toggleFilterSet(effectiveBrandFilters, id)); }}
               options={brandOptions}
-              selected={brandFilters}
+              selected={effectiveBrandFilters}
             />
             <FilterGroup
               label="Platforms"

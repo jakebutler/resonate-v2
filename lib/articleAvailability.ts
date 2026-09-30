@@ -159,6 +159,7 @@ export function expectedArticleText(markdown: string) {
       text.push(elementText(parseFragment(node.value ?? "")));
       continue;
     }
+    if (node.type === "break") { text.push(" "); continue; }
     const block = blocks.has(node.type);
     if (block) {
       text.push(" ");
