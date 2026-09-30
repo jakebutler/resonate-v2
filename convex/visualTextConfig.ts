@@ -15,6 +15,11 @@ export const registerReviewedTextRoute = internalMutation({
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$/.test(args.model) || !args.stages.length || new Set(args.stages).size !== args.stages.length) throw new Error("Reviewed explicit text model/stages required");
     for (const amount of [args.maxInputBytes, args.maxInputTokens, args.maxMessageOverheadTokens, args.contextWindowTokens, args.maxOutputTokens, args.inputPriceMicrosPerMillion, args.outputPriceMicrosPerMillion]) if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error("Reviewed positive integer text bounds/prices required");
     if (args.maxInputBytes > 220_000 || args.maxInputTokens > 1_000_000 || args.maxOutputTokens > 20_000 || args.maxInputTokens < args.maxInputBytes + args.maxMessageOverheadTokens || args.contextWindowTokens < args.maxInputTokens + args.maxOutputTokens || !Number.isSafeInteger(args.expiresAt) || args.expiresAt <= Date.now()) throw new Error("Invalid or expired text tokenizer/context bounds");
+    if (args.vision) {
+      const vision = args.vision;
+      if (!args.stages.includes("reflection") || [vision.maxImageBytes, vision.maxImageInputTokens, vision.maxRequestBytes].some(value => !Number.isSafeInteger(value) || value <= 0) || vision.maxImageBytes >= 150_000 || vision.maxImageInputTokens > 1_000_000 || vision.maxRequestBytes > 500_000 || vision.maxRequestBytes < args.maxInputBytes + Math.ceil(vision.maxImageBytes / 3) * 4 + 100 || args.maxInputTokens < args.maxInputBytes + args.maxMessageOverheadTokens + vision.maxImageInputTokens) throw new Error("Invalid reviewed vision byte/token/context bounds");
+      if (!vision.capabilityReceiptIds.length || vision.capabilityReceiptIds.length > 16 || [...vision.capabilityReceiptIds, vision.tokenBoundReceiptId, vision.priceReceiptId].some(id => !/^[a-zA-Z0-9._:-]{1,160}$/.test(id))) throw new Error("Separate vision capability and image-token bound evidence required");
+    }
     if (!args.capabilityReceiptIds.length || args.capabilityReceiptIds.length > 16 || [...args.capabilityReceiptIds, args.tokenBoundReceiptId, args.priceReceiptId].some(id => !/^[a-zA-Z0-9._:-]{1,160}$/.test(id)) || !args.reviewedBy.trim() || args.reviewedBy.length > 200 || !args.provenance.trim() || args.provenance.length > 1000) throw new Error("Trusted capability, UTF-8 token upper bound and price evidence required");
     return ctx.db.insert("v2VisualTextRoutes", { ...args, maximumMicros: textMaximumMicros(args), enabled: true, createdAt: Date.now() });
   },
@@ -25,7 +30,7 @@ async function routesForStage(ctx: QueryCtx | MutationCtx, stage: "planning" | "
   for (const provider of ["openai", "cortex"] as const) {
     const rows = await ctx.db.query("v2VisualTextRoutes").withIndex("by_provider", q => q.eq("provider", provider)).order("desc").take(21);
     if (rows.length > 20) throw new Error("Text route history exceeds bounded lookup; archive inactive routes");
-    routes.push(...rows.filter(route => route.enabled && route.expiresAt > Date.now() && route.stages.includes(stage)));
+    routes.push(...rows.filter(route => route.enabled && route.expiresAt > Date.now() && route.stages.includes(stage) && (stage !== "reflection" || !!route.vision)));
   }
   return routes;
 }
@@ -37,7 +42,8 @@ export const getReviewedTextRoutes = internalQuery({
 async function preparedForAttempt(ctx: QueryCtx | MutationCtx, attempt: Doc<"v2VisualAttempts">, route: Doc<"v2VisualTextRoutes">) {
   if (!route.enabled || route.expiresAt <= Date.now() || !["planning", "reflection"].includes(attempt.stage) || !route.stages.includes(attempt.stage as "planning" | "reflection") || route.maximumMicros !== textMaximumMicros(route)) throw new Error("Text route does not bind stored attempt");
   const reflection = attempt.stage === "reflection" ? await verifiedReflectionContext(ctx, attempt) : null;
-  return prepareTextRequest({ ...attempt, stage: attempt.stage as "planning" | "reflection" }, route, reflection?.context);
+  if (attempt.stage === "reflection" && (!reflection || !route.vision)) throw new Error("Current approved image and reviewed vision route required");
+  return prepareTextRequest({ ...attempt, stage: attempt.stage as "planning" | "reflection" }, route, reflection?.context, reflection ? { identity: reflection.approvedImage } : undefined);
 }
 export async function validateTextQuote(ctx: QueryCtx | MutationCtx, attempt: Doc<"v2VisualAttempts">, quote: Doc<"v2VisualDispatchQuotes">) {
   const route = quote.textRouteId ? await ctx.db.get(quote.textRouteId) : null;
@@ -46,7 +52,7 @@ export async function validateTextQuote(ctx: QueryCtx | MutationCtx, attempt: Do
   if (quote.requestSha256 !== prepared.requestSha256) throw new Error("Text quote differs from exact pinned request");
 }
 export const registerTextDispatchQuote = internalMutation({
-  args: { attemptId: v.id("v2VisualAttempts"), routeId: v.id("v2VisualTextRoutes"), requestSha256: v.string(), userId: v.string(), trustedReflectionScheduler: v.optional(v.boolean()) }, returns: v.id("v2VisualDispatchQuotes"),
+  args: { attemptId: v.id("v2VisualAttempts"), routeId: v.id("v2VisualTextRoutes"), requestSha256: v.string(), userId: v.string(), trustedReflectionScheduler: v.optional(v.boolean()) }, returns: v.union(v.null(), v.id("v2VisualDispatchQuotes")),
   handler: async (ctx, args) => {
     const attempt = await ctx.db.get(args.attemptId), route = await ctx.db.get(args.routeId);
     let authenticatedUserId: string | null = null;
@@ -54,10 +60,11 @@ export const registerTextDispatchQuote = internalMutation({
     const userId = args.trustedReflectionScheduler && !authenticatedUserId && attempt?.stage === "reflection" ? args.userId : authenticatedUserId;
     if (!userId) throw new Error("Unauthorized");
     if (userId !== args.userId || args.trustedReflectionScheduler && attempt?.stage !== "reflection") throw new Error("Text dispatch actor mismatch");
-    if (!attempt || attempt.userId !== userId || attempt.status !== "queued" || !route) throw new Error("Queued owned text attempt required");
+    if (!attempt || attempt.userId !== userId || !route) throw new Error("Owned text attempt and reviewed route required");
     const member = await requireBrandAccess(ctx, userId, attempt.brandId);
     if (!["owner", "editor"].includes(member.role)) throw new Error("Brand edit access denied");
     assertVisualAdmissionEnabled(userId);
+    if (attempt.status !== "queued") return null;
     const prepared = await preparedForAttempt(ctx, attempt, route);
     if (args.requestSha256 !== prepared.requestSha256) throw new Error("Text request hash differs from trusted preparation");
     return ctx.db.insert("v2VisualDispatchQuotes", { attemptId: attempt._id, inputSignature: attempt.inputSignature, stage: attempt.stage, provider: route.provider, model: route.model, maximumMicros: route.maximumMicros, qualification: "live-receipt", boundVerified: true, capabilityReceiptIds: route.capabilityReceiptIds, provenance: route.provenance, requestSha256: prepared.requestSha256, textRouteId: route._id, createdAt: Date.now() });

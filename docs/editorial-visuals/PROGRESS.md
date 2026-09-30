@@ -1,3 +1,10 @@
+## Approved-image reflection and current reader rehearsal — 2026-09-30
+
+- V07 now carries exact approved final WebP pixels with the full ordered lineage; optional vision bounds and separate `OPENAI_TEXT_API_KEY` are required before text/vision dispatch. 106 focused offline tests, both production typechecks and scoped lint passed. Independent integrated review remains pending; no live text route or separately billed text experiment is authorized.
+- The fictional composer saved the current H1-free body and Draft metadata, rebound and accepted its two evidence figures, and retained its engineering-only hero approval. The pure export prepared and wrote identical MDX/WebP/SVG hashes into a separate disposable reader checkout; the actual site reader loaded all three assets, captions and sources at desktop and narrow widths. No real article was published or scheduled.
+- The ebb224f independent image and export/UI delta reviews approved their scopes. Its hosted CI failed one test because its fictional repository conflicted with CI settings; the test now isolates the target and retains explicit foreign-target rejection (14 focused tests passed). Fresh exact-candidate CI is still required.
+- Separate provider caps remain $5 DigitalOcean and $5 OpenAI; spent/reserved zero each. Restricted Images:Request/Models:Read key creation is prepared, with action-time confirmation pending.
+
 # Editorial visuals progress
 
 ## September 30 independent-review repairs

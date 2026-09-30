@@ -21,3 +21,7 @@ Use the registered `codex/epic-97-review-followups` worktree. Preserve the prima
 ## Next pickup
 
 Read the epic and actual PR/CI/deployment state, verify the Buffer gate, and use the hash-only preservation receipts. Existing content activation is a separate review: production has no adopted series or saved capacity evidence, 15 candidate articles need reviewed heroes/alt/artifact bindings, and 20 linked companions remain unapproved. The local activation review lists exact existing mappings without changing copy or schedules.
+
+## Editorial visual generation
+
+PR #131 integrates the current publishing safeguards, approved-image pixel reflection, guarded image-generation/edit dispatch, evidence-bound figures and complete MDX/WebP/SVG assets. The current feature candidate still requires fresh independent integration reviews and exact-SHA CI. Provider qualifications remain pending; no new human aesthetic approval, article publication or schedule is implied. See [editorial visual progress](editorial-visuals/PROGRESS.md) for separate implementation, review, qualification and release evidence.

@@ -10,14 +10,16 @@ import { fileURLToPath } from "node:url";
 import { FIXTURE_ROOT, FIXTURE_SUBJECT, FIXTURE_CONVEX_URL, FIXTURE_ISSUER, FIXTURE_NEXT_ORIGIN, verifyLocalFixtureTarget } from "./visual-fixture-issuer.mjs";
 import { FIXTURE_CONTENT, FIXTURE_TITLE } from "./visual-fixture-rehearsal.mjs";
 
-export const READER_ROOT = "/Volumes/rexy/GitHub/codex-worktrees/resonate-visual-reader/corvo-labs-dot-com";
+export const READER_ROOT = "/Volumes/rexy/GitHub/codex-worktrees/resonate-visual-reader-current/corvo-labs-dot-com";
 export const READER_COMMIT = "c4be2ee4d11fb5e5ee2c36c239aa497a2e2c4c33";
 export const FICTIONAL_POST_ID = "nd77g7q41hws09ge4zbp1epe4x8fc3wy";
 export const READER_SLUG = "local-fixture-editorial-visual-rehearsal";
 export const READER_DATE = "2026-09-30";
-export const READER_URL = `http://127.0.0.1:3171/blog/${READER_DATE}-${READER_SLUG}`;
+export const READER_URL = `http://127.0.0.1:3172/blog/${READER_DATE}-${READER_SLUG}`;
 const CONTENT_FILE = `corvo-labs-enhanced/content/blog/${READER_DATE}-${READER_SLUG}.mdx`;
-const ASSET_DIRECTORY = `corvo-labs-enhanced/public/images/blog/${READER_SLUG}`;
+const ASSET_DIRECTORY = `corvo-labs-enhanced/public/images/blog/${READER_DATE}-${READER_SLUG}`;
+// Explicit fixture revision; the saved composer must contain this exact body.
+export const READER_CONTENT_BASELINE = FIXTURE_CONTENT.replace(`# ${FIXTURE_TITLE}\n\n`, "");
 const ownedFailure = Symbol("local-reader-guard-failure");
 function reject(code) { throw Object.assign(new Error(code), { fixtureCode: code, [ownedFailure]: true }); }
 const sha = value => createHash("sha256").update(value).digest("hex");
@@ -30,7 +32,7 @@ let corePromise;
 export async function loadPublicationCore() {
   corePromise ??= (async () => {
     const { build } = await import("esbuild");
-    const result = await build({ stdin: { contents: 'export { prepareBlogPublication } from "./lib/github.ts"; export { figureSignatures, planFigureCandidates, assertFigureEvidence, buildFigureMarkdownBlock } from "./lib/visualFigures.ts"; export { articleSignature, stableInputSignature } from "./lib/visualWorkflow.ts"; export { fingerprintPostContent } from "./lib/domain.ts";', resolveDir: FIXTURE_ROOT, loader: "ts" }, bundle: true, write: false, format: "cjs", platform: "node", target: "node20", packages: "external", logLevel: "silent", define: {
+    const result = await build({ stdin: { contents: 'export { prepareBlogPublication } from "./lib/github.ts"; export { figureSignatures, planFigureCandidates, assertFigureEvidence, buildFigureMarkdownBlock } from "./lib/visualFigures.ts"; export { articleSignature, stableInputSignature } from "./lib/visualWorkflow.ts"; export { fingerprintPostContent } from "./lib/domain.ts"; export { blogEditorialFingerprint } from "./lib/blogContract.ts";', resolveDir: FIXTURE_ROOT, loader: "ts" }, bundle: true, write: false, format: "cjs", platform: "node", target: "node20", packages: "external", logLevel: "silent", define: {
       "process.env.GITHUB_TOKEN": "undefined", "process.env.BLOG_REPO_OWNER": '"local-fixture-only"', "process.env.BLOG_REPO_NAME": '"local-fixture-only"', "process.env.BLOG_APP_ROOT": '"corvo-labs-enhanced"', "process.env.BLOG_CONTENT_PATH": '"corvo-labs-enhanced/content/blog"', "process.env.BLOG_POST_AUTHOR": '"Local fictional engineering rehearsal"', "process.env.BLOG_DEFAULT_CATEGORY": '"engineering-fixture"', "fetch": "__fixtureForbiddenFetch", "globalThis.fetch": "__fixtureForbiddenFetch", "global.fetch": "__fixtureForbiddenFetch",
     } });
     const publicationBundle = { exports: {} };
@@ -42,7 +44,7 @@ export async function loadPublicationCore() {
 
 export function assertFictionalPublication(snapshot) {
   const post = snapshot?.post;
-  if (!post || post._id !== FICTIONAL_POST_ID || post.userId !== FIXTURE_SUBJECT || post.brandId !== "corvo" || post.channelId !== "corvo-blog" || post.title !== FIXTURE_TITLE || typeof post.content !== "string" || !post.content.startsWith(FIXTURE_CONTENT) || post.prUrl || post.branchName || post.scheduledDate || post.scheduledTime) reject("FICTIONAL_POST_REJECTED");
+  if (!post || post._id !== FICTIONAL_POST_ID || post.userId !== FIXTURE_SUBJECT || post.brandId !== "corvo" || post.channelId !== "corvo-blog" || post.title !== FIXTURE_TITLE || typeof post.content !== "string" || !post.content.startsWith(READER_CONTENT_BASELINE) || post.prUrl || post.branchName || post.scheduledDate || post.scheduledTime) reject("FICTIONAL_POST_REJECTED");
   if (post.approvalState !== "approved" || post.status !== "approved") reject("FINAL_APPROVAL_REQUIRED");
   const hero = snapshot?.visuals?.hero;
   if (!hero || hero.approvedBy !== FIXTURE_SUBJECT || !Number.isSafeInteger(hero.approvedAt) || hero.approvedAt <= 0 || hero.approvedAt > Date.now() + 30_000) reject("HERO_APPROVAL_REJECTED");
@@ -229,14 +231,14 @@ export async function prepareFixtureFiles(snapshot, heroBytes) {
   assertFictionalPublication(snapshot);
   const core = await loadPublicationCore();
   const hero = snapshot.visuals.hero;
-  if (snapshot.visuals.articleSignature !== core.articleSignature(snapshot.post) || snapshot.post.contentFingerprint !== core.fingerprintPostContent(snapshot.post)) reject("ARTICLE_PROOF_REJECTED");
+  if (snapshot.visuals.articleSignature !== core.articleSignature(snapshot.post) || snapshot.post.contentFingerprint !== core.blogEditorialFingerprint(snapshot.post)) reject("ARTICLE_PROOF_REJECTED");
   if (!(heroBytes instanceof Uint8Array) || !heroBytes.byteLength || heroBytes.byteLength >= 150_000 || !/^[a-f0-9]{64}$/.test(hero.sha256) || sha(heroBytes) !== hero.sha256 || hero.metadata?.width !== 1600 || hero.metadata.height !== 900 || hero.metadata.format !== "webp" || hero.metadata.bytes !== heroBytes.byteLength || typeof hero.metadata.crop !== "string" || hero.metadata.crop.length > 32_000 || !hero.alt?.trim()) reject("HERO_BYTES_REJECTED");
   if (!Array.isArray(snapshot.figures) || snapshot.figures.length > 3) reject("FIGURE_PROOF_REJECTED");
   const images = [{ sourceUrl: hero.url, alt: hero.alt, isCover: true, export: { bytes: heroBytes, sha256: hero.sha256, fileName: "hero.webp", contentType: "image/webp", hero: { provider: hero.provider, model: hero.model, qualification: hero.qualification, quoteProvenance: hero.quoteProvenance, approvedBy: hero.approvedBy, approvedAt: hero.approvedAt } } }];
   const candidateIds = new Set();
   let plainContent = snapshot.post.content;
   for (const figure of snapshot.figures) {
-    if (!id(figure.candidateId) || candidateIds.has(figure.candidateId) || figure.postId !== snapshot.post._id || figure.postContentSha256 !== sha(snapshot.post.content) || figure.postContentFingerprint !== snapshot.post.contentFingerprint || figure.acceptedBy !== FIXTURE_SUBJECT || !positiveRevision(figure.acceptedAt) || figure.acceptedAt > Date.now() + 30_000 || figure.url !== `resonate-figure://${figure.candidateId}` || !Array.isArray(figure.evidenceSources) || !figure.spec) reject("FIGURE_PROOF_REJECTED");
+    if (!id(figure.candidateId) || candidateIds.has(figure.candidateId) || figure.postId !== snapshot.post._id || figure.postContentSha256 !== sha(snapshot.post.content) || figure.postContentFingerprint !== core.fingerprintPostContent(snapshot.post) || figure.acceptedBy !== FIXTURE_SUBJECT || !positiveRevision(figure.acceptedAt) || figure.acceptedAt > Date.now() + 30_000 || figure.url !== `resonate-figure://${figure.candidateId}` || !Array.isArray(figure.evidenceSources) || !figure.spec) reject("FIGURE_PROOF_REJECTED");
     candidateIds.add(figure.candidateId);
     const required = new Map();
     for (const [bindings, purpose] of [[figure.spec.evidence, "article"], [figure.spec.claimTraceEvidence, "claim-trace"]]) {
@@ -266,22 +268,22 @@ export async function prepareFixtureFiles(snapshot, heroBytes) {
     images.push({ sourceUrl: figure.url, alt: figure.alt, isCover: false, export: { bytes: new TextEncoder().encode(figure.svg), sha256: figure.svgSha256, fileName: `figure-${figure.candidateId}.svg`, contentType: "image/svg+xml", figure: { spec: figure.spec, rendererVersion: figure.rendererVersion, dataSignature: figure.dataSignature, presentationSignature: figure.presentationSignature,
       postId: figure.postId, postContentSha256: figure.postContentSha256, postContentFingerprint: figure.postContentFingerprint, acceptedBy: figure.acceptedBy, acceptedAt: figure.acceptedAt, evidenceSources: figure.evidenceSources } } });
   }
-  if (!plainContent.startsWith(FIXTURE_CONTENT) || Buffer.byteLength(plainContent) > 200_000) reject("FICTIONAL_CONTENT_REJECTED");
-  const additions = plainContent.slice(FIXTURE_CONTENT.length);
+  if (!plainContent.startsWith(READER_CONTENT_BASELINE) || Buffer.byteLength(plainContent) > 200_000) reject("FICTIONAL_CONTENT_REJECTED");
+  const additions = plainContent.slice(READER_CONTENT_BASELINE.length);
   const knownInventedRehearsalLines = new Set([
     "Every value below is invented solely for this local engineering rehearsal.",
     "These arrows describe an invented rehearsal workflow.",
     "These dates and events are invented test data.",
   ]);
   if (/[<>{}`]/.test(additions) || /https?:\/\/|javascript:|data:|resonate-figure:\/\//i.test(additions) || additions.split("\n").some(line => line.trim() && !/^\s*\|.*\|\s*$/.test(line) && !/\bfictional\b/i.test(line) && !knownInventedRehearsalLines.has(line.trim()))) reject("FICTIONAL_CONTENT_REJECTED");
-  const prepared = await core.prepareBlogPublication({ postId: snapshot.post._id, title: FIXTURE_TITLE, content: snapshot.post.content, linkedinFirstComment: snapshot.post.linkedinFirstComment, scheduledDate: READER_DATE, status: "published", slug: READER_SLUG, author: "Local fictional engineering rehearsal", tags: ["local-fixture", "fictional", "rehearsal"], category: "engineering-fixture", featured: false,
-    excerpt: "Fictional local engineering rehearsal. No image-model result, real article claim or live publication is implied.", images,
+  const prepared = await core.prepareBlogPublication({ postId: snapshot.post._id, title: FIXTURE_TITLE, content: snapshot.post.content, linkedinFirstComment: snapshot.post.linkedinFirstComment, scheduledDate: READER_DATE, status: "published", slug: READER_SLUG, author: snapshot.post.blogAuthor, tags: snapshot.post.blogTags, category: snapshot.post.blogCategory, featured: false,
+    excerpt: snapshot.post.blogExcerpt, images,
   }, { allowFixture: true });
   return { ...prepared, files: assertPreparedPaths(prepared.files) };
 }
 
 export async function readerSelfTest() {
-  const snapshot = { post: { _id: FICTIONAL_POST_ID, userId: FIXTURE_SUBJECT, brandId: "corvo", channelId: "corvo-blog", title: FIXTURE_TITLE, content: FIXTURE_CONTENT, approvalState: "approved", status: "approved" }, visuals: { hero: { provider: "offline-fixture", model: "offline-fixture", qualification: "offline-fixture", quoteProvenance: "LOCAL OFFLINE FIXTURE — literal offline self-test", approvedBy: FIXTURE_SUBJECT, approvedAt: 1 } }, figures: [] };
+  const snapshot = { post: { _id: FICTIONAL_POST_ID, userId: FIXTURE_SUBJECT, brandId: "corvo", channelId: "corvo-blog", title: FIXTURE_TITLE, content: READER_CONTENT_BASELINE, blogExcerpt: "Fictional local engineering rehearsal. No real publication is implied.", blogAuthor: "Local fictional engineering rehearsal", blogTags: ["local-fixture", "fictional", "rehearsal"], blogCategory: "engineering-fixture", blogSlug: READER_SLUG, blogPublicationIntent: "draft", approvalState: "approved", status: "approved" }, visuals: { hero: { provider: "offline-fixture", model: "offline-fixture", qualification: "offline-fixture", quoteProvenance: "LOCAL OFFLINE FIXTURE — literal offline self-test", approvedBy: FIXTURE_SUBJECT, approvedAt: 1 } }, figures: [] };
   assert.doesNotThrow(() => assertFictionalPublication(snapshot));
   for (const change of [{ _id: "realpostid01" }, { userId: "real-author" }, { title: "Real article" }, { brandId: "other" }, { channelId: "other" }, { scheduledDate: READER_DATE }, { branchName: "main" }]) assert.throws(() => assertFictionalPublication({ ...snapshot, post: { ...snapshot.post, ...change } }), /FICTIONAL_POST_REJECTED/);
   assert.throws(() => assertFictionalPublication({ ...snapshot, post: { ...snapshot.post, approvalState: "draft" } }), /FINAL_APPROVAL_REQUIRED/);
@@ -314,23 +316,25 @@ export async function readerSelfTest() {
   const sharp = (await import("sharp")).default;
   const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2E5B60" } }).webp().toBuffer();
   const core = await loadPublicationCore();
-  const complete = { ...snapshot, post: { ...snapshot.post, contentFingerprint: core.fingerprintPostContent(snapshot.post) }, visuals: { articleSignature: core.articleSignature(snapshot.post), hero: { ...snapshot.visuals.hero, url: "http://127.0.0.1:3210/api/storage/fictional-storage-id", sha256: sha(heroBytes), alt: "A plainly fictional local engineering color pattern.", metadata: { width: 1600, height: 900, bytes: heroBytes.length, format: "webp", crop: JSON.stringify({ crop: null }) } } } };
+  const complete = { ...snapshot, post: { ...snapshot.post, contentFingerprint: core.blogEditorialFingerprint(snapshot.post) }, visuals: { articleSignature: core.articleSignature(snapshot.post), hero: { ...snapshot.visuals.hero, url: "http://127.0.0.1:3210/api/storage/fictional-storage-id", sha256: sha(heroBytes), alt: "A plainly fictional local engineering color pattern.", metadata: { width: 1600, height: 900, bytes: heroBytes.length, format: "webp", crop: JSON.stringify({ crop: null }) } } } };
   const prepared = await prepareFixtureFiles(complete, heroBytes);
-  await assert.rejects(() => core.prepareBlogPublication({ title: FIXTURE_TITLE, content: FIXTURE_CONTENT, scheduledDate: READER_DATE, status: "published", slug: READER_SLUG, images: [{ sourceUrl: complete.visuals.hero.url, alt: complete.visuals.hero.alt, isCover: true, export: { bytes: heroBytes, sha256: sha(heroBytes), fileName: "hero.webp", contentType: "image/webp", hero: snapshot.visuals.hero } }] }), /Offline engineering visuals cannot be published/);
+  for (const metadataChange of [{ blogAuthor: "Different fictional author" }, { blogExcerpt: "Different fictional excerpt" }, { blogCategory: "research" }, { blogTags: ["changed-fictional-tag"] }, { blogPublicationIntent: "published" }]) await assert.rejects(() => prepareFixtureFiles({ ...complete, post: { ...complete.post, ...metadataChange } }, heroBytes), /ARTICLE_PROOF_REJECTED/);
+  await assert.rejects(() => prepareFixtureFiles({ ...complete, post: { ...complete.post, content: FIXTURE_CONTENT } }, heroBytes), /FICTIONAL_POST_REJECTED/);
+  await assert.rejects(() => core.prepareBlogPublication({ title: FIXTURE_TITLE, content: READER_CONTENT_BASELINE, scheduledDate: READER_DATE, status: "published", slug: READER_SLUG, images: [{ sourceUrl: complete.visuals.hero.url, alt: complete.visuals.hero.alt, isCover: true, export: { bytes: heroBytes, sha256: sha(heroBytes), fileName: "hero.webp", contentType: "image/webp", hero: snapshot.visuals.hero } }] }), /Offline engineering visuals cannot be published/);
   assert.equal(prepared.files.length, 2);
-  const inventedContent = `${FIXTURE_CONTENT}\n\nEvery value below is invented solely for this local engineering rehearsal.\n\nThese arrows describe an invented rehearsal workflow.\n\nThese dates and events are invented test data.`;
+  const inventedContent = `${READER_CONTENT_BASELINE}\n\nEvery value below is invented solely for this local engineering rehearsal.\n\nThese arrows describe an invented rehearsal workflow.\n\nThese dates and events are invented test data.`;
   const inventedPost = { ...complete.post, content: inventedContent };
-  inventedPost.contentFingerprint = core.fingerprintPostContent(inventedPost);
+  inventedPost.contentFingerprint = core.blogEditorialFingerprint(inventedPost);
   assert.equal((await prepareFixtureFiles({ ...complete, post: inventedPost, visuals: { ...complete.visuals, articleSignature: core.articleSignature(inventedPost) } }, heroBytes)).files.length, 2);
   for (const addition of ["Unmarked ordinary claims are not rehearsal data.", "Fictional https://remote.example/image", "```fictional\nexecutable\n```", "Invented but unrecognized prose."]) {
-    const rejectedPost = { ...complete.post, content: `${FIXTURE_CONTENT}\n\n${addition}` };
-    rejectedPost.contentFingerprint = core.fingerprintPostContent(rejectedPost);
+    const rejectedPost = { ...complete.post, content: `${READER_CONTENT_BASELINE}\n\n${addition}` };
+    rejectedPost.contentFingerprint = core.blogEditorialFingerprint(rejectedPost);
     await assert.rejects(() => prepareFixtureFiles({ ...complete, post: rejectedPost, visuals: { ...complete.visuals, articleSignature: core.articleSignature(rejectedPost) } }, heroBytes), /FICTIONAL_CONTENT_REJECTED/);
   }
   assert.match(Buffer.from(prepared.fileContent, "base64").toString("utf8"), /status: "published"/);
   await assert.rejects(() => prepareFixtureFiles({ ...complete, visuals: { ...complete.visuals, articleSignature: "stale article" } }, heroBytes), /ARTICLE_PROOF_REJECTED/);
   for (const heroChange of [{ sha256: "0".repeat(64) }, { metadata: { ...complete.visuals.hero.metadata, width: 1599 } }, { metadata: { ...complete.visuals.hero.metadata, bytes: heroBytes.length + 1 } }]) await assert.rejects(() => prepareFixtureFiles({ ...complete, visuals: { ...complete.visuals, hero: { ...complete.visuals.hero, ...heroChange } } }, heroBytes), /HERO_BYTES_REJECTED/);
-  const sourceContent = `${FIXTURE_CONTENT}\n\n## Fictional workflow table (local rehearsal only)\n\n| from | to | relation |\n| --- | --- | --- |\n| Fictional inspection | Fictional repair | checks broken gear |\n| Fictional repair | Fictional test | retries repaired machine |`;
+  const sourceContent = `${READER_CONTENT_BASELINE}\n\n## Fictional workflow table (local rehearsal only)\n\n| from | to | relation |\n| --- | --- | --- |\n| Fictional inspection | Fictional repair | checks broken gear |\n| Fictional repair | Fictional test | retries repaired machine |`;
   const source = { id: "articlefixture01", name: "Fictional rehearsal article", format: "markdown", purpose: "article", content: sourceContent };
   const spec = core.planFigureCandidates(source, [], { requireClaimTrace: false }).candidates[0];
   const rendered = await core.figureSignatures(spec);
@@ -339,8 +343,8 @@ export async function readerSelfTest() {
   const block = core.buildFigureMarkdownBlock(candidateId, spec);
   const content = sourceContent.replace(spec.insertionAnchor, `${spec.insertionAnchor}\n\n${block}`);
   const figurePost = { ...complete.post, content };
-  figurePost.contentFingerprint = core.fingerprintPostContent(figurePost);
-  const figure = { candidateId, postId: FICTIONAL_POST_ID, postContentSha256: sha(content), postContentFingerprint: figurePost.contentFingerprint, acceptedBy: FIXTURE_SUBJECT, acceptedAt: 1,
+  figurePost.contentFingerprint = core.blogEditorialFingerprint(figurePost);
+  const figure = { candidateId, postId: FICTIONAL_POST_ID, postContentSha256: sha(content), postContentFingerprint: core.fingerprintPostContent(figurePost), acceptedBy: FIXTURE_SUBJECT, acceptedAt: 1,
     evidenceSources: [{ sourceId: source.id, sha256: sha(sourceContent), revision: 1, purpose: "article", currentSourceId: null, currentSha256: sha(content), currentRevision: null }], spec, ...rendered, url, caption: p.caption, sourceNote: p.sourceNote, alt: p.alt };
   const withFigure = { ...complete, post: figurePost, visuals: { ...complete.visuals, articleSignature: core.articleSignature(figurePost) }, figures: [figure] };
   const figurePrepared = await prepareFixtureFiles(withFigure, heroBytes);
@@ -354,8 +358,8 @@ export async function readerSelfTest() {
   const literalSpec = core.planFigureCandidates(literalSource, [], { requireClaimTrace: false }).candidates[0];
   const literalContent = literalSource.content.replace(literalSpec.insertionAnchor, `${literalSpec.insertionAnchor}\n\n${core.buildFigureMarkdownBlock(candidateId, literalSpec)}`);
   const literalPost = { ...figurePost, content: literalContent };
-  literalPost.contentFingerprint = core.fingerprintPostContent(literalPost);
-  const literalFigure = { ...figure, spec: literalSpec, ...await core.figureSignatures(literalSpec), caption: literalSpec.presentation.caption, alt: literalSpec.presentation.alt, sourceNote: literalSpec.presentation.sourceNote, postContentSha256: sha(literalContent), postContentFingerprint: literalPost.contentFingerprint, evidenceSources: [{ ...figure.evidenceSources[0], sha256: sha(literalSource.content), currentSha256: sha(literalContent) }] };
+  literalPost.contentFingerprint = core.blogEditorialFingerprint(literalPost);
+  const literalFigure = { ...figure, spec: literalSpec, ...await core.figureSignatures(literalSpec), caption: literalSpec.presentation.caption, alt: literalSpec.presentation.alt, sourceNote: literalSpec.presentation.sourceNote, postContentSha256: sha(literalContent), postContentFingerprint: core.fingerprintPostContent(literalPost), evidenceSources: [{ ...figure.evidenceSources[0], sha256: sha(literalSource.content), currentSha256: sha(literalContent) }] };
   assert.equal((await prepareFixtureFiles({ ...withFigure, post: literalPost, visuals: { ...withFigure.visuals, articleSignature: core.articleSignature(literalPost) }, figures: [literalFigure] }, heroBytes)).files.length, 3);
   console.log("Offline fictional snapshot, exact publication preparation, path, detached checkout, local transport, symlink and binary-write-plan checks passed. No database, network or reader-file write ran.");
 }
