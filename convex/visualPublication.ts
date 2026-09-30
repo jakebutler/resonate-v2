@@ -5,6 +5,8 @@ import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { requireUserId } from "./campaignAccess";
+import { assertVisualAdmissionEnabled } from "./visualRollout";
+import { resolvePublicationSchedule } from "../lib/publicationReview";
 import { createBlogPostPR, fetchBlogPrStatus, prepareBlogPublication, type BlogPublicationParams, type BlogPrStatus } from "../lib/github";
 
 const sanitizedResponseValidator = v.object({
@@ -20,8 +22,9 @@ export const createPr = action({
   args: { postId: v.id("v2Posts") },
   returns: v.object({ prUrl: v.string(), branchName: v.string(), sanitizedResponse: sanitizedResponseValidator, recorded: v.literal(true) }),
   handler: async (ctx, args): Promise<CreatedPr> => {
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
     const snapshot = await ctx.runQuery(api.publishing.getPostForPublication, { postId: args.postId });
+    assertVisualAdmissionEnabled(userId);
     const { post, intent } = snapshot;
     const hero = snapshot.visuals?.hero;
     if (!hero) throw new Error("Approve a prepared hero before creating a visual publication PR");
@@ -33,10 +36,10 @@ export const createPr = action({
     if (hero.metadata.width !== 1600 || hero.metadata.height !== 900 || hero.metadata.format !== "webp" || hero.metadata.bytes !== heroBytes.byteLength) {
       throw new Error("Approved hero metadata no longer matches its reviewed export");
     }
+    const dispatchSchedule = resolvePublicationSchedule(post, intent, new Date().toISOString().slice(0, 10));
     const params: BlogPublicationParams = {
       postId: post._id, title: post.title, content: post.content, linkedinFirstComment: post.linkedinFirstComment,
-      scheduledDate: intent.scheduledDate ?? post.scheduledDate ?? new Date().toISOString().slice(0, 10),
-      scheduledTime: intent.scheduledTime ?? post.scheduledTime, timezone: intent.timezone ?? post.timezone ?? "UTC",
+      ...dispatchSchedule,
       scheduleTrigger: "pr-body", status: "draft", featured: false,
       excerpt: post.blogExcerpt, author: post.blogAuthor, tags: post.blogTags, category: post.blogCategory, slug: post.blogSlug,
       coverImageAlt: hero.alt,
@@ -58,6 +61,7 @@ export const createPr = action({
         postId: args.postId, result: { ...result, prStatus: "open", ...(result.sanitizedResponse.number === undefined ? {} : { prNumber: result.sanitizedResponse.number }) },
         expectedArticleSignature: JSON.stringify({ title: post.title, content: post.content, linkedinFirstComment: post.linkedinFirstComment ?? "" }),
         expectedVisualSignature: snapshot.reviewSignature,
+        expectedIntentId: intent._id, expectedSchedule: dispatchSchedule,
       });
     } catch {
       throw new ConvexError({ code: "VISUAL_PR_RECORDING_REQUIRES_REVIEW", message: "The PR was created, but its saved publication state could not be recorded. Inspect this retained PR and reload the current approval before any retry.", prUrl: result.prUrl, branchName: result.branchName, sanitizedResponse: result.sanitizedResponse });

@@ -1,13 +1,162 @@
 // @vitest-environment node
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
 import { api } from "../_generated/api";
 import { anyApi } from "convex/server";
+import { approvalArticleSignature, resolvePublicationSchedule } from "../../lib/publicationReview";
 
 const modules = import.meta.glob("../**/*.ts");
+beforeEach(() => { vi.stubEnv("BLOG_REPO_OWNER", "fictional-owner"); vi.stubEnv("BLOG_REPO_NAME", "fictional-reader"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("final post approval with editorial visuals", () => {
+  it("asks an older composer to reload before new uploads without creating storage or changing saved content", async () => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "fixture-author" });
+    await user.mutation(api.publishing.seedMvpWorkspace, {});
+    const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Historical upload compatibility", content: "Fictional retained draft." });
+    const before = await user.query(api.publishing.getPostById, { postId });
+    await expect(user.mutation(anyApi.v2Storage.generateUploadUrl, {})).rejects.toThrow("Reload the updated composer before uploading an image");
+    await expect(t.mutation(anyApi.v2Storage.generateUploadUrl, {})).rejects.toThrow("Unauthorized");
+    expect(await t.run(ctx => ctx.db.system.query("_storage").collect())).toEqual([]);
+    expect(await t.run(ctx => ctx.db.query("v2StorageUploads").collect())).toEqual([]);
+    expect(await user.query(api.publishing.getPostById, { postId })).toEqual(before);
+  });
+  it("keeps older composer saved hero reads through server-verified owned attachment binding", async () => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "fixture-author" });
+    await user.mutation(api.publishing.seedMvpWorkspace, {});
+    const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Historical saved hero", content: "Fictional saved body." });
+    const { fileId, orphanId } = await t.run(async ctx => {
+      const fileId = await ctx.storage.store(new Blob(["historical saved hero"]));
+      const orphanId = await ctx.storage.store(new Blob(["unregistered orphan"]));
+      await ctx.db.patch(postId, { heroImageStorageId: fileId });
+      return { fileId, orphanId };
+    });
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId })).resolves.toBeTruthy();
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId, postId })).resolves.toBeTruthy();
+    await expect(t.withIdentity({ subject: "foreign-owner" }).query(api.v2Storage.getFileUrl, { fileId })).rejects.toThrow("Storage asset not found or access denied");
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId: orphanId })).rejects.toThrow("Storage asset not found or access denied");
+    const other = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Different owned post", content: "Fictional context." });
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId, postId: other.postId })).rejects.toThrow("Storage asset not found or access denied");
+    await expect(user.query(api.posts.getFileUrl, { fileId })).rejects.toThrow("Storage asset not found or access denied");
+    await t.run(async ctx => {
+      const membership = (await ctx.db.query("v2BrandMemberships").withIndex("by_user_and_brand", q => q.eq("userId", "fixture-author").eq("brandId", "corvo")).unique())!;
+      await ctx.db.delete(membership._id);
+    });
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId })).rejects.toThrow(/access denied/);
+  });
+  it("fails closed on ambiguous and mixed-brand historical bindings while keeping exact context readable", async () => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "fixture-author" });
+    await user.mutation(api.publishing.seedMvpWorkspace, {});
+    const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Historical binding boundary", content: "Fictional saved body." });
+    const fileId = await t.run(async ctx => {
+      const fileId = await ctx.storage.store(new Blob(["historical binding"]));
+      await ctx.db.patch(postId, { heroImageStorageId: fileId });
+      const original = (await ctx.db.get(postId))!;
+      const { _id: _oldId, _creationTime: _oldTime, ...fields } = original;
+      void _oldId; void _oldTime;
+      await ctx.db.insert("v2Posts", { ...fields, title: "Second historical binding" });
+      await ctx.db.insert("v2Posts", { ...fields, title: "Third historical binding" });
+      return fileId;
+    });
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId })).rejects.toThrow("Ambiguous historical attachment ownership");
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId, postId })).resolves.toBeTruthy();
+    await t.run(async ctx => {
+      const posts = await ctx.db.query("v2Posts").withIndex("by_user", q => q.eq("userId", "fixture-author")).collect();
+      await ctx.db.delete(posts.find(post => post.title === "Third historical binding")!._id);
+      await ctx.db.patch(posts.find(post => post.title === "Second historical binding")!._id, { brandId: "lower-db" });
+      const member = await ctx.db.query("v2BrandMemberships").withIndex("by_user_and_brand", q => q.eq("userId", "fixture-author").eq("brandId", "lower-db")).unique();
+      if (member) await ctx.db.delete(member._id);
+    });
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId })).rejects.toThrow(/access denied/);
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId, postId })).resolves.toBeTruthy();
+  });
+  it.each(["reference", "foreign-upload"] as const)("never uses a historical association to bypass classified %s denial", async kind => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "fixture-author" });
+    await user.mutation(api.publishing.seedMvpWorkspace, {});
+    const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Classified binding boundary", content: "Fictional saved body." });
+    const fileId = await t.run(async ctx => {
+      const fileId = await ctx.storage.store(new Blob(["classified fixture"]));
+      await ctx.db.patch(postId, { heroImageStorageId: fileId });
+      if (kind === "reference") {
+        await ctx.db.insert("v2VisualReferences", { brandId: "corvo", storageId: fileId, sha256: "a".repeat(64), byteLength: 18, contentType: "image/png", fileName: "fixture.png", kind: "upload", seedAssetKey: null, article: null, approvalProvenance: null, sourceDocumentSha256: null, sourceRecord: "Offline fixture", historicalProvider: null, historicalModelId: null, uploadedBy: "fixture-author", createdAt: 1 });
+        const member = (await ctx.db.query("v2BrandMemberships").withIndex("by_user_and_brand", q => q.eq("userId", "fixture-author").eq("brandId", "corvo")).unique())!;
+        await ctx.db.patch(member._id, { role: "viewer" });
+      } else {
+        await ctx.db.insert("v2StorageUploads", { storageId: fileId, brandId: "corvo", userId: "foreign-owner", sha256: "a".repeat(64), bytes: 18, contentType: "image/png", fileName: "fixture.png", createdAt: 1 });
+      }
+      return fileId;
+    });
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId })).rejects.toThrow(/access denied/);
+    await expect(user.query(api.v2Storage.getFileUrl, { fileId, postId })).rejects.toThrow(/access denied/);
+  });
+  it("refuses to record an old publication schedule after a date-only reschedule", async () => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "fixture-author" });
+    await user.mutation(api.publishing.seedMvpWorkspace, {});
+    const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Fictional dispatch schedule", content: "Fictional saved body.", scheduledDate: "2026-10-01", scheduledTime: "09:30", timezone: "UTC" });
+    await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    const sent = await user.query(api.publishing.getPostForPublication, { postId });
+    await user.mutation(api.publishing.reschedule, { postId, scheduledDate: "2026-10-02", scheduledTime: "12:30", timezone: "America/Los_Angeles" });
+    const current = await user.query(api.publishing.getPostForPublication, { postId });
+    expect(current.post.approvalState).toBe("approved");
+    expect(current.reviewSignature).toBe(sent.reviewSignature);
+    await expect(user.mutation(anyApi.publishing.recordVisualPublicationPr, {
+      postId, expectedArticleSignature: JSON.stringify({ title: sent.post.title, content: sent.post.content, linkedinFirstComment: "" }), expectedVisualSignature: sent.reviewSignature,
+      expectedIntentId: sent.intent._id, expectedSchedule: { scheduledDate: sent.intent.scheduledDate!, scheduledTime: sent.intent.scheduledTime, timezone: sent.intent.timezone! },
+      result: { prUrl: "https://github.com/fictional-owner/fictional-reader/pull/987654", branchName: "blog/fictional-dispatch", prNumber: 987654, prStatus: "open", sanitizedResponse: { scheduledDate: sent.intent.scheduledDate, scheduledTime: sent.intent.scheduledTime, timezone: sent.intent.timezone } },
+    })).rejects.toThrow("Publication schedule changed before PR recording");
+    const retained = await t.run(async ctx => ({ post: await ctx.db.get(postId), attempts: await ctx.db.query("v2PublishAttempts").collect() }));
+    expect(retained.post?.prUrl).toBeUndefined();
+    expect(retained.post?.scheduledDate).toBe("2026-10-02");
+    expect(retained.attempts).toEqual([]);
+  });
+  it.each(["time", "timezone", "intent"] as const)("binds publication recording to the dispatched %s", async change => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "fixture-author" });
+    await user.mutation(api.publishing.seedMvpWorkspace, {});
+    const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Fictional dispatch context", content: "Fictional saved body.", scheduledDate: "2026-10-01", scheduledTime: "09:30", timezone: "UTC" });
+    await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    const sent = await user.query(api.publishing.getPostForPublication, { postId });
+    if (change === "intent") {
+      await t.run(async ctx => {
+        const { _id: _oldId, _creationTime: _oldTime, ...fields } = sent.intent;
+        void _oldId; void _oldTime;
+        await ctx.db.delete(sent.intent._id);
+        await ctx.db.insert("v2PublishingIntents", fields);
+      });
+    } else {
+      await user.mutation(api.publishing.reschedule, { postId, scheduledDate: "2026-10-01", scheduledTime: change === "time" ? "10:30" : "09:30", timezone: change === "timezone" ? "America/Los_Angeles" : "UTC" });
+    }
+    await expect(user.mutation(anyApi.publishing.recordVisualPublicationPr, {
+      postId, expectedArticleSignature: approvalArticleSignature(sent.post), expectedVisualSignature: sent.reviewSignature,
+      expectedIntentId: sent.intent._id, expectedSchedule: resolvePublicationSchedule(sent.post, sent.intent, "2026-10-01"),
+      result: { prUrl: "https://github.com/fictional-owner/fictional-reader/pull/987654", branchName: "blog/fictional-context", prStatus: "open", sanitizedResponse: {} },
+    })).rejects.toThrow("Publication schedule changed before PR recording");
+    expect(await t.run(ctx => ctx.db.query("v2PublishAttempts").collect())).toEqual([]);
+  });
+  it("records the actual dispatched fallback date and resolved timezone without changing approval semantics", async () => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "fixture-author" });
+    await user.mutation(api.publishing.seedMvpWorkspace, {});
+    const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Fictional unscheduled dispatch", content: "Fictional saved body." });
+    await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    const sent = await user.query(api.publishing.getPostForPublication, { postId });
+    const expectedSchedule = resolvePublicationSchedule(sent.post, sent.intent, "2026-10-01");
+    const result = await user.mutation(anyApi.publishing.recordVisualPublicationPr, {
+      postId, expectedArticleSignature: approvalArticleSignature(sent.post), expectedVisualSignature: sent.reviewSignature,
+      expectedIntentId: sent.intent._id, expectedSchedule,
+      result: { prUrl: "https://github.com/fictional-owner/fictional-reader/pull/987654", branchName: "blog/fictional-fallback", prStatus: "open", sanitizedResponse: expectedSchedule },
+    });
+    const attempt = await t.run(ctx => ctx.db.get(result.attemptId));
+    expect(attempt?.submissionSnapshot).toMatchObject(expectedSchedule);
+    expect(attempt?.sanitizedResponse).toEqual(expectedSchedule);
+    expect((await user.query(api.publishing.getPostById, { postId }))?.status).toBe("pr-created");
+  });
   it("blocks the final review of an inserted linked figure when upstream evidence changes before reimport", async () => {
     const t = convexTest(schema, modules);
     const user = t.withIdentity({ subject: "fixture-author" });

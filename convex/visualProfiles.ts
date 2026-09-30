@@ -5,11 +5,13 @@ import { brandIdValidator, requireBrandAccess, requireUserId, type BrandId } fro
 import { visualDefaultRouteValidator, visualGuidanceValidator, visualLessonRoleValidator, visualLessonValidator, visualPostExceptionValidator, visualProfilePinValidator, visualProfileRevisionValidator, visualReferenceBindingValidator, visualReferenceRoleValidator, visualReferenceValidator } from "./visualProfileTables";
 import type { Doc, Id } from "./_generated/dataModel";
 import { assertVisualImage, hashVisualBytes, validateVisualProfileContent } from "../lib/visualProfile";
+import { assertVisualAdmissionEnabled } from "./visualRollout";
 import { approvedCorvoSeedAsset, corvoCurrentGuidance, corvoSeed, corvoSeedAssets, corvoSeedIntegrity, verifyCorvoSeedIntegrity, CORVO_VISUAL_SEED_ID } from "../lib/visualSeed";
 
-async function requireProfileWrite(ctx: QueryCtx | MutationCtx, userId: string, brandId: BrandId) {
+async function requireProfileWrite(ctx: QueryCtx | MutationCtx, userId: string, brandId: BrandId, write = true) {
   const member = await requireBrandAccess(ctx, userId, brandId);
   if (member.role !== "owner" && member.role !== "editor") throw new Error("Visual profile write access denied");
+  if (write) assertVisualAdmissionEnabled(userId);
   return member;
 }
 
@@ -71,7 +73,7 @@ export const getProfile = query({
   returns: v.union(v.null(), v.object({ revision: visualProfileRevisionValidator, references: v.array(visualReferenceValidator) })),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    await requireProfileWrite(ctx, userId, args.brandId);
+    await requireProfileWrite(ctx, userId, args.brandId, false);
     const revision = args.profileRevisionId ? await ctx.db.get(args.profileRevisionId) : (await currentProfile(ctx, args.brandId)).revision;
     if (!revision) return null;
     if (revision.brandId !== args.brandId) throw new Error("Visual profile revision not found");
@@ -160,7 +162,7 @@ export const resolveForPost = query({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await ownedBlogPost(ctx, userId, args.postId);
-    await requireProfileWrite(ctx, userId, post.brandId);
+    await requireProfileWrite(ctx, userId, post.brandId, false);
     return resolveVisualProfileForPost(ctx, userId, args.postId, args);
   },
 });
@@ -213,7 +215,7 @@ export const resolveFromPin = query({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await ownedBlogPost(ctx, userId, args.postId);
-    await requireProfileWrite(ctx, userId, post.brandId);
+    await requireProfileWrite(ctx, userId, post.brandId, false);
     return resolveVisualProfileFromPin(ctx, userId, args.postId, args.pin);
   },
 });
@@ -297,7 +299,7 @@ export const getReference = query({
     const userId = await requireUserId(ctx);
     const reference = await ctx.db.get(args.referenceId);
     if (!reference) throw new Error("Visual reference not found");
-    await requireProfileWrite(ctx, userId, reference.brandId);
+    await requireProfileWrite(ctx, userId, reference.brandId, false);
     return { ...reference, url: await ctx.storage.getUrl(reference.storageId) };
   },
 });
@@ -403,7 +405,7 @@ export const getSeedArchive = query({
     archiveOnly: v.literal(true), lessonsSha256: v.string(), finalDirectionsSha256: v.string(),
   })),
   handler: async (ctx, args) => {
-    await requireProfileWrite(ctx, await requireUserId(ctx), args.brandId);
+    await requireProfileWrite(ctx, await requireUserId(ctx), args.brandId, false);
     const archive = await ctx.db.query("v2VisualSeedImports")
       .withIndex("by_brandId_and_seedId", q => q.eq("brandId", args.brandId).eq("seedId", CORVO_VISUAL_SEED_ID)).unique();
     if (!archive) return null;

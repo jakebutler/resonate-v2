@@ -25,7 +25,7 @@ import { assertEditorialStorageAccess } from "./visualStorageAccess";
 import { buildPublicationFigures, onFigureArticleChange, publicationFigureValidator } from "./visualFigures";
 import { hashVisualBytes } from "../lib/visualProfile";
 import { stableInputSignature } from "../lib/visualWorkflow";
-import { approvalArticleSignature, publicationMetadataSignature } from "../lib/publicationReview";
+import { approvalArticleSignature, publicationMetadataSignature, resolvePublicationSchedule } from "../lib/publicationReview";
 import { assertCurrentLinkedEvidence } from "./visualLinkedEvidence";
 
 type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
@@ -1413,7 +1413,8 @@ export const recordProviderIntent = mutation({
   },
 });
 
-async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Posts">; result: Infer<typeof githubPrRecordValidator>; expectedArticleSignature?: string; expectedVisualSignature?: string }, trusted = false) {
+const publicationScheduleValidator = v.object({ scheduledDate: v.string(), scheduledTime: v.optional(v.string()), timezone: v.string() });
+async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Posts">; result: Infer<typeof githubPrRecordValidator>; expectedArticleSignature?: string; expectedVisualSignature?: string; expectedIntentId?: Id<"v2PublishingIntents">; expectedSchedule?: Infer<typeof publicationScheduleValidator> }, trusted = false) {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId, true);
     if (post.channelId !== "corvo-blog") {
@@ -1428,6 +1429,14 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
     if (trusted && (intent.approvalState !== "approved" || intent.contentFingerprint !== fingerprintPostContent(post))) throw new Error("Publication intent changed before PR recording");
+    if (trusted) {
+      const expected = args.expectedSchedule;
+      const current = resolvePublicationSchedule(post, intent, expected?.scheduledDate ?? "");
+      if (!expected || intent._id !== args.expectedIntentId || current.scheduledDate !== expected.scheduledDate ||
+        current.scheduledTime !== expected.scheduledTime || current.timezone !== expected.timezone) {
+        throw new Error("Publication schedule changed before PR recording");
+      }
+    }
 
     const now = Date.now();
     const sanitizedResponse = sanitizeProviderResponse(
@@ -1454,9 +1463,9 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
         channelId: post.channelId,
         title: post.title,
         content: post.content,
-        scheduledDate: intent.scheduledDate,
-        scheduledTime: intent.scheduledTime,
-        timezone: intent.timezone,
+        scheduledDate: trusted ? args.expectedSchedule!.scheduledDate : intent.scheduledDate,
+        scheduledTime: trusted ? args.expectedSchedule!.scheduledTime : intent.scheduledTime,
+        timezone: trusted ? args.expectedSchedule!.timezone : intent.timezone,
       },
       sanitizedResponse,
       createdAt: now,
@@ -1511,14 +1520,15 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
       metadata: { attemptId, prUrl: args.result.prUrl },
     });
 
-    return { recorded: true, attemptId };
+    return { recorded: true as const, attemptId };
 }
 export const recordGithubPr = mutation({
   args: { postId: v.id("v2Posts"), result: githubPrRecordValidator },
   handler: (ctx, args) => recordGithubPrHandler(ctx, args),
 });
 export const recordVisualPublicationPr = internalMutation({
-  args: { postId: v.id("v2Posts"), result: githubPrRecordValidator, expectedArticleSignature: v.string(), expectedVisualSignature: v.string() },
+  args: { postId: v.id("v2Posts"), result: githubPrRecordValidator, expectedArticleSignature: v.string(), expectedVisualSignature: v.string(), expectedIntentId: v.id("v2PublishingIntents"), expectedSchedule: publicationScheduleValidator },
+  returns: v.object({ recorded: v.literal(true), attemptId: v.id("v2PublishAttempts") }),
   handler: (ctx, args) => recordGithubPrHandler(ctx, args, true),
 });
 
@@ -1782,7 +1792,7 @@ async function recordBlogPrStatusHandler(ctx: MutationCtx, args: { postId: Id<"v
     }
 
     await ctx.db.patch(args.postId, patch);
-    return { updated: true, prStatus: args.prStatus };
+    return { updated: true as const, prStatus: args.prStatus };
 }
 export const recordBlogPrStatus = mutation({
   args: { postId: v.id("v2Posts"), prStatus: visualPrStatusValidator, prNumber: v.optional(v.number()) },
@@ -1790,6 +1800,7 @@ export const recordBlogPrStatus = mutation({
 });
 export const recordVisualPublicationPrStatus = internalMutation({
   args: { postId: v.id("v2Posts"), prStatus: visualPrStatusValidator, prNumber: v.optional(v.number()), expectedPrUrl: v.string() },
+  returns: v.object({ updated: v.literal(true), prStatus: visualPrStatusValidator }),
   handler: (ctx, args) => recordBlogPrStatusHandler(ctx, args, true),
 });
 export const getVisualPublicationPr = query({

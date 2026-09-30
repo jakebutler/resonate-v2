@@ -24,6 +24,76 @@ async function harness(article = content) {
   return { t, user, postId };
 }
 describe("persistent evidence-bound figures", () => {
+  it.each([
+    { name: "published", status: "published", blogPrStatus: "merged" },
+    { name: "pr-created", status: "pr-created", blogPrStatus: "open" },
+    { name: "submitted", status: "submitted", blogPrStatus: "open" },
+    { name: "merged", status: "draft", blogPrStatus: "merged" },
+  ] as const)("rejects figure writes in $name lifecycle while preserving inspection and saved state", async lifecycle => {
+    const article = "## Flow\n\n| from | to | relation |\n|---|---|---|\n| Reader | Editor | sends feedback |\n\n## Discussion\n\nUnrelated copy.";
+    for (const operation of ["accept", "edit", "move", "remove", "attach", "plan", "decline"] as const) {
+      const { t, user, postId } = await harness(article);
+      const plan = await user.mutation(figureApi.planFigures, { postId });
+      const candidate = await user.query(figureApi.getCandidate, { candidateId: plan.candidateIds[0] });
+      const review = { candidateId: candidate._id, expectedDataSignature: candidate.dataSignature, expectedPresentationSignature: candidate.presentationSignature };
+      if (operation === "move" || operation === "remove") await user.mutation(figureApi.acceptCandidate, review);
+      await t.run(ctx => ctx.db.patch(postId, {
+        status: lifecycle.status, blogPrStatus: lifecycle.blogPrStatus, approvalState: "approved",
+        prUrl: "https://github.com/fictional/fixture/pull/1", branchName: "blog/fictional-lifecycle",
+      }));
+      const before = {
+        post: await user.query(api.publishing.getPostById, { postId }),
+        workspace: await user.query(figureApi.getWorkspace, { postId }),
+        history: await user.query(figureApi.getReviewHistory, { postId }),
+        publication: await user.query(figureApi.getPublicationFigures, { postId }),
+      };
+      const source = before.workspace.sources[0];
+      expect(await user.query(figureApi.getSource, { sourceId: source._id })).toEqual(source);
+      expect(await user.query(figureApi.getCandidate, { candidateId: candidate._id })).toEqual(candidate);
+      const actions = {
+        accept: () => user.mutation(figureApi.acceptCandidate, review),
+        edit: () => user.mutation(figureApi.editCandidate, { ...review, palette: { background: "#ece9e2", ink: "#22272b", accent: "#c2612c" } }),
+        move: () => user.mutation(figureApi.moveFigure, { ...review, insertionAnchor: "## Discussion" }),
+        remove: () => user.mutation(figureApi.removeFigure, { candidateId: candidate._id }),
+        attach: () => user.mutation(figureApi.attachEvidence, { postId, key: "lifecycle-evidence", expectedSourceId: null, name: "evidence.md", format: "markdown", purpose: "claim-trace", content: article }),
+        plan: () => user.mutation(figureApi.planFigures, { postId }),
+        decline: () => user.mutation(figureApi.declineCandidate, { candidateId: candidate._id }),
+      };
+      await expect(actions[operation]()).rejects.toThrow("Separate publishing transition required before figure changes");
+      expect({
+        post: await user.query(api.publishing.getPostById, { postId }),
+        workspace: await user.query(figureApi.getWorkspace, { postId }),
+        history: await user.query(figureApi.getReviewHistory, { postId }),
+        publication: await user.query(figureApi.getPublicationFigures, { postId }),
+      }).toEqual(before);
+    }
+  });
+
+  it.each(["draft", "scheduled"] as const)("preserves permitted %s figure writes and scheduling metadata", async status => {
+    const article = "## Flow\n\n| from | to | relation |\n|---|---|---|\n| Reader | Editor | sends feedback |\n\n## Discussion\n\nUnrelated copy.";
+    const { t, user, postId } = await harness(article);
+    const schedule = { scheduledDate: "2026-10-02", scheduledTime: "12:30", timezone: "America/Los_Angeles" };
+    await t.run(ctx => ctx.db.patch(postId, { status, ...schedule }));
+    await user.mutation(figureApi.attachEvidence, { postId, key: "lifecycle-evidence", expectedSourceId: null, name: "evidence.md", format: "markdown", purpose: "claim-trace", content: article });
+    const plan = await user.mutation(figureApi.planFigures, { postId });
+    const candidate = await user.query(figureApi.getCandidate, { candidateId: plan.candidateIds[0] });
+    const review = (current: typeof candidate) => ({ candidateId: current._id, expectedDataSignature: current.dataSignature, expectedPresentationSignature: current.presentationSignature });
+    await user.mutation(figureApi.acceptCandidate, review(candidate));
+    const edited = await user.mutation(figureApi.editCandidate, { ...review(candidate), palette: { background: "#ece9e2", ink: "#22272b", accent: "#c2612c" } });
+    expect(edited.candidateId).not.toBe(candidate._id);
+    const editedCandidate = await user.query(figureApi.getCandidate, { candidateId: edited.candidateId });
+    await user.mutation(figureApi.acceptCandidate, review(editedCandidate));
+    const moved = await user.mutation(figureApi.moveFigure, { ...review(editedCandidate), insertionAnchor: "## Discussion" });
+    expect(await user.query(figureApi.getPublicationFigures, { postId })).toHaveLength(1);
+    await user.mutation(figureApi.removeFigure, { candidateId: moved.candidateId });
+    expect(await user.query(figureApi.getPublicationFigures, { postId })).toEqual([]);
+    const next = await user.mutation(figureApi.planFigures, { postId });
+    await user.mutation(figureApi.declineCandidate, { candidateId: next.candidateIds[0] });
+    expect((await user.query(figureApi.getWorkspace, { postId })).states[0].status).toBe("declined");
+    expect(await user.query(api.publishing.getPostById, { postId })).toMatchObject({ status, ...schedule, content: article });
+    expect((await user.query(figureApi.getReviewHistory, { postId })).map(event => event.decision)).toEqual(["declined", "removed", "moved", "accepted", "edited", "accepted"]);
+  });
+
   it("rejects bare, malformed and case-variant internal figure protocols even when there are no accepted figures", async () => {
     const { user, postId } = await harness("No supported figure evidence.");
     for (const token of ["resonate-figure://", "resonate-figure://-x", "Resonate-Figure://bad", "resonate-figure:/bad", "resonate-figure:%2F%2Fbad"]) {

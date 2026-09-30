@@ -2,8 +2,8 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import { requireBrandAccess } from "./campaignAccess";
 
-/** No bare storage ID grants access. Historical attachment context is explicit. */
-export async function assertEditorialStorageAccess(ctx: QueryCtx | MutationCtx, userId: string, fileId: Id<"_storage">, context?: { legacyPostId?: Id<"posts">; postId?: Id<"v2Posts"> }) {
+/** Storage access requires classified ownership or a verified historical attachment. */
+export async function assertEditorialStorageAccess(ctx: QueryCtx | MutationCtx, userId: string, fileId: Id<"_storage">, context?: { legacyPostId?: Id<"posts">; postId?: Id<"v2Posts">; allowOwnedHistoricalLookup?: boolean }) {
     // Existing composers retain their legacy storage path. New visual assets
     // carry indexed ownership, which must also apply to this older endpoint.
     const [references, rawVersions, exports] = await Promise.all([
@@ -38,6 +38,16 @@ export async function assertEditorialStorageAccess(ctx: QueryCtx | MutationCtx, 
       const post = await ctx.db.get(context.postId);
       if (post?.userId === userId && post.heroImageStorageId === fileId) {
         await requireBrandAccess(ctx, userId, post.brandId);
+        return;
+      }
+    }
+    // Read-only compatibility for older canonical composers, which omitted postId.
+    // Mutation validation and shared legacy reads never enable this option.
+    if (context?.allowOwnedHistoricalLookup && !context.postId && !context.legacyPostId) {
+      const posts = await ctx.db.query("v2Posts").withIndex("by_user_and_heroImageStorageId", q => q.eq("userId", userId).eq("heroImageStorageId", fileId)).take(3);
+      if (posts.length > 2) throw new Error("Ambiguous historical attachment ownership");
+      if (posts.length) {
+        for (const post of posts) await requireBrandAccess(ctx, userId, post.brandId);
         return;
       }
     }

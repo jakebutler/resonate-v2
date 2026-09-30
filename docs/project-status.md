@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 08:29:27 PDT
+Last updated: 09/30/2026 09:50:56 PDT
 
 ## State
 
@@ -16,43 +16,39 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 4f59b60 feat: integrate opt-in visuals into the saved composer
+- c390c98 docs: record visual contracts and guarded offline rehearsals
 
 ## Recent Commits
 
+- c390c98 docs: record visual contracts and guarded offline rehearsals
 - 4f59b60 feat: integrate opt-in visuals into the saved composer
 - 48a28c0 feat: persist guarded editorial visuals and evidence-bound figures
 - b8b6e44 Merge pull request #96 from jakebutler/codex/linkedin-first-comment
 - c91ecdb feat: preserve LinkedIn first comments through approval and Buffer submission
-- 38238c9 Merge pull request #95 from jakebutler/codex/publishing-navigation
 
 ## Local Working Tree
 
-- A  docs/editorial-visuals/PROGRESS.md
-- A  docs/editorial-visuals/figures.md
-- A  docs/editorial-visuals/fixture-rehearsal.md
-- A  docs/editorial-visuals/issues.json
-- A  docs/editorial-visuals/linked-evidence.md
-- A  docs/editorial-visuals/linked-fixture-rehearsal.md
-- A  docs/editorial-visuals/profile-contract.md
-- A  docs/editorial-visuals/providers/contracts.md
-- A  docs/editorial-visuals/providers/qualification-packet.json
-- A  docs/editorial-visuals/providers/review-dispositions.md
-- A  docs/editorial-visuals/providers/tdd-receipts.md
-- A  docs/editorial-visuals/publication-action.md
-- A  docs/editorial-visuals/reader-rehearsal.md
-- A  docs/editorial-visuals/release-preflight.md
-- A  docs/editorial-visuals/ui.md
-- A  docs/editorial-visuals/workflow-contract.md
-- A  docs/editorial-visuals/workflow-tdd-receipts.md
-- A  scripts/export-local-visual-fixture.mjs
-- A  scripts/import-visual-seed.mjs
-- A  scripts/publish-visual-tickets.py
-- A  scripts/visual-fixture-issuer.mjs
-- A  scripts/visual-fixture-rehearsal.mjs
-- A  scripts/visual-linked-fixture-rehearsal.mjs
-- A  scripts/visual-provider-qualification-packet.py
-- A  scripts/visual-provider-qualification-packet.test.py
+- M  convex/__tests__/visualFigures.test.ts
+- M  convex/__tests__/visualPublication.test.ts
+- M  convex/__tests__/visualPublishingIntegration.test.ts
+- A  convex/__tests__/visualRollout.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- M  convex/v2Storage.ts
+- M  convex/visualFigures.ts
+- M  convex/visualLinkedEvidence.ts
+- M  convex/visualProfiles.ts
+- M  convex/visualPublication.ts
+- A  convex/visualRollout.ts
+- M  convex/visualStorageAccess.ts
+- M  convex/visualWorkflow.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/publication-action.md
+- M  docs/editorial-visuals/release-preflight.md
+- A  docs/editorial-visuals/rollout.md
+- M  lib/publicationReview.ts
+- M  tests/setup.ts
 
 ## Next Agent Pickup
 

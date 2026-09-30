@@ -4509,3 +4509,61 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/editorial-visual-generation
+
+## 09/30/2026 09:50:56 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	convex/__tests__/visualFigures.test.ts
+- M	convex/__tests__/visualPublication.test.ts
+- M	convex/__tests__/visualPublishingIntegration.test.ts
+- A	convex/__tests__/visualRollout.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- M	convex/v2Storage.ts
+- M	convex/visualFigures.ts
+- M	convex/visualLinkedEvidence.ts
+- M	convex/visualProfiles.ts
+- M	convex/visualPublication.ts
+- A	convex/visualRollout.ts
+- M	convex/visualStorageAccess.ts
+- M	convex/visualWorkflow.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- M	docs/editorial-visuals/publication-action.md
+- M	docs/editorial-visuals/release-preflight.md
+- A	docs/editorial-visuals/rollout.md
+- M	lib/publicationReview.ts
+- M	tests/setup.ts
+
+### Working Tree Snapshot
+
+- M  convex/__tests__/visualFigures.test.ts
+- M  convex/__tests__/visualPublication.test.ts
+- M  convex/__tests__/visualPublishingIntegration.test.ts
+- A  convex/__tests__/visualRollout.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- M  convex/v2Storage.ts
+- M  convex/visualFigures.ts
+- M  convex/visualLinkedEvidence.ts
+- M  convex/visualProfiles.ts
+- M  convex/visualPublication.ts
+- A  convex/visualRollout.ts
+- M  convex/visualStorageAccess.ts
+- M  convex/visualWorkflow.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/publication-action.md
+- M  docs/editorial-visuals/release-preflight.md
+- A  docs/editorial-visuals/rollout.md
+- M  lib/publicationReview.ts
+- M  tests/setup.ts
+
+### Branch
+
+- feat/editorial-visual-generation

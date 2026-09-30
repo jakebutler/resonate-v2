@@ -270,6 +270,7 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_brand", ["brandId"])
+    .index("by_user_and_heroImageStorageId", ["userId", "heroImageStorageId"])
     .index("by_brand_and_status", ["brandId", "status"])
     .index("by_brand_and_blogSlug", ["brandId", "blogSlug"])
     .index("by_channel", ["channelId"])

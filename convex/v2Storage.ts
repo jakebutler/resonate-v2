@@ -1,10 +1,19 @@
-import { v } from "convex/values";
-import { action, internalMutation, internalQuery, query } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { brandIdValidator, requireBrandAccess, requireUserId } from "./campaignAccess";
 import { assertEditorialStorageAccess } from "./visualStorageAccess";
 import { assertVisualImage, hashVisualBytes } from "../lib/visualProfile";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+
+/** Older open composers retain a safe, explicit reload boundary during deployment. */
+export const generateUploadUrl = mutation({
+  args: {}, returns: v.string(),
+  handler: async ctx => {
+    await requireUserId(ctx);
+    throw new ConvexError("Reload the updated composer before uploading an image");
+  },
+});
 
 export const authorizeUpload = internalQuery({
   args: { brandId: v.optional(brandIdValidator) }, returns: v.null(),
@@ -53,9 +62,10 @@ export const uploadImage = action({
 
 export const getFileUrl = query({
   args: { fileId: v.id("_storage"), postId: v.optional(v.id("v2Posts")) },
+  returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    await assertEditorialStorageAccess(ctx, userId, args.fileId, { postId: args.postId });
+    await assertEditorialStorageAccess(ctx, userId, args.fileId, args.postId === undefined ? { allowOwnedHistoricalLookup: true } : { postId: args.postId });
     return await ctx.storage.getUrl(args.fileId);
   },
 });

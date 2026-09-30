@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
 import { brandIdValidator, requireBrandAccess, requireUserId, audit } from "./campaignAccess";
 import { resolveVisualProfileForPost, resolveVisualProfileFromPin } from "./visualProfiles";
+import { assertVisualAdmissionEnabled } from "./visualRollout";
 import { hashVisualBytes } from "../lib/visualProfile";
 import { articleSignature, stableInputSignature, validateScenePlan, composeScenePrompt, relevanceSignature, serializedUtf8Bytes, assertSerializedBound, canIssueLocalFixtureQuote, isOfflineContractRuntime } from "../lib/visualWorkflow";
 import { attemptInputValidator, sceneValidator, exportMetadataValidator, publicationVisualsValidator, visualVersionDocValidator, visualAttemptDocValidator, visualPlanDocValidator, visualStateDocValidator, visualReflectionDocValidator, visualBudgetDocValidator, visualBudgetMonthDocValidator } from "./visualWorkflowTables";
@@ -59,13 +60,14 @@ async function validatePinnedInput(ctx: QueryCtx | MutationCtx, attempt: Doc<"v2
   }
 }
 
-async function ownedPost(ctx: MutationCtx | QueryCtx, userId: string, postId: Id<"v2Posts">, write = true) {
+async function ownedPost(ctx: MutationCtx | QueryCtx, userId: string, postId: Id<"v2Posts">, write = true, admission = true) {
   const post = await ctx.db.get(postId);
   if (!post || post.userId !== userId) throw new Error("Post not found");
   const membership = await requireBrandAccess(ctx, userId, post.brandId);
   if (write && membership.role !== "owner" && membership.role !== "editor") throw new Error("Brand edit access denied");
-  if (write && ["published", "submitted", "pr-created"].includes(post.status)) throw new Error("Separate publishing transition required before visual changes");
+  if (write && (["published", "submitted", "pr-created"].includes(post.status) || post.blogPrStatus === "merged")) throw new Error("Separate publishing transition required before visual changes");
   if (post.channelId !== "corvo-blog") throw new Error("Visuals require a saved blog post");
+  if (write && admission) assertVisualAdmissionEnabled(userId);
   return post;
 }
 
@@ -148,6 +150,7 @@ export const registerLocalFixtureQuote = internalMutation({
     if (!attempt) throw new Error("Attempt not found");
     micros(args.maximumMicros);
     if (!canIssueLocalFixtureQuote(process.env, attempt.userId, args)) throw new Error("Only verified local offline fixtures can issue fixture quotes");
+    assertVisualAdmissionEnabled(attempt.userId);
     if (!args.provider.trim() || args.provider.length > 80 || !args.model.trim() || args.model.length > 120) throw new Error("Invalid fixture route");
     return ctx.db.insert("v2VisualDispatchQuotes", { attemptId: attempt._id, inputSignature: attempt.inputSignature, stage: attempt.stage, provider: args.provider, model: args.model, maximumMicros: args.maximumMicros, qualification: "offline-fixture", boundVerified: true, capabilityReceiptIds: [], provenance: "LOCAL OFFLINE FIXTURE — no live provider qualification", createdAt: Date.now() });
   },
@@ -186,7 +189,7 @@ export const reserveAttempt = internalMutation({
       if (deferred?.deferredReason) { if (attempt.reservedMicros !== undefined) await cancelBeforeDispatch(ctx, attempt, deferred.deferredReason); return { admitted: false, reason: deferred.deferredReason }; }
     }
     try {
-      const post = await ownedPost(ctx, attempt.userId, attempt.postId);
+      const post = await ownedPost(ctx, attempt.userId, attempt.postId, true, false);
       await validatePinnedInput(ctx, attempt);
       if (attempt.stage !== "reflection" && articleSignature(post) !== attempt.input.article.signature) throw new Error("Article changed before dispatch; request a new attempt");
     } catch (error) {
@@ -194,6 +197,8 @@ export const reserveAttempt = internalMutation({
       await cancelBeforeDispatch(ctx, attempt, reason);
       return { admitted: false, reason };
     }
+    // Keep a rollout pause outside cancellation catches: it retains existing reservations.
+    assertVisualAdmissionEnabled(attempt.userId);
     if (!await imageSlotCurrent(ctx, attempt)) { await cancelBeforeDispatch(ctx, attempt, "Image attempt was superseded before dispatch"); return { admitted: false, reason: "Image attempt was superseded before dispatch" }; }
     if (attempt.stage === "reflection") {
       const reflection = await ctx.db.query("v2VisualReflections").withIndex("by_attempt", q => q.eq("attemptId", attempt._id)).unique();
@@ -271,12 +276,14 @@ export const claimAttempt = internalMutation({
     try {
       await qualifiedQuote(ctx, attempt, attempt.quoteId);
       await validatePinnedInput(ctx, attempt);
-      const post = await ownedPost(ctx, attempt.userId, attempt.postId);
+      const post = await ownedPost(ctx, attempt.userId, attempt.postId, true, false);
       if (attempt.stage !== "reflection" && articleSignature(post) !== attempt.input.article.signature) throw new Error("Article changed before dispatch; request a new attempt");
     } catch (error) {
       await cancelBeforeDispatch(ctx, attempt, `Cancelled before dispatch: ${error instanceof Error ? error.message.slice(0,2000) : "Stored inputs or permissions changed"}`);
       return null;
     }
+    // Pause new dispatch without releasing the already admitted reservation.
+    assertVisualAdmissionEnabled(attempt.userId);
     const budget = await ctx.db.query("v2VisualBudgets").withIndex("by_brand", q => q.eq("brandId", attempt.brandId)).unique();
     if (budget?.unacknowledgedOverrunMicros || budget?.unacknowledgedLateChargeMicros) return null;
     const now = Date.now();

@@ -37,6 +37,7 @@ import type * as visualLinkedEvidence from "../visualLinkedEvidence.js";
 import type * as visualProfileTables from "../visualProfileTables.js";
 import type * as visualProfiles from "../visualProfiles.js";
 import type * as visualPublication from "../visualPublication.js";
+import type * as visualRollout from "../visualRollout.js";
 import type * as visualStorageAccess from "../visualStorageAccess.js";
 import type * as visualStorageTables from "../visualStorageTables.js";
 import type * as visualWorkflow from "../visualWorkflow.js";
@@ -79,6 +80,7 @@ declare const fullApi: ApiFromModules<{
   visualProfileTables: typeof visualProfileTables;
   visualProfiles: typeof visualProfiles;
   visualPublication: typeof visualPublication;
+  visualRollout: typeof visualRollout;
   visualStorageAccess: typeof visualStorageAccess;
   visualStorageTables: typeof visualStorageTables;
   visualWorkflow: typeof visualWorkflow;

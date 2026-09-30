@@ -1,8 +1,24 @@
 # Editorial visuals progress
 
+## September 30, 09:40 PDT checkpoint
+
+Final candidate review found two defects in `c390c98`: concurrent scheduling could record a stale first PR as current, and figure writes could modify published/merged posts. Both have actual public-interface RED/GREEN repairs. The repaired server now defaults new visual admissions to paused, retains existing reservations and settlement during containment, and freezes hero/linked/figure changes for a retained merged PR. Root compatibility tests preserve older open-composer hero reads through indexed server ownership and provide an authenticated reload error for deprecated uploads. Thirty publishing/storage integration tests pass, plus 185 worker regression tests with one existing source-master skip; scoped lint and both production typechecks pass. Full exact-candidate checks and fresh independent review are next.
+
+PR [#131](https://github.com/jakebutler/resonate-v2/pull/131) remains draft. Its previous CI passed at `c390c98`, which is not approval for these uncommitted repairs. A read-only private production backup preserved 825 documents and all 15 stored files with verified hashes; restore was not rehearsed. Production admission/fixture flags are absent. The primary checkouts remain untouched. Provider spend and reservations remain $0 for each separate $5 cap. No provider qualification, Jake aesthetic approval, merge, production deployment or article publication/scheduling has occurred.
+
 Started September 30, 2026. Worktree: `/Users/jacobbutler/.codex/worktrees/resonate-editorial-visuals/resonate-v2`. Branch: `feat/editorial-visual-generation`. Remote: `https://github.com/jakebutler/resonate-v2.git`. Verified remote default: `main`. Clean base: `b8b6e44baab1d728f6a2267e043acc64b03bec66`. Primary checkout preserved.
 
 Authoritative contract: `/Users/jacobbutler/Documents/Codex/2026-09-28/you-are-continuing-work-for-jake/work/resonate-visual-generation/IMPLEMENTATION-COORDINATOR.md`.
+
+## Latest coordinator checkpoint — September 30, 09:13 PDT
+
+Draft [PR #131](https://github.com/jakebutler/resonate-v2/pull/131) is attached to the chat. Commits `48a28c0`, `4f59b60`, and `c390c98` were pushed; exact `c390c98` passed all GitHub lint/test/build/E2E checks and Vercel preview deployment. Final integrated backend and figures reviews both returned CHANGES_REQUIRED for two P2 defects, so that commit cannot merge despite green CI. Both reviewers retained clean end manifests; no timeout was counted as approval.
+
+The coordinator reproduced and repaired a reschedule-during-PR-recording race using a separate dispatched-intent/date/time/timezone CAS, preserving date-only editorial approval. The actual public mutation RED wrongly recorded success; targeted regressions pass 53 tests. A disjoint worker repaired the shared figure write lifecycle guard: published, submitted, pr-created and merged articles refuse all seven mutations, while read inspection and draft/scheduled controls remain intact. Its public RED/GREEN and 77 passing checks are retained. Both repairs still need a new committed candidate, independent final review and new exact CI.
+
+Release containment is being strengthened with a server opt-in/forward-pause control because hiding the UI alone leaves direct authenticated write entry available. The pause must preserve existing immutable history, evidence/publication guards, reservations, uncertain recovery and receipt reconciliation. No provider route is qualified. Both cumulative provider ledgers remain spent/reserved $0, no keys were minted, and no real publication/scheduling was attempted.
+
+Production baseline authentication and calendar readback work in Chrome, with no user mutations. The automatic candidate preview reaches sign-in but Clerk rejects its origin because it uses the production-domain key; no authentication protection was changed or bypassed. The new Convex visual publisher has no production GitHub configuration. Disabled delivery can be assessed separately from opt-in/live provider use, only after all code/review/CI/compatible rollback gates are green. The durable exact frontier is contract `execution/progress-ledger.json`; later entries supersede the historical checkpoints below.
 
 ## Authority and state
 

@@ -36,7 +36,7 @@ async function harness() {
     getPostForPublication: query({ args: { postId: v.string() }, returns: v.any(), handler: async (ctx, args) => {
       await owned(ctx); if (args.postId !== snapshot.post._id) throw new Error("Post not found"); reads.push(args.postId); return snapshot;
     } }),
-    recordVisualPublicationPr: internalMutation({ args: { postId: v.id("v2Posts"), result: v.any(), expectedArticleSignature: v.string(), expectedVisualSignature: v.string() }, returns: v.any(), handler: async (ctx, args) => {
+    recordVisualPublicationPr: internalMutation({ args: { postId: v.id("v2Posts"), result: v.any(), expectedArticleSignature: v.string(), expectedVisualSignature: v.string(), expectedIntentId: v.id("v2PublishingIntents"), expectedSchedule: v.object({ scheduledDate: v.string(), scheduledTime: v.optional(v.string()), timezone: v.string() }) }, returns: v.any(), handler: async (ctx, args) => {
       await owned(ctx); records.push(args); if (recordingError) throw new Error(recordingError); return { recorded: true, attemptId: "retained-attempt" };
     } }),
     getVisualPublicationPr: query({ args: { postId: v.string() }, returns: v.any(), handler: async (ctx, args) => {
@@ -66,6 +66,21 @@ const created = { prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/
 
 beforeEach(() => { transport.create.mockReset(); transport.refresh.mockReset(); });
 describe("server-owned visual publication", () => {
+  it("pauses a new publication dispatch server-side before transport while preserving retained PR status refresh", async () => {
+    const { user, snapshot, records } = await harness();
+    qualifiedMock(snapshot);
+    snapshot.post.prUrl = created.prUrl;
+    transport.create.mockResolvedValue(created);
+    transport.refresh.mockResolvedValue({ prUrl: created.prUrl, prStatus: "open", prNumber: 123456 });
+    vi.stubEnv("EDITORIAL_VISUALS_ENABLED", "0");
+    try {
+      await expect(user.action(anyApi.visualPublication.createPr, { postId: snapshot.post._id })).rejects.toThrow("Editorial visual admissions are paused");
+      expect(transport.create).not.toHaveBeenCalled();
+      expect(records).toEqual([]);
+      expect(await user.action(anyApi.visualPublication.refreshPr, { postId: snapshot.post._id })).toMatchObject({ recorded: true, prStatus: "open" });
+      expect(transport.refresh).toHaveBeenCalledExactlyOnceWith(created.prUrl);
+    } finally { vi.unstubAllEnvs(); }
+  });
   it("rejects offline engineering provenance through the public action before GitHub transport", async () => {
     const { user, snapshot, records } = await harness();
     await expect(user.action(anyApi.visualPublication.createPr, { postId: snapshot.post._id })).rejects.toThrow(/Offline engineering visuals cannot be published/);
@@ -97,7 +112,7 @@ describe("server-owned visual publication", () => {
     expect(Buffer.from(params.images[0].export.bytes)).toEqual(bytes);
     expect(params.images[0].export.hero).toEqual({ provider: "mock-provider", model: "mock-model", quoteProvenance: "Mock trusted snapshot receipt", qualification: "live-receipt", approvedBy: OWNER.subject, approvedAt: 1 });
     expect(params.images[1].export.figure).toEqual({ spec, rendererVersion: signatures.rendererVersion, dataSignature: signatures.dataSignature, presentationSignature: signatures.presentationSignature, postId: snapshot.post._id, postContentSha256: bodyHash, postContentFingerprint: fingerprintPostContent(snapshot.post), acceptedBy: OWNER.subject, acceptedAt: 1, evidenceSources: figure.evidenceSources });
-    expect(records).toEqual([{ postId: snapshot.post._id, result: { ...created, prStatus: "open", prNumber: 123456 }, expectedArticleSignature: JSON.stringify({ title: snapshot.post.title, content: snapshot.post.content, linkedinFirstComment: snapshot.post.linkedinFirstComment }), expectedVisualSignature: snapshot.reviewSignature }]);
+    expect(records).toEqual([{ postId: snapshot.post._id, result: { ...created, prStatus: "open", prNumber: 123456 }, expectedArticleSignature: JSON.stringify({ title: snapshot.post.title, content: snapshot.post.content, linkedinFirstComment: snapshot.post.linkedinFirstComment }), expectedVisualSignature: snapshot.reviewSignature, expectedIntentId: snapshot.intent._id, expectedSchedule: { scheduledDate: "2026-10-04", scheduledTime: "10:30", timezone: "UTC" } }]);
   });
 
   it("refreshes only the server-recorded PR URL and records the server-fetched status", async () => {

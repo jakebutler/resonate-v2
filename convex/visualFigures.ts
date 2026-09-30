@@ -7,13 +7,16 @@ import { buildFigureMarkdownBlock, figureArticleTokens, assertFigureInsertionAnc
 import { hashVisualBytes } from "../lib/visualProfile";
 import { fingerprintPostContent } from "../lib/domain";
 import { onArticleChange } from "./visualWorkflow";
+import { assertVisualAdmissionEnabled } from "./visualRollout";
 
 async function ownedPost(ctx: QueryCtx | MutationCtx, userId: string, postId: Id<"v2Posts">, write = false) {
   const post = await ctx.db.get(postId);
   if (!post || post.userId !== userId) throw new Error("Post not found");
   const member = await requireBrandAccess(ctx, userId, post.brandId);
   if (write && member.role !== "owner" && member.role !== "editor") throw new Error("Figure write access denied");
+  if (write && (["published", "submitted", "pr-created"].includes(post.status) || post.blogPrStatus === "merged")) throw new Error("Separate publishing transition required before figure changes");
   if (post.channelId !== "corvo-blog") throw new Error("Figures require a saved blog post");
+  if (write) assertVisualAdmissionEnabled(userId);
   return post;
 }
 const textHash = (text: string) => hashVisualBytes(new TextEncoder().encode(text).buffer);
