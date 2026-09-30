@@ -8,6 +8,7 @@ import { parseFigureSource } from "../lib/visualFigures";
 import { onFigureArticleChange } from "./visualFigures";
 import { parseCorpusCitation } from "../lib/campaignGrounding";
 import { assertVisualAdmissionEnabled } from "./visualRollout";
+import { publicationTransitionRequired } from "../lib/publicationReview";
 
 const SOURCE_KEY = "linked-research";
 class UnsupportedLinkedEvidence extends Error {}
@@ -32,7 +33,7 @@ async function ownedPost(ctx: QueryCtx | MutationCtx, userId: string, postId: Id
   if (!post || post.userId !== userId) throw new Error("Post not found");
   const membership = await requireBrandAccess(ctx, userId, post.brandId);
   if (write && membership.role !== "owner" && membership.role !== "editor") throw new Error("Linked evidence write access denied");
-  if (write && (["published", "submitted", "pr-created"].includes(post.status) || post.blogPrStatus === "merged")) throw new Error("Separate publishing transition required before importing evidence");
+  if (write && publicationTransitionRequired(post)) throw new Error("Separate publishing transition required before importing evidence");
   if (post.channelId !== "corvo-blog") throw new Error("Linked evidence requires a saved blog post");
   if (write) assertVisualAdmissionEnabled(userId);
   return post;

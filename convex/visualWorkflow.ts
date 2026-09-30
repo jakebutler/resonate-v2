@@ -5,6 +5,7 @@ import type { Id, Doc } from "./_generated/dataModel";
 import { brandIdValidator, requireBrandAccess, requireUserId, audit } from "./campaignAccess";
 import { resolveVisualProfileForPost, resolveVisualProfileFromPin } from "./visualProfiles";
 import { assertVisualAdmissionEnabled } from "./visualRollout";
+import { publicationTransitionRequired } from "../lib/publicationReview";
 import { hashVisualBytes } from "../lib/visualProfile";
 import { articleSignature, stableInputSignature, validateScenePlan, composeScenePrompt, relevanceSignature, serializedUtf8Bytes, assertSerializedBound, canIssueLocalFixtureQuote, isOfflineContractRuntime } from "../lib/visualWorkflow";
 import { attemptInputValidator, sceneValidator, exportMetadataValidator, publicationVisualsValidator, visualVersionDocValidator, visualAttemptDocValidator, visualPlanDocValidator, visualStateDocValidator, visualReflectionDocValidator, visualBudgetDocValidator, visualBudgetMonthDocValidator } from "./visualWorkflowTables";
@@ -65,7 +66,7 @@ async function ownedPost(ctx: MutationCtx | QueryCtx, userId: string, postId: Id
   if (!post || post.userId !== userId) throw new Error("Post not found");
   const membership = await requireBrandAccess(ctx, userId, post.brandId);
   if (write && membership.role !== "owner" && membership.role !== "editor") throw new Error("Brand edit access denied");
-  if (write && (["published", "submitted", "pr-created"].includes(post.status) || post.blogPrStatus === "merged")) throw new Error("Separate publishing transition required before visual changes");
+  if (write && publicationTransitionRequired(post)) throw new Error("Separate publishing transition required before visual changes");
   if (post.channelId !== "corvo-blog") throw new Error("Visuals require a saved blog post");
   if (write && admission) assertVisualAdmissionEnabled(userId);
   return post;

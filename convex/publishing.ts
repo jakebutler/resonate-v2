@@ -25,7 +25,7 @@ import { assertEditorialStorageAccess } from "./visualStorageAccess";
 import { buildPublicationFigures, onFigureArticleChange, publicationFigureValidator } from "./visualFigures";
 import { hashVisualBytes } from "../lib/visualProfile";
 import { stableInputSignature } from "../lib/visualWorkflow";
-import { approvalArticleSignature, publicationMetadataSignature, resolvePublicationSchedule } from "../lib/publicationReview";
+import { approvalArticleSignature, publicationMetadataSignature, resolvePublicationSchedule, publicationTransitionRequired } from "../lib/publicationReview";
 import { assertCurrentLinkedEvidence } from "./visualLinkedEvidence";
 
 type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
@@ -736,18 +736,19 @@ async function currentVisualApprovalSignature(ctx: QueryCtx | MutationCtx, post:
   return hashVisualBytes(new TextEncoder().encode(stableInputSignature(proof)).buffer);
 }
 function assertNewPublicationLifecycle(post: Doc<"v2Posts">) {
-  if (["pr-created", "submitted", "published", "unavailable"].includes(post.status) || post.blogPrStatus === "merged") {
+  if (publicationTransitionRequired(post)) {
     throw new Error("This publication lifecycle requires a separate publishing transition");
   }
 }
 async function assertReviewedApproval(ctx: MutationCtx, post: Doc<"v2Posts">, expectedArticleSignature?: string, expectedVisualSignature?: string) {
   if (expectedArticleSignature !== undefined && expectedArticleSignature !== exactApprovalArticle(post)) throw new Error("Reviewed article changed; reload before final approval");
   if (post.channelId !== "corvo-blog") return;
+  const hasVisuals = await hasVisualPublication(ctx, post._id);
+  if (hasVisuals) assertNewPublicationLifecycle(post);
   const signature = await currentVisualApprovalSignature(ctx, post);
-  if (await hasVisualPublication(ctx, post._id)) {
+  if (hasVisuals) {
     if (!expectedArticleSignature || !expectedVisualSignature) throw new Error("Review the current article and visual snapshot before final approval");
     if (expectedVisualSignature !== signature) throw new Error("Reviewed visuals changed; reload before final approval");
-    assertNewPublicationLifecycle(post);
   }
 }
 

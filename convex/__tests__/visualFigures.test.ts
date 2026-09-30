@@ -29,6 +29,10 @@ describe("persistent evidence-bound figures", () => {
     { name: "pr-created", status: "pr-created", blogPrStatus: "open" },
     { name: "submitted", status: "submitted", blogPrStatus: "open" },
     { name: "merged", status: "draft", blogPrStatus: "merged" },
+    { name: "rescheduled open PR", status: "scheduled", blogPrStatus: "open" },
+    { name: "rescheduled draft PR", status: "scheduled", blogPrStatus: "draft" },
+    { name: "edited closed PR", status: "draft", blogPrStatus: "closed" },
+    { name: "unavailable", status: "unavailable", blogPrStatus: "closed" },
   ] as const)("rejects figure writes in $name lifecycle while preserving inspection and saved state", async lifecycle => {
     const article = "## Flow\n\n| from | to | relation |\n|---|---|---|\n| Reader | Editor | sends feedback |\n\n## Discussion\n\nUnrelated copy.";
     for (const operation of ["accept", "edit", "move", "remove", "attach", "plan", "decline"] as const) {

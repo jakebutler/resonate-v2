@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 10:18:07 PDT
+Last updated: 09/30/2026 11:01:38 PDT
 
 ## State
 
@@ -16,24 +16,29 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- ca79746 fix: pause visual admissions and preserve publication consistency
+- 8adb3ad fix: retain terminal publication authority after rescheduling
 
 ## Recent Commits
 
+- 8adb3ad fix: retain terminal publication authority after rescheduling
 - ca79746 fix: pause visual admissions and preserve publication consistency
 - c390c98 docs: record visual contracts and guarded offline rehearsals
 - 4f59b60 feat: integrate opt-in visuals into the saved composer
 - 48a28c0 feat: persist guarded editorial visuals and evidence-bound figures
-- b8b6e44 Merge pull request #96 from jakebutler/codex/linkedin-first-comment
 
 ## Local Working Tree
 
-- A  convex/__tests__/visualPublicationLifecycle.test.ts
+- M  convex/__tests__/visualFigures.test.ts
+- M  convex/__tests__/visualPublicationLifecycle.test.ts
 - M  convex/publishing.ts
+- M  convex/visualFigures.ts
+- M  convex/visualLinkedEvidence.ts
+- M  convex/visualWorkflow.ts
 - M  docs/editorial-visuals/PROGRESS.md
 - M  docs/editorial-visuals/publication-action.md
 - M  docs/editorial-visuals/release-preflight.md
 - M  docs/editorial-visuals/rollout.md
+- M  lib/publicationReview.ts
 
 ## Next Agent Pickup
 

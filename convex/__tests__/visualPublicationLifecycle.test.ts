@@ -1,3 +1,5 @@
+// @vitest-environment node
+/// <reference types="vite/client" />
 // Public-interface regressions derived from the independent frozen-candidate review.
 // All bytes/quotes are synthetic offline doubles; transport and network are forbidden.
 import { convexTest } from "convex-test";
@@ -199,5 +201,62 @@ it("retains the new remote PR receipt without replacing a merged marker that arr
   expect(github.createBlogPostPR).toHaveBeenCalledTimes(1);
   expect(await user.query(api.publishing.getPostById, { postId })).toMatchObject({ blogPrStatus: "merged", prUrl: "https://github.com/fictional-owner/fictional-reader/pull/123456", branchName: "blog/fictional-retained" });
   expect(await t.run(ctx => ctx.db.query("v2PublishAttempts").collect())).toEqual([]);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it.each(["open", "draft", "closed"] as const)("keeps recorded %s PR identity authoritative after reschedule and metadata edits", async prStatus => {
+  const { t, user, postId, edited } = await approvedEdited();
+  await t.run(async ctx => {
+    const version = await ctx.db.get(edited.versionId);
+    const attempt = await ctx.db.get(version.attemptId);
+    await ctx.db.patch(attempt.quoteId, { qualification: "live-receipt", provenance: "SYNTHETIC QUALIFIED DOUBLE" });
+    await ctx.db.patch(attempt._id, { quoteProvenance: "SYNTHETIC QUALIFIED DOUBLE" });
+  });
+  const review = await user.query(api.publishing.getApprovalReview, { postId });
+  await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved", expectedArticleSignature: review.articleSignature, expectedVisualSignature: review.visualSignature });
+  const sent = await user.query(api.publishing.getPostForPublication, { postId });
+  const prUrl = "https://github.com/fictional-owner/fictional-reader/pull/123456";
+  await user.mutation(api.publishing.recordVisualPublicationPr, {
+    postId, expectedArticleSignature: approvalArticleSignature(sent.post), expectedVisualSignature: sent.reviewSignature, expectedIntentId: sent.intent._id, expectedSchedule: resolvePublicationSchedule(sent.post, sent.intent, "2026-10-01"),
+    result: { prUrl, branchName: "blog/fictional-recorded", prNumber: 123456, prStatus: "open", sanitizedResponse: {} },
+  });
+  await user.mutation(api.publishing.recordVisualPublicationPrStatus, { postId, expectedPrUrl: prUrl, prStatus, prNumber: 123456 });
+  await t.run(async ctx => { for (const state of await ctx.db.query("v2ProviderStates").collect()) await ctx.db.delete(state._id); });
+  await user.mutation(api.publishing.reschedule, { postId, scheduledDate: "2026-10-02", scheduledTime: "12:30", timezone: "America/Los_Angeles" });
+  expect(await user.query(api.publishing.getPostById, { postId })).toMatchObject({ status: "scheduled", blogPrStatus: prStatus, prUrl, branchName: "blog/fictional-recorded", approvalState: "approved" });
+  const envelope = () => t.run(async ctx => ({ post: await ctx.db.get(postId), intent: await ctx.db.get(sent.intent._id), attempts: await ctx.db.query("v2PublishAttempts").collect(), visualAttempts: await ctx.db.query("v2VisualAttempts").collect(), figures: await ctx.db.query("v2FigureCandidates").collect(), sources: await ctx.db.query("v2FigureSources").collect() }));
+  const before = await envelope();
+  const github = await import("../../lib/github");
+  vi.mocked(github.createBlogPostPR).mockClear();
+  await user.action(api.visualPublication.createPr, { postId }).catch(() => undefined);
+  expect(github.createBlogPostPR).not.toHaveBeenCalled();
+  for (const call of [
+    () => user.mutation(api.visualWorkflow.requestPlan, { postId, operationKey: "forbidden-recorded-pr-plan" }),
+    () => user.mutation(api.visualFigures.planFigures, { postId }),
+    () => user.mutation(api.visualLinkedEvidence.importLinkedEvidence, { postId, expectedSnapshotHash: "a".repeat(64), expectedSourceId: null }),
+  ]) await expect(call()).rejects.toThrow(/[Ss]eparate publishing transition/);
+  expect(await envelope()).toEqual(before);
+  await user.mutation(api.publishing.updateBlogMetadata, { postId, metadata: { blogSlug: "fictional-replacement-slug" } });
+  const changed = await envelope();
+  expect(changed.post).toMatchObject({ status: "draft", approvalState: "unapproved", blogPrStatus: prStatus, prUrl });
+  await expect(user.query(api.publishing.getPostForPublication, { postId })).rejects.toThrow("separate publishing transition");
+  expect((await user.query(api.publishing.getApprovalReview, { postId })).blockedReason).toContain("separate publishing transition");
+  await expect(user.mutation(api.publishing.setApproval, { postId, approvalState: "approved", expectedArticleSignature: review.articleSignature, expectedVisualSignature: review.visualSignature })).rejects.toThrow("separate publishing transition");
+  expect(await envelope()).toEqual(changed);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it.each(["prUrl", "branchName", "blogPrStatus"] as const)("keeps historical partial %s identity from reopening publication", async field => {
+  const { t, user, postId } = await approvedEdited();
+  const review = await user.query(api.publishing.getApprovalReview, { postId });
+  await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved", expectedArticleSignature: review.articleSignature, expectedVisualSignature: review.visualSignature });
+  const values = { prUrl: "https://github.com/fictional-owner/fictional-reader/pull/123456", branchName: "blog/fictional-historical", blogPrStatus: "open" };
+  await t.run(ctx => ctx.db.patch(postId, { [field]: values[field] }));
+  const before = await user.query(api.publishing.getPostById, { postId });
+  await expect(user.query(api.publishing.getPostForPublication, { postId })).rejects.toThrow("separate publishing transition");
+  await expect(user.mutation(api.visualWorkflow.requestPlan, { postId, operationKey: "forbidden-historical-plan" })).rejects.toThrow("Separate publishing transition");
+  await expect(user.mutation(api.visualFigures.planFigures, { postId })).rejects.toThrow("Separate publishing transition");
+  await expect(user.mutation(api.visualLinkedEvidence.importLinkedEvidence, { postId, expectedSnapshotHash: "a".repeat(64), expectedSourceId: null })).rejects.toThrow("Separate publishing transition");
+  expect(await user.query(api.publishing.getPostById, { postId })).toEqual(before);
   expect(fetch).not.toHaveBeenCalled();
 });
