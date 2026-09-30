@@ -38,18 +38,21 @@ vi.mock("@/lib/github", () => {
 
   return {
     BlogPostContractError,
-    createBlogPostPR: vi.fn().mockResolvedValue({
-      prUrl: "https://github.com/org/repo/pull/1",
-      branchName: "resonate/blog-post-2026-03-04-test",
-      sanitizedResponse: {
-        repo: "jakebutler/corvo-labs-dot-com",
+    createBlogPostPR: vi.fn(async (params: { beforeRemoteWrite?: () => Promise<void> }) => {
+      await params.beforeRemoteWrite?.();
+      return {
         prUrl: "https://github.com/org/repo/pull/1",
         branchName: "resonate/blog-post-2026-03-04-test",
-        number: 1,
-        state: "open",
-        scheduleTrigger: "pr-body",
-        scheduledDate: "2026-03-04",
-      },
+        sanitizedResponse: {
+          repo: "jakebutler/corvo-labs-dot-com",
+          prUrl: "https://github.com/org/repo/pull/1",
+          branchName: "resonate/blog-post-2026-03-04-test",
+          number: 1,
+          state: "open",
+          scheduleTrigger: "pr-body",
+          scheduledDate: "2026-03-04",
+        },
+      };
     }),
   };
 });
@@ -91,7 +94,7 @@ describe("POST /api/publish saved export contract", () => {
     process.env.NEXT_PUBLIC_CONVEX_URL = "https://example.convex.cloud";
     mockConvexQuery.mockResolvedValue({ post: approvedPost, visuals: null, figures: [] });
     mockConvexAction.mockResolvedValue({base64: "aGVybw==", sha256: "fixture-hash"});
-    mockConvexMutation.mockResolvedValue(null);
+    mockConvexMutation.mockReset().mockResolvedValue(null);
     vi.mocked(auth).mockResolvedValue({ userId: "user_123", getToken: vi.fn().mockResolvedValue("convex-token") } as unknown as Awaited<ReturnType<typeof auth>>);
   });
   it("dispatches approved visual assets through the server action instead of the legacy hero transport", async () => {
