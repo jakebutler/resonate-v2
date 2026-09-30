@@ -223,7 +223,7 @@ describe("patchFrontmatterSchedule", () => {
 import sharp from "sharp";
 import { createHash } from "node:crypto";
 
-function githubFixture(options: {fail?: string; ambiguous?: string; wrongHead?: boolean} = {}) {
+function githubFixture(options: {fail?: string; ambiguous?: string; wrongHead?: boolean; advancedMain?: boolean; rename?: boolean} = {}) {
   const files = new Map<string, string>();
   const blobs = new Map<string, string>();
   let tree: {path: string; sha: string}[] = [];
@@ -239,11 +239,11 @@ function githubFixture(options: {fail?: string; ambiguous?: string; wrongHead?: 
     const response = (value: unknown, status=200) => new Response(JSON.stringify(value), {status});
     if (options.fail === path && !failed) { failed = true; return response({}, 503); }
     if (!path) return response({default_branch:"main"});
-    if (path === "/git/ref/heads/main") return response({object:{sha:"base"}});
+    if (path === "/git/ref/heads/main") return response({object:{sha:options.advancedMain && prCreated ? "new-base" : "base"}});
     if (path.startsWith("/git/ref/heads/")) return branch ? response({object:{sha: options.wrongHead ? "manual" : head}}) : response({},404);
     if (path === "/git/refs") {branch = true; return response({});}
     if (path.startsWith("/contents/")) return files.has(path.slice(10)) ? response({sha:"blob-sha", encoding:"base64", content:files.get(path.slice(10))}) : response({},404);
-    if (path.startsWith("/compare/")) return response({status:"ahead",merge_base_commit:{sha:"base"},total_commits:1,files:[...files.keys()].map(filename=>({filename,status:"added"}))});
+    if (path.startsWith("/compare/")) return response({status:options.advancedMain && prCreated ? "diverged" : "ahead",ahead_by:1,merge_base_commit:{sha:"base"},total_commits:1,files:[...files.keys()].map(filename=>({filename,status:options.rename && prCreated ? "renamed" : "added",...(options.rename ? {previous_filename:"unrelated.txt"} : {})}))});
     if (path.startsWith("/git/commits/") && method === "GET") return response({tree:{sha:"base-tree"}});
     if (path === "/git/blobs") {const sha = `blob-${++sequence}`; blobs.set(sha,body!.content); return response({sha});}
     if (path === "/git/trees") {tree=body!.tree;return response({sha:"tree"});}
@@ -299,6 +299,53 @@ describe("complete atomic blog exports", () => {
       fixture.mock.mockClear();await expect(createBlogPostPR({...input,...change})).rejects.toThrow();expect(fixture.mock).not.toHaveBeenCalled();
     }
   });
+  it("validates copy and hero bytes before claiming the export", async () => {
+    const fixture = githubFixture();
+    const input = await exportInput();
+    const beforeRemoteWrite = vi.fn();
+    await expect(
+      createBlogPostPR({
+        ...input,
+        content: "# Invalid body heading",
+        beforeRemoteWrite,
+      }),
+    ).rejects.toThrow();
+    expect(beforeRemoteWrite).not.toHaveBeenCalled();
+    expect(fixture.mock).not.toHaveBeenCalled();
+    await createBlogPostPR({ ...input, beforeRemoteWrite });
+    expect(beforeRemoteWrite).toHaveBeenCalledOnce();
+  });
+
+  it("rejects unrelated changes on a recovered export branch even when both artifacts match", async () => {
+    const fixture = githubFixture();
+    const input = await exportInput();
+    await createBlogPostPR(input);
+    fixture.files.set(
+      "unrelated.txt",
+      Buffer.from("Unreviewed change").toString("base64"),
+    );
+    const before = fixture.calls.filter((c) => c.method !== "GET").length;
+    await expect(createBlogPostPR(input)).rejects.toThrow(/unrelated.*diff/);
+    expect(fixture.calls.filter((c) => c.method !== "GET")).toHaveLength(before);
+  });
+
+  it("reconciles a safe export after main advances without additional writes", async () => {
+    const fixture = githubFixture({advancedMain: true});
+    const input = await exportInput();
+    const result = await createBlogPostPR(input);
+    const writes = fixture.calls.filter(c => c.method !== "GET").length;
+    expect((await createBlogPostPR(input)).prUrl).toBe(result.prUrl);
+    expect(fixture.calls.filter(c => c.method !== "GET")).toHaveLength(writes);
+  });
+  it("rejects renaming an unrelated file into a matching expected artifact", async () => {
+    const fixture = githubFixture({rename: true});
+    const input = await exportInput();
+    await createBlogPostPR(input);
+    const writes = fixture.calls.filter(c => c.method !== "GET").length;
+    await expect(createBlogPostPR(input)).rejects.toThrow(/unrelated.*diff/);
+    expect(fixture.calls.filter(c => c.method !== "GET")).toHaveLength(writes);
+  });
+
 });
 
 describe("bound schedule synchronization", () => {
@@ -338,34 +385,4 @@ describe("bound schedule synchronization", () => {
   it("rejects wrong repositories without reading or writing", async () => {
     const {fixture}=setup();expect(await updatePrFrontmatter({...params,artifact:{...artifact,repository:"other/repo"}})).toEqual({ok:false,reason:"identity-mismatch"});expect(fixture.mock).not.toHaveBeenCalled();
   });
-});
-
-it("validates copy and hero bytes before claiming the export", async () => {
-  const fixture = githubFixture();
-  const input = await exportInput();
-  const beforeRemoteWrite = vi.fn();
-  await expect(
-    createBlogPostPR({
-      ...input,
-      content: "# Invalid body heading",
-      beforeRemoteWrite,
-    }),
-  ).rejects.toThrow();
-  expect(beforeRemoteWrite).not.toHaveBeenCalled();
-  expect(fixture.mock).not.toHaveBeenCalled();
-  await createBlogPostPR({ ...input, beforeRemoteWrite });
-  expect(beforeRemoteWrite).toHaveBeenCalledOnce();
-});
-
-it("rejects unrelated changes on a recovered export branch even when both artifacts match", async () => {
-  const fixture = githubFixture();
-  const input = await exportInput();
-  await createBlogPostPR(input);
-  fixture.files.set(
-    "unrelated.txt",
-    Buffer.from("Unreviewed change").toString("base64"),
-  );
-  const before = fixture.calls.filter((c) => c.method !== "GET").length;
-  await expect(createBlogPostPR(input)).rejects.toThrow(/unrelated.*diff/);
-  expect(fixture.calls.filter((c) => c.method !== "GET")).toHaveLength(before);
 });

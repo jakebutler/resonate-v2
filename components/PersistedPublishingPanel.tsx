@@ -431,7 +431,8 @@ export function PersistedPublishingPanel({
 
   const seriesList = useQuery(api.series.list, isConvexAuthenticated ? {} : "skip") as import("@/convex/_generated/dataModel").Doc<"postSeries">[] | undefined;
   const activeSeries = seriesList?.find(s => s._id === seriesFilter);
-  const seriesResolved = !seriesFilter || seriesList !== undefined;
+  const seriesResolved = !seriesFilter || Boolean(activeSeries);
+  const unavailableSeries = Boolean(seriesFilter && seriesList !== undefined && !activeSeries);
   const effectiveBrandFilters = activeSeries ? [activeSeries.brandId] : brandFilters;
   const items = useQuery(
     api.publishing.listCalendarItems,
@@ -958,7 +959,7 @@ export function PersistedPublishingPanel({
 
   return (
     <WorkspaceLayout
-      banner={message ? <Notice>{message}</Notice> : null}
+      banner={unavailableSeries ? <Notice>This series is unavailable. Choose an accessible series or All series to view the calendar.</Notice> : message ? <Notice>{message}</Notice> : null}
       header={
         <PageHeader
           description="See scheduled posts across your brands, edit drafts, approve content, and open blog pull requests when ready."
@@ -981,7 +982,7 @@ export function PersistedPublishingPanel({
       sidebar={
         <>
           <SidebarCard className="space-y-3">
-            <label className="block text-sm">Series<select aria-label="Calendar series filter" className="w-full rounded border p-2" value={activeSeries?._id ?? ""} onChange={e => setSeriesFilter(e.target.value)}><option value="">All series</option>{seriesList?.map(series => <option key={series._id} value={series._id}>{series.title}</option>)}</select></label>
+            <label className="block text-sm">Series<select aria-label="Calendar series filter" className="w-full rounded border p-2" value={seriesFilter} onChange={e => setSeriesFilter(e.target.value)}>{unavailableSeries && <option value={seriesFilter}>Unavailable series</option>}<option value="">All series</option>{seriesList?.map(series => <option key={series._id} value={series._id}>{series.title}</option>)}</select></label>
             <FilterGroup
               label="Brands"
               onChange={(id) => { setSeriesFilter(""); setBrandFilters(toggleFilterSet(effectiveBrandFilters, id)); }}
@@ -1085,7 +1086,7 @@ export function PersistedPublishingPanel({
               </p>
             )}
 
-            {isConvexAuthenticated && loading && (
+            {isConvexAuthenticated && loading && !unavailableSeries && (
               <p className="p-4 text-sm text-gray-600">Loading your publishing calendar...</p>
             )}
 

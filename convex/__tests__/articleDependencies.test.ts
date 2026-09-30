@@ -251,7 +251,7 @@ describe("server-owned article dependency", () => {
         postId: f.articleId,
         userId: "editor",
         expectedArtifactVersion: articleArtifactVersion(article.blogArtifact),
-    expectedSourceVersion: articlePublicationSourceVersion(article),
+        expectedSourceVersion: articlePublicationSourceVersion(article),
         key: "stale",
         evidence: {
           checkedAt: Date.now(),

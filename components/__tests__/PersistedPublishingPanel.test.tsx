@@ -1178,11 +1178,33 @@ describe("PersistedPublishingPanel", () => {
     expect(screen.queryByRole("button", { name: /simulate submission/i })).not.toBeInTheDocument();
   });
 
-});
 
-it('derives calendar brand filters from the selected owned non-Corvo series',()=>{
- const original=vi.mocked(useQuery).getMockImplementation()!;
- vi.mocked(useQuery).mockImplementation((reference,args)=>reference==='series:list'?[{_id:'series-lower-db',brandId:'lower-db',title:'Lower DB series'}]:original(reference,args));
- render(<PersistedPublishingPanel initialSeriesId='series-lower-db'/>);
- expect(vi.mocked(useQuery).mock.calls.some(([reference,args])=>reference==='publishing:listCalendarItems'&&JSON.stringify(args).includes('"brandIds":["lower-db"]')&&JSON.stringify(args).includes('series-lower-db'))).toBe(true);
+  it("derives calendar brand filters from the selected owned non-Corvo series", () => {
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "series:list") return [{_id: "series-lower-db", brandId: "lower-db", title: "Lower DB series"}];
+      if (reference === "publishing:listBrands") return [{brandId: "lower-db", name: "Lower DB"}];
+      if (reference === "publishing:listCalendarItems") return [];
+      return undefined;
+    });
+    render(<PersistedPublishingPanel initialSeriesId="series-lower-db" />);
+    expect(useQuery).toHaveBeenCalledWith("publishing:listCalendarItems", {
+      brandIds: ["lower-db"], seriesId: "series-lower-db",
+      platformIds: ["linkedin", "reddit", "corvo-blog"],
+      statuses: ["draft", "scheduled", "submitted", "queued", "publishing", "published", "cancel-requested", "cancelled", "removed", "provider-draft", "needs-review", "pr-created"],
+    });
+  });
+  it("holds an unavailable calendar series until the user selects an accessible filter", () => {
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "series:list") return [];
+      if (reference === "publishing:listBrands") return [{brandId: "corvo", name: "Corvo Labs"}];
+      if (reference === "publishing:listCalendarItems") return [];
+      return undefined;
+    });
+    render(<PersistedPublishingPanel initialSeriesId="unavailable-series" />);
+    expect(screen.getByText(/This series is unavailable/)).toBeInTheDocument();
+    expect(vi.mocked(useQuery).mock.calls.filter(([ref]) => ref === "publishing:listCalendarItems").every(([,args]) => args === "skip")).toBe(true);
+    fireEvent.change(screen.getByRole("combobox", {name: "Calendar series filter"}), {target: {value: ""}});
+    expect(screen.queryByText(/This series is unavailable/)).not.toBeInTheDocument();
+    expect(vi.mocked(useQuery).mock.calls.some(([ref,args]) => ref === "publishing:listCalendarItems" && args !== "skip")).toBe(true);
+  });
 });

@@ -19,18 +19,18 @@ describe("legacy cancellation receipts",()=>{
  it.each([true,false])("reconciles only a matching historical deletion receipt (%s)",async(proof)=>{const {t,postId,intentId}=await fixture();const stateId=await t.run(async ctx=>{const state=(await ctx.db.query("v2ProviderStates").withIndex("by_intent",q=>q.eq("intentId",intentId)).first())!;await ctx.db.patch(state._id,{providerId:"buffer",status:"cancel-intent-recorded",providerPostId:"external-legacy",simulated:false});if(proof)await ctx.db.insert("v2AuditEvents",{userId:"editor",brandId:"corvo",postId,intentId,action:"provider.buffer_cancel",summary:"Buffer cancel/delete recorded.",metadata:{providerPostId:"external-legacy",sanitizedResponse:{providerId:"buffer",intentType:"cancel"}},createdAt:1});return state._id;});await t.mutation(internal.bufferDelivery.reconcileLegacyCancellation,{providerStateId:stateId});expect((await t.run(ctx=>ctx.db.get(stateId)))!.status).toBe(proof?"cancelled":"needs-review");});
 });
 
-it("selects live Buffer receipts before bounding a mixed-provider cohort", async () => {
+it("selects live Buffer receipts before bounding mixed providers and mock-like Buffer receipts", async () => {
   const { t, postId, intentId } = await fixture();
   for (let n = 0; n < 10; n++)
     await t.run((ctx) =>
       ctx.db.insert("v2ProviderStates", {
         postId,
         intentId,
-        providerId: "mock",
+        providerId: n % 2 ? "buffer" : "mock",
         status: "queued",
         providerPostId: `mock-${n}`,
-        createdAt: 1,
-        updatedAt: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       }),
     );
   const id = await t.run((ctx) =>
@@ -40,8 +40,8 @@ it("selects live Buffer receipts before bounding a mixed-provider cohort", async
       providerId: "buffer",
       status: "queued",
       providerPostId: "live-fixture",
-      createdAt: 2,
-      updatedAt: 2,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     }),
   );
   expect(
@@ -108,3 +108,27 @@ it.each([true, false])(
     ).toBe(proof ? "released" : "active");
   },
 );
+
+it.each(["cancelled", "removed"] as const)("allows planning dates after verified %s without permitting replay", async (status) => {
+  const {t, user, postId, intentId} = await fixture();
+  await user.mutation(api.publishing.setApproval, {postId, approvalState: "approved"});
+  const post = (await t.run(ctx => ctx.db.get(postId)))!;
+  const attemptId = await t.run(async ctx => {
+    const id = await ctx.db.insert("v2PublishAttempts", {
+      postId, intentId, userId: "editor", providerId: "buffer", status: "success", providerPostId: "external-post", retryCount: 0,
+      idempotencyKey: "accepted-fixture", submissionSnapshot: {postId, brandId: "corvo", channelId: "linkedin", title: post.title, content: post.content, timezone: post.timezone},
+      sanitizedResponse: {postId: "external-post"}, createdAt: Date.now(), updatedAt: Date.now(),
+    });
+    const state = (await ctx.db.query("v2ProviderStates").withIndex("by_intent", q => q.eq("intentId", intentId)).first())!;
+    await ctx.db.patch(state._id, {providerId: "buffer", providerPostId: "external-post", lastAttemptId: id, status});
+    return id;
+  });
+  const before = await t.run(ctx => ctx.db.get(attemptId));
+  await user.mutation(api.publishing.reschedule, {postId, scheduledDate: "2030-10-08", scheduledTime: "09:00"});
+  expect(await t.run(ctx => ctx.db.get(postId))).toMatchObject({scheduledDate: "2030-10-08", content: post.content, approvalState: "approved"});
+  expect(await t.run(ctx => ctx.db.get(attemptId))).toEqual(before);
+  expect((await user.query(api.articleDependencies.details, {postId})).scheduleHold).toBeNull();
+  expect(await t.query(internal.publishing.getBufferSubmissionContext, {postId, userId: "editor"})).toMatchObject({eligible: false});
+  await t.run(ctx => ctx.db.patch(attemptId, {status: "ambiguous"}));
+  await expect(user.mutation(api.publishing.reschedule, {postId, scheduledDate: "2030-10-09"})).rejects.toThrow(/pending or uncertain/);
+});

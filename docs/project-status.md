@@ -1,87 +1,23 @@
 # Project Status
 
-Last updated: 09/30/2026 14:09:31 PDT
+Recorded checkpoint: September 30, 2026. This document describes PR #133 and its release boundary; it is not a live `git status` report. Verify the actual branch, worktree and remote head before resuming.
 
-## State
+## Implementation
 
-Resonate is a working content operations app with active surfaces for calendar planning, content editing, workflow review, and idea capture.
+Epic #97 and issues #98–#108 are implemented on main through #130 (`df9b9f0`). Follow-up PR #133 starts with `54357ee` and addresses all 30 integrated review findings plus its own 18 review findings. The detailed code and regression dispositions are in [epic-97-review-followups.md](epic-97-review-followups.md).
 
-## Current Task
+PR #133 preserves explicit editorial holds, binds article/source/capacity evidence, requires destination review, handles confirmed cancellation separately from submission replay, reconciles exact exports after main advances, excludes mock receipts before polling bounds, and makes unavailable series links visible. Its committed change set includes associated mocked tests and browser fixtures; these are PR changes, not unrelated uncommitted work.
 
-Maintain the living documentation and preserve a handoff-quality snapshot of the repo state.
+## Verification and release
 
-## Session Focus
+The initial follow-up checkpoint passed 897 unit tests, native Convex dry-run, lint/typecheck/build and 19 browser tests. The final follow-up candidate adds cancellation, renamed-file, advanced-main, failed-connection and unavailable-calendar regressions. Final hosted verification, PR review, merge, deployment and read-only production verification are recorded separately in [epic-97-progress.md](epic-97-progress.md) and the GitHub epic.
 
-- Updated repository documentation and handoff records.
-- Touched the main dashboard surfaces.
+Jake approved merge and deployment. Live content writes still require his next scoped review. Keep `BUFFER_LIVE_SUBMISSION=blocked`; do not approve existing drafts, adopt production content, create/cancel provider fixtures, publish articles or submit existing posts from this software release approval.
 
-## Last Completed Task
+## Workspace preservation
 
-- df9b9f0 Merge pull request #130 from jakebutler/codex/epic-97-reviewed-queue
+Use the registered `codex/epic-97-review-followups` worktree. Preserve the primary `feat/jake-voice-profile` checkout and the editorial-visual and publishing-navigation worktrees. No production content, approvals, images, schedules or immutable receipts are changed by tests or read-only release checks.
 
-## Recent Commits
+## Next pickup
 
-- df9b9f0 Merge pull request #130 from jakebutler/codex/epic-97-reviewed-queue
-- 9986c17 fix(release): isolate article fixtures and require native Convex checks
-- 1b77d73 feat(queue): dispatch exact reviewed batches with durable capacity claims
-- 92aad6c feat: approve exact selected series versions atomically
-- 9aacca7 feat: verify article publication before companion delivery
-
-## Local Working Tree
-
-- A  app/__tests__/homeSeriesParams.test.tsx
-- M  app/api/ops/validate-workflow/__tests__/route.test.ts
-- M  app/api/ops/validate-workflow/route.ts
-- M  app/api/publish/route.ts
-- M  app/page.tsx
-- M  components/ArticleDependencyPanel.tsx
-- M  components/PersistedPublishingPanel.tsx
-- M  components/QueuePlanningPanel.tsx
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
-- A  components/__tests__/QueuePlanningPanel.test.tsx
-- M  convex/__tests__/articleDependencies.test.ts
-- M  convex/__tests__/bufferFoundations.test.ts
-- A  convex/__tests__/legacyGithubSchedule.test.ts
-- M  convex/__tests__/preparedImports.test.ts
-- M  convex/__tests__/queuePlanning.test.ts
-- M  convex/__tests__/queueRelease.test.ts
-- M  convex/articleDependencies.ts
-- M  convex/articlePublication.ts
-- M  convex/bufferAttempts.ts
-- M  convex/bufferDelivery.ts
-- M  convex/bufferDestinations.ts
-- M  convex/bufferLive.ts
-- M  convex/githubPrSync.ts
-- M  convex/preparedImportActions.ts
-- M  convex/preparedImports.ts
-- M  convex/publishing.ts
-- M  convex/queueDispatch.ts
-- M  convex/queuePlanning.ts
-- M  convex/queueRelease.ts
-- M  convex/schema.ts
-- M  docs/epic-97-progress.md
-- A  docs/epic-97-review-followups.md
-- M  docs/ops-runbook.md
-- A  e2e/series-url-filters.spec.ts
-- M  lib/__tests__/articlePublication.test.ts
-- M  lib/__tests__/bufferContracts.test.ts
-- M  lib/__tests__/deliverySummary.test.ts
-- M  lib/__tests__/github.test.ts
-- M  lib/__tests__/queueCapacity.test.ts
-- M  lib/articleAvailability.ts
-- M  lib/articleContracts.ts
-- M  lib/articlePublication.ts
-- M  lib/bufferContracts.ts
-- M  lib/deliverySummary.ts
-- M  lib/github.ts
-- M  lib/providerAdapters.ts
-- M  lib/queueCapacity.ts
-
-## Next Agent Pickup
-
-- Start by checking the living docs against the current code before making assumptions.
-- If the working set includes product changes, keep `docs/spec.md`, `docs/changelog.md`, and `docs/project-status.md` aligned in the same session.
-
-## Branch
-
-- codex/epic-97-review-followups
+Read the epic and actual PR/CI/deployment state, verify the Buffer gate, and use the hash-only preservation receipts. Existing content activation is a separate review: production has no adopted series or saved capacity evidence, 15 candidate articles need reviewed heroes/alt/artifact bindings, and 20 linked companions remain unapproved. The local activation review lists exact existing mappings without changing copy or schedules.

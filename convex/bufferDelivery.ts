@@ -33,7 +33,14 @@ export async function applyRefresh(ctx:MutationCtx,args:{providerStateId:Id<"v2P
 }
 export const oldestActive=internalQuery({args:{limit:v.number()},returns:v.any(),handler:async(ctx,args)=>{
  const limit=Math.min(50,Math.max(1,args.limit));const rows=[];
- for(const status of ACTIVE_BUFFER_STATES){const page=await ctx.db.query("v2ProviderStates").withIndex("by_provider_status_and_last_checked",q=>q.eq("providerId","buffer").eq("status",status)).take(limit);rows.push(...page.filter(s=>s.providerId==="buffer"&&s.simulated!==true&&s.providerPostId&&!s.providerPostId.startsWith("mock-")));}
+ for(const status of ACTIVE_BUFFER_STATES){
+  const page=await ctx.db.query("v2ProviderStates").withIndex("by_provider_status_and_last_checked",q=>q.eq("providerId","buffer").eq("status",status)).filter(q=>q.and(
+   q.neq(q.field("simulated"),true),q.neq(q.field("providerPostId"),undefined),q.neq(q.field("providerPostId"),""),
+   // The lexical interval [mock-, mock.) contains every mock- prefixed ID.
+   q.or(q.lt(q.field("providerPostId"),"mock-"),q.gte(q.field("providerPostId"),"mock.")),
+  )).take(limit);
+  rows.push(...page);
+ }
  return rows.sort((a,b)=>(a.lastCheckedAt??0)-(b.lastCheckedAt??0)||a._creationTime-b._creationTime).slice(0,limit);
 }});
 export const control=internalQuery({args:{},returns:v.any(),handler:async(ctx)=>ctx.db.query("bufferPollControl").withIndex("by_key",q=>q.eq("key","buffer")).first()});

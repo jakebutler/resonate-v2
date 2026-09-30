@@ -36,3 +36,28 @@ Nine newly written regression tests failed on the merged implementation before t
 | [#4148471279](https://github.com/jakebutler/resonate-v2/pull/130#discussion_r4148471279) | Normalize repeated series query parameters before passing to the composer | [app/__tests__/homeSeriesParams.test.tsx](../app/__tests__/homeSeriesParams.test.tsx) |
 | [#4148471356](https://github.com/jakebutler/resonate-v2/pull/130#discussion_r4148471356) | Resolve URL IDs through owned series and derive brand before queue queries | [components/__tests__/QueuePlanningPanel.test.tsx](../components/__tests__/QueuePlanningPanel.test.tsx) |
 | [#4148471364](https://github.com/jakebutler/resonate-v2/pull/130#discussion_r4148471364) | Preserve consumed reservation receipts and make released replay idempotent | [convex/__tests__/queuePlanning.test.ts](../convex/__tests__/queuePlanning.test.ts) |
+
+## Follow-up PR review
+
+All 18 comments on PR #133 were read before merge. The two correctness blockers and the remaining UX, recovery, test isolation, formatting and handoff findings are addressed below. Hosted exact-head checks and review readback remain separate release gates.
+
+| Comment | Disposition | Regression or evidence |
+| --- | --- | --- |
+| [#4149430671](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430671) | Permit planning dates after matching confirmed cancellation/removal; retain submission no-replay and uncertain holds | convex/__tests__/bufferFoundations.test.ts |
+| [#4149430694](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430694) | Reject recovered branch renames; only added/modified reviewed artifact paths are accepted | lib/__tests__/github.test.ts |
+| [#4149430702](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430702) | Hold unavailable calendar series and show an explicit filter selection message before any calendar query | components/__tests__/PersistedPublishingPanel.test.tsx, e2e/series-url-filters.spec.ts |
+| [#4149430712](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430712) | Direct the legacy migration response to the canonical composer root | app/api/ops/validate-workflow/__tests__/route.test.ts |
+| [#4149430726](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430726) | Preserve trimmed header and bearer authentication for the retired HTTP 410 route | app/api/ops/validate-workflow/__tests__/route.test.ts |
+| [#4149430739](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430739) | Display retained destination refresh error and disable destination review until a successful refresh | components/__tests__/BufferDestinationPanel.test.tsx |
+| [#4149430754](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430754) | Move calendar regression inside its setup/teardown group; use its own query fixture | components/__tests__/PersistedPublishingPanel.test.tsx |
+| [#4149430766](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430766) | Recover exact two-file exports on ahead/diverged branches after main advances; require nonempty bounded history | lib/__tests__/github.test.ts |
+| [#4149430789](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430789) | Group and format the reservation regression with capacity evidence tests | lib/__tests__/queueCapacity.test.ts |
+| [#4149430797](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430797) | Assert the exact calendar query arguments rather than serialized substrings | components/__tests__/PersistedPublishingPanel.test.tsx |
+| [#4149430813](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430813) | Format publication evidence properties individually | lib/__tests__/deliverySummary.test.ts |
+| [#4149430833](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430833) | Align source-version argument indentation | convex/__tests__/articleDependencies.test.ts |
+| [#4149430848](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430848) | Render the page with a mocked canonical panel and assert normalized series props through the DOM | app/__tests__/homeSeriesParams.test.tsx |
+| [#4149430857](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430857) | Replace the transient working-tree dump with a recorded checkpoint and explicit PR change summary | docs/project-status.md |
+| [#4149430880](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430880) | Exclude mock-like/simulated Buffer receipts before the bounded output page; test both providers in one cohort | convex/__tests__/bufferFoundations.test.ts |
+| [#4149430900](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430900) | Move export regressions into atomic export setup/teardown scope | lib/__tests__/github.test.ts |
+| [#4149430915](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430915) | Use explicit invalidSeries/blockedCalendar scenario discriminators | e2e/series-url-filters.spec.ts |
+| [#4149430930](https://github.com/jakebutler/resonate-v2/pull/133#discussion_r4149430930) | Share the local Convex sync harness across both browser specs | e2e/test-support/mockConvexSync.ts |

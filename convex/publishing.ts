@@ -1,5 +1,6 @@
 import {postScheduleVersion} from "../lib/socialPayload";
 import {priorDispatchHold, priorBufferAttempts, dispatchCapacity, releasePin, allocateDispatch, reconcileAllocation, reviewReservationsHold} from "./queueDispatch";
+import {providerScheduleHold} from "./bufferAttempts";
 import {companionSubmissionHold,latestPublication} from "./articleDependencies";
 import {consumeReservation} from "./queuePlanning";
 import { linkedInPayload } from "../lib/socialPayload";
@@ -945,10 +946,8 @@ export const reschedule = mutation({
     const post = await getOwnedPost(ctx, userId, args.postId);
     if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     if (post.channelId === "linkedin") {
-      const hold = await priorDispatchHold(ctx, post._id);
+      const hold = await providerScheduleHold(ctx, post._id);
       if (hold) throw new Error(`Cannot change a provider schedule: ${hold}`);
-      const state = await ctx.db.query("v2ProviderStates").withIndex("by_post", q => q.eq("postId", post._id)).order("desc").first();
-      if (state?.providerId === "buffer" && !["cancelled", "removed", "not-submitted"].includes(state.status) && (state.providerPostId || ["submitted", "cancel-requested", "cancel-intent-recorded", "needs-review"].includes(state.status))) throw new Error("A provider receipt or uncertain dispatch requires reconciliation before changing dates.");
     }
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");

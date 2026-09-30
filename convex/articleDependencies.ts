@@ -1,4 +1,4 @@
-import { priorDispatchHold } from "./bufferAttempts";
+import { providerScheduleHold } from "./bufferAttempts";
 import { articleArtifactVersion, articlePublicationSourceVersion } from "../lib/articleContracts";
 import { v } from "convex/values";
 import {
@@ -227,7 +227,7 @@ export const details = query({
               articleArtifactVersion(post.blogArtifact),
             )
           : await companionSubmissionHold(ctx, post),
-      scheduleHold: await priorDispatchHold(ctx, post._id),
+      scheduleHold: await providerScheduleHold(ctx, post._id),
       proposal:
         post.companionLink && article?.blogArtifact
           ? proposeArticleLink(

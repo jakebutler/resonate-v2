@@ -483,7 +483,7 @@ export async function createBlogPostPR(params: {
   else {
     const diff = await read(`/compare/${encodeURIComponent(defaultRef.object.sha)}...${encodeURIComponent(head)}`);
     const expected = new Set(files.map(f => f.path));
-    if (diff.status !== "ahead" || diff.merge_base_commit?.sha !== defaultRef.object.sha || !Number.isSafeInteger(diff.total_commits) || diff.total_commits > 250 || !Array.isArray(diff.files) || diff.files.length !== 2 || diff.files.some((f: {filename: string; status: string}) => !expected.has(f.filename) || f.status === "removed"))
+    if (!["ahead", "diverged"].includes(diff.status) || !Number.isSafeInteger(diff.ahead_by) || diff.ahead_by < 1 || !Number.isSafeInteger(diff.total_commits) || diff.total_commits < 1 || diff.total_commits > 250 || !Array.isArray(diff.files) || diff.files.length !== 2 || diff.files.some((f: {filename: string; status: string}) => !expected.has(f.filename) || !["added", "modified"].includes(f.status)))
       throw new Error("Incomplete or unrelated export branch diff; Needs Review");
   }
   const existingPrs = await read(`/pulls?state=all&head=${encodeURIComponent(`${REPO_OWNER}:${branchName}`)}&base=${encodeURIComponent(defaultBranch)}`);
