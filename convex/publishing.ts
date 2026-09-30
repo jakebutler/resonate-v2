@@ -715,20 +715,21 @@ export const getPostById = query({
   },
 });
 
-export const createPostWithIntent = mutation({
+export async function createCanonicalPost(
+  ctx: MutationCtx,
+  userId: string,
   args: {
-    brandId: brandIdValidator,
-    channelId: channelIdValidator,
-    title: v.string(),
-    content: v.string(),
-    scheduledDate: v.optional(v.string()),
-    scheduledTime: v.optional(v.string()),
-    timezone: v.optional(v.string()),
-    sourceIdeaId: v.optional(v.string()),
-    sourceResearchBriefId: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx);
+    brandId: Doc<"v2Posts">["brandId"];
+    channelId: Doc<"v2Posts">["channelId"];
+    title: string;
+    content: string;
+    scheduledDate?: string;
+    scheduledTime?: string;
+    timezone?: string;
+    sourceIdeaId?: string;
+    sourceResearchBriefId?: string;
+  }
+) {
     const channel = await ensureWorkspaceChannel(
       ctx,
       userId,
@@ -794,6 +795,23 @@ export const createPostWithIntent = mutation({
     });
 
     return { postId, intentId };
+}
+
+export const createPostWithIntent = mutation({
+  args: {
+    brandId: brandIdValidator,
+    channelId: channelIdValidator,
+    title: v.string(),
+    content: v.string(),
+    scheduledDate: v.optional(v.string()),
+    scheduledTime: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+    sourceIdeaId: v.optional(v.string()),
+    sourceResearchBriefId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    return createCanonicalPost(ctx,userId,args);
   },
 });
 

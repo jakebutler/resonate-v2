@@ -1,4 +1,5 @@
 "use client";
+import {PreparedPackageImport} from "./PreparedPackageImport";
 import { useState } from "react";
 import Link from "next/link";
 import { useConvexAuth, useMutation, usePaginatedQuery, useQuery } from "convex/react";
@@ -15,7 +16,7 @@ export function SeriesWorkspace({initialSeriesId}:{initialSeriesId?:string}) {
   return <main className="mx-auto max-w-6xl space-y-6 p-6"><h1 className="text-2xl font-semibold">Publication series</h1><p>Organize existing articles and companions. Edit each post in its canonical composer.</p>
     <div className="flex flex-wrap gap-3"><label>Series<select className="ml-2 rounded border p-2" value={selected} onChange={e=>setSelected(e.target.value)}><option value="">Select a series</option>{rows?.map(row=><option key={row._id} value={row._id}>{row.title}</option>)}</select></label>
     <label>New series title<input className="ml-2 rounded border p-2" value={title} onChange={e=>setTitle(e.target.value)}/></label><label>Brand<select className="ml-2 rounded border p-2" value={brand} onChange={e=>setBrand(e.target.value as typeof brand)}>{BRANDS.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label><button className="rounded border px-3" disabled={!isAuthenticated||!title.trim()} onClick={()=>void onCreate()}>Create series</button></div>
-    {message&&<p role="alert">{message}</p>}{selected&&isAuthenticated&&<SeriesDetail key={selected} seriesId={selected as Id<"postSeries">}/>}
+    <PreparedPackageImport/>{message&&<p role="alert">{message}</p>}{selected&&isAuthenticated&&<SeriesDetail key={selected} seriesId={selected as Id<"postSeries">}/>}
   </main>;
 }
 export function SeriesDetail({seriesId}:{seriesId:Id<"postSeries">}){
