@@ -1,0 +1,132 @@
+{
+  "format_version": 1,
+  "status": "prepared_unqualified_not_dispatched",
+  "paid_calls_made": 0,
+  "spend_ledger_owner": "implementation coordinator",
+  "provider_caps_usd": {
+    "digitalocean": 5,
+    "openai": 5
+  },
+  "remaining_allowances": "Read coordinator ledger immediately before admission; not inferred here",
+  "seed_manifest_sha256": "3054c1fce45be346dbbb2168605fc73933b4aa60481d4d762d1f3efa7c6eac86",
+  "selected_scene": {
+    "article": 8,
+    "selection_provenance": "Jake's documented Revised Prompt iteration 2",
+    "request_provenance": "documented_final_direction",
+    "historical_model_id": null,
+    "exact_historical_request_verified": false,
+    "candidate_one_shot_validation": "not_tested",
+    "central_story": "A raven mechanic studies live measurements while a roadster remains restrained under testing"
+  },
+  "references": [
+    {
+      "order": 1,
+      "role": "identity",
+      "source_file_name": "raven-character-sheet.png",
+      "sha256": "0900adbe822813085b585b6415dd958e994046ec47122ca248e6ee525b4db316",
+      "bytes": 2178138,
+      "width": 1448,
+      "height": 1086,
+      "mime_type": "image/png",
+      "approval_provenance": "approved_by_Jake_in_conversation_and_source_record"
+    },
+    {
+      "order": 2,
+      "role": "style",
+      "source_file_name": "article-04-hero.png",
+      "sha256": "a909d8401db8a4bfc69ecead8dde3a9aafcc93a554b66b0b9bc69ee67fade2ce",
+      "bytes": 2013581,
+      "width": 1672,
+      "height": 941,
+      "mime_type": "image/png",
+      "approval_provenance": "selected_by_Jake_in_source_record"
+    }
+  ],
+  "generation": {
+    "operation": "generate",
+    "request_count": 1,
+    "canonical_model": "gpt-image-2",
+    "ordered_inputs": [
+      1,
+      2
+    ],
+    "prompt": "Create ONE wide 16:9 editorial illustration of a raven mechanic monitoring a vintage roadster undergoing electronic testing in a compact, well-equipped workshop. The entire scene is constructed from cut and layered matte paper, photographed under soft, diffuse daylight.\n\nREFERENCE IMAGES\nUse Image 1 for the raven’s identity: face, eyes, beak, body proportions, feather shapes, tail, legs, toes, and composed, quietly whimsical personality.\nUse Image 2 for materials and lighting: tactile matte paper, visible fibers, layered construction, restrained contact shadows, and neutral daylight.\nDo not reproduce the character-sheet layout, labels, or desk-and-stopwatch scene. Create the new workshop scene described below.\n\nMATERIALS AND LIGHTING\nUse crisp hand-cut edges with occasional slight deckling, visible paper tooth and fibers, believable cardstock thickness, and broad overlapping feather and object layers. Forms can have convincing physical depth, but their construction must remain visibly cut, folded, curved, and layered paper rather than smooth molded surfaces.\n\nEverything belongs to the same tactile paper world: the raven, clothing, car, tires, monitors, screen graphics, electronic sensors, cables, tools, furniture, and plants. Even the technological equipment should look carefully fabricated from matte paper.\n\nPhotograph the construction under soft, diffuse upper-left daylight with neutral white balance. Use restrained contact shadows to describe overlapping layers and grounded objects. Keep everything in sharp focus, with no lens distortion, dramatic lighting, or glossy reflections.\n\nPALETTE\nUse warm-neutral off-white #ECE9E2, charcoal #22272B, slate teal #2E5B60, and pale sage #B7C4B4 as the base palette. Burnt copper #C2612C provides related accents on the mechanic’s uniform, adjustment handle, wheel restraints, sensor connectors, and selected screen graphics. Small amounts of muted light gray and warm tan are allowed for recognizable mechanical trim and seat upholstery.\n\nKeep the background neutral off-white without a yellow cast. The monitors have dark charcoal screens with subdued paper-cut graphics, not luminous displays casting colored light.\n\nSCENE AND COMPOSITION\nStage a recognizable vehicle-testing workshop from a slightly elevated, three-quarter front viewpoint. The raven stands in the left foreground. A small, elegant slate-teal vintage roadster occupies the center-right on a substantial charcoal rolling test stand. Three computer monitors hang above the rear workbench across the upper-left and upper-middle background.\n\nThe image should read immediately as “a skilled mechanic studying live measurements while an attractive car remains under controlled testing.” The raven’s upward gaze, the telemetry monitors, the electronic sensors, and the restrained wheels establish that relationship.\n\nGive both the car and the testing operation substantial visual presence. The main subjects occupy roughly three quarters of the canvas, with clean breathing room around their silhouettes; secondary workshop furniture may extend toward the edges. Keep the raven’s inspection sheet, the copper adjustment handle, the sensor-to-car relationship, and the car’s wheels around the central band so a wide thumbnail crop retains the story.\n\nRAVEN MECHANIC\nMatch the approved raven character: charcoal layered feather shapes, substantial slate-teal beak, off-white eyes with dark pupils, compact body, tapered tail, slender bird legs and toes, and wings that can grip objects through feather-like fingers.\n\nDress the raven as a modern Formula 1 team mechanic, not in an apron. Give it a fitted charcoal technical mechanic’s jumpsuit with light-gray inset panels, narrow burnt-copper stripes along the outer sleeves and trouser legs, practical seams, a simple belt, and one small utility pocket containing a wrench and an orange-handled tool. All clothing is made from layered matte paper. No branding, team names, sponsor patches, lettering, or helmet. Keep the feathered head, neck, wing tips, tail, and bird feet visible.\n\nShow the raven in a three-quarter rear/side view, with its shoulders turned toward the wall monitors and its head tilted upward to study the middle screen. Keep the recognizable eye and beak visible in profile. Its gaze must clearly meet the monitor graphics rather than the car or the sheet in its wings.\n\nThe raven holds a large off-white inspection printout below its face, around chest-to-waist height, with feather-like fingers supporting the edges. Include only a small car silhouette, an illustrative line graph, broad document blocks, and a wheel diagram. The printout supports its comparison with the electronic results, but its attention is currently on the monitors. Its posture is attentive, analytical, and composed.\n\nROADSTER AND ROLLING TEST STAND\nMake the roadster a compact, attractive classic convertible, with its front facing left and slightly toward the viewer. Give it rounded slate-teal bodywork, round pale headlights, a simple vertical grille, restrained light-gray trim, an open cockpit, a pale windshield frame, warm tan seats, dark tires, and layered spoke-like wheel hubs.\n\nThe car is stationary on a robust charcoal dynamometer-style test stand. Clearly show the tires resting between cylindrical rollers. Include substantial beams, triangular braces, visible paper-cut bolts, roller axles, and sturdy supports. Burnt-copper wheel restraints with charcoal brackets secure the visible front and rear wheels to the rig. Make the physical connection between car, rollers, restraints, and support frame unmistakable.\n\nRetain a prominent burnt-copper adjustment handwheel with a short projecting grip on the upright near the car’s front-left corner. It belongs to the testing apparatus, not to the car.\n\nLIVE TESTING MONITORS\nReplace wall-mounted paper charts with exactly three modern flat-panel computer monitors in simple charcoal frames above the rear workbench. Their displays represent results from the roadster’s ongoing test.\n\nLeft monitor: a side-profile roadster silhouette, broad horizontal readout bars, and a small wheel diagram.\nMiddle monitor: two semicircular gauge arcs above a simple graph with teal and copper curves, plus a few vertical indicator bars.\nRight monitor: a waveform plot beside an overhead axle-and-wheel schematic, with a few small status dots and abstract readout blocks.\n\nUse layered paper lines and shapes for every interface element. The graphics are schematic visual shorthand, not real statistics or evidence. No words, numerals, scores, checkmarks, or pass/fail verdicts. Avoid neon, screen bloom, holograms, or colored light spilling onto the workshop.\n\nELECTRONIC TESTING APPARATUS\nMake the sensors visibly contemporary and electronic, rather than a simple mechanical measuring arm. A sturdy vertical mast attached to the rig supports an articulated assembly of compact rectangular sensor housings, adjustment joints, and a precise measuring head positioned just above the roadster’s front bodywork.\n\nAdd a second compact sensor module near the rear wheel, mounted on its own support and aimed toward the vehicle. Connect the modules to the rig with a few neatly routed black cables, small copper connectors, and one short coiled lead. Include a compact control or acquisition box attached to the test stand and a single thicker conduit exiting the rig.\n\nUse small matte indicator dots and simple panel details without text. Keep the electronics believable and orderly, with clear mounting points and purposeful connections. No floating devices, glowing scanning beams, or decorative circuitry.\n\nWORKSHOP BACKGROUND\nKeep the room tidy and functional. Beneath the monitors, show a muted teal workbench and drawer cabinet with a modest stack of inspection sheets, a small cup holding pencils or tools, and one simple sage-leaf plant in a muted copper-brown pot.\n\nOn the rear-right wall, include one compact charcoal tool board holding two wrenches and an orange-handled screwdriver. Place a closed sage-gray workshop door farther right, with a simple pale window panel and dark handle. A small portion of a rolling tool cabinet may appear at the far-right edge.\n\nThe background should establish a credible working environment without competing with the raven, screens, car, or test apparatus.\n\nFINAL CONSTRAINTS\nNo readable text anywhere. No captions, logos, watermarks, actual statistics, or claims about performance. No victory, race finish, crashed vehicle, green release light, open exit, or car departing. The vehicle is an attractive candidate still being evaluated, not a proven success.\n\nAvoid glossy materials, gradients, cinematic lighting, neon, holograms, robots, circuit-board decoration, excessive clutter, and a smooth 3D-render finish. Preserve the tactile matte-paper construction, clear visual hierarchy, and quiet whimsy throughout. One image only.\n\nOUTPUT MASTER\nRender a 1536x1024 landscape master; keep the decisive interaction in the center band for a later 16:9 crop.",
+    "prompt_utf8_bytes": 9045,
+    "fields": {
+      "n": 1,
+      "size": "1536x1024",
+      "quality": "medium",
+      "output_format": "png",
+      "background": "opaque",
+      "stream": false
+    },
+    "digitalocean": {
+      "api_model_id": "openai-gpt-image-2",
+      "reference_contract": "unverified",
+      "maximum_charge_usd": null
+    },
+    "openai": {
+      "api_model_id": "gpt-image-2-2026-04-21",
+      "known_snapshot": "gpt-image-2-2026-04-21",
+      "path": "/v1/images/edits",
+      "encoding": "multipart",
+      "image_field": "image[]",
+      "qualification": "not_run",
+      "maximum_charge_usd": null
+    }
+  },
+  "edit": {
+    "operation": "edit",
+    "request_count": 1,
+    "same_canonical_model": "gpt-image-2",
+    "parent_image": "Bind exact returned generation bytes, storage ID and SHA256; never use historical approved master as generated output",
+    "ordered_inputs": [
+      "generated-parent",
+      "raven-identity",
+      "paper-style"
+    ],
+    "feedback": "Shorten only the projecting grip on the burnt-copper adjustment handwheel by about one fifth. Keep the wheel, mounting point, raven identity, upward gaze, paper construction, lighting, car restraints, three monitors, scene arrangement and all other objects unchanged. The vehicle remains under controlled testing; this is not a new scene.",
+    "prompt": "Image 1 is the selected image to edit. Image 2 supplies raven identity. Image 3 supplies materials and lighting. Shorten only the projecting grip on the burnt-copper adjustment handwheel by about one fifth. Keep the wheel, mounting point, raven identity, upward gaze, paper construction, lighting, car restraints, three monitors, scene arrangement and all other objects unchanged. The vehicle remains under controlled testing; this is not a new scene.",
+    "shared_remote_history_assumed": false,
+    "maximum_charge_usd": null,
+    "settings": {
+      "n": 1,
+      "size": "1536x1024",
+      "quality": "medium",
+      "output_format": "png",
+      "background": "opaque",
+      "stream": false
+    }
+  },
+  "optional_text_only_probe": {
+    "purpose": "Engineering endpoint/receipt identity only; cannot qualify references or edits",
+    "prompt": "One matte-paper burnt-copper adjustment handwheel on an off-white background. No text.",
+    "request_count": 1,
+    "maximum_charge_usd": null,
+    "status": "not_admitted"
+  },
+  "admission_blockers": [
+    "No reliable combined billable input/output hard bound established for exact route",
+    "DO references and edits lack a documented request contract",
+    "Provider/account identity and applicable credit eligibility must be attached by coordinator"
+  ],
+  "human_review_pending": [
+    "Raven identity",
+    "Tactile paper style",
+    "Story readability at 400px",
+    "Localized edit preservation"
+  ],
+  "receipt_requirements": [
+    "Exact submitted prompt and ordered reference hashes",
+    "Provider and model identity",
+    "HTTP status and safe request ID",
+    "Attempt and durable claim IDs, logical job lineage, reserved maximum",
+    "Prompt SHA256, ordered input SHA256/roles and parent version ID",
+    "Provider-reported model or explicit missing identity",
+    "Durable full output bytes and hash",
+    "Observed token categories or explicit missing usage",
+    "Invoice versus usage-derived estimate",
+    "Reserved maximum retained for every uncertain outcome",
+    "Human aesthetic approval recorded separately"
+  ]
+}

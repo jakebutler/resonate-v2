@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 08:22:03 PDT
+Last updated: 09/30/2026 08:29:27 PDT
 
 ## State
 
@@ -13,46 +13,46 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 ## Session Focus
 
 - Updated repository documentation and handoff records.
-- Touched auth or environment wiring.
 
 ## Last Completed Task
 
-- 48a28c0 feat: persist guarded editorial visuals and evidence-bound figures
+- 4f59b60 feat: integrate opt-in visuals into the saved composer
 
 ## Recent Commits
 
+- 4f59b60 feat: integrate opt-in visuals into the saved composer
 - 48a28c0 feat: persist guarded editorial visuals and evidence-bound figures
 - b8b6e44 Merge pull request #96 from jakebutler/codex/linkedin-first-comment
 - c91ecdb feat: preserve LinkedIn first comments through approval and Buffer submission
 - 38238c9 Merge pull request #95 from jakebutler/codex/publishing-navigation
-- ffd3339 fix: make spawned drafts reachable in publishing workspace
 
 ## Local Working Tree
 
-- M  components/BlogPostEditor/BlogPostEditor.tsx
-- M  components/BlogPostEditor/__tests__/BlogPostEditor.test.tsx
-- M  components/ConvexClientProvider.tsx
-- A  components/EditorialFigurePanel.tsx
-- A  components/EditorialVisualPanel.tsx
-- M  components/FullScreenEditor/FullScreenEditor.tsx
-- M  components/FullScreenEditor/__tests__/FullScreenEditor.test.tsx
-- A  components/LinkedFigureEvidencePanel.tsx
-- M  components/PersistedPublishingPanel.tsx
-- M  components/__tests__/ConvexClientProvider.test.tsx
-- A  components/__tests__/EditorialFigurePanel.test.tsx
-- A  components/__tests__/EditorialVisualPanel.test.tsx
-- A  components/__tests__/LinkedFigureEvidencePanel.test.tsx
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
-- M  eslint.config.mjs
-- ?? docs/editorial-visuals/
-- ?? scripts/export-local-visual-fixture.mjs
-- ?? scripts/import-visual-seed.mjs
-- ?? scripts/publish-visual-tickets.py
-- ?? scripts/visual-fixture-issuer.mjs
-- ?? scripts/visual-fixture-rehearsal.mjs
-- ?? scripts/visual-linked-fixture-rehearsal.mjs
-- ?? scripts/visual-provider-qualification-packet.py
-- ?? scripts/visual-provider-qualification-packet.test.py
+- A  docs/editorial-visuals/PROGRESS.md
+- A  docs/editorial-visuals/figures.md
+- A  docs/editorial-visuals/fixture-rehearsal.md
+- A  docs/editorial-visuals/issues.json
+- A  docs/editorial-visuals/linked-evidence.md
+- A  docs/editorial-visuals/linked-fixture-rehearsal.md
+- A  docs/editorial-visuals/profile-contract.md
+- A  docs/editorial-visuals/providers/contracts.md
+- A  docs/editorial-visuals/providers/qualification-packet.json
+- A  docs/editorial-visuals/providers/review-dispositions.md
+- A  docs/editorial-visuals/providers/tdd-receipts.md
+- A  docs/editorial-visuals/publication-action.md
+- A  docs/editorial-visuals/reader-rehearsal.md
+- A  docs/editorial-visuals/release-preflight.md
+- A  docs/editorial-visuals/ui.md
+- A  docs/editorial-visuals/workflow-contract.md
+- A  docs/editorial-visuals/workflow-tdd-receipts.md
+- A  scripts/export-local-visual-fixture.mjs
+- A  scripts/import-visual-seed.mjs
+- A  scripts/publish-visual-tickets.py
+- A  scripts/visual-fixture-issuer.mjs
+- A  scripts/visual-fixture-rehearsal.mjs
+- A  scripts/visual-linked-fixture-rehearsal.mjs
+- A  scripts/visual-provider-qualification-packet.py
+- A  scripts/visual-provider-qualification-packet.test.py
 
 ## Next Agent Pickup
 
