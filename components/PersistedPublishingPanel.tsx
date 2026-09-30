@@ -362,6 +362,7 @@ export function PersistedPublishingPanel({
     "scheduled",
     "submitted",
     "needs-review",
+    "pr-created",
   ]);
   const [calendarView, setCalendarView] = useState<CalendarView>("month");
   const [calendarAnchor, setCalendarAnchor] = useState<string | null>(null);
@@ -387,6 +388,28 @@ export function PersistedPublishingPanel({
     api.publishing.listBrands,
     isConvexAuthenticated ? {} : "skip"
   );
+  const deepLinkedPost = useQuery(
+    api.publishing.getPostById,
+    isConvexAuthenticated && initialPostId ? { postId: initialPostId } : "skip"
+  );
+  const linkedBrandId = deepLinkedPost?.brandId;
+  const linkedChannelId = deepLinkedPost?.channelId;
+  const linkedStatus = deepLinkedPost?.status;
+  useEffect(() => {
+    if (!linkedBrandId || !linkedChannelId || !linkedStatus) return;
+    // An explicit composer link should open even when the calendar filters
+    // initially exclude this owned post's brand, channel, or status.
+    setBrandFilters((current) =>
+      current.includes(linkedBrandId) ? current : [...current, linkedBrandId]
+    );
+    setPlatformFilters((current) =>
+      current.includes(linkedChannelId) ? current : [...current, linkedChannelId]
+    );
+    setStatusFilters((current) =>
+      current.includes(linkedStatus) ? current : [...current, linkedStatus]
+    );
+  }, [linkedBrandId, linkedChannelId, linkedStatus]);
+
   const items = useQuery(
     api.publishing.listCalendarItems,
     isConvexAuthenticated
@@ -456,6 +479,7 @@ export function PersistedPublishingPanel({
       return acc;
     }, {});
   }, [visibleItems]);
+  const unscheduledItems = visibleItems.filter((item) => !itemScheduledDate(item));
   const rangeItems = useMemo(
     () =>
       visibleItems
@@ -1153,6 +1177,23 @@ export function PersistedPublishingPanel({
                     );
                   })}
                 </div>
+
+                {unscheduledItems.length > 0 && (
+                  <section className="border-t border-black/10 px-4 py-3" aria-label="Unscheduled drafts">
+                    <h3 className="text-sm font-semibold">Unscheduled drafts</h3>
+                    <div className="mt-3 flex flex-col items-start gap-2">
+                      {unscheduledItems.map((item) => (
+                        <Button
+                          key={item.post._id}
+                          variant="secondary"
+                          onClick={() => setManualSelectedPostId(item.post._id)}
+                        >
+                          Open composer for {item.post.title}
+                        </Button>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 <div className="border-t border-black/10 px-4 py-3">
                   <h3 className="text-sm font-semibold">Range agenda</h3>

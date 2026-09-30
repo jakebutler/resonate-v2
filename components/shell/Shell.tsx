@@ -40,6 +40,9 @@ export function Shell({ activeSurface, children }: ShellProps) {
             >
               Calendar
             </Link>
+            <Link href="/ideas" className={navLinkClass(false)}>
+              Ideas
+            </Link>
             <Link
               href="/campaigns"
               aria-current={activeSurface === "campaigns" ? "page" : undefined}

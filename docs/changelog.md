@@ -4176,3 +4176,29 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/jake-voice-profile
+
+## 09/29/2026 15:07:03 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	components/IdeaDetail/IdeaDetail.tsx
+- M	components/IdeaDetail/__tests__/IdeaDetail.test.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/shell/Shell.tsx
+
+### Working Tree Snapshot
+
+- M  components/IdeaDetail/IdeaDetail.tsx
+- M  components/IdeaDetail/__tests__/IdeaDetail.test.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/shell/Shell.tsx
+
+### Branch
+
+- codex/publishing-navigation
