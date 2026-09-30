@@ -37,7 +37,7 @@ it.each([
   { authorization: "bearer   sanitized-secret  " },
   { "x-v2-ops-secret": " sanitized-secret " },
 ])(
-  "returns the composer migration response for legacy authenticated operators: %s",
+  "returns the composer migration response for legacy authenticated operators: %j",
   async (headers) => {
     vi.stubEnv("V2_OPS_SECRET", "sanitized-secret");
     const fetch = vi.fn();

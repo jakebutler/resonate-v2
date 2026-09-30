@@ -10,7 +10,7 @@ PR #133 preserves explicit editorial holds, binds article/source/capacity eviden
 
 ## Verification and release
 
-The initial follow-up checkpoint passed 897 unit tests, native Convex dry-run, lint/typecheck/build and 19 browser tests. The final follow-up candidate adds cancellation, renamed-file, advanced-main, failed-connection and unavailable-calendar regressions. Final hosted verification, PR review, merge, deployment and read-only production verification are recorded separately in [epic-97-progress.md](epic-97-progress.md) and the GitHub epic.
+The initial follow-up checkpoint passed 897 unit tests, native Convex dry-run, lint/typecheck/build and 19 browser tests. The final follow-up candidate adds cancellation, renamed-file, advanced-main, failed-connection and unavailable-calendar regressions. Final hosted verification, PR review, merge, deployment and read-only production verification remain pending at this recorded checkpoint; their gate status is tracked separately in [epic-97-progress.md](epic-97-progress.md) and the GitHub epic.
 
 Jake approved merge and deployment. Live content writes still require his next scoped review. Keep `BUFFER_LIVE_SUBMISSION=blocked`; do not approve existing drafts, adopt production content, create/cancel provider fixtures, publish articles or submit existing posts from this software release approval.
 

@@ -8,9 +8,10 @@ export async function priorBufferAttempts(
     .query("v2PublishAttempts")
     .withIndex("by_post", (q) => q.eq("postId", postId))
     .order("desc")
+    .filter((q) => q.eq(q.field("providerId"), "buffer"))
     .take(101);
   return {
-    rows: rows.filter((r) => r.providerId === "buffer"),
+    rows,
     overflow: rows.length > 100,
   };
 }

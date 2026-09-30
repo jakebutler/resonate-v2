@@ -109,26 +109,146 @@ it.each([true, false])(
   },
 );
 
-it.each(["cancelled", "removed"] as const)("allows planning dates after verified %s without permitting replay", async (status) => {
-  const {t, user, postId, intentId} = await fixture();
-  await user.mutation(api.publishing.setApproval, {postId, approvalState: "approved"});
-  const post = (await t.run(ctx => ctx.db.get(postId)))!;
-  const attemptId = await t.run(async ctx => {
-    const id = await ctx.db.insert("v2PublishAttempts", {
-      postId, intentId, userId: "editor", providerId: "buffer", status: "success", providerPostId: "external-post", retryCount: 0,
-      idempotencyKey: "accepted-fixture", submissionSnapshot: {postId, brandId: "corvo", channelId: "linkedin", title: post.title, content: post.content, timezone: post.timezone},
-      sanitizedResponse: {postId: "external-post"}, createdAt: Date.now(), updatedAt: Date.now(),
+it.each(["cancelled", "removed"] as const)(
+  "allows planning dates after verified %s without permitting replay",
+  async (status) => {
+    const { t, user, postId, intentId } = await fixture();
+    await user.mutation(api.publishing.setApproval, {
+      postId,
+      approvalState: "approved",
     });
-    const state = (await ctx.db.query("v2ProviderStates").withIndex("by_intent", q => q.eq("intentId", intentId)).first())!;
-    await ctx.db.patch(state._id, {providerId: "buffer", providerPostId: "external-post", lastAttemptId: id, status});
-    return id;
-  });
-  const before = await t.run(ctx => ctx.db.get(attemptId));
-  await user.mutation(api.publishing.reschedule, {postId, scheduledDate: "2030-10-08", scheduledTime: "09:00"});
-  expect(await t.run(ctx => ctx.db.get(postId))).toMatchObject({scheduledDate: "2030-10-08", content: post.content, approvalState: "approved"});
-  expect(await t.run(ctx => ctx.db.get(attemptId))).toEqual(before);
-  expect((await user.query(api.articleDependencies.details, {postId})).scheduleHold).toBeNull();
-  expect(await t.query(internal.publishing.getBufferSubmissionContext, {postId, userId: "editor"})).toMatchObject({eligible: false});
-  await t.run(ctx => ctx.db.patch(attemptId, {status: "ambiguous"}));
-  await expect(user.mutation(api.publishing.reschedule, {postId, scheduledDate: "2030-10-09"})).rejects.toThrow(/pending or uncertain/);
-});
+    const post = (await t.run((ctx) => ctx.db.get(postId)))!;
+    const attemptId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("v2PublishAttempts", {
+        postId,
+        intentId,
+        userId: "editor",
+        providerId: "buffer",
+        status: "success",
+        providerPostId: "external-post",
+        retryCount: 0,
+        idempotencyKey: "accepted-fixture",
+        submissionSnapshot: {
+          postId,
+          brandId: "corvo",
+          channelId: "linkedin",
+          title: post.title,
+          content: post.content,
+          timezone: post.timezone,
+        },
+        sanitizedResponse: { postId: "external-post" },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      const state = (await ctx.db
+        .query("v2ProviderStates")
+        .withIndex("by_intent", (q) => q.eq("intentId", intentId))
+        .first())!;
+      await ctx.db.patch(state._id, {
+        providerId: "buffer",
+        providerPostId: "external-post",
+        lastAttemptId: id,
+        status,
+      });
+      return id;
+    });
+    const before = await t.run((ctx) => ctx.db.get(attemptId));
+    await user.mutation(api.publishing.reschedule, {
+      postId,
+      scheduledDate: "2030-10-08",
+      scheduledTime: "09:00",
+    });
+    expect(await t.run((ctx) => ctx.db.get(postId))).toMatchObject({
+      scheduledDate: "2030-10-08",
+      content: post.content,
+      approvalState: "approved",
+    });
+    expect(await t.run((ctx) => ctx.db.get(attemptId))).toEqual(before);
+    expect(
+      (await user.query(api.articleDependencies.details, { postId }))
+        .scheduleHold,
+    ).toBeNull();
+    expect(
+      await t.query(internal.publishing.getBufferSubmissionContext, {
+        postId,
+        userId: "editor",
+      }),
+    ).toMatchObject({ eligible: false });
+    await t.run((ctx) => ctx.db.patch(attemptId, { status: "ambiguous" }));
+    await expect(
+      user.mutation(api.publishing.reschedule, {
+        postId,
+        scheduledDate: "2030-10-09",
+      }),
+    ).rejects.toThrow(/pending or uncertain/);
+  },
+);
+
+it.each(["mock", "buffer"] as const)(
+  "bounds only Buffer attempt history when %s has over one hundred attempts",
+  async (providerId) => {
+    const { t, user, postId, intentId } = await fixture();
+    const post = (await t.run((ctx) => ctx.db.get(postId)))!;
+    const attempt = {
+      postId,
+      intentId,
+      userId: "editor",
+      providerId,
+      status: "retryable-failure" as const,
+      retryCount: 0,
+      submissionSnapshot: {
+        postId,
+        brandId: "corvo" as const,
+        channelId: "linkedin" as const,
+        title: post.title,
+        content: post.content,
+        timezone: post.timezone,
+      },
+      sanitizedResponse: {},
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    await t.run(async (ctx) => {
+      for (let n = 0; n < 110; n++)
+        await ctx.db.insert("v2PublishAttempts", {
+          ...attempt,
+          idempotencyKey: `unrelated-${n}`,
+        });
+    });
+    if (providerId === "buffer") {
+      await expect(
+        user.mutation(api.publishing.reschedule, {
+          postId,
+          scheduledDate: "2030-10-08",
+        }),
+      ).rejects.toThrow(/history exceeds/);
+    } else {
+      await user.mutation(api.publishing.reschedule, {
+        postId,
+        scheduledDate: "2030-10-08",
+      });
+      expect((await t.run((ctx) => ctx.db.get(postId)))!.scheduledDate).toBe(
+        "2030-10-08",
+      );
+      await t.run(async (ctx) => {
+        await ctx.db.insert("v2PublishAttempts", {
+          ...attempt,
+          providerId: "buffer",
+          status: "pending",
+          idempotencyKey: "older-buffer-pending",
+        });
+        for (let n = 0; n < 110; n++)
+          await ctx.db.insert("v2PublishAttempts", {
+            ...attempt,
+            idempotencyKey: `newer-unrelated-${n}`,
+          });
+      });
+      await expect(
+        user.mutation(api.publishing.reschedule, {
+          postId,
+          scheduledDate: "2030-10-09",
+        }),
+      ).rejects.toThrow(/pending or uncertain/);
+    }
+  },
+);

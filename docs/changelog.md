@@ -4805,6 +4805,21 @@ Append-only session log for repository-level updates. Each documentation refresh
 - codex/epic-97-review-followups
 
 
-## September 30, 2026 — Epic #97 follow-up review
+## 09/30/2026 14:29:00 PDT
+
+### Summary
 
 Addressed the 18 initial comments on PR #133 before merge: confirmed cancellation permits planning dates without submission replay; recovered blog branches accept main advancing and reject renamed or unrelated files; stale calendar series hold their query with a visible selection message; failed connection refreshes preserve destination facts while disabling review. Retired ops authentication keeps bearer/header compatibility and directs operators to the composer. Added mocked regressions, isolated test setup, a shared browser transport and specific failure screenshots. Merge/deployment authority persists; live content activation still requires Jake's separate scoped review.
+
+
+### Staged Changes
+
+- Epic #97 review follow-ups in PR #133; see the code/test disposition table for the complete change set.
+
+### Working Tree Snapshot
+
+- Recorded before the follow-up commit. Verify current Git state separately; the listed PR changes are committed work.
+
+### Branch
+
+- codex/epic-97-review-followups

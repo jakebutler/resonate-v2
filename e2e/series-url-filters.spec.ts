@@ -115,6 +115,11 @@ for (const scenario of [
         .toBeGreaterThan(0);
       for (const call of calls.filter((c) => c.path === scenario.path))
         expect(call.args).toMatchObject(scenario.args);
+      expect(
+        calls
+          .filter((c) => c.path === scenario.path)
+          .every((c) => !c.args.seriesId),
+      ).toBe(true);
       await expect(page.getByText(/This series is unavailable/)).toHaveCount(0);
     }
   });
