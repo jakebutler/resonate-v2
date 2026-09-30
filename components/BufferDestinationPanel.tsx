@@ -5,7 +5,7 @@ import {api} from "@/convex/_generated/api";
 import type {Doc,Id} from "@/convex/_generated/dataModel";
 import {destinationHold,destinationIdentity} from "@/lib/bufferContracts";
 import {linkedInPayload,socialReleaseVersion} from "@/lib/socialPayload";
-import {scheduleToUtcIso} from "@/lib/providerAdapters";
+import {scheduleToUtcIso} from "@/lib/schedules";
 type ReviewedPost={_id:Id<"v2Posts">;title:string;content:string;linkedinFirstComment?:string;scheduledDate?:string;scheduledTime?:string;timezone?:string;platformSettings?:unknown};
 export function BufferDestinationPanel({brandId,post}:{brandId:Doc<"v2Posts">["brandId"];post?:ReviewedPost}){
  const {isAuthenticated}=useConvexAuth();const row=useQuery(api.bufferDestinations.get,isAuthenticated?{brandId}:"skip") as Doc<"bufferDestinations">|null|undefined;const refresh=useAction(api.bufferLive.refreshDestination);const pin=useMutation(api.bufferDestinations.pin);const fallback=useMutation(api.bufferDestinations.bodyLinkAlternative);const confirm=useMutation(api.bufferDestinations.confirmFirstComment);

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 03:19:52 PDT
+Last updated: 09/30/2026 03:51:16 PDT
 
 ## State
 
@@ -16,42 +16,38 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 454a5a7 Adopt existing posts into durable publication series
+- 520bc47 Review Buffer destinations and reconcile delivery receipts fairly
 
 ## Recent Commits
 
+- 520bc47 Review Buffer destinations and reconcile delivery receipts fairly
 - 454a5a7 Adopt existing posts into durable publication series
 - bbe7d67 Complete approved blog exports with prepared heroes and bound artifacts
 - b8b6e44 Merge pull request #96 from jakebutler/codex/linkedin-first-comment
 - c91ecdb feat: preserve LinkedIn first comments through approval and Buffer submission
-- 38238c9 Merge pull request #95 from jakebutler/codex/publishing-navigation
 
 ## Local Working Tree
 
-- A  components/BufferDestinationPanel.tsx
-- A  components/DeliveryReceiptPanel.tsx
-- M  components/PersistedPublishingPanel.tsx
-- M  components/SocialConnectionsPanel.tsx
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
-- A  convex/__tests__/bufferFoundations.test.ts
-- M  convex/__tests__/publishing.test.ts
+- A  app/queue/page.tsx
+- M  components/BufferDestinationPanel.tsx
+- A  components/QueuePlanningPanel.tsx
+- M  components/SeriesWorkspace.tsx
+- M  components/shell/Shell.tsx
+- A  convex/__tests__/queuePlanning.test.ts
 - M  convex/_generated/api.d.ts
-- A  convex/bufferDelivery.ts
-- A  convex/bufferDestinations.ts
 - M  convex/bufferLive.ts
-- A  convex/bufferValidators.ts
-- M  convex/crons.ts
 - M  convex/publishing.ts
+- A  convex/queuePlanning.ts
+- A  convex/queueValidators.ts
 - M  convex/schema.ts
 - M  docs/epic-97-progress.md
-- A  e2e/buffer-foundations.spec.ts
-- A  lib/__tests__/bufferContracts.test.ts
-- M  lib/__tests__/providerAdapters.test.ts
-- A  lib/bufferContracts.ts
-- M  lib/domain.ts
+- A  e2e/queue-planning.spec.ts
+- A  lib/__tests__/queueCapacity.test.ts
+- M  lib/bufferContracts.ts
 - M  lib/providerAdapters.ts
-- A  lib/socialPayload.ts
-- A  vercel.json
+- A  lib/queueCapacity.ts
+- A  lib/readBufferQueue.ts
+- A  lib/schedules.ts
 
 ## Next Agent Pickup
 
@@ -60,4 +56,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- codex/epic-97-buffer-foundations
+- codex/epic-97-capacity-planning

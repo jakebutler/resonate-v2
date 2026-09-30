@@ -35,6 +35,8 @@ import type * as posts from "../posts.js";
 import type * as previewSeedData from "../previewSeedData.js";
 import type * as publishing from "../publishing.js";
 import type * as queue from "../queue.js";
+import type * as queuePlanning from "../queuePlanning.js";
+import type * as queueValidators from "../queueValidators.js";
 import type * as research from "../research.js";
 import type * as series from "../series.js";
 import type * as settings from "../settings.js";
@@ -74,6 +76,8 @@ declare const fullApi: ApiFromModules<{
   previewSeedData: typeof previewSeedData;
   publishing: typeof publishing;
   queue: typeof queue;
+  queuePlanning: typeof queuePlanning;
+  queueValidators: typeof queueValidators;
   research: typeof research;
   series: typeof series;
   settings: typeof settings;

@@ -1,3 +1,4 @@
+import {consumeReservation} from "./queuePlanning";
 import { linkedInPayload } from "../lib/socialPayload";
 import { destinationSubmissionHold, readDestination } from "./bufferDestinations";
 import { applyRefresh } from "./bufferDelivery";
@@ -2277,6 +2278,7 @@ export const recordBufferSubmitResult = internalMutation({
     if(!attempt || attempt.postId!==post._id || attempt.intentId!==intent._id || attempt.idempotencyKey!==args.idempotencyKey)throw new Error("Submission receipt identity mismatch");
     if(attempt.status!=="pending")return {recorded:true as const,attemptId:attempt._id,submitted:attempt.status==="success",stale:false};
     const now = Date.now();
+    if(args.ok&&args.providerPostId)await consumeReservation(ctx,post._id,args.providerPostId,post.destinationReview?.identity);
     if(args.sanitizedResponse?.firstCommentUnsupported===true){const destination=await readDestination(ctx,post.userId,post.brandId);if(destination?.destination && attempt.submissionSnapshot.firstComment)await ctx.db.patch(destination._id,{destination:{...destination.destination,firstComment:{value:"unsupported",source:"provider-observation",checkedAt:now,evidence:"Definitive Buffer response rejected first-comment entitlement for this account."}}});}
     const intentStillValid =
       intent.approvalState === "approved" &&

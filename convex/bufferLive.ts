@@ -3,6 +3,8 @@
 import { v } from "convex/values";
 import { type BufferRequestBudget, BufferRequestBudgetError } from "../lib/bufferContracts";
 import { brandIdValidator } from "./campaignAccess";
+import {readBufferQueue} from "../lib/readBufferQueue";
+import {destinationHold,destinationIdentity,type BufferDestination} from "../lib/bufferContracts";
 import { resolveBufferLinkedInChannelId } from "../lib/providerAdapters";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
@@ -249,4 +251,17 @@ export const refreshDestination=action({args:{brandId:brandIdValidator},returns:
   const context=bufferAdapterContext({remaining:22});if(!context.liveProviderValidationApproved||!context.env.BUFFER_API_KEY)return {verified:false,reason:"Read-only provider validation requires the configured approval gate and credential."};
   const control=await ctx.runQuery(internal.bufferDelivery.control,{});if((control?.backoffUntil??0)>Date.now())return {verified:false,reason:"Provider rate limited; wait before checking."};
   try{const result=await resolveBufferLinkedInChannelId(args.brandId,context);await ctx.runMutation(internal.bufferDestinations.record,{...args,userId,...(result.ok?{destination:result.destination}:{error:result.reason})});return {verified:result.ok,...(!result.ok?{reason:result.reason}:{})};}catch{await ctx.runMutation(internal.bufferDestinations.record,{...args,userId,error:"Destination lookup failed; review the connection."});return {verified:false,reason:"Destination lookup failed; review the connection."};}finally{if(context.requestBudget?.backoffUntil)await ctx.runMutation(internal.bufferDelivery.recordBackoff,{backoffUntil:context.requestBudget.backoffUntil});}
+}});
+
+/** Read-only capacity observation. The same provider budget/backoff applies. */
+export const refreshCapacity=action({args:{brandId:brandIdValidator},returns:v.any(),handler:async(ctx,args):Promise<{complete:boolean;reason?:string}>=>{
+ const userId=await requireActionUserId(ctx);const saved: {destination?:BufferDestination}|null=await ctx.runQuery(internal.queuePlanning.context,{...args,userId});
+ const hold=destinationHold(saved?.destination,false);if(hold)return {complete:false,reason:hold};
+ const context=bufferAdapterContext({remaining:22});if(!context.liveProviderValidationApproved||!context.env.BUFFER_API_KEY)return {complete:false,reason:"Read-only provider validation requires the configured approval gate and credential."};
+ const control=await ctx.runQuery(internal.bufferDelivery.control,{});if((control?.backoffUntil??0)>Date.now())return {complete:false,reason:"Provider rate limited; wait before checking."};
+ try {
+  const resolved=await resolveBufferLinkedInChannelId(args.brandId,context);if(!resolved.ok||destinationIdentity(resolved.destination)!==destinationIdentity(saved!.destination!))return {complete:false,reason:"Destination changed; refresh Connections before planning."};
+  const observation=await readBufferQueue(resolved.destination,context);await ctx.runMutation(internal.queuePlanning.record,{...args,userId,observation});return {complete:observation.complete,reason:observation.error};
+ }catch{return {complete:false,reason:"Capacity check failed; capacity remains unknown."};}
+ finally{if(context.requestBudget?.backoffUntil)await ctx.runMutation(internal.bufferDelivery.recordBackoff,{backoffUntil:context.requestBudget.backoffUntil});}
 }});

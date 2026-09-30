@@ -1,3 +1,5 @@
+import {scheduleToUtcIso} from "./schedules";
+export {scheduleToUtcIso} from "./schedules";
 import { type BufferDestination, type BufferRequestBudget, BufferRequestBudgetError, observeBufferRateLimit, safeLinkedInUrl, destinationHold, destinationIdentity } from "./bufferContracts";
 import type {
   BrandId,
@@ -235,43 +237,6 @@ function sanitizeBufferChannel(channel: Record<string, unknown>) {
 
 export { brandHasBufferLinkedInMapping };
 
-export function scheduleToUtcIso(input: {
-  scheduledDate: string;
-  scheduledTime?: string;
-  timezone: string;
-}): string {
-  const [year, month, day] = input.scheduledDate.split("-").map(Number);
-  const [hour, minute] = (input.scheduledTime ?? "09:00").split(":").map(Number);
-  const readZoned = (ms: number) => {
-    const parts = new Intl.DateTimeFormat("en-GB", {
-      timeZone: input.timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).formatToParts(new Date(ms));
-    const pick = (type: string) =>
-      Number(parts.find((part) => part.type === type)?.value ?? "0");
-    return {
-      year: pick("year"),
-      month: pick("month"),
-      day: pick("day"),
-      hour: pick("hour"),
-      minute: pick("minute"),
-    };
-  };
-
-  let ms = Date.UTC(year, month - 1, day, hour, minute, 0);
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const zoned = readZoned(ms);
-    const desired = Date.UTC(year, month - 1, day, hour, minute, 0);
-    const actual = Date.UTC(zoned.year, zoned.month - 1, zoned.day, zoned.hour, zoned.minute, 0);
-    ms += desired - actual;
-  }
-  return new Date(ms).toISOString();
-}
 
 function isBufferLiveSubmissionApproved(context: ProviderAdapterContext): boolean {
   return context.env.BUFFER_LIVE_SUBMISSION === "approved";
@@ -284,7 +249,7 @@ function needsLiveSubmissionApproval(providerId: ProviderId): ProviderResult {
   );
 }
 
-function createBufferGraphqlClient(context: ProviderAdapterContext) {
+export function createBufferGraphqlClient(context: ProviderAdapterContext) {
   const fetchImpl = fetchForContext(context);
   const apiKey = credential(context, "BUFFER_API_KEY");
   return {

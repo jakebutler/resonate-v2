@@ -1,3 +1,4 @@
+import {queueObservationValidator} from "./queueValidators";
 import { destinationValidator, deliveryStatusValidator } from "./bufferValidators";
 import { preparedHeroValidator } from "./blogValidators";
 import { defineSchema, defineTable } from "convex/server";
@@ -173,6 +174,12 @@ const ideaFlavor = v.union(
 );
 
 export default defineSchema({
+  queuePlans: defineTable({userId:v.string(),brandId:v2BrandId,seriesId:v.optional(v.id("postSeries")),checkedAt:v.number(),snapshotId:v.optional(v.id("queueObservations")),capacity:v.any(),rows:v.array(v.object({postId:v.id("v2Posts"),dueAt:v.union(v.string(),v.null()),hold:v.union(v.string(),v.null()),eligible:v.boolean()}))}).index("by_user_and_brand",["userId","brandId"]),
+  queueObservations:defineTable({userId:v.string(),brandId:v2BrandId,observation:queueObservationValidator,identity:v.string(),checkedAt:v.number()}).index("by_user_and_brand",["userId","brandId"]).index("by_identity_and_time",["identity","checkedAt"]),
+  queueConstraints:defineTable({userId:v.string(),brandId:v2BrandId,identity:v.string(),channelId:v.string(),organizationId:v.string(),channelLimit:v.number(),organizationLimit:v.optional(v.number()),dailyLimit:v.optional(v.number()),evidence:v.string(),actor:v.string(),checkedAt:v.number(),revision:v.number()}).index("by_user_and_identity",["userId","identity"]),
+  queueReservations:defineTable({userId:v.string(),brandId:v2BrandId,seriesId:v.id("postSeries"),postId:v.id("v2Posts"),identity:v.string(),channelId:v.string(),organizationId:v.string(),status:v.union(v.literal("reserved"),v.literal("consumed"),v.literal("released")),providerPostId:v.optional(v.string()),actor:v.string(),updatedAt:v.number()}).index("by_identity",["identity"]).index("by_organization",["organizationId"]).index("by_post_and_identity",["postId","identity"]),
+  queueDispatchGuards:defineTable({identity:v.string(),revision:v.number()}).index("by_identity",["identity"]),
+  queueDispatchClaims:defineTable({userId:v.string(),postId:v.id("v2Posts"),intentId:v.id("v2PublishingIntents"),attemptId:v.id("v2PublishAttempts"),identity:v.string(),channelId:v.string(),organizationId:v.string(),status:v.union(v.literal("active"),v.literal("uncertain"),v.literal("confirmed"),v.literal("released")),providerPostId:v.optional(v.string()),updatedAt:v.number()}).index("by_identity",["identity"]).index("by_organization",["organizationId"]).index("by_attempt",["attemptId"]).index("by_post",["postId"]),
   bufferDestinations:defineTable({userId:v.string(),brandId:v2BrandId,destination:v.optional(destinationValidator),error:v.optional(v.string()),updatedAt:v.number()}).index("by_user_and_brand",["userId","brandId"]),
   bufferPollControl:defineTable({key:v.string(),backoffUntil:v.optional(v.number()),claimedUntil:v.optional(v.number())}).index("by_key",["key"]),
   postSeries: defineTable({userId:v.string(),brandId:v2BrandId,title:v.string(),revision:v.number(),createdAt:v.number(),updatedAt:v.number()}).index("by_user",["userId"]).index("by_user_and_brand",["userId","brandId"]),
@@ -348,7 +355,7 @@ export default defineSchema({
   })
     .index("by_post", ["postId"])
     .index("by_intent", ["intentId"])
-    .index("by_idempotency_key", ["idempotencyKey"]),
+    .index("by_idempotency_key", ["idempotencyKey"]).index("by_provider_and_status",["providerId","status"]),
 
   v2AuditEvents: defineTable({
     userId: v.string(),

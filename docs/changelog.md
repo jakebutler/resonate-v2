@@ -4408,3 +4408,59 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/epic-97-buffer-foundations
+
+## 09/30/2026 03:51:16 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	app/queue/page.tsx
+- M	components/BufferDestinationPanel.tsx
+- A	components/QueuePlanningPanel.tsx
+- M	components/SeriesWorkspace.tsx
+- M	components/shell/Shell.tsx
+- A	convex/__tests__/queuePlanning.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/bufferLive.ts
+- M	convex/publishing.ts
+- A	convex/queuePlanning.ts
+- A	convex/queueValidators.ts
+- M	convex/schema.ts
+- M	docs/epic-97-progress.md
+- A	e2e/queue-planning.spec.ts
+- A	lib/__tests__/queueCapacity.test.ts
+- M	lib/bufferContracts.ts
+- M	lib/providerAdapters.ts
+- A	lib/queueCapacity.ts
+- A	lib/readBufferQueue.ts
+- A	lib/schedules.ts
+
+### Working Tree Snapshot
+
+- A  app/queue/page.tsx
+- M  components/BufferDestinationPanel.tsx
+- A  components/QueuePlanningPanel.tsx
+- M  components/SeriesWorkspace.tsx
+- M  components/shell/Shell.tsx
+- A  convex/__tests__/queuePlanning.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/bufferLive.ts
+- M  convex/publishing.ts
+- A  convex/queuePlanning.ts
+- A  convex/queueValidators.ts
+- M  convex/schema.ts
+- M  docs/epic-97-progress.md
+- A  e2e/queue-planning.spec.ts
+- A  lib/__tests__/queueCapacity.test.ts
+- M  lib/bufferContracts.ts
+- M  lib/providerAdapters.ts
+- A  lib/queueCapacity.ts
+- A  lib/readBufferQueue.ts
+- A  lib/schedules.ts
+
+### Branch
+
+- codex/epic-97-capacity-planning
