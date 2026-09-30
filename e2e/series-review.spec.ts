@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mockConvexSync } from "./test-support/mockConvexSync";
 test("durable full review selects three then approves exactly two and material composer edit clears only one", async ({
   page,
 }) => {
@@ -38,194 +39,138 @@ test("durable full review selects three then approves exactly two and material c
         approved && n > 0 && !(n === 1 && edited) ? "approved" : "unapproved",
     };
   }
-  await page.routeWebSocket(/\/api\/.*\/sync/, (socket) => {
-    const qs = new Map<number, { queryId: number; udfPath: string }>();
-    let version = { querySet: 0, identity: 0, ts: "AAAAAAAAAAA=" };
-    let clock = 0;
-    function value(path: string) {
-      if (path === "series:list")
-        return [
-          {
-            _id: "series-fixture",
-            title: "Exact three-post series",
-            brandId: "corvo",
-            revision: 1,
-          },
-        ];
-      if (path === "series:get")
-        return {
+  function value(path: string) {
+    if (path === "series:list")
+      return [
+        {
           _id: "series-fixture",
           title: "Exact three-post series",
           brandId: "corvo",
           revision: 1,
-        };
-      if (path === "series:entries")
-        return {
-          page: [
-            {
-              _id: "entry-fixture",
-              sequence: 1,
-              articlePostId: "post-0",
-              companionPostIds: ["post-1", "post-2"],
-              posts: posts.map((_, n) => ({
-                post: current(n),
-                providerState: { status: "not-submitted" },
-              })),
-            },
-          ],
-          isDone: true,
-          continueCursor: "",
-        };
-      if (path === "series:picker")
-        return { page: [], isDone: true, continueCursor: "" };
-      if (path === "seriesReview:selection")
-        return { _id: "selection-fixture", postIds: selected, revision };
-      if (path === "seriesReview:packet")
-        return packetIds.length
-          ? {
-              packet: {
-                _id: "packet-fixture",
-                createdAt: 1,
-                selectionRevision: packetIds.length === 3 ? 3 : revision,
-                status: approved ? "approved" : "reviewed",
-              },
-              stale: selected.join() !== packetIds.join() || edited,
-              rows: packetIds.map((id) => {
-                const n = Number(id.slice(-1));
-                const p = current(n);
-                return {
-                  _id: `row-${n}`,
-                  postId: id,
-                  snapshot: {
-                    post: p,
-                    finalContent: posts[n].content,
-                    destination: n
-                      ? {
-                          displayName: "Corvo Labs Page",
-                          handle: "corvo-labs-us",
-                          accountType: "page",
-                          channelId: "fixture-page",
-                          organizationId: "fixture-org",
-                          firstComment: {
-                            value: "unsupported",
-                            source: "operator-confirmed",
-                          },
-                        }
-                      : null,
-                    dueAt: "2030-10-07T16:00:00.000Z",
-                    holds: n
-                      ? [
-                          "Article publication unverified; no release authority.",
-                        ]
-                      : [],
-                    approvalError: null,
-                    warnings: ["Unvetted source warning remains visible."],
-                    citations: ["source-passage-42"],
-                    sourceResearchBriefId: "brief-fixture",
-                  },
-                  staleReason:
-                    n === 1 && edited
-                      ? "Content or editorial metadata changed."
-                      : null,
-                  heroUrl: null,
-                  ...(approved && n > 0
-                    ? { actor: "fixture-editor", approvedAt: 1 }
-                    : {}),
-                };
-              }),
-            }
-          : null;
-      if (path === "publishing:listBrands")
-        return [{ brandId: "corvo", name: "Corvo Labs" }];
-      if (path === "publishing:getPostById") return current(1);
-      if (path === "publishing:listCalendarItems")
-        return posts.map((_, n) => ({
-          post: current(n),
-          intent: {
-            _id: `intent-${n}`,
-            scheduledDate: "2030-10-07",
-            scheduledTime: "09:00",
-            timezone: "America/Los_Angeles",
+        },
+      ];
+    if (path === "series:get")
+      return {
+        _id: "series-fixture",
+        title: "Exact three-post series",
+        brandId: "corvo",
+        revision: 1,
+      };
+    if (path === "series:entries")
+      return {
+        page: [
+          {
+            _id: "entry-fixture",
+            sequence: 1,
+            articlePostId: "post-0",
+            companionPostIds: ["post-1", "post-2"],
+            posts: posts.map((_, n) => ({
+              post: current(n),
+              providerState: { status: "not-submitted" },
+            })),
           },
-          providerState: { status: "not-submitted" },
-          attemptCount: 0,
-        }));
-      if (path === "publishing:bufferLiveSubmissionEnabled")
-        return { enabled: false };
-      return null;
-    }
-    function send(querySet = version.querySet) {
-      const ts = Buffer.alloc(8);
-      ts.writeBigUInt64LE(BigInt(++clock));
-      const endVersion = { ...version, querySet, ts: ts.toString("base64") };
-      socket.send(
-        JSON.stringify({
-          type: "Transition",
-          startVersion: version,
-          endVersion,
-          modifications: [...qs.values()].map((q) => ({
-            type: "QueryUpdated",
-            queryId: q.queryId,
-            value: value(q.udfPath),
-            journal: null,
-            logLines: [],
-          })),
-        }),
-      );
-      version = endVersion;
-    }
-    socket.onMessage((raw) => {
-      const m = JSON.parse(String(raw));
-      if (m.type === "Authenticate") {
-        const startVersion = version;
-        version = { ...version, identity: version.identity + 1 };
-        socket.send(
-          JSON.stringify({
-            type: "Transition",
-            startVersion,
-            endVersion: version,
-            modifications: [],
-          }),
-        );
+        ],
+        isDone: true,
+        continueCursor: "",
+      };
+    if (path === "series:picker")
+      return { page: [], isDone: true, continueCursor: "" };
+    if (path === "seriesReview:selection")
+      return { _id: "selection-fixture", postIds: selected, revision };
+    if (path === "seriesReview:packet")
+      return packetIds.length
+        ? {
+            packet: {
+              _id: "packet-fixture",
+              createdAt: 1,
+              selectionRevision: packetIds.length === 3 ? 3 : revision,
+              status: approved ? "approved" : "reviewed",
+            },
+            stale: selected.join() !== packetIds.join() || edited,
+            rows: packetIds.map((id) => {
+              const n = Number(id.slice(-1));
+              const p = current(n);
+              return {
+                _id: `row-${n}`,
+                postId: id,
+                snapshot: {
+                  post: p,
+                  finalContent: posts[n].content,
+                  destination: n
+                    ? {
+                        displayName: "Corvo Labs Page",
+                        handle: "corvo-labs-us",
+                        accountType: "page",
+                        channelId: "fixture-page",
+                        organizationId: "fixture-org",
+                        firstComment: {
+                          value: "unsupported",
+                          source: "operator-confirmed",
+                        },
+                      }
+                    : null,
+                  dueAt: "2030-10-07T16:00:00.000Z",
+                  holds: n
+                    ? ["Article publication unverified; no release authority."]
+                    : [],
+                  approvalError: null,
+                  warnings: ["Unvetted source warning remains visible."],
+                  citations: ["source-passage-42"],
+                  sourceResearchBriefId: "brief-fixture",
+                },
+                staleReason:
+                  n === 1 && edited
+                    ? "Content or editorial metadata changed."
+                    : null,
+                heroUrl: null,
+                ...(approved && n > 0
+                  ? { actor: "fixture-editor", approvedAt: 1 }
+                  : {}),
+              };
+            }),
+          }
+        : null;
+    if (path === "publishing:listBrands")
+      return [{ brandId: "corvo", name: "Corvo Labs" }];
+    if (path === "publishing:getPostById") return current(1);
+    if (path === "publishing:listCalendarItems")
+      return posts.map((_, n) => ({
+        post: current(n),
+        intent: {
+          _id: `intent-${n}`,
+          scheduledDate: "2030-10-07",
+          scheduledTime: "09:00",
+          timezone: "America/Los_Angeles",
+        },
+        providerState: { status: "not-submitted" },
+        attemptCount: 0,
+      }));
+    if (path === "publishing:bufferLiveSubmissionEnabled")
+      return { enabled: false };
+    return null;
+  }
+  await mockConvexSync(page, {
+    value,
+    mutation: (path, a) => {
+      calls.push(path);
+
+      let result: unknown = null;
+      if (path === "seriesReview:select") {
+        selected = a.postIds;
+        revision++;
+        result = "selection-fixture";
       }
-      if (m.type === "ModifyQuerySet") {
-        for (const q of m.modifications) {
-          if (q.type === "Add") qs.set(q.queryId, q);
-          else qs.delete(q.queryId);
-        }
-        send(m.newVersion);
+      if (path === "seriesReview:prepare") {
+        packetIds = [...selected];
+        result = "packet-fixture";
       }
-      if (m.type === "Mutation") {
-        calls.push(m.udfPath);
-        const a = m.args[0];
-        let result: unknown = null;
-        if (m.udfPath === "seriesReview:select") {
-          selected = a.postIds;
-          revision++;
-          result = "selection-fixture";
-        }
-        if (m.udfPath === "seriesReview:prepare") {
-          packetIds = [...selected];
-          result = "packet-fixture";
-        }
-        if (m.udfPath === "seriesReview:approve") {
-          approved = true;
-          result = { approved: true };
-        }
-        if (m.udfPath === "publishing:updateContent") edited = true;
-        socket.send(
-          JSON.stringify({
-            type: "MutationResponse",
-            requestId: m.requestId,
-            success: true,
-            result,
-            ts: version.ts,
-            logLines: [],
-          }),
-        );
-        send();
+      if (path === "seriesReview:approve") {
+        approved = true;
+        result = { approved: true };
       }
-    });
+      if (path === "publishing:updateContent") edited = true;
+      return result;
+    },
   });
   await page.goto("/series?seriesId=series-fixture");
   let panel = page.getByRole("region", { name: "Selected editorial review" });
@@ -256,7 +201,9 @@ test("durable full review selects three then approves exactly two and material c
     panel.getByText(/Unvetted source warning/).first(),
   ).toBeVisible();
   await panel.getByRole("checkbox", { name: /Exact review 0/ }).click();
-  await expect(panel.getByRole("checkbox", { name: /Exact review 0/ })).not.toBeChecked();
+  await expect(
+    panel.getByRole("checkbox", { name: /Exact review 0/ }),
+  ).not.toBeChecked();
   await expect(
     panel.getByRole("button", { name: "Approve 3 selected versions" }),
   ).toBeDisabled();

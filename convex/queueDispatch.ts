@@ -10,6 +10,7 @@ import {
 } from "../lib/socialPayload";
 import { latestPublication } from "./articleDependencies";
 import { priorBufferAttempts } from "./bufferAttempts";
+import { exactScheduleHold } from "../lib/articleContracts";
 export async function sha256(value: string) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -39,8 +40,7 @@ export async function dispatchCapacity(
     (capacity.projection.availableForBacklog ?? 0) + (own ? 1 : 0) <= 0
   )
     reason = "Queue capacity is full or retained for launch reservations.";
-  if (!post.scheduledDate || !post.scheduledTime)
-    reason ??= "Save an exact local date and time.";
+  reason ??= exactScheduleHold(post);
   if (!reason && capacity.constraint?.dailyLimit !== undefined) {
     const limit = capacity.constraint.dailyLimit;
     const localDay = (due: string) =>

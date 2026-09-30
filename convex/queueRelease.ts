@@ -23,12 +23,6 @@ import {
   reviewReservationsHold,
 } from "./queueDispatch";
 import { reviewRow } from "./seriesReview";
-import { readDestination } from "./bufferDestinations";
-import { destinationHold, destinationIdentity } from "../lib/bufferContracts";
-import {
-  socialReleaseVersion,
-  postScheduleVersion,
-} from "../lib/socialPayload";
 type Ctx = QueryCtx | MutationCtx;
 async function own(ctx: Ctx, userId: string, id: Id<"queueReleaseReviews">) {
   const review = await ctx.db.get(id);
@@ -79,17 +73,6 @@ export const prepare = mutation({
           .first())
       )
         throw new Error("Post is not a series member.");
-      const d = (await readDestination(ctx, userId, post.brandId))?.destination;
-      if (d && !destinationHold(d, Boolean(post.linkedinFirstComment?.trim())))
-        await ctx.db.patch(id, {
-          destinationReview: {
-            identity: destinationIdentity(d),
-            fingerprint: socialReleaseVersion(post),
-            schedule: postScheduleVersion(post),
-            checkedAt: Date.now(),
-            actor: userId,
-          },
-        });
       const allocation = await dispatchCapacity(
         ctx,
         post,
@@ -317,6 +300,7 @@ export const begin = internalMutation({
       if (row.attemptId) {
         const attempt = await ctx.db.get(row.attemptId);
         if (
+          row.status === "executing" &&
           attempt?.status === "success" &&
           attempt.providerPostId &&
           !attempt.providerPostId.startsWith("mock-") &&

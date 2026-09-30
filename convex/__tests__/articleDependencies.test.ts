@@ -6,6 +6,7 @@ import { api, internal } from "../_generated/api";
 import { blogEditorialFingerprint } from "../../lib/blogContract";
 import {
   articleArtifactVersion,
+  articlePublicationSourceVersion,
   companionReviewVersion,
 } from "../../lib/articleContracts";
 import { socialReleaseVersion } from "../../lib/socialPayload";
@@ -135,6 +136,7 @@ async function record(
     postId: f.articleId,
     userId: "editor",
     expectedArtifactVersion: articleArtifactVersion(article.blogArtifact),
+    expectedSourceVersion: articlePublicationSourceVersion(article),
     key: JSON.stringify(overrides),
     evidence,
   });
@@ -249,6 +251,7 @@ describe("server-owned article dependency", () => {
         postId: f.articleId,
         userId: "editor",
         expectedArtifactVersion: articleArtifactVersion(article.blogArtifact),
+        expectedSourceVersion: articlePublicationSourceVersion(article),
         key: "stale",
         evidence: {
           checkedAt: Date.now(),
@@ -267,4 +270,59 @@ describe("server-owned article dependency", () => {
       await f.t.run((ctx) => ctx.db.query("articlePublications").collect()),
     ).toHaveLength(0);
   });
+});
+
+it("rejects a changed PR source during a legacy article read even without an artifact", async () => {
+  const f = await fixture();
+  await f.t.run((ctx) =>
+    ctx.db.patch(f.articleId, {
+      blogArtifact: undefined,
+      branchName: "old-branch",
+    }),
+  );
+  const article = (await f.t.run((ctx) => ctx.db.get(f.articleId)))!;
+  await f.t.run((ctx) =>
+    ctx.db.patch(f.articleId, {
+      prUrl: "https://github.com/fixture/site/pull/8",
+      branchName: "new-branch",
+    }),
+  );
+  expect(
+    await f.t.mutation(internal.articleDependencies.record, {
+      postId: f.articleId,
+      userId: "editor",
+      expectedArtifactVersion: articleArtifactVersion(undefined),
+      expectedSourceVersion: articlePublicationSourceVersion(article),
+      key: "old-pr",
+      artifact: f.artifact,
+      evidence: {
+        checkedAt: Date.now(),
+        editorialVersion: blogEditorialFingerprint(article),
+        artifactVersion: articleArtifactVersion(f.artifact),
+        prState: "merged",
+        deploymentState: "success",
+        availability: "verified",
+      },
+    }),
+  ).toBe(false);
+  expect(
+    await f.t.run((ctx) => ctx.db.query("articlePublications").collect()),
+  ).toHaveLength(0);
+  expect(
+    (await f.t.run((ctx) => ctx.db.get(f.articleId)))!.blogArtifact,
+  ).toBeUndefined();
+});
+it("rejects a first-comment link for a non-LinkedIn companion without altering copy", async () => {
+  const f = await fixture();
+  await f.t.run((ctx) => ctx.db.patch(f.postId, { channelId: "reddit" }));
+  const post = (await f.t.run((ctx) => ctx.db.get(f.postId)))!;
+  await expect(
+    f.user.mutation(api.articleDependencies.link, {
+      postId: f.postId,
+      articlePostId: f.articleId,
+      placement: "first-comment",
+      expectedVersion: companionReviewVersion(post),
+    }),
+  ).rejects.toThrow(/LinkedIn/);
+  expect(await f.t.run((ctx) => ctx.db.get(f.postId))).toEqual(post);
 });

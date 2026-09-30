@@ -430,12 +430,16 @@ export function PersistedPublishingPanel({
   }, [linkedBrandId, linkedChannelId, linkedStatus]);
 
   const seriesList = useQuery(api.series.list, isConvexAuthenticated ? {} : "skip") as import("@/convex/_generated/dataModel").Doc<"postSeries">[] | undefined;
+  const activeSeries = seriesList?.find(s => s._id === seriesFilter);
+  const seriesResolved = !seriesFilter || Boolean(activeSeries);
+  const unavailableSeries = Boolean(seriesFilter && seriesList !== undefined && !activeSeries);
+  const effectiveBrandFilters = activeSeries ? [activeSeries.brandId] : brandFilters;
   const items = useQuery(
     api.publishing.listCalendarItems,
-    isConvexAuthenticated
+    isConvexAuthenticated && seriesResolved
       ? {
-          ...(seriesFilter ? {seriesId: seriesFilter as Id<"postSeries">} : {}),
-          brandIds: brandFilters,
+          ...(activeSeries ? {seriesId: activeSeries._id} : {}),
+          brandIds: effectiveBrandFilters,
           platformIds: platformFilters,
           statuses: statusFilters,
         }
@@ -517,7 +521,12 @@ export function PersistedPublishingPanel({
         }),
     [visibleDateKeys, visibleItems]
   );
-  const providerSummary = useMemo(() => deliverySummary(visibleItems), [visibleItems]);
+  const [deliveryClock, setDeliveryClock] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setDeliveryClock(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+  const providerSummary = useMemo(() => deliverySummary(visibleItems, deliveryClock), [visibleItems, deliveryClock]);
   const autoSelectedPostId = useMemo(() => {
     if (!initialPostId || loading) return null;
     return visibleItems.find((item) => item.post._id === initialPostId)?.post._id ?? null;
@@ -950,7 +959,7 @@ export function PersistedPublishingPanel({
 
   return (
     <WorkspaceLayout
-      banner={message ? <Notice>{message}</Notice> : null}
+      banner={unavailableSeries ? <Notice>This series is unavailable. Choose an accessible series or All series to view the calendar.</Notice> : message ? <Notice>{message}</Notice> : null}
       header={
         <PageHeader
           description="See scheduled posts across your brands, edit drafts, approve content, and open blog pull requests when ready."
@@ -973,12 +982,12 @@ export function PersistedPublishingPanel({
       sidebar={
         <>
           <SidebarCard className="space-y-3">
-            <label className="block text-sm">Series<select aria-label="Calendar series filter" className="w-full rounded border p-2" value={seriesFilter} onChange={e => setSeriesFilter(e.target.value)}><option value="">All series</option>{seriesList?.map(series => <option key={series._id} value={series._id}>{series.title}</option>)}</select></label>
+            <label className="block text-sm">Series<select aria-label="Calendar series filter" className="w-full rounded border p-2" value={seriesFilter} onChange={e => setSeriesFilter(e.target.value)}>{unavailableSeries && <option value={seriesFilter}>Unavailable series</option>}<option value="">All series</option>{seriesList?.map(series => <option key={series._id} value={series._id}>{series.title}</option>)}</select></label>
             <FilterGroup
               label="Brands"
-              onChange={(id) => setBrandFilters(toggleFilterSet(brandFilters, id))}
+              onChange={(id) => { setSeriesFilter(""); setBrandFilters(toggleFilterSet(effectiveBrandFilters, id)); }}
               options={brandOptions}
-              selected={brandFilters}
+              selected={effectiveBrandFilters}
             />
             <FilterGroup
               label="Platforms"
@@ -1077,7 +1086,7 @@ export function PersistedPublishingPanel({
               </p>
             )}
 
-            {isConvexAuthenticated && loading && (
+            {isConvexAuthenticated && loading && !unavailableSeries && (
               <p className="p-4 text-sm text-gray-600">Loading your publishing calendar...</p>
             )}
 

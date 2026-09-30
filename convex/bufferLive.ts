@@ -39,6 +39,7 @@ function isBufferLiveGateOn() {
 }
 
 function providerFailureFromError(_error: unknown): ProviderResult {
+  if (_error instanceof BufferRequestBudgetError) return {ok:false,status:"retryable-failure",providerStateStatus:"needs-review",reason:"Provider request budget reached before dispatch; refresh and review again.",sanitizedResponse:{providerId:"buffer",phase:"preflight",dispatched:false}};
   return {ok:false,status:"ambiguous",providerStateStatus:"needs-review",reason:"Provider call did not return a definitive receipt; reconcile before retrying.",sanitizedResponse:{providerId:"buffer",outcome:"uncertain"}};
 }
 

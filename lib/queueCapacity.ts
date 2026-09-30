@@ -55,7 +55,7 @@ export function capacityProjection(
   const organizationClaims = unresolved.filter(
     (c) => c.organizationId === observation?.organizationId,
   ).length;
-  const claimPosts = new Set(unresolved.map((c) => c.postId));
+  const claimPosts = new Set(claims.filter(c => c.status !== "released").map((c) => c.postId));
   const unconsumed = reservations.filter(
     (r) =>
       r.status === "reserved" &&

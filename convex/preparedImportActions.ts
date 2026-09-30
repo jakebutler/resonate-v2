@@ -1,7 +1,7 @@
 "use node";
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
-import { action } from "./_generated/server";
+import { action, type ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireUserId } from "./campaignAccess";
 import {
@@ -170,25 +170,7 @@ export const commitEntry = action({
       reviewId: review._id,
     });
     if (!claim.ready) {
-      const sourceStorageId = await ctx.storage.store(
-        new Blob([new Uint8Array(bytes)]),
-      );
-      let storageId: Doc<"preparedImportAssets">["storageId"];
-      try {
-        storageId = await ctx.storage.store(
-          new Blob([new Uint8Array(prepared.bytes)], { type: "image/webp" }),
-        );
-        await ctx.runMutation(internal.preparedImports.recordAsset, {
-          assetId: claim.assetId,
-          userId,
-          sourceStorageId,
-          storageId,
-        });
-      } catch (error) {
-        await ctx.storage.delete(sourceStorageId);
-        if (storageId) await ctx.storage.delete(storageId);
-        throw error;
-      }
+      await storePreparedImportAsset(ctx, {assetId:claim.assetId,userId,bytes,preparedBytes:prepared.bytes});
     }
     return ctx.runMutation(internal.preparedImports.commit, {
       userId,
@@ -197,3 +179,34 @@ export const commitEntry = action({
     });
   },
 });
+
+export async function storePreparedImportAsset(
+  ctx: Pick<ActionCtx, "storage" | "runMutation">,
+  input: {
+    assetId: Doc<"preparedImportAssets">["_id"];
+    userId: string;
+    bytes: Uint8Array;
+    preparedBytes: Uint8Array;
+  },
+) {
+  const sourceStorageId = await ctx.storage.store(
+    new Blob([new Uint8Array(input.bytes)]),
+  );
+  let storageId: Doc<"preparedImportAssets">["storageId"];
+  try {
+    storageId = await ctx.storage.store(
+      new Blob([new Uint8Array(input.preparedBytes)], { type: "image/webp" }),
+    );
+  } catch (error) {
+    await ctx.storage.delete(sourceStorageId);
+    throw error;
+  }
+  // A failed response may have committed the receipt. Keep both blobs until
+  // the durable claim is reconciled; a replay reuses a ready claim.
+  await ctx.runMutation(internal.preparedImports.recordAsset, {
+    assetId: input.assetId,
+    userId: input.userId,
+    sourceStorageId,
+    storageId,
+  });
+}

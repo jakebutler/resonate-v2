@@ -1085,6 +1085,7 @@ export const bufferProviderAdapter: ProviderAdapter = {
       scheduledTime: submission.scheduledTime,
       timezone: submission.timezone,
     });
+    if (context.requestBudget && (context.requestBudget.remaining <= 0 || (context.requestBudget.backoffUntil ?? 0) > Date.now())) throw new BufferRequestBudgetError(context.requestBudget.backoffUntil);
     const preflight = await context.beforeCreate?.();
     if(preflight)return {ok:false,status:"permanent-failure",providerStateStatus:"needs-review",reason:preflight,sanitizedResponse:{providerId,phase:"preflight"}};
     if(submission.expectedDestination && Date.parse(dueAt)<=Date.now())return {ok:false,status:"permanent-failure",providerStateStatus:"needs-review",reason:"Exact scheduled time has passed.",sanitizedResponse:{providerId,phase:"preflight"}};

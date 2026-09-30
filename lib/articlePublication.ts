@@ -116,41 +116,29 @@ export async function readArticlePublication(
         artifact.branchName !== pr.head.ref)
     )
       throw new Error("Article artifact identity changed.");
-    let path = artifact?.mdxPath;
-    if (!path) {
-      const slug =
-        input.slug ||
-        input.title
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "");
-      const candidates: string[] = [];
-      let complete = false;
-      for (let page = 1; page <= 10; page++) {
-        const files = (await read(
-          `/pulls/${number}/files?per_page=100&page=${page}`,
-        )) as { filename: string; status: string }[];
-        if (!Array.isArray(files))
-          throw new Error("Article changed files are unverified.");
-        candidates.push(
-          ...files
-            .filter(
-              (f) =>
-                f.status !== "removed" &&
-                f.filename.startsWith(`${contentPath()}/`) &&
-                f.filename.endsWith(`-${slug}.mdx`),
-            )
-            .map((f) => f.filename),
-        );
-        if (files.length < 100) {
-          complete = true;
-          break;
-        }
-      }
-      if (!complete || candidates.length !== 1)
-        throw new Error("Legacy article artifact is ambiguous or incomplete.");
-      path = candidates[0];
+    const changedFiles: {filename: string; status: string}[] = [];
+    let filesComplete = false;
+    for (let page = 1; page <= 10; page++) {
+      const files = await read(`/pulls/${number}/files?per_page=100&page=${page}`);
+      if (!Array.isArray(files) || files.some(f => typeof f.filename !== "string" || typeof f.status !== "string"))
+        throw new Error("Article changed files are unverified.");
+      changedFiles.push(...files);
+      if (files.length < 100) { filesComplete = true; break; }
     }
+    if (!filesComplete) throw new Error("Article changed files are incomplete.");
+    let path = artifact?.mdxPath;
+    if (path) {
+      if (!changedFiles.some(f => f.filename === path && f.status !== "removed"))
+        throw new Error("Article artifact is absent from the bound PR changed files.");
+    } else {
+      const slug = input.slug || input.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const candidates = changedFiles.filter(f => f.status !== "removed" && f.filename.startsWith(`${contentPath()}/`) && f.filename.endsWith(`-${slug}.mdx`));
+      if (candidates.length !== 1) throw new Error("Legacy article artifact is ambiguous or incomplete.");
+      path = candidates[0].filename;
+    }
+    const currentPr = await read(`/pulls/${number}`);
+    if (currentPr.head?.sha !== pr.head.sha || currentPr.merge_commit_sha !== pr.merge_commit_sha || currentPr.head?.ref !== pr.head.ref || currentPr.merged !== pr.merged)
+      throw new Error("Article PR changed during file verification.");
     if (
       !path.startsWith(`${contentPath()}/`) ||
       path.includes("..") ||

@@ -1,5 +1,6 @@
 import {postScheduleVersion} from "../lib/socialPayload";
 import {priorDispatchHold, priorBufferAttempts, dispatchCapacity, releasePin, allocateDispatch, reconcileAllocation, reviewReservationsHold} from "./queueDispatch";
+import {providerScheduleHold} from "./bufferAttempts";
 import {companionSubmissionHold,latestPublication} from "./articleDependencies";
 import {consumeReservation} from "./queuePlanning";
 import { linkedInPayload } from "../lib/socialPayload";
@@ -944,6 +945,10 @@ export const reschedule = mutation({
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
     if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
+    if (post.channelId === "linkedin") {
+      const hold = await providerScheduleHold(ctx, post._id);
+      if (hold) throw new Error(`Cannot change a provider schedule: ${hold}`);
+    }
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
     if (post.blogSyncPending) throw new Error("Article schedule sync is in progress; refresh before changing it again.");
@@ -2865,6 +2870,62 @@ export const markDispatchUncertain = internalMutation({
           "Provider result could not be durably reconciled; inspect this attempt before any new review.",
         updatedAt: Date.now(),
       });
+    return null;
+  },
+});
+
+export const markLegacyGithubScheduleNeedsReview = internalMutation({
+  args: {
+    postId: v.id("v2Posts"),
+    userId: v.string(),
+    intentId: v.id("v2PublishingIntents"),
+    prUrl: v.string(),
+    branchName: v.string(),
+    scheduledDate: v.string(),
+    scheduledTime: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    const intent = await ctx.db.get(args.intentId);
+    if (
+      !post ||
+      post.userId !== args.userId ||
+      post.channelId !== "corvo-blog" ||
+      post.blogSyncPending ||
+      intent?.postId !== post._id ||
+      post.prUrl !== args.prUrl ||
+      post.branchName !== args.branchName ||
+      post.scheduledDate !== args.scheduledDate ||
+      post.scheduledTime !== args.scheduledTime ||
+      (args.timezone && post.timezone !== args.timezone)
+    )
+      return null;
+    const state = await ctx.db
+      .query("v2ProviderStates")
+      .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
+      .first();
+    if (state?.providerId === "github-pr")
+      await ctx.db.patch(state._id, {
+        status: "needs-review",
+        lastResponseSummary:
+          "Legacy schedule sync requires artifact review; GitHub was not changed.",
+        updatedAt: Date.now(),
+      });
+    await ctx.db.patch(post._id, {
+      status: "needs-review",
+      updatedAt: Date.now(),
+    });
+    await audit(ctx, {
+      userId: post.userId,
+      brandId: post.brandId,
+      postId: post._id,
+      intentId: intent._id,
+      action: "provider.github_pr_reschedule_needs_review",
+      summary:
+        "Legacy schedule callback lacks a bound artifact; review the PR schedule in the composer before retrying.",
+    });
     return null;
   },
 });
