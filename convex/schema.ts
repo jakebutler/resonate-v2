@@ -1,5 +1,9 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { visualWorkflowTables } from "./visualWorkflowTables";
+import { visualProfileTables } from "./visualProfileTables";
+import { visualFigureTables } from "./visualFigureTables";
+import { visualStorageTables } from "./visualStorageTables";
 
 const v2BrandId = v.union(
   v.literal("personal"),
@@ -178,6 +182,10 @@ const ideaFlavor = v.union(
 );
 
 export default defineSchema({
+  ...visualWorkflowTables,
+  ...visualProfileTables,
+  ...visualFigureTables,
+  ...visualStorageTables,
   v2Brands: defineTable({
     brandId: v2BrandId,
     name: v.string(),
@@ -263,6 +271,7 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_brand", ["brandId"])
     .index("by_brand_and_status", ["brandId", "status"])
+    .index("by_brand_and_blogSlug", ["brandId", "blogSlug"])
     .index("by_channel", ["channelId"])
     .index("by_scheduled_date", ["scheduledDate"])
     .index("by_user_and_campaign", ["userId", "sourceCampaignId"])
@@ -287,6 +296,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_post", ["postId"])
+    .index("by_post_and_approval_state", ["postId", "approvalState"])
     .index("by_user", ["userId"])
     .index("by_brand", ["brandId"])
     .index("by_schedule", ["scheduledDate"]),

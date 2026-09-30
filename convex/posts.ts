@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./campaignAccess";
+import { assertEditorialStorageAccess } from "./visualStorageAccess";
 
 export const list = query({
   args: {
@@ -56,8 +57,9 @@ export const create = mutation({
     coverImageAlt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
     const now = Date.now();
+    for (const fileId of new Set([...(args.fileIds ?? []), ...(args.heroImageId ? [args.heroImageId] : [])])) await assertEditorialStorageAccess(ctx, userId, fileId);
     return await ctx.db.insert("posts", {
       ...args,
       createdAt: now,
@@ -98,8 +100,13 @@ export const update = mutation({
     coverImageAlt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
     const { id, ...fields } = args;
+    const current = await ctx.db.get(id);
+    const retained = new Set([...(current?.fileIds ?? []), ...(current?.heroImageId ? [current.heroImageId] : [])]);
+    for (const fileId of new Set([...(args.fileIds ?? []), ...(args.heroImageId ? [args.heroImageId] : [])])) {
+      if (!retained.has(fileId)) await assertEditorialStorageAccess(ctx, userId, fileId);
+    }
     await ctx.db.patch(id, { ...fields, updatedAt: Date.now() });
   },
 });
@@ -120,9 +127,10 @@ export const generateUploadUrl = mutation({
 });
 
 export const getFileUrl = query({
-  args: { fileId: v.id("_storage") },
+  args: { fileId: v.id("_storage"), postId: v.optional(v.id("posts")) },
   handler: async (ctx, args) => {
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
+    await assertEditorialStorageAccess(ctx, userId, args.fileId, { legacyPostId: args.postId });
     return await ctx.storage.getUrl(args.fileId);
   },
 });

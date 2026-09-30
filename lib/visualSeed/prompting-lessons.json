@@ -1,0 +1,346 @@
+[
+  {
+    "id": "corvo-01",
+    "title": "Describe the story as a visible action or reveal",
+    "role": "creative_director",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "scene_selection",
+      "abstract_article_thesis"
+    ],
+    "instruction": "Express the article connection through a recognizable scene with a visible action, relationship, or reveal. Name what the viewer should notice and why; avoid relying on an inventory of symbolic objects to communicate the story.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 114,
+        "end_line": 121,
+        "excerpt": "A superbly equipped raven archer has everything needed to succeed—specialized optics, an excellent bow, carefully prepared arrows—but has still missed the actual goal. The visual metaphor is “good tools and support do not guarantee the right outcome.”\n\nShow this through one immediately readable scene, not a diagram: a confident, well-equipped raven on the left, facing a tilted archery target on the right. Three previously fired arrows have struck the target well away from its untouched bullseye.\n\nThe irony should come from the contrast between the archer’s impressive equipment and the conspicuously poor results. Do not make the raven look foolish, confused, or incompetent.\n\nSTYLE AND MATERIALS\nLayered cut-paper still life, photographed as a clean editorial studio image. Every element—including the raven, its equipment, the arrows, and the target—is constructed from matte cut paper."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 521,
+        "end_line": 522,
+        "excerpt": "CONCEPT\nA beautiful, impressive house front turns out to be only a freestanding façade, held up from behind by a single ordinary 2×4. The story is the contrast between a polished, substantial-looking exterior and its surprisingly makeshift support. The attractive house should draw the viewer in; the exposed thin edge and diagonal brace should reveal the illusion immediately afterward."
+      }
+    ],
+    "approved_example_articles": [
+      1,
+      6
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  },
+  {
+    "id": "corvo-02",
+    "title": "Assign separate jobs to character and style references",
+    "role": "image_generator",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "character_scene",
+      "multiple_reference_images"
+    ],
+    "instruction": "Bind the mascot sheet to identity and anatomy, and a selected hero to materials and lighting. State that the reference layout, labels, and scene must not be copied. Supply the actual reference images, not only their names.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 11,
+        "end_line": 21,
+        "excerpt": "- `raven-character-sheet.png` — approved mascot identity, anatomy, proportions, feather construction, and role flexibility.\n- `article-01-hero.png` through `article-07-hero.png`, and `article-08-image.png` through `article-15-image.png` — the 15 selected hero masters. Keep these selections and filenames.\n- For a character scene, use `article-04-hero.png` as the general paper and lighting reference. For a denser workshop or map scene, `article-03-hero.png` is also useful.\n- Both detailed scenes and isolated objects are representative. Match materials and visual clarity; composition can vary with the story.\n- Article 7's photographic hand is an accepted exception. Ordinary human elements should be made of paper.\n\n### Generation recipe for future revisions\n\nAll 15 hero masters are now selected. Further generation is unnecessary for this publication package. For any future revision, attach the approved raven sheet as image 1 and a selected hero as image 2, binding character identity and paper construction separately. Use one scene per request and evaluate the visible action or reveal at thumbnail size.\n\nJake's **Revised Prompt iteration 2** for article 8 records the selected workshop scene. It makes the role, gaze, costume, instrumentation, and physical connections explicit. Modern sensors and computer monitors are allowed when fabricated in the same matte paper world, with subdued illustrative graphics and no real statistics or luminous screen effects."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 619,
+        "end_line": 624,
+        "excerpt": "REFERENCE IMAGES\nUse Image 1 for the raven’s identity: face, eyes, beak, body proportions, feather shapes, tail, legs, toes, and composed, quietly whimsical personality.\nUse Image 2 for materials and lighting: tactile matte paper, visible fibers, layered construction, restrained contact shadows, and neutral daylight.\nDo not reproduce the character-sheet layout, labels, or desk-and-stopwatch scene. Create the new workshop scene described below.\n\nMATERIALS AND LIGHTING"
+      }
+    ],
+    "approved_example_articles": [
+      8
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  },
+  {
+    "id": "corvo-03",
+    "title": "Specify role, posture, gaze, and grip independently",
+    "role": "image_generator",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "character_scene",
+      "character_object_interaction"
+    ],
+    "instruction": "Specify the character role and costume, torso orientation, head angle, gaze target, and how held objects are supported. Distinguish the object being held from the object receiving attention when they differ.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 640,
+        "end_line": 650,
+        "excerpt": "\nGive both the car and the testing operation substantial visual presence. The main subjects occupy roughly three quarters of the canvas, with clean breathing room around their silhouettes; secondary workshop furniture may extend toward the edges. Keep the raven’s inspection sheet, the copper adjustment handle, the sensor-to-car relationship, and the car’s wheels around the central band so a wide thumbnail crop retains the story.\n\nRAVEN MECHANIC\nMatch the approved raven character: charcoal layered feather shapes, substantial slate-teal beak, off-white eyes with dark pupils, compact body, tapered tail, slender bird legs and toes, and wings that can grip objects through feather-like fingers.\n\nDress the raven as a modern Formula 1 team mechanic, not in an apron. Give it a fitted charcoal technical mechanic’s jumpsuit with light-gray inset panels, narrow burnt-copper stripes along the outer sleeves and trouser legs, practical seams, a simple belt, and one small utility pocket containing a wrench and an orange-handled tool. All clothing is made from layered matte paper. No branding, team names, sponsor patches, lettering, or helmet. Keep the feathered head, neck, wing tips, tail, and bird feet visible.\n\nShow the raven in a three-quarter rear/side view, with its shoulders turned toward the wall monitors and its head tilted upward to study the middle screen. Keep the recognizable eye and beak visible in profile. Its gaze must clearly meet the monitor graphics rather than the car or the sheet in its wings.\n\nThe raven holds a large off-white inspection printout below its face, around chest-to-waist height, with feather-like fingers supporting the edges. Include only a small car silhouette, an illustrative line graph, broad document blocks, and a wheel diagram. The printout supports its comparison with the electronic results, but its attention is currently on the monitors. Its posture is attentive, analytical, and composed."
+      }
+    ],
+    "approved_example_articles": [
+      8
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  },
+  {
+    "id": "corvo-04",
+    "title": "Spell out physical connections and movement",
+    "role": "image_generator",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "mechanism_scene",
+      "process_metaphor",
+      "support_or_restraint"
+    ],
+    "instruction": "Describe what connects to what, where the support or attachment meets its object, and which direction material moves. Specify physically important differences between stages so the process reads without explanatory arrows.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 255,
+        "end_line": 286,
+        "excerpt": "The cards are blank, mostly rectangular or square, with subtly irregular hand-cut edges. Include three visibly distinct sizes: large cards, medium cards, and tiny pieces. Use off-white, pale sage, and deep slate teal for the cards.\n\nPrint “All the News” clearly on the bucket’s visible side.\n\nFIRST STAGE — “Big Stories”\nBelow and to the right of the input bucket is a broad, shallow, deep-slate-teal sieve-container. Its elliptical opening reveals a perforated base with large, clearly visible circular holes.\n\nThe sieve and collection container are one integrated object, not separate objects stacked together. Its front paper sidewall is labeled “Big Stories.”\n\nSeveral large cards remain visibly inside, too large to pass through the holes. Medium and small cards fall out through its bottom onto the first conveyor belt directly below it.\n\nFIRST CONVEYOR\nA simple horizontal matte-paper belt loop carries the medium and small cards to the right.\n\nConstruct the belt from a dark paper band around two simple circular paper rollers. No motor, gears, legs, framework, or elaborate machinery.\n\nIts left portion sits beneath the Big Stories sieve. Its right end finishes above the opening of the next container, allowing the cards to visibly tumble off the belt into it. The receiving container must sit lower; the cards should never need to travel uphill.\n\nSECOND STAGE — “Medium Reads”\nLower and farther right is a pale-sage sieve-container with the same shallow, folded-paper construction. Label its front sidewall “Medium Reads.”\n\nIts perforated base has noticeably smaller, more densely spaced circular holes than the Big Stories sieve.\n\nMedium cards remain visibly inside. Only the tiny pieces pass through its bottom, falling onto a second conveyor belt below.\n\nSECOND CONVEYOR\nA second simple horizontal matte-paper belt loop carries only tiny paper pieces toward the lower right.\n\nUse the same restrained construction as the first conveyor: one dark paper belt and two circular paper rollers.\n\nPlace this belt distinctly lower than the first. Its right end finishes above the final bucket’s opening, with a short visible stream of tiny pieces falling into that bucket.\n"
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 534,
+        "end_line": 541,
+        "excerpt": "FAÇADE CONSTRUCTION AND SUPPORT\nThis is only the decorated front wall of a house, like a theatrical stage flat. There is no enclosed building behind it, no full side wall, and no deep roof structure. The roofline and chimney belong to the same shallow, layered silhouette.\n\nShow the narrow exposed cardstock edge along the left side so the viewer can clearly understand how thin the façade is. Let the whole panel lean very slightly backward toward its support—not enough to look like it is falling, but enough to suggest that the brace is necessary.\n\nOne straight, narrow, rectangular 2×4 extends diagonally from the ground at the lower left to a point roughly halfway up the back of the façade. Its upper end disappears behind the left edge of the house. Make the connection physically convincing: the timber is visibly propping up the panel, not lying beside it or passing across its decorated front. A small simple foot block is acceptable, but do not add another brace, scaffolding, or a substantial support frame.\n\nRender the 2×4 in burnt-copper paper, with only a subtle lengthwise edge or seam to suggest its rectangular timber form."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 655,
+        "end_line": 673,
+        "excerpt": "The car is stationary on a robust charcoal dynamometer-style test stand. Clearly show the tires resting between cylindrical rollers. Include substantial beams, triangular braces, visible paper-cut bolts, roller axles, and sturdy supports. Burnt-copper wheel restraints with charcoal brackets secure the visible front and rear wheels to the rig. Make the physical connection between car, rollers, restraints, and support frame unmistakable.\n\nRetain a prominent burnt-copper adjustment handwheel with a short projecting grip on the upright near the car’s front-left corner. It belongs to the testing apparatus, not to the car.\n\nLIVE TESTING MONITORS\nReplace wall-mounted paper charts with exactly three modern flat-panel computer monitors in simple charcoal frames above the rear workbench. Their displays represent results from the roadster’s ongoing test.\n\nLeft monitor: a side-profile roadster silhouette, broad horizontal readout bars, and a small wheel diagram.\nMiddle monitor: two semicircular gauge arcs above a simple graph with teal and copper curves, plus a few vertical indicator bars.\nRight monitor: a waveform plot beside an overhead axle-and-wheel schematic, with a few small status dots and abstract readout blocks.\n\nUse layered paper lines and shapes for every interface element. The graphics are schematic visual shorthand, not real statistics or evidence. No words, numerals, scores, checkmarks, or pass/fail verdicts. Avoid neon, screen bloom, holograms, or colored light spilling onto the workshop.\n\nELECTRONIC TESTING APPARATUS\nMake the sensors visibly contemporary and electronic, rather than a simple mechanical measuring arm. A sturdy vertical mast attached to the rig supports an articulated assembly of compact rectangular sensor housings, adjustment joints, and a precise measuring head positioned just above the roadster’s front bodywork.\n\nAdd a second compact sensor module near the rear wheel, mounted on its own support and aimed toward the vehicle. Connect the modules to the rig with a few neatly routed black cables, small copper connectors, and one short coiled lead. Include a compact control or acquisition box attached to the test stand and a single thicker conduit exiting the rig.\n\nUse small matte indicator dots and simple panel details without text. Keep the electronics believable and orderly, with clear mounting points and purposeful connections. No floating devices, glowing scanning beams, or decorative circuitry."
+      }
+    ],
+    "approved_example_articles": [
+      2,
+      6,
+      8
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  },
+  {
+    "id": "corvo-05",
+    "title": "Choose a viewpoint that exposes the decisive evidence",
+    "role": "image_generator",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "hidden_reveal",
+      "occlusion_risk",
+      "mechanism_scene"
+    ],
+    "instruction": "Choose the camera angle to expose the detail carrying the metaphor. Name which edge, opening, connection, or support must remain visible and which foreground objects must not obscure it.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 534,
+        "end_line": 548,
+        "excerpt": "FAÇADE CONSTRUCTION AND SUPPORT\nThis is only the decorated front wall of a house, like a theatrical stage flat. There is no enclosed building behind it, no full side wall, and no deep roof structure. The roofline and chimney belong to the same shallow, layered silhouette.\n\nShow the narrow exposed cardstock edge along the left side so the viewer can clearly understand how thin the façade is. Let the whole panel lean very slightly backward toward its support—not enough to look like it is falling, but enough to suggest that the brace is necessary.\n\nOne straight, narrow, rectangular 2×4 extends diagonally from the ground at the lower left to a point roughly halfway up the back of the façade. Its upper end disappears behind the left edge of the house. Make the connection physically convincing: the timber is visibly propping up the panel, not lying beside it or passing across its decorated front. A small simple foot block is acceptable, but do not add another brace, scaffolding, or a substantial support frame.\n\nRender the 2×4 in burnt-copper paper, with only a subtle lengthwise edge or seam to suggest its rectangular timber form.\n\nVIEWPOINT AND COMPOSITION\nUse a slight three-quarter view from the front-left, close to eye level. Show most of the attractive front elevation while also revealing its thin left edge and the rear support. Avoid an extreme perspective or an overhead view.\n\nPlace the house center-right and let the diagonal brace extend into the open space on the left. The house-and-brace arrangement should occupy roughly 75–80 percent of the image width and 85–90 percent of its height. Make the house substantial in the frame rather than a small isolated icon. Preserve clean outer margins and keep the entire structure visible.\n\nAt the base, add a few low, flat, overlapping shrub silhouettes in pale sage and deep teal. These are restrained paper-cut scenery, not a garden. Keep the brace’s foot and the exposed left edge unobstructed."
+      }
+    ],
+    "approved_example_articles": [
+      6
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  },
+  {
+    "id": "corvo-06",
+    "title": "Use scene-specific scale and thumbnail hierarchy",
+    "role": "image_generator",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "wide_hero",
+      "thumbnail_crop",
+      "composition"
+    ],
+    "instruction": "Give the main subject substantial scale and place the decisive interaction in the crop-safe center band. Let the story determine whether the scene is dense or sparse; do not apply a universal tiny central-cluster layout.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 13,
+        "end_line": 19,
+        "excerpt": "- For a character scene, use `article-04-hero.png` as the general paper and lighting reference. For a denser workshop or map scene, `article-03-hero.png` is also useful.\n- Both detailed scenes and isolated objects are representative. Match materials and visual clarity; composition can vary with the story.\n- Article 7's photographic hand is an accepted exception. Ordinary human elements should be made of paper.\n\n### Generation recipe for future revisions\n\nAll 15 hero masters are now selected. Further generation is unnecessary for this publication package. For any future revision, attach the approved raven sheet as image 1 and a selected hero as image 2, binding character identity and paper construction separately. Use one scene per request and evaluate the visible action or reveal at thumbnail size."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 543,
+        "end_line": 548,
+        "excerpt": "VIEWPOINT AND COMPOSITION\nUse a slight three-quarter view from the front-left, close to eye level. Show most of the attractive front elevation while also revealing its thin left edge and the rear support. Avoid an extreme perspective or an overhead view.\n\nPlace the house center-right and let the diagonal brace extend into the open space on the left. The house-and-brace arrangement should occupy roughly 75–80 percent of the image width and 85–90 percent of its height. Make the house substantial in the frame rather than a small isolated icon. Preserve clean outer margins and keep the entire structure visible.\n\nAt the base, add a few low, flat, overlapping shrub silhouettes in pale sage and deep teal. These are restrained paper-cut scenery, not a garden. Keep the brace’s foot and the exposed left edge unobstructed."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 636,
+        "end_line": 638,
+        "excerpt": "SCENE AND COMPOSITION\nStage a recognizable vehicle-testing workshop from a slightly elevated, three-quarter front viewpoint. The raven stands in the left foreground. A small, elegant slate-teal vintage roadster occupies the center-right on a substantial charcoal rolling test stand. Three computer monitors hang above the rear workbench across the upper-left and upper-middle background.\n"
+      }
+    ],
+    "approved_example_articles": [
+      3,
+      6,
+      8
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  },
+  {
+    "id": "corvo-07",
+    "title": "State exact labels and important object counts locally",
+    "role": "image_generator",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "necessary_readable_labels",
+      "multi_stage_scene"
+    ],
+    "instruction": "When labels are needed, enumerate the allowed strings and their surfaces. Specify exact counts only for story-critical objects and explicitly exclude likely duplicates. Keep these counts local to the selected concept.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 247,
+        "end_line": 249,
+        "excerpt": "\nUse most of the available width while keeping every object fully inside the frame with comfortable outer margins. Preserve generous open background above and to the right of the middle stages, and below and to the left. Let the diagonal flow create the composition; do not squeeze everything into a small central cluster.\n"
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 289,
+        "end_line": 306,
+        "excerpt": "\nThis final bucket has a solid bottom, not a sieve. It contains a visible pile of small paper pieces, with no large or medium cards.\n\nTYPOGRAPHY\nThe only text anywhere in the image is:\n“All the News”\n“Big Stories”\n“Medium Reads”\n“News Nuggets”\n\nUse clear, traditional serif lettering in charcoal, printed directly on the front-facing paper surfaces. Make all four labels readable. Natural line breaks are allowed. Do not add headings, explanatory captions, belt labels, or writing on the cards.\n\nVISUAL PRIORITIES\nMake the descending left-to-right flow unmistakable through placement and falling cards, without drawn arrows.\n\nClearly distinguish the three card sizes, the two sieve-hole sizes, and the two conveyor levels. Keep enough of each perforated base exposed to show how the sorting works.\n\nFavor a poetic editorial still life over a technical diagram. Keep the forms simple, the texture tactile, and the arrangement slightly whimsical but orderly."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 659,
+        "end_line": 666,
+        "excerpt": "LIVE TESTING MONITORS\nReplace wall-mounted paper charts with exactly three modern flat-panel computer monitors in simple charcoal frames above the rear workbench. Their displays represent results from the roadster’s ongoing test.\n\nLeft monitor: a side-profile roadster silhouette, broad horizontal readout bars, and a small wheel diagram.\nMiddle monitor: two semicircular gauge arcs above a simple graph with teal and copper curves, plus a few vertical indicator bars.\nRight monitor: a waveform plot beside an overhead axle-and-wheel schematic, with a few small status dots and abstract readout blocks.\n\nUse layered paper lines and shapes for every interface element. The graphics are schematic visual shorthand, not real statistics or evidence. No words, numerals, scores, checkmarks, or pass/fail verdicts. Avoid neon, screen bloom, holograms, or colored light spilling onto the workshop."
+      }
+    ],
+    "approved_example_articles": [
+      2,
+      8
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  },
+  {
+    "id": "corvo-08",
+    "title": "Translate every prop into the approved material world",
+    "role": "image_generator",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "technology_props",
+      "mixed_material_risk",
+      "hero_style"
+    ],
+    "instruction": "Describe how tools, clothes, electronics, and interface graphics are fabricated in the same matte paper world. For screen props, specify subdued paper shapes and lighting rather than luminous displays. Honor explicit post exceptions.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 628,
+        "end_line": 634,
+        "excerpt": "\nPhotograph the construction under soft, diffuse upper-left daylight with neutral white balance. Use restrained contact shadows to describe overlapping layers and grounded objects. Keep everything in sharp focus, with no lens distortion, dramatic lighting, or glossy reflections.\n\nPALETTE\nUse warm-neutral off-white #ECE9E2, charcoal #22272B, slate teal #2E5B60, and pale sage #B7C4B4 as the base palette. Burnt copper #C2612C provides related accents on the mechanic’s uniform, adjustment handle, wheel restraints, sensor connectors, and selected screen graphics. Small amounts of muted light gray and warm tan are allowed for recognizable mechanical trim and seat upholstery.\n\nKeep the background neutral off-white without a yellow cast. The monitors have dark charcoal screens with subdued paper-cut graphics, not luminous displays casting colored light."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 666,
+        "end_line": 666,
+        "excerpt": "Use layered paper lines and shapes for every interface element. The graphics are schematic visual shorthand, not real statistics or evidence. No words, numerals, scores, checkmarks, or pass/fail verdicts. Avoid neon, screen bloom, holograms, or colored light spilling onto the workshop."
+      }
+    ],
+    "approved_example_articles": [
+      8
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  },
+  {
+    "id": "corvo-09",
+    "title": "Prevent the wrong narrative outcome explicitly",
+    "role": "image_generator",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "evaluation_scene",
+      "ambiguous_success_or_failure"
+    ],
+    "instruction": "State the intended scene state and exclude plausible but misleading endings. A candidate still under evaluation should remain visibly restrained or awaiting judgment; avoid success verdicts or release cues unless the selected concept requires them.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 655,
+        "end_line": 657,
+        "excerpt": "The car is stationary on a robust charcoal dynamometer-style test stand. Clearly show the tires resting between cylindrical rollers. Include substantial beams, triangular braces, visible paper-cut bolts, roller axles, and sturdy supports. Burnt-copper wheel restraints with charcoal brackets secure the visible front and rear wheels to the rig. Make the physical connection between car, rollers, restraints, and support frame unmistakable.\n\nRetain a prominent burnt-copper adjustment handwheel with a short projecting grip on the upright near the car’s front-left corner. It belongs to the testing apparatus, not to the car."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 682,
+        "end_line": 685,
+        "excerpt": "FINAL CONSTRAINTS\nNo readable text anywhere. No captions, logos, watermarks, actual statistics, or claims about performance. No victory, race finish, crashed vehicle, green release light, open exit, or car departing. The vehicle is an attractive candidate still being evaluated, not a proven success.\n\nAvoid glossy materials, gradients, cinematic lighting, neon, holograms, robots, circuit-board decoration, excessive clutter, and a smooth 3D-render finish. Preserve the tactile matte-paper construction, clear visual hierarchy, and quiet whimsy throughout. One image only."
+      }
+    ],
+    "approved_example_articles": [
+      8
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  },
+  {
+    "id": "corvo-10",
+    "title": "Resolve historical constraints against the current profile",
+    "role": "image_generator",
+    "brand_scope": "corvo",
+    "model_scope": null,
+    "applies_when": [
+      "imported_prompt",
+      "historical_style_conflict",
+      "post_exception"
+    ],
+    "instruction": "Treat archived prompts as examples, not current global rules. Use the approved current profile and explicit post exceptions when historical instructions conflict. Do not promote a one-post color choice, photographic exception, scene prop, or local object count into a brand-wide requirement.",
+    "evidence": [
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 13,
+        "end_line": 15,
+        "excerpt": "- For a character scene, use `article-04-hero.png` as the general paper and lighting reference. For a denser workshop or map scene, `article-03-hero.png` is also useful.\n- Both detailed scenes and isolated objects are representative. Match materials and visual clarity; composition can vary with the story.\n- Article 7's photographic hand is an accepted exception. Ordinary human elements should be made of paper."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 553,
+        "end_line": 553,
+        "excerpt": "Use burnt copper #C2612C on BOTH the front door and the supporting 2×4. These are the two intentional accent areas. A little natural kraft-paper color on exposed cardstock edges and a tiny muted brass doorknob are the only additional colors needed."
+      },
+      {
+        "source": "hero-image-prompts.md",
+        "start_line": 569,
+        "end_line": 574,
+        "excerpt": "- **Selected master:** `article-07-hero.png` — approved by Jake; retain this image.\n- **Concept:** A human editorial choice completing a newspaper layout.\n- **Alt text:** \"A photographic hand holds a copper landscape image over an empty image slot in a paper newspaper.\"\n- **Style exception:** The photographic hand is intentionally retained. It is not the construction reference for other human elements.\n\nNo new generation prompt is needed for this approved image."
+      }
+    ],
+    "approved_example_articles": [
+      6,
+      7
+    ],
+    "status": "seeded_observation",
+    "one_shot_validation": "not_tested",
+    "changes_brand_profile": false
+  }
+]

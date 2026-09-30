@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createBlogPostPR, BlogPostContractError } from "@/lib/github";
+import { createBlogPostPR, BlogPostContractError, type PublishImageAsset } from "@/lib/github";
 import { enrichPublishImageAlts } from "@/lib/imageAlt";
 import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
@@ -25,7 +25,7 @@ function isScheduleTrigger(value: unknown): value is "frontmatter" | "pr-body" {
 
 async function loadApprovedPostForPublish(
   postId: string
-): Promise<{ post: Doc<"v2Posts"> } | { error: string; status: number }> {
+): Promise<(Awaited<ReturnType<typeof clientPublicationSnapshot>> & { client: ConvexHttpClient }) | { error: string; status: number }> {
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.trim();
   if (!convexUrl) {
     return { error: "Convex is not configured.", status: 503 };
@@ -40,7 +40,10 @@ async function loadApprovedPostForPublish(
   const client = new ConvexHttpClient(convexUrl);
   client.setAuth(token);
 
-  const post = await client.query(api.publishing.getPostById, { postId });
+  let snapshot;
+  try { snapshot = await clientPublicationSnapshot(client, postId); }
+  catch { return { error: "Post or visuals are not currently approved for publishing. Reload and review before publishing.", status: 403 }; }
+  const post = snapshot?.post;
   if (!post) {
     return { error: "Post not found or access denied.", status: 403 };
   }
@@ -48,7 +51,11 @@ async function loadApprovedPostForPublish(
     return { error: "Post is not approved for publishing.", status: 403 };
   }
 
-  return { post };
+  return { ...snapshot, client };
+}
+
+async function clientPublicationSnapshot(client: ConvexHttpClient, postId: string) {
+  return client.query(api.publishing.getPostForPublication, { postId });
 }
 
 function coverImagesFromPost(post: Doc<"v2Posts">) {
@@ -63,13 +70,13 @@ function coverImagesFromPost(post: Doc<"v2Posts">) {
   ];
 }
 
-function missingServerPublishFields(post: Doc<"v2Posts">): string[] {
+function missingServerPublishFields(post: Doc<"v2Posts">, hasApprovedHero = false): string[] {
   const missing: string[] = [];
   if (!post.blogExcerpt?.trim()) missing.push("excerpt");
   if (!post.blogAuthor?.trim()) missing.push("author");
   if (!post.blogCategory?.trim()) missing.push("category");
   if (!(post.blogTags?.length ?? 0)) missing.push("tags");
-  if (!post.heroImageUrl?.trim() && !post.heroImageStorageId) missing.push("hero image");
+  if (!hasApprovedHero && !post.heroImageUrl?.trim() && !post.heroImageStorageId) missing.push("hero image");
   return missing;
 }
 
@@ -81,7 +88,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const body = await req.json();
+  let body;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 }); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Request body must be an object." }, { status: 400 });
   const {
     postId: rawPostId,
     scheduledDate: clientScheduledDate,
@@ -111,7 +120,7 @@ export async function POST(req: NextRequest) {
   }
 
   const post = gate.post;
-  const missingFields = missingServerPublishFields(post);
+  const missingFields = missingServerPublishFields(post, !!gate.visuals?.hero);
   if (missingFields.length > 0) {
     return NextResponse.json(
       {
@@ -119,6 +128,16 @@ export async function POST(req: NextRequest) {
       },
       { status: 400 }
     );
+  }
+
+  if (gate.visuals) {
+    try {
+      const result = await gate.client.action(api.visualPublication.createPr, { postId: post._id });
+      return NextResponse.json(result);
+    } catch (error) {
+      const data = error && typeof error === "object" && "data" in error ? error.data : undefined;
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Visual publication requires review before any new attempt.", ...(data && typeof data === "object" ? { reviewReceipt: data } : {}) }, { status: 400 });
+    }
   }
 
   const title = post.title;
@@ -138,11 +157,12 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  const images = coverImagesFromPost(post);
+  const images: PublishImageAsset[] | undefined = coverImagesFromPost(post);
   const coverImageAlt =
     asTrimmedString(clientCoverImageAlt) ?? `Cover image for ${post.title}`;
 
   if (
+    (status !== undefined && typeof status !== "string") ||
     (subtitle !== undefined && typeof subtitle !== "string") ||
     (scheduledTime !== undefined && typeof scheduledTime !== "string") ||
     (timezone !== undefined && typeof timezone !== "string") ||
@@ -160,14 +180,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const altTextResult = await enrichPublishImageAlts({
-      title,
-      excerpt,
-      coverImageAlt,
-      images,
-    });
+    const altTextResult = await enrichPublishImageAlts({ title, excerpt, coverImageAlt, images });
 
     const result = await createBlogPostPR({
+      postId: post._id,
       title,
       content,
       scheduledDate,

@@ -1,8 +1,9 @@
 import type { NextRequest } from "next/server"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const { mockConvexQuery } = vi.hoisted(() => ({
+const { mockConvexQuery, mockConvexAction } = vi.hoisted(() => ({
   mockConvexQuery: vi.fn(),
+  mockConvexAction: vi.fn(),
 }))
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -17,6 +18,7 @@ vi.mock("convex/browser", () => ({
     return {
       setAuth: vi.fn(),
       query: mockConvexQuery,
+      action: mockConvexAction,
     }
   }),
 }))
@@ -90,12 +92,33 @@ describe("POST /api/publish", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.NEXT_PUBLIC_CONVEX_URL = "https://example.convex.cloud"
-    mockConvexQuery.mockResolvedValue(approvedPost)
+    mockConvexQuery.mockResolvedValue({ post: approvedPost, visuals: null })
+    mockConvexAction.mockResolvedValue({ prUrl: "https://github.com/test/test/pull/1", branchName: "server-branch", sanitizedResponse: {}, recorded: true })
     vi.mocked(auth).mockResolvedValue({
       userId: "user_123",
       getToken: vi.fn().mockResolvedValue("convex-token"),
     } as Awaited<ReturnType<typeof auth>>)
   })
+
+  it("sends only the saved post identity to the server visual publication action", async () => {
+    mockConvexQuery.mockResolvedValueOnce({ post: approvedPost, visuals: { hero: {} }, figures: [] });
+    const response = await POST(makeRequest({ postId: "post_approved", status: "published", subtitle: "Unapproved text", scheduledDate: "2099-01-01", featured: true, images: [{ sourceUrl: "https://attacker.test/image" }] }));
+    expect(response.status).toBe(200);
+    expect(mockConvexAction).toHaveBeenCalledWith(expect.anything(), { postId: "post_approved" });
+    expect(createBlogPostPR).not.toHaveBeenCalled();
+    expect(enrichPublishImageAlts).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ recorded: true, branchName: "server-branch" });
+  });
+  it("retains a server publication review receipt without retrying or recording it from the client", async () => {
+    mockConvexQuery.mockResolvedValueOnce({ post: approvedPost, visuals: { hero: {} } });
+    const error = Object.assign(new Error("Inspect retained PR before another attempt"), { data: { code: "VISUAL_PR_RECORDING_REQUIRES_REVIEW", prUrl: "https://github.com/test/test/pull/1" } });
+    mockConvexAction.mockRejectedValueOnce(error);
+    const response = await POST(makeRequest({ postId: "post_approved" }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ reviewReceipt: error.data });
+    expect(mockConvexAction).toHaveBeenCalledTimes(1);
+    expect(createBlogPostPR).not.toHaveBeenCalled();
+  });
 
   it("returns 401 when not authenticated", async () => {
     vi.mocked(auth).mockResolvedValueOnce({ userId: null } as Awaited<ReturnType<typeof auth>>)
@@ -218,7 +241,7 @@ describe("POST /api/publish", () => {
   })
 
   it("rejects incomplete server metadata instead of filling from the client", async () => {
-    mockConvexQuery.mockResolvedValueOnce({ ...approvedPost, blogTags: [] })
+    mockConvexQuery.mockResolvedValueOnce({ post: { ...approvedPost, blogTags: [] }, visuals: null })
 
     const res = await POST(
       makeRequest({
@@ -251,7 +274,7 @@ describe("POST /api/publish", () => {
   })
 
   it("returns 403 when postId is provided but post is not approved", async () => {
-    mockConvexQuery.mockResolvedValueOnce({ ...approvedPost, approvalState: "unapproved" })
+    mockConvexQuery.mockResolvedValueOnce({ post: { ...approvedPost, approvalState: "unapproved" }, visuals: null })
 
     const res = await POST(
       makeRequest({

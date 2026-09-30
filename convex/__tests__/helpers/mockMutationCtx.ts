@@ -90,6 +90,7 @@ export function createMockMutationCtx(options: {
 
           return {
             first: async () => results[0] ?? null,
+            take: async (count: number) => results.slice(0, count),
             collect: async () => [...results],
           };
         },

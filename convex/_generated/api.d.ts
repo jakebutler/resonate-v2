@@ -30,6 +30,17 @@ import type * as settings from "../settings.js";
 import type * as shapes from "../shapes.js";
 import type * as v2Migration from "../v2Migration.js";
 import type * as v2Storage from "../v2Storage.js";
+import type * as visualExports from "../visualExports.js";
+import type * as visualFigureTables from "../visualFigureTables.js";
+import type * as visualFigures from "../visualFigures.js";
+import type * as visualLinkedEvidence from "../visualLinkedEvidence.js";
+import type * as visualProfileTables from "../visualProfileTables.js";
+import type * as visualProfiles from "../visualProfiles.js";
+import type * as visualPublication from "../visualPublication.js";
+import type * as visualStorageAccess from "../visualStorageAccess.js";
+import type * as visualStorageTables from "../visualStorageTables.js";
+import type * as visualWorkflow from "../visualWorkflow.js";
+import type * as visualWorkflowTables from "../visualWorkflowTables.js";
 import type * as workflow from "../workflow.js";
 
 import type {
@@ -61,6 +72,17 @@ declare const fullApi: ApiFromModules<{
   shapes: typeof shapes;
   v2Migration: typeof v2Migration;
   v2Storage: typeof v2Storage;
+  visualExports: typeof visualExports;
+  visualFigureTables: typeof visualFigureTables;
+  visualFigures: typeof visualFigures;
+  visualLinkedEvidence: typeof visualLinkedEvidence;
+  visualProfileTables: typeof visualProfileTables;
+  visualProfiles: typeof visualProfiles;
+  visualPublication: typeof visualPublication;
+  visualStorageAccess: typeof visualStorageAccess;
+  visualStorageTables: typeof visualStorageTables;
+  visualWorkflow: typeof visualWorkflow;
+  visualWorkflowTables: typeof visualWorkflowTables;
   workflow: typeof workflow;
 }>;
 
