@@ -24,6 +24,67 @@ async function harness(article = content) {
   return { t, user, postId };
 }
 describe("persistent evidence-bound figures", () => {
+  it("omits a table-only article candidate with an unusable anchor and preserves saved prose", async () => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Reader | Editor | sends feedback |";
+    const { user, postId } = await harness(table);
+    const blocked = await user.mutation(figureApi.planFigures, { postId });
+    expect(blocked.candidateIds).toEqual([]);
+    expect(blocked.reasons.join(" ")).toMatch(/safe insertion anchor|placement/);
+    expect((await user.query(api.publishing.getPostById, { postId }))?.content).toBe(table);
+    const headed = `## Explicit flow\n\n${table}`;
+    await user.mutation(api.publishing.updateContent, { postId, content: headed });
+    const usable = await user.mutation(figureApi.planFigures, { postId });
+    expect(usable.candidateIds).toHaveLength(1);
+    const candidate = await user.query(figureApi.getCandidate, { candidateId: usable.candidateIds[0] });
+    expect(candidate.spec.insertionAnchor).toBe("## Explicit flow");
+    await user.mutation(figureApi.acceptCandidate, { candidateId: candidate._id, expectedDataSignature: candidate.dataSignature, expectedPresentationSignature: candidate.presentationSignature });
+    expect(await user.query(figureApi.getPublicationFigures, { postId })).toHaveLength(1);
+  });
+
+  it("invalidates an accepted figure when unreviewed text is appended directly to its source-note line", async () => {
+    const article = "## Flow\n\n| from | to | relation | citation |\n|---|---|---|---|\n| Reader | Editor | sends feedback | Fictional report |\n\n## Dates\n\n| date | event |\n|---|---|\n| 2026-01-01 | Draft |\n| 2026-02-01 | Review |";
+    const { t, user, postId } = await harness(article);
+    const plan = await user.mutation(figureApi.planFigures, { postId });
+    const candidate = await user.query(figureApi.getCandidate, { candidateId: plan.candidateIds[0] });
+    const review = { candidateId: candidate._id, expectedDataSignature: candidate.dataSignature, expectedPresentationSignature: candidate.presentationSignature };
+    await user.mutation(figureApi.acceptCandidate, review);
+    expect(await user.query(figureApi.getPublicationFigures, { postId })).toHaveLength(1);
+    const before = await user.query(api.publishing.getPostById, { postId });
+    const workspace = await user.query(figureApi.getWorkspace, { postId });
+    const block = workspace.states[0].insertedBlock!;
+    await t.run(ctx => ctx.db.patch(postId, { approvalState: "approved" }));
+    const edited = before!.content.replace(block, `${block} APPENDED UNREVIEWED SOURCE-NOTE TEXT`);
+    await user.mutation(api.publishing.updateContent, { postId, content: edited });
+    const after = await user.query(figureApi.getWorkspace, { postId });
+    expect(after.states.find(state => state.selectedCandidateId === candidate._id)?.status).toBe("needs-review");
+    expect((await user.query(api.publishing.getPostById, { postId }))?.approvalState).toBe("unapproved");
+    await expect(user.query(figureApi.getPublicationFigures, { postId })).rejects.toThrow(/review|placement/);
+    await expect(user.mutation(figureApi.acceptCandidate, review)).rejects.toThrow(/placement/);
+    await expect(user.mutation(figureApi.removeFigure, { candidateId: candidate._id })).rejects.toThrow(/partial source-note/);
+    const sibling = await user.query(figureApi.getCandidate, { candidateId: plan.candidateIds[1] });
+    const history = await user.query(figureApi.getReviewHistory, { postId });
+    await expect(user.mutation(figureApi.acceptCandidate, { candidateId: sibling._id, expectedDataSignature: sibling.dataSignature, expectedPresentationSignature: sibling.presentationSignature })).rejects.toThrow(/Sibling figure.*placement/);
+    expect((await user.query(figureApi.getWorkspace, { postId })).states.find(state => state.selectedCandidateId === sibling._id)?.status).toBe("proposed");
+    expect(await user.query(figureApi.getReviewHistory, { postId })).toEqual(history);
+    expect((await user.query(api.publishing.getPostById, { postId }))?.content).toBe(edited);
+  });
+
+  it("excludes a table inside nested hidden HTML and resumes only after the outer region closes", async () => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | unseen feedback |";
+    const hidden = `## Appendix\n\n<div hidden>\n<div>\n</div>\n\n${table}\n\n</div>`;
+    const { user, postId } = await harness(hidden);
+    const before = await user.query(api.publishing.getPostById, { postId });
+    const blocked = await user.mutation(figureApi.planFigures, { postId });
+    expect(blocked.candidateIds).toEqual([]);
+    expect((await user.query(api.publishing.getPostById, { postId }))?.content).toBe(before?.content);
+    await user.mutation(api.publishing.updateContent, { postId, content: `${hidden}\n\n## Visible\n\n${table.replace("Hidden", "Reader")}` });
+    const visible = await user.mutation(figureApi.planFigures, { postId });
+    expect(visible.candidateIds).toHaveLength(1);
+    const candidate = await user.query(figureApi.getCandidate, { candidateId: visible.candidateIds[0] });
+    expect(candidate.spec.rows[0][0]).toBe("Reader");
+    expect(candidate.spec.insertionAnchor).toBe("## Visible");
+  });
+
   it.each([
     { name: "published", status: "published", blogPrStatus: "merged" },
     { name: "pr-created", status: "pr-created", blogPrStatus: "open" },

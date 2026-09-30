@@ -3,7 +3,7 @@ import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/s
 import type { Doc, Id } from "./_generated/dataModel";
 import { requireBrandAccess, requireUserId } from "./campaignAccess";
 import { figureCandidateValidator, figureFormatValidator, figurePlanValidator, figureReviewEventValidator, figureSourceValidator, figureStateValidator } from "./visualFigureTables";
-import { buildFigureMarkdownBlock, figureArticleTokens, assertFigureInsertionAnchor, assertFigureEvidence, figureSignatures, parseFigureSource, planFigureCandidates, type FigureSource, type FigureSpec } from "../lib/visualFigures";
+import { buildFigureMarkdownBlock, figureArticleTokens, assertFigureInsertionAnchor, assertFigureMarkdownBlockPlacement, assertFigureEvidence, figureSignatures, parseFigureSource, planFigureCandidates, type FigureSource, type FigureSpec } from "../lib/visualFigures";
 import { hashVisualBytes } from "../lib/visualProfile";
 import { fingerprintPostContent } from "../lib/domain";
 import { onArticleChange } from "./visualWorkflow";
@@ -256,6 +256,7 @@ function removeInsertedEnvelope(content: string, state: Doc<"v2FigureStates">): 
   }
   uniqueOccurrence(content, block, "Inserted figure block");
   uniqueOccurrence(content, token, "Inserted figure token");
+  if (!/^(?:\r?\n[ \t]*(?:\r?\n|$)|$)/u.test(content.slice(index + block.length))) throw new Error("Figure placement contains a partial source-note block; remove the modified token explicitly before detaching or reinserting");
   const envelope = `\n\n${block}\n\n`;
   if (index >= 2 && content.slice(index - 2, index + block.length + 2) === envelope) {
     return { content: content.slice(0, index - 2) + content.slice(index + block.length + 2), detached: false };
@@ -293,9 +294,7 @@ function insertAtAnchor(content: string, anchor: string, block: string) {
   return `${content.slice(0, index)}\n\n${block}\n\n${content.slice(index)}`;
 }
 function assertInsertionPlacement(content: string, candidate: Doc<"v2FigureCandidates">, block: string) {
-  uniqueOccurrence(content, block, "Accepted figure block");
-  const end = wholeLineAnchor(content, candidate.spec.insertionAnchor, "Accepted figure insertion anchor");
-  if (!content.slice(end).startsWith(`\n\n${block}`)) throw new Error("Accepted figure placement changed; move or review it explicitly");
+  assertFigureMarkdownBlockPlacement(content, candidate.spec.insertionAnchor, block);
 }
 async function updateArticle(ctx: MutationCtx, post: Doc<"v2Posts">, content: string) {
   const fingerprint = fingerprintPostContent({ title: post.title, content, linkedinFirstComment: post.linkedinFirstComment });

@@ -113,6 +113,27 @@ async function approvedEdited(withReference = false) {
 }
 
 describe("saved editorial visual workflow", () => {
+  it("admits and selects three distinct Japanese-only article-bound stories", async () => {
+    const f = await setup();
+    await configureProfile(f.user);
+    await f.user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1000 });
+    const content = "夜明けの工房で三つの異なる場面を検査して正しい道を選びます。";
+    await f.t.run(ctx => ctx.db.patch(f.postId, { title: "異なる場面", content }));
+    const attemptId = await f.user.mutation(api.visualWorkflow.requestPlan, { postId: f.postId, operationKey: "unicode-scenes" });
+    const claimed = await claim(f.t, attemptId);
+    const stories = [
+      { subject: "工房の修理職人", metaphor: "欠けた歯車", action: "工具で歯車を取り替える", reveal: "機械の傷が見える" },
+      { subject: "森の道案内人", metaphor: "曲がり角の選択", action: "明るい小道を歩く", reveal: "別の小道が崖になる" },
+      { subject: "川岸の橋職人", metaphor: "重さの試験", action: "籠を橋に置く", reveal: "細い梁がたわむ" },
+    ];
+    const unicodeScenes = stories.map((story, i) => ({ title: ["歯車を直す", "小道を選ぶ", "橋を試す"][i], ...story, articleConnection: "本文の判断を具体的な行動に表す", articleAnchor: content }));
+    const planId = await f.t.mutation(api.visualWorkflow.completePlan, { attemptId, claimKey: claimed.claimKey, scenes: unicodeScenes, actualMicros: 1, usageKind: "reported", usageReceipt: "SPECULATIVE unicode scene response" });
+    const snapshot = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(snapshot.plans[0]).toMatchObject({ status: "complete", reasons: [] });
+    await expect(f.user.mutation(api.visualWorkflow.selectScene, { planId, sceneIndex: 1 })).resolves.toBeNull();
+    expect((await f.user.query(api.visualWorkflow.get, { postId: f.postId })).state).toMatchObject({ selectedPlanId: planId, selectedSceneIndex: 1 });
+  });
+
   it("claims reflection with every distinct version's full input envelope and retained provider-revised prompt", async () => {
     const { t, user, postId, referenceId } = await selectedPlan(true);
     const first = await finishImage(t, await user.mutation(api.visualWorkflow.requestGeneration, { postId, operationKey: "complete-reflection-original", prompt: "Keep the bird touching the broken gear." }), "digitalocean", "gpt-image-2", "Offline provider rewrite: the bird removes the broken gear.");

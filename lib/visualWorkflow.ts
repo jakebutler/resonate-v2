@@ -49,7 +49,7 @@ export function composeScenePrompt(scene: SceneConcept, instructions?: string) {
 }
 
 function words(text: string) {
-  return new Set(text.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+  return new Set(text.normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
 }
 
 export function validateScenePlan(scenes: SceneConcept[], article: string): { valid: boolean; reasons: string[] } {
@@ -61,11 +61,12 @@ export function validateScenePlan(scenes: SceneConcept[], article: string): { va
     if (Object.entries(scene).some(([field, value]) => value.length > limits[field as keyof SceneConcept]) || serializedUtf8Bytes(scene) > 24_000) reasons.push(`Scene ${i + 1} is oversized`);
     if (scene.articleAnchor.trim().length < 12 || !article.includes(scene.articleAnchor)) reasons.push(`Scene ${i + 1} lacks an exact article anchor`);
     const story = words(`${scene.subject} ${scene.metaphor} ${scene.action} ${scene.reveal}`);
+    if (!story.size) reasons.push(`Scene ${i + 1} lacks letter or number story detail`);
     for (let j = 0; j < i; j++) {
       const previous = words(`${scenes[j].subject} ${scenes[j].metaphor} ${scenes[j].action} ${scenes[j].reveal}`);
       const overlap = [...story].filter((word) => previous.has(word)).length;
       const union = new Set([...story, ...previous]).size;
-      if (!union || overlap / union >= 0.72) reasons.push(`Scenes ${j + 1} and ${i + 1} tell nearly the same story`);
+      if (union > 0 && overlap / union >= 0.72) reasons.push(`Scenes ${j + 1} and ${i + 1} tell nearly the same story`);
     }
   }
   return { valid: reasons.length === 0, reasons };

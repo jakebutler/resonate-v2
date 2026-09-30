@@ -27,6 +27,14 @@ describe("editorial scene planning", () => {
     expect(validateScenePlan([scene, { ...scene, title: "Reveal the fault" }, { ...scene, title: "Inspect the fault" }], article)).toMatchObject({ valid: false });
     expect(validateScenePlan([scene], article)).toMatchObject({ valid: false });
   });
+  it("still rejects identical Unicode stories and genuinely tokenless scene detail", () => {
+    const article = "夜明けの工房で三つの異なる場面を検査して正しい道を選びます。";
+    const scene = { title: "歯車を直す", subject: "工房の修理職人", metaphor: "欠けた歯車", action: "工具で歯車を取り替える", reveal: "機械の傷が見える", articleConnection: "本文の判断を具体的な行動に表す", articleAnchor: article };
+    expect(validateScenePlan([scene, { ...scene, title: "作業を続ける" }, { ...scene, title: "故障を直す" }], article)).toMatchObject({ valid: false, reasons: expect.arrayContaining(["Scenes 1 and 2 tell nearly the same story"]) });
+    const punctuationOnly = { ...scene, subject: "!!!", metaphor: "...", action: "???", reveal: "---" };
+    expect(validateScenePlan([punctuationOnly, scene, { ...scene, title: "故障を直す" }], article)).toMatchObject({ valid: false, reasons: expect.arrayContaining(["Scene 1 lacks letter or number story detail"]) });
+  });
+
   it("preserves verified typo and whitespace edits while requiring review for uncertain semantic changes", () => {
     const before = { title: "Inspect first", content: "The raven recieved evidence before acting." };
     expect(classifyArticleChange(before, { ...before, content: "The raven received evidence  before acting." })).toBe("copy-edit");

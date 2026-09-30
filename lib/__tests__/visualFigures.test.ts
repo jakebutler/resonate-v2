@@ -1,10 +1,64 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { planFigureCandidates, assertFigureEvidence, renderFigureSvg, figureSignatures, parseFigureSource, assertFigureCurrentArticle, buildFigureMarkdownBlock, assertFigureInsertionAnchor } from "../visualFigures";
+import { planFigureCandidates, assertFigureEvidence, renderFigureSvg, figureSignatures, parseFigureSource, assertFigureCurrentArticle, buildFigureMarkdownBlock, assertFigureInsertionAnchor, assertFigureMarkdownBlockPlacement } from "../visualFigures";
 
 const citedNumeric = (content: string) => content.split("\n").map(line => line.trim().startsWith("|") ? line + (line.includes("| value |") ? " citation |" : /^\|[-:| ]+\|$/u.test(line) ? "---|" : " Evaluation report, Table 2 |") : line).join("\n");
 
 describe("evidence-bound figures", () => {
+  it("omits unusable table anchors across all five families while retaining corroborated headed tables", () => {
+    const tables = [
+      citedNumeric("| label | value | unit | population | denominator |\n|---|---|---|---|---|\n| Alpha | 12 | cases | Set | 80 |\n| Beta | 20 | cases | Set | 80 |"),
+      citedNumeric("| date | value | unit | population | denominator |\n|---|---|---|---|---|\n| 2026-01-01 | 12 | cases | Set | 80 |\n| 2026-02-01 | 20 | cases | Set | 80 |"),
+      "| from | to | relation |\n|---|---|---|\n| Reader | Editor | feedback |",
+      "| order | from | to | message |\n|---|---|---|---|\n| 1 | Reader | Editor | feedback |",
+      "| date | event |\n|---|---|\n| 2026-01-01 | Draft |\n| 2026-02-01 | Review |",
+    ];
+    for (const [index, table] of tables.entries()) {
+      const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const, content: table };
+      const trace = { ...source, id: "trace", purpose: "claim-trace" as const };
+      const omitted = planFigureCandidates(source, [trace]);
+      expect(omitted.candidates).toEqual([]);
+      expect(omitted.reasons.join(" ")).toMatch(/safe insertion anchor/);
+      const headed = { ...source, content: `## Evidence ${index}\n\n${table}` };
+      const usable = planFigureCandidates(headed, [trace]);
+      expect(usable.candidates).toHaveLength(1);
+      expect(() => assertFigureInsertionAnchor(headed.content, usable.candidates[0].insertionAnchor)).not.toThrow();
+    }
+  });
+
+  it("requires the exact canonical source-note paragraph to end at EOF or a blank line", () => {
+    const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const,
+      content: "## Flow\n\n| from | to | relation |\n|---|---|---|\n| Reader | Editor | feedback |" };
+    const spec = planFigureCandidates(source, []).candidates[0];
+    const block = buildFigureMarkdownBlock("figure1", spec);
+    const prefix = `## Flow\n\n${block}`;
+    for (const suffix of ["", "\n", "\n\nUnrelated prose.", "\r\n\t \r\nUnrelated prose."]) {
+      expect(() => assertFigureMarkdownBlockPlacement(prefix + suffix, spec.insertionAnchor, block)).not.toThrow();
+    }
+    for (const suffix of [" APPENDED TEXT", "<!-- hidden suffix -->", "\nUnreviewed continuation.", "\r\nUnreviewed continuation."]) {
+      expect(() => assertFigureMarkdownBlockPlacement(prefix + suffix, spec.insertionAnchor, block)).toThrow(/source-note|placement/);
+    }
+  });
+
+  it("masks nested raw HTML through outer closure, including comments, quoted tags and multiline attributes", () => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | unseen feedback |";
+    for (const inner of [
+      "<div>\n</div>",
+      '<section data-close="</div>">\n</section>',
+      '<div\n data-close="</div>">\n</div>',
+      "<!-- </div> -->",
+      '<script>\nconst sample = "</div>";\n</script>',
+    ]) {
+      const hidden = `## Appendix\n\n<div hidden><!-- raw block -->\n${inner}\n\n${table}\n\n</div>`;
+      const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const, content: hidden };
+      expect(planFigureCandidates(source, []).candidates, inner).toEqual([]);
+      expect(() => assertFigureInsertionAnchor(hidden, table)).toThrow(/structure|top-level/);
+      const visible = planFigureCandidates({ ...source, content: `${hidden}\n\n## Visible\n\n${table.replace("Hidden", "Reader")}` }, []);
+      expect(visible.candidates, inner).toHaveLength(1);
+      expect(visible.candidates[0].rows[0][0]).toBe("Reader");
+    }
+  });
+
   it("refuses hidden MDX module declarations as evidence and insertion regions", () => {
     const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Reader | sends feedback |";
     for (const opening of ["export const example = `", "import example from `"]) {
@@ -89,15 +143,15 @@ describe("evidence-bound figures", () => {
 
   it("requires publishable numeric citations and never exposes internal evidence filenames", () => {
     const bare = "| label | value | unit | population | denominator |\n|---|---|---|---|---|\n| A | 12 | cases | Set | 80 |\n| B | 20 | cases | Set | 80 |";
-    const article = { id: "a", name: "Article draft", format: "markdown" as const, purpose: "article" as const, content: bare };
+    const article = { id: "a", name: "Article draft", format: "markdown" as const, purpose: "article" as const, content: "## Results\n\n" + bare };
     expect(planFigureCandidates(article, [], { requireClaimTrace: false }).candidates).toEqual([]);
     const cited = bare.split("\n").map((line, i) => line + (i === 0 ? " citation |" : i === 1 ? "---|" : " Evaluation report, Table 2 | ")).join("\n");
-    const main = { ...article, content: cited };
+    const main = { ...article, content: "## Results\n\n" + cited };
     const trace = { ...main, id: "trace", name: "internal-secret-claim-trace.md", purpose: "claim-trace" as const };
     const spec = planFigureCandidates(main, [trace]).candidates[0];
     expect(spec.presentation.sourceNote).toBe("Source: Evaluation report, Table 2.");
     expect(spec.presentation.sourceNote).not.toContain(trace.name);
-    expect(planFigureCandidates({ ...main, content: cited.replace("Evaluation report, Table 2", "") }, [], { requireClaimTrace: false }).candidates).toEqual([]);
+    expect(planFigureCandidates({ ...main, content: main.content.replace("Evaluation report, Table 2", "") }, [], { requireClaimTrace: false }).candidates).toEqual([]);
   });
 
   it("uses contiguous table contexts when headers repeat and excludes represented evidence before the combined limit", () => {
@@ -124,7 +178,7 @@ describe("evidence-bound figures", () => {
 
   it("blocks numeric rendering when denominators are missing, permitting only explicitly stated count or N/A denominators", () => {
     const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const,
-      content: citedNumeric('| label | value | unit | population | denominator |\n|---|---|---|---|---|\n| A | 12 | percent | Set | |\n| B | 20 | percent | Set | |') };
+      content: citedNumeric('## Results\n\n| label | value | unit | population | denominator |\n|---|---|---|---|---|\n| A | 12 | percent | Set | |\n| B | 20 | percent | Set | |') };
     expect(planFigureCandidates(source, [], { requireClaimTrace: false }).candidates).toEqual([]);
     expect(planFigureCandidates({ ...source, content: source.content.replaceAll("Set | |", "Set | 80 reviewed cases |") }, [], { requireClaimTrace: false }).candidates).toHaveLength(1);
   });

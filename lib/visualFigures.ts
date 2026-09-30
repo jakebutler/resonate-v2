@@ -46,6 +46,43 @@ function csvCells(line: string): string[] | null {
 }
 
 export type FigureArticleLine = { raw: string; start: number; end: number; row: number; eligible: boolean; tableRow: boolean; topLevelEligible: boolean };
+type HtmlRegion = { stack: string[]; tag: string | null; quote: string | null; comment: boolean; invalid: boolean };
+const voidHtmlTag = /^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/u;
+const rawTextHtmlTag = /^(?:script|style|textarea|title)$/u;
+/** Conservative lexical boundary only: malformed nesting cannot expose later Markdown. */
+function scanHtmlRegion(region: HtmlRegion, raw: string): void {
+  for (let index = 0; index < raw.length; index++) {
+    if (region.comment) {
+      if (raw.startsWith("-->", index)) { region.comment = false; index += 2; }
+      continue;
+    }
+    if (region.tag === null) {
+      const parent = region.stack.at(-1);
+      if (parent && rawTextHtmlTag.test(parent) && !new RegExp(`^</${parent}(?=\\s|>)`, "iu").test(raw.slice(index))) continue;
+      if (raw.startsWith("<!--", index)) { region.comment = true; index += 3; continue; }
+      if (raw[index] !== "<") continue;
+      region.tag = "<";
+      continue;
+    }
+    const char = raw[index]; region.tag += char;
+    if (region.quote) { if (char === region.quote) region.quote = null; continue; }
+    if (char === '"' || char === "'") { region.quote = char; continue; }
+    if (char !== ">") continue;
+    const tag = /^<(\/)?([a-z][a-z0-9-]*)(?=\s|\/|>)/iu.exec(region.tag);
+    if (tag) {
+      const name = tag[2].toLowerCase();
+      if (tag[1]) {
+        if (region.stack.at(-1) === name) region.stack.pop();
+        else if (!voidHtmlTag.test(name)) region.invalid = true;
+      } else if (!voidHtmlTag.test(name)) {
+        // Raw HTML nonvoid elements do not acquire a closing boundary from '/>'.
+        region.stack.push(name);
+      }
+    }
+    region.tag = null;
+  }
+  if (region.tag !== null) region.tag += "\n";
+}
 /** Shared conservative Markdown structure mask for evidence and visible top-level placement. */
 export function getFigureArticleStructure(content: string): FigureArticleLine[] {
   let offset = 0;
@@ -53,10 +90,15 @@ export function getFigureArticleStructure(content: string): FigureArticleLine[] 
     const line = { raw, start: offset, end: offset + raw.length, row: index + 1, eligible: true, tableRow: false, topLevelEligible: false }; offset += raw.length + 1; return line;
   });
   let fence: { character: string; length: number } | null = null;
-  let comment = false; let mdxComment = false; let unsupportedMdxExpression = false; let htmlTag: string | null = null; let htmlClose: string | null = null; let list = false;
+  let comment = false; let mdxComment = false; let unsupportedMdxExpression = false; let htmlRegion: HtmlRegion | null = null; let htmlClose: string | null = null; let list = false;
   for (const line of lines) {
     const raw = line.raw;
     if (fence) { if (new RegExp(`^ {0,3}${fence.character}{${fence.length},}\\s*$`, "u").test(raw)) fence = null; line.eligible = false; continue; }
+    if (htmlRegion) {
+      scanHtmlRegion(htmlRegion, raw);
+      if (!htmlRegion.stack.length && htmlRegion.tag === null && !htmlRegion.comment && !htmlRegion.invalid) htmlRegion = null;
+      line.eligible = false; continue;
+    }
     if (unsupportedMdxExpression) { line.eligible = false; continue; }
     if (/^\s*(?:import|export)\b/u.test(raw)) {
       // MDX modules can hide Markdown-shaped data in JavaScript strings.
@@ -82,12 +124,17 @@ export function getFigureArticleStructure(content: string): FigureArticleLine[] 
       line.eligible = false; continue;
     }
     if (htmlClose) { if (raw.includes(htmlClose)) htmlClose = null; line.eligible = false; continue; }
-    if (comment || raw.includes("<!--")) { comment = !raw.includes("-->", Math.max(0, raw.indexOf("<!--"))); line.eligible = false; continue; }
+    if (comment) { comment = !raw.includes("-->"); line.eligible = false; continue; }
+    const html = /^ {0,3}<([a-z][a-z0-9-]*)(?:\s|>|\/|$)/iu.exec(raw);
+    if (html) {
+      htmlRegion = { stack: [], tag: null, quote: null, comment: false, invalid: false };
+      scanHtmlRegion(htmlRegion, raw);
+      if (!htmlRegion.stack.length && htmlRegion.tag === null && !htmlRegion.comment && !htmlRegion.invalid) htmlRegion = null;
+      line.eligible = false; continue;
+    }
+    if (raw.includes("<!--")) { comment = !raw.includes("-->", Math.max(0, raw.indexOf("<!--"))); line.eligible = false; continue; }
     const special = /^ {0,3}<\?/u.test(raw) ? "?>" : /^ {0,3}<!\[CDATA\[/u.test(raw) ? "]]>" : /^ {0,3}<![A-Z]/u.test(raw) ? ">" : null;
     if (special) { if (!raw.includes(special)) htmlClose = special; line.eligible = false; continue; }
-    if (htmlTag) { if (new RegExp(`</${htmlTag}\\s*>`, "iu").test(raw)) htmlTag = null; line.eligible = false; continue; }
-    const html = /^ {0,3}<([a-z][a-z0-9-]*)(?:\s|>|\/)/iu.exec(raw);
-    if (html) { if (!new RegExp(`</${html[1]}\\s*>`, "iu").test(raw) && !/\/\s*>\s*$/u.test(raw) && !/^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/iu.test(html[1])) htmlTag = html[1]; line.eligible = false; continue; }
     if (/^ {0,3}<\//u.test(raw)) { line.eligible = false; continue; }
     const opening = /^ {0,3}(`{3,}|~{3,})/u.exec(raw)?.[1];
     if (opening) { fence = { character: opening[0], length: opening.length }; line.eligible = false; continue; }
@@ -112,6 +159,15 @@ export function assertFigureInsertionAnchor(content: string, anchor: string, kin
   const last = lines.findIndex(line => line.end === end || (line.raw.endsWith("\r") && line.end - 1 === end));
   if (first < 0 || last < first || lines.slice(first, last + 1).some(line => !line.topLevelEligible) || (lines[last + 1] && lines[last + 1].raw.trim())) throw new Error("Choose a safe insertion anchor on top-level lines outside tables, lists, code and HTML structures, followed by a blank line or EOF");
   return end;
+}
+/** Exact canonical block must be a complete paragraph, never a source-note prefix. */
+export function assertFigureMarkdownBlockPlacement(content: string, anchor: string, block: string): void {
+  const index = content.indexOf(block);
+  if (!block || index < 0 || content.lastIndexOf(block) !== index) throw new Error("Accepted figure block must match exactly once; resolve placement explicitly");
+  const end = assertFigureInsertionAnchor(content, anchor, "Accepted figure insertion anchor");
+  if (!content.slice(end).startsWith(`\n\n${block}`) || !/^(?:\r?\n[ \t]*(?:\r?\n|$)|$)/u.test(content.slice(index + block.length))) {
+    throw new Error("Accepted figure placement changed; its exact source-note block must end at a blank line or EOF");
+  }
 }
 
 /** Deliberately narrow extraction: no prose inference, units inferred from numbers, or network research. */
@@ -213,7 +269,10 @@ export function planFigureCandidates(article: FigureSource, sources: FigureSourc
     if ((family === "bars" || family === "lines") && (options.requireClaimTrace ?? true) && !trace) { reasons.push("Comparable article data needs a matching attached claim trace"); continue; }
     const spec: FigureSpec = { version: 1, family, columns: table.columns, rows: table.rows, evidence: table.evidence,
       claimTraceEvidence: trace?.table?.evidence ?? [], presentation: presentationFor(table, family), insertionAnchor: table.anchor };
-    try { assertFigureEvidence(spec, [article, ...sources], options.requireClaimTrace ?? true); }
+    try {
+      assertFigureInsertionAnchor(article.content, spec.insertionAnchor);
+      assertFigureEvidence(spec, [article, ...sources], options.requireClaimTrace ?? true);
+    }
     catch (error) { reasons.push(error instanceof Error ? error.message : "Unsupported evidence context"); continue; }
     const representation = JSON.stringify({ family, columns: table.columns, rows: table.rows });
     if ((options.requiredRepresentation && options.requiredRepresentation !== representation) || options.excludedRepresentations?.includes(representation) || selectedRepresentations.has(representation)) continue;
