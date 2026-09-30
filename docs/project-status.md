@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 14:42:29 PDT
+Last updated: 09/30/2026 15:09:55 PDT
 
 ## State
 
@@ -16,30 +16,30 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- a9f6b18 Merge current main and harden image and visual export dispatch
+- ebb224f Block mismatched edit parents and preserve bound export receipts
 
 ## Recent Commits
 
+- ebb224f Block mismatched edit parents and preserve bound export receipts
 - a9f6b18 Merge current main and harden image and visual export dispatch
 - 008141d Implement guarded image and text visual executors
 - df9b9f0 Merge pull request #130 from jakebutler/codex/epic-97-reviewed-queue
 - 9986c17 fix(release): isolate article fixtures and require native Convex checks
-- 6f0de30 fix: preserve all recorded publication identities
 
 ## Local Working Tree
 
-- M  components/PersistedPublishingPanel.tsx
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
 - M  convex/__tests__/articlePublicationVisual.test.ts
-- M  convex/__tests__/visualProviderActions.test.ts
-- M  convex/blogValidators.ts
-- M  convex/visualProviderActions.ts
+- M  convex/__tests__/visualTextActions.test.ts
+- M  convex/visualTextActions.ts
+- M  convex/visualTextConfig.ts
+- M  convex/visualTextTables.ts
+- M  convex/visualWorkflow.ts
 - M  docs/editorial-visuals/PROGRESS.md
-- M  docs/editorial-visuals/providers/functional-first-packet.json
-- M  lib/__tests__/articlePublication.test.ts
-- M  lib/__tests__/github.test.ts
-- M  lib/articlePublication.ts
-- M  lib/github.ts
+- A  docs/editorial-visuals/pixel-reflection.md
+- M  docs/editorial-visuals/reader-rehearsal.md
+- M  lib/__tests__/visualTextRuntime.test.ts
+- M  lib/visualTextRuntime.ts
+- M  scripts/export-local-visual-fixture.mjs
 
 ## Next Agent Pickup
 
@@ -48,4 +48,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- feat/editorial-visual-generation
+- codex/approved-image-reflection

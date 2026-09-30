@@ -2,7 +2,7 @@
 // Synthetic artifact and read-only provider double; no network or qualification evidence.
 import { convexTest } from "convex-test";
 import { anyApi } from "convex/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
 import sharp from "sharp";
 import { prepareBlogPublication } from "../../lib/github";
@@ -15,7 +15,11 @@ const transport = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock("../../lib/articlePublication", async original => ({ ...await original<typeof import("../../lib/articlePublication")>(), readArticlePublication: transport.read }));
 const modules = import.meta.glob("../**/*.ts");
 const api = anyApi;
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => {
+  vi.stubEnv("BLOG_REPO_OWNER", "fictional-owner");
+  vi.stubEnv("BLOG_REPO_NAME", "fictional-repo");
+});
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 async function fixture() {
   const t = convexTest(schema, modules), user = t.withIdentity({ subject: "fixture-owner" });
   const postId = await t.run(async ctx => {
@@ -49,12 +53,15 @@ describe("bound visual publication read adapter", () => {
     const preparedHero = await user.action(api.blogHero.getApprovedBytes, { postId });
     const expectedSchedule = resolvePublicationSchedule(sent.post, sent.intent, "2030-10-07");
     const prepared = await prepareBlogPublication({ title: sent.post.title, content: sent.post.content, ...expectedSchedule, status: sent.post.blogPublicationIntent!, slug: sent.post.blogSlug, excerpt: sent.post.blogExcerpt, author: sent.post.blogAuthor, category: sent.post.blogCategory, tags: sent.post.blogTags, coverImageAlt: sent.post.coverImageAlt, images: [{ sourceUrl: heroSourceUrl!, isCover: true }], preparedHero: { bytes: Buffer.from(preparedHero.base64, "base64"), sha256: preparedHero.sha256 } });
-    const artifact = { repository: "jakebutler/corvo-labs-dot-com", prNumber: 987654, branchName: prepared.branchName, mdxPath: prepared.filePath, heroPath: prepared.files.find(file => file.path.endsWith("/hero.webp"))!.path, canonicalUrl: "https://corvolabs.com/blog/2030-10-07-fictional-hero-roundtrip", editorialFingerprint: sent.post.contentFingerprint, heroSha256: prepared.heroSha256, coverImageAlt: prepared.coverImageAlt, heroSourceUrl: prepared.heroSourceUrl, figureAssets: prepared.figureAssets };
+    const artifact = { repository: "fictional-owner/fictional-repo", prNumber: 987654, branchName: prepared.branchName, mdxPath: prepared.filePath, heroPath: prepared.files.find(file => file.path.endsWith("/hero.webp"))!.path, canonicalUrl: "https://corvolabs.com/blog/2030-10-07-fictional-hero-roundtrip", editorialFingerprint: sent.post.contentFingerprint, heroSha256: prepared.heroSha256, coverImageAlt: prepared.coverImageAlt, heroSourceUrl: prepared.heroSourceUrl, figureAssets: prepared.figureAssets };
     expect(artifact.heroSourceUrl).toBe(heroSourceUrl);
     expect(articleBodyForArtifact(sent.post.content, artifact)).toBe(Buffer.from(prepared.fileContent, "base64").toString().split("\n---\n")[1].replace(/^\n/, ""));
     const exportClaimKey = "SPECULATIVE-inline-hero-claim";
     await user.mutation(api.publishing.claimBlogExport, { postId, fingerprint: sent.post.contentFingerprint, schedule: JSON.stringify([sent.post.scheduledDate, sent.post.scheduledTime, sent.post.timezone]), key: exportClaimKey });
-    const record = { postId, expectedArticleSignature: approvalArticleSignature(sent.post), expectedVisualSignature: sent.reviewSignature, expectedIntentId: sent.intent._id, expectedSchedule, result: { exportClaimKey, artifact, prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/987654", prNumber: 987654, branchName: prepared.branchName, prStatus: "open" as const, sanitizedResponse: {} } };
+    const record = { postId, expectedArticleSignature: approvalArticleSignature(sent.post), expectedVisualSignature: sent.reviewSignature, expectedIntentId: sent.intent._id, expectedSchedule, result: { exportClaimKey, artifact, prUrl: "https://github.com/fictional-owner/fictional-repo/pull/987654", prNumber: 987654, branchName: prepared.branchName, prStatus: "open" as const, sanitizedResponse: {} } };
+    await expect(user.mutation(api.publishing.recordVisualPublicationPr, { ...record, result: { ...record.result, prUrl: "https://github.com/foreign-owner/foreign-repo/pull/987654" } })).rejects.toThrow("Recorded visual PR target is invalid");
+    expect((await user.query(api.publishing.getPostById, { postId })).blogArtifact).toBeUndefined();
+    expect(await t.run(ctx => ctx.db.query("v2PublishAttempts").collect())).toEqual([]);
     await expect(user.mutation(api.publishing.recordVisualPublicationPr, { ...record, expectedArticleSignature: approvalArticleSignature({ ...sent.post, content: sent.post.content.replace(heroSourceUrl!, changedSourceUrl) }) })).rejects.toThrow("Reviewed article changed");
     expect((await user.query(api.publishing.getPostById, { postId })).blogArtifact).toBeUndefined();
     expect(await t.run(ctx => ctx.db.query("v2PublishAttempts").collect())).toEqual([]);

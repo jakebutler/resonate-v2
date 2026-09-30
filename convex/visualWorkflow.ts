@@ -12,6 +12,8 @@ import { hashVisualBytes } from "../lib/visualProfile";
 import { articleSignature, stableInputSignature, validateScenePlan, composeScenePrompt, relevanceSignature, serializedUtf8Bytes, assertSerializedBound, canIssueLocalFixtureQuote, isOfflineContractRuntime } from "../lib/visualWorkflow";
 import { attemptInputValidator, sceneValidator, exportMetadataValidator, publicationVisualsValidator, visualVersionDocValidator, visualAttemptDocValidator, visualPlanDocValidator, visualStateDocValidator, visualReflectionDocValidator, visualBudgetDocValidator, visualBudgetMonthDocValidator, visualStageValidator } from "./visualWorkflowTables";
 
+import { approvedReflectionImageValidator } from "./visualTextTables";
+
 type Input = Doc<"v2VisualAttempts">["input"];
 type Stage = Doc<"v2VisualAttempts">["stage"];
 
@@ -283,7 +285,7 @@ async function cancelBeforeDispatch(ctx: MutationCtx, attempt: Doc<"v2VisualAtte
 
 export const claimAttempt = internalMutation({
   args: { attemptId: v.id("v2VisualAttempts"), expectedRequestSha256: v.optional(v.string()) },
-  returns: v.union(v.null(), v.object({ requestSha256: v.optional(v.string()), attemptId: v.id("v2VisualAttempts"), claimKey: v.string(), input: attemptInputValidator, provider: v.string(), model: v.string(), maximumMicros: v.number(), reflectionContext: v.optional(v.string()) })),
+  returns: v.union(v.null(), v.object({ requestSha256: v.optional(v.string()), attemptId: v.id("v2VisualAttempts"), claimKey: v.string(), input: attemptInputValidator, provider: v.string(), model: v.string(), maximumMicros: v.number(), reflectionContext: v.optional(v.string()), approvedReflectionImage: v.optional(approvedReflectionImageValidator) })),
   handler: async (ctx, args) => {
     const attempt = await ctx.db.get(args.attemptId);
     if (!attempt || attempt.status !== "queued" || attempt.reservedMicros === undefined || attempt.claimKey || !attempt.quotedProvider || !attempt.quotedModel) return null;
@@ -317,7 +319,7 @@ export const claimAttempt = internalMutation({
     const now = Date.now();
     const claimKey = `${attempt._id}:${now}`;
     await ctx.db.patch(attempt._id, { status: "running", claimKey, dispatchedAt: now, updatedAt: now });
-    return { ...(args.expectedRequestSha256 ? { requestSha256: args.expectedRequestSha256 } : {}), attemptId: attempt._id, claimKey, input: attempt.input, provider: attempt.quotedProvider, model: attempt.quotedModel, maximumMicros: attempt.reservedMicros, ...(reflectionContext ? { reflectionContext: reflectionContext.context } : {}) };
+    return { ...(args.expectedRequestSha256 ? { requestSha256: args.expectedRequestSha256 } : {}), attemptId: attempt._id, claimKey, input: attempt.input, provider: attempt.quotedProvider, model: attempt.quotedModel, maximumMicros: attempt.reservedMicros, ...(reflectionContext ? { reflectionContext: reflectionContext.context, approvedReflectionImage: reflectionContext.approvedImage } : {}) };
   },
 });
 
@@ -768,7 +770,11 @@ export async function verifiedReflectionContext(ctx: QueryCtx | MutationCtx, att
   const context = stableInputSignature(reflectionContext(lineage, { exportStorageId: reflection.approvedExportStorageId, exportHash: reflection.approvedExportHash, exportMetadata: final.exportMetadata, alt: reflection.approvedAlt }, attempt.input.article));
   const contextBytes = new TextEncoder().encode(context).byteLength;
   if (contextBytes > 200_000 || contextBytes !== reflection.contextBytes) return null;
-  return { context, contextBytes };
+  const metadata = final.exportMetadata;
+  if (!metadata || metadata.width !== 1600 || metadata.height !== 900 || metadata.format !== "webp" || !Number.isSafeInteger(metadata.bytes) || metadata.bytes < 1 || metadata.bytes >= 150_000 || !/^[a-f0-9]{64}$/.test(reflection.approvedExportHash)) return null;
+  const stored = await ctx.db.system.get(reflection.approvedExportStorageId);
+  if (!stored || !storageHashMatches(stored.sha256, reflection.approvedExportHash) || stored.size !== metadata.bytes || stored.contentType !== undefined && stored.contentType !== "image/webp") return null;
+  return { context, contextBytes, approvedImage: { storageId: reflection.approvedExportStorageId, sha256: reflection.approvedExportHash, bytes: metadata.bytes, width: 1600 as const, height: 900 as const, contentType: "image/webp" as const } };
 }
 
 async function cancelStaleReflectionBatch(ctx: MutationCtx, postId: Id<"v2Posts">): Promise<void> {
@@ -842,7 +848,7 @@ async function queueReflection(ctx: MutationCtx, post: Doc<"v2Posts">, version: 
 }
 
 export const getReflectionContext = internalQuery({
-  args: { attemptId: v.id("v2VisualAttempts") }, returns: v.union(v.null(), v.object({ context: v.string(), contextBytes: v.number() })),
+  args: { attemptId: v.id("v2VisualAttempts") }, returns: v.union(v.null(), v.object({ context: v.string(), contextBytes: v.number(), approvedImage: approvedReflectionImageValidator })),
   handler: async (ctx, args) => {
     const attempt = await ctx.db.get(args.attemptId);
     if (!attempt || attempt.stage !== "reflection" || !await reflectionCurrent(ctx, attempt)) return null;
