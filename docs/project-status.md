@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 11:01:38 PDT
+Last updated: 09/30/2026 12:32:03 PDT
 
 ## State
 
@@ -16,29 +16,44 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 8adb3ad fix: retain terminal publication authority after rescheduling
+- 6f0de30 fix: preserve all recorded publication identities
 
 ## Recent Commits
 
+- 6f0de30 fix: preserve all recorded publication identities
 - 8adb3ad fix: retain terminal publication authority after rescheduling
 - ca79746 fix: pause visual admissions and preserve publication consistency
 - c390c98 docs: record visual contracts and guarded offline rehearsals
 - 4f59b60 feat: integrate opt-in visuals into the saved composer
-- 48a28c0 feat: persist guarded editorial visuals and evidence-bound figures
 
 ## Local Working Tree
 
-- M  convex/__tests__/visualFigures.test.ts
-- M  convex/__tests__/visualPublicationLifecycle.test.ts
-- M  convex/publishing.ts
-- M  convex/visualFigures.ts
-- M  convex/visualLinkedEvidence.ts
+- M  components/EditorialVisualPanel.tsx
+- M  components/__tests__/EditorialVisualPanel.test.tsx
+- A  convex/__tests__/visualProviderActions.test.ts
+- M  convex/__tests__/visualPublication.test.ts
+- A  convex/__tests__/visualTextActions.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/schema.ts
+- A  convex/visualProviderActions.ts
+- A  convex/visualProviderConfig.ts
+- M  convex/visualPublication.ts
+- A  convex/visualTextActions.ts
+- A  convex/visualTextConfig.ts
+- A  convex/visualTextTables.ts
 - M  convex/visualWorkflow.ts
+- M  convex/visualWorkflowTables.ts
 - M  docs/editorial-visuals/PROGRESS.md
-- M  docs/editorial-visuals/publication-action.md
-- M  docs/editorial-visuals/release-preflight.md
-- M  docs/editorial-visuals/rollout.md
-- M  lib/publicationReview.ts
+- M  docs/editorial-visuals/providers/contracts.md
+- A  docs/editorial-visuals/providers/functional-first-packet.json
+- A  docs/editorial-visuals/providers/gpt-image-1-functional-bound.md
+- A  lib/__tests__/visualProviderRuntime.test.ts
+- M  lib/__tests__/visualProviders.test.ts
+- A  lib/__tests__/visualTextRuntime.test.ts
+- M  lib/github.ts
+- A  lib/visualProviderRuntime.ts
+- M  lib/visualProviders.ts
+- A  lib/visualTextRuntime.ts
 
 ## Next Agent Pickup
 

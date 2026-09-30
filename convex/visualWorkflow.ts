@@ -5,10 +5,12 @@ import type { Id, Doc } from "./_generated/dataModel";
 import { brandIdValidator, requireBrandAccess, requireUserId, audit } from "./campaignAccess";
 import { resolveVisualProfileForPost, resolveVisualProfileFromPin } from "./visualProfiles";
 import { assertVisualAdmissionEnabled } from "./visualRollout";
+import { validateTextQuote } from "./visualTextConfig";
+import { validateLiveImageQuote } from "./visualProviderConfig";
 import { publicationTransitionRequired } from "../lib/publicationReview";
 import { hashVisualBytes } from "../lib/visualProfile";
 import { articleSignature, stableInputSignature, validateScenePlan, composeScenePrompt, relevanceSignature, serializedUtf8Bytes, assertSerializedBound, canIssueLocalFixtureQuote, isOfflineContractRuntime } from "../lib/visualWorkflow";
-import { attemptInputValidator, sceneValidator, exportMetadataValidator, publicationVisualsValidator, visualVersionDocValidator, visualAttemptDocValidator, visualPlanDocValidator, visualStateDocValidator, visualReflectionDocValidator, visualBudgetDocValidator, visualBudgetMonthDocValidator } from "./visualWorkflowTables";
+import { attemptInputValidator, sceneValidator, exportMetadataValidator, publicationVisualsValidator, visualVersionDocValidator, visualAttemptDocValidator, visualPlanDocValidator, visualStateDocValidator, visualReflectionDocValidator, visualBudgetDocValidator, visualBudgetMonthDocValidator, visualStageValidator } from "./visualWorkflowTables";
 
 type Input = Doc<"v2VisualAttempts">["input"];
 type Stage = Doc<"v2VisualAttempts">["stage"];
@@ -160,12 +162,29 @@ export const registerLocalFixtureQuote = internalMutation({
 async function qualifiedQuote(ctx: QueryCtx | MutationCtx, attempt: Doc<"v2VisualAttempts">, quoteId: Id<"v2VisualDispatchQuotes">) {
   const quote = await ctx.db.get(quoteId);
   if (!quote || quote.attemptId !== attempt._id || quote.inputSignature !== attempt.inputSignature || quote.stage !== attempt.stage || !quote.boundVerified) throw new Error("Quote does not bind the exact stored attempt");
-  // The capability ledger has no qualified live image or text route with a reliable maximum.
+  if (["live-receipt", "qualification-probe"].includes(quote.qualification)) {
+    if (quote.textRouteId && quote.imageRouteId) throw new Error("Dispatch quote cannot bind multiple route authorities");
+    if (quote.textRouteId) { if (quote.qualification !== "live-receipt") throw new Error("Text probe authority is not configured"); await validateTextQuote(ctx, attempt, quote); }
+    else await validateLiveImageQuote(ctx, attempt, quote);
+    micros(quote.maximumMicros); return quote;
+  }
+  // Offline qualifications never confer live authority.
   const fixture = quote.qualification === "offline-fixture" && canIssueLocalFixtureQuote(process.env, attempt.userId, quote);
   const contract = quote.qualification === "offline-contract" && isOfflineContractRuntime(process.env);
   if (!fixture && !contract) throw new Error("No qualified live route and verified cost bound");
   micros(quote.maximumMicros);
   return quote;
+}
+
+const providerCapMicros = 5_000_000;
+async function providerAllowance(ctx: QueryCtx | MutationCtx, provider: string) {
+  return ctx.db.query("v2VisualProviderAllowances").withIndex("by_provider", q => q.eq("provider", provider)).unique();
+}
+async function settleProviderAllowance(ctx: MutationCtx, attempt: Doc<"v2VisualAttempts">, actualMicros: number) {
+  if (!attempt.providerAllowanceReserved) return;
+  const ledger = await providerAllowance(ctx, attempt.quotedProvider!);
+  if (!ledger || ledger.reservedMicros < attempt.reservedMicros!) throw new Error("Provider allowance ledger is inconsistent");
+  await ctx.db.patch(ledger._id, { reservedMicros: ledger.reservedMicros - attempt.reservedMicros!, spentMicros: ledger.spentMicros + actualMicros, updatedAt: Date.now() });
 }
 
 /** Authoritative admission reads immutable evidence; caller costs or provenance are never accepted. */
@@ -226,10 +245,16 @@ export const reserveAttempt = internalMutation({
       await ctx.db.patch(attempt._id, { pauseReason: "monthly-budget-exhausted", updatedAt: Date.now() });
       return { admitted: false, reason: "monthly-budget-exhausted" };
     }
+    const providerLedger = quote.imageRouteId ? await providerAllowance(ctx, quote.provider) : null;
+    if (quote.imageRouteId && (providerLedger?.reservedMicros ?? 0) + (providerLedger?.spentMicros ?? 0) + quote.maximumMicros > providerCapMicros) return { admitted: false, reason: "cumulative-provider-allowance-exhausted" };
     const now = Date.now();
+    if (quote.imageRouteId) {
+      if (providerLedger) await ctx.db.patch(providerLedger._id, { reservedMicros: providerLedger.reservedMicros + quote.maximumMicros, updatedAt: now });
+      else await ctx.db.insert("v2VisualProviderAllowances", { provider: quote.provider, reservedMicros: quote.maximumMicros, spentMicros: 0, updatedAt: now });
+    }
     if (usage) await ctx.db.patch(usage._id, { reservedMicros: usage.reservedMicros + quote.maximumMicros, updatedAt: now });
     else await ctx.db.insert("v2VisualBudgetMonths", { brandId: attempt.brandId, month, reservedMicros: quote.maximumMicros, spentMicros: 0, updatedAt: now });
-    await ctx.db.patch(attempt._id, { quoteId: quote._id, reservedMicros: quote.maximumMicros, reservationMonth: month, quotedProvider: quote.provider, quotedModel: quote.model, quoteProvenance: quote.provenance, pauseReason: undefined, updatedAt: now });
+    await ctx.db.patch(attempt._id, { ...(quote.imageRouteId ? { providerAllowanceReserved: true } : {}), quoteId: quote._id, reservedMicros: quote.maximumMicros, reservationMonth: month, quotedProvider: quote.provider, quotedModel: quote.model, quoteProvenance: quote.provenance, pauseReason: undefined, updatedAt: now });
     return { admitted: true, reason: null };
   },
 });
@@ -250,14 +275,15 @@ async function cancelBeforeDispatch(ctx: MutationCtx, attempt: Doc<"v2VisualAtte
     if (!month || month.reservedMicros < attempt.reservedMicros) throw new Error("Reservation ledger is inconsistent");
     await ctx.db.patch(month._id, { reservedMicros: month.reservedMicros - attempt.reservedMicros, updatedAt: Date.now() });
   }
+  await settleProviderAllowance(ctx, attempt, 0);
   await ctx.db.patch(attempt._id, { status: "failed", error: reason, pauseReason: undefined, updatedAt: Date.now() });
   const state = await visualState(ctx, attempt.postId);
   if (state?.activeImageAttemptId === attempt._id) await ctx.db.patch(state._id, { activeImageAttemptId: undefined, updatedAt: Date.now() });
 }
 
 export const claimAttempt = internalMutation({
-  args: { attemptId: v.id("v2VisualAttempts") },
-  returns: v.union(v.null(), v.object({ attemptId: v.id("v2VisualAttempts"), claimKey: v.string(), input: attemptInputValidator, provider: v.string(), model: v.string(), maximumMicros: v.number(), reflectionContext: v.optional(v.string()) })),
+  args: { attemptId: v.id("v2VisualAttempts"), expectedRequestSha256: v.optional(v.string()) },
+  returns: v.union(v.null(), v.object({ requestSha256: v.optional(v.string()), attemptId: v.id("v2VisualAttempts"), claimKey: v.string(), input: attemptInputValidator, provider: v.string(), model: v.string(), maximumMicros: v.number(), reflectionContext: v.optional(v.string()) })),
   handler: async (ctx, args) => {
     const attempt = await ctx.db.get(args.attemptId);
     if (!attempt || attempt.status !== "queued" || attempt.reservedMicros === undefined || attempt.claimKey || !attempt.quotedProvider || !attempt.quotedModel) return null;
@@ -275,7 +301,8 @@ export const claimAttempt = internalMutation({
     if (attempt.stage === "reflection" && !reflectionContext) { await cancelBeforeDispatch(ctx, attempt, "Reflection lineage context is unavailable or unverified"); return null; }
     if (!attempt.quoteId) { await cancelBeforeDispatch(ctx, attempt, "Previously reserved quote is unavailable"); return null; }
     try {
-      await qualifiedQuote(ctx, attempt, attempt.quoteId);
+      const quote = await qualifiedQuote(ctx, attempt, attempt.quoteId);
+      if (args.expectedRequestSha256 !== undefined && quote.requestSha256 !== args.expectedRequestSha256) throw new Error("Prepared request differs from trusted quote");
       await validatePinnedInput(ctx, attempt);
       const post = await ownedPost(ctx, attempt.userId, attempt.postId, true, false);
       if (attempt.stage !== "reflection" && articleSignature(post) !== attempt.input.article.signature) throw new Error("Article changed before dispatch; request a new attempt");
@@ -290,7 +317,7 @@ export const claimAttempt = internalMutation({
     const now = Date.now();
     const claimKey = `${attempt._id}:${now}`;
     await ctx.db.patch(attempt._id, { status: "running", claimKey, dispatchedAt: now, updatedAt: now });
-    return { attemptId: attempt._id, claimKey, input: attempt.input, provider: attempt.quotedProvider, model: attempt.quotedModel, maximumMicros: attempt.reservedMicros, ...(reflectionContext ? { reflectionContext: reflectionContext.context } : {}) };
+    return { ...(args.expectedRequestSha256 ? { requestSha256: args.expectedRequestSha256 } : {}), attemptId: attempt._id, claimKey, input: attempt.input, provider: attempt.quotedProvider, model: attempt.quotedModel, maximumMicros: attempt.reservedMicros, ...(reflectionContext ? { reflectionContext: reflectionContext.context } : {}) };
   },
 });
 
@@ -301,11 +328,12 @@ async function claimedAttempt(ctx: MutationCtx, attemptId: Id<"v2VisualAttempts"
 }
 
 export const markUncertain = internalMutation({
-  args: { attemptId: v.id("v2VisualAttempts"), claimKey: v.string(), reason: v.string() }, returns: v.null(),
+  args: { attemptId: v.id("v2VisualAttempts"), claimKey: v.string(), reason: v.string(), usageReceipt: v.optional(v.string()), outputStorageId: v.optional(v.id("_storage")) }, returns: v.null(),
   handler: async (ctx, args) => {
     const attempt = await claimedAttempt(ctx, args.attemptId, args.claimKey);
     assertSerializedBound(args.reason, 4000, "Uncertain outcome reason");
-    await ctx.db.patch(attempt._id, { status: "uncertain", error: args.reason, updatedAt: Date.now() });
+    if (args.usageReceipt) assertSerializedBound(args.usageReceipt, 16_000, "Uncertain provider receipt");
+    await ctx.db.patch(attempt._id, { status: "uncertain", error: args.reason, ...(args.usageReceipt ? { usageReceipt: args.usageReceipt } : {}), ...(args.outputStorageId ? { pendingOutputStorageId: args.outputStorageId } : {}), updatedAt: Date.now() });
     return null;
   },
 });
@@ -344,6 +372,7 @@ async function settleCharge(ctx: MutationCtx, attempt: Doc<"v2VisualAttempts">, 
     if (!budget) throw new Error("Reservation budget is missing");
     await ctx.db.patch(budget._id, { unacknowledgedOverrunMicros: (budget.unacknowledgedOverrunMicros ?? 0) + costOverrunMicros, updatedAt: Date.now() });
   }
+  await settleProviderAllowance(ctx, attempt, usage.actualMicros);
   await ctx.db.patch(attempt._id, { status, ...(costOverrunMicros ? { costOverrunMicros } : {}), ...(usage.usageKind === "reported" ? { reportedActualMicros: usage.actualMicros } : { estimatedActualMicros: usage.actualMicros }), usageReceipt: usage.usageReceipt, completionSignature, updatedAt: Date.now() });
 }
 
@@ -376,6 +405,11 @@ async function settleLateReceipt(ctx: MutationCtx, attempt: Doc<"v2VisualAttempt
   if (!month || !budget || month.spentMicros + delta < 0) throw new Error("Owner reconciliation ledger is inconsistent");
   await ctx.db.patch(month._id, { spentMicros: month.spentMicros + delta, ...(additionalOverrun ? { overrunMicros: (month.overrunMicros ?? 0) + additionalOverrun } : {}), updatedAt: Date.now() });
   if (delta > 0) await ctx.db.patch(budget._id, { unacknowledgedOverrunMicros: (budget.unacknowledgedOverrunMicros ?? 0) + additionalOverrun, unacknowledgedLateChargeMicros: (budget.unacknowledgedLateChargeMicros ?? 0) + Math.max(0, delta - additionalOverrun), updatedAt: Date.now() });
+  if (attempt.providerAllowanceReserved) {
+    const ledger = await providerAllowance(ctx, attempt.quotedProvider!);
+    if (!ledger || ledger.spentMicros + delta < 0) throw new Error("Late provider allowance ledger is inconsistent");
+    await ctx.db.patch(ledger._id, { spentMicros: ledger.spentMicros + delta, updatedAt: Date.now() });
+  }
   const late = { lateCompletionSignature: signature, lateUsageReceipt: usage.usageReceipt, lateActualMicros: usage.actualMicros, lateUsageKind: usage.usageKind, lateUsageDeltaMicros: delta, lateCostOverrunMicros: additionalOverrun, ...(outputStorageId ? { lateOutputStorageId: outputStorageId } : {}), error: "Late trusted receipt reconciled after owner attestation; no selectable output created", updatedAt: Date.now() };
   assertSerializedBound({ ...attempt, ...late }, 750_000, "Serialized late reconciliation");
   await ctx.db.patch(attempt._id, late);
@@ -519,7 +553,7 @@ function assertViewedSelection(post: Doc<"v2Posts">, state: Doc<"v2VisualStates"
 }
 
 export const requestGeneration = mutation({
-  args: { postId: v.id("v2Posts"), operationKey: v.string(), ...viewedSelectionArgs, prompt: v.optional(v.string()), modelOverride: v.optional(v.string()), providerOverride: v.optional(v.string()) },
+  args: { postId: v.id("v2Posts"), operationKey: v.string(), ...viewedSelectionArgs, prompt: v.optional(v.string()), outputFormat: v.optional(v.union(v.literal("png"), v.literal("jpeg"), v.literal("webp"))), inputFidelity: v.optional(v.union(v.literal("low"), v.literal("high"))), quality: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))), modelOverride: v.optional(v.string()), providerOverride: v.optional(v.string()) },
   returns: v.id("v2VisualAttempts"),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -539,7 +573,8 @@ export const requestGeneration = mutation({
     const profile = await resolveVisualProfileForPost(ctx, userId, post._id, { profileRevisionId: revision._id, role: "image_generator", model, provider, sceneTags: sceneTags(scene, plan.input.references.length, plan.input.pins.postExceptionId !== null) });
     if (!profile) throw new Error("Pinned visual profile is unavailable");
     if ((args.prompt?.length ?? 0) > 20_000) throw new Error("Production instructions are too long");
-    const input: Input = { ...plan.input,
+    if (args.inputFidelity && !["gpt-image-1-mini", "gpt-image-1"].includes(model)) throw new Error("Input fidelity requires an explicit GPT Image1 model");
+    const input: Input = { ...plan.input, outputFormat: args.outputFormat ?? plan.input.outputFormat, quality: args.quality ?? "medium", ...(["gpt-image-1-mini", "gpt-image-1"].includes(model) ? { inputFidelity: args.inputFidelity ?? "low" } : {}),
       article: { title: post.title, content: post.content, signature: articleSignature(post) },
       pins: { ...plan.input.pins, lessonIds: profile.lessonIds },
       scene, planId: plan._id, selectionAtQueue: { planId: state.selectedPlanId, sceneIndex: state.selectedSceneIndex, refinedSceneSignature: stableInputSignature(state.refinedScene ?? null) }, selectedVersionIdAtQueue: state.selectedVersionId ?? null, authorProductionInstructions: args.prompt?.trim() ?? "", previousFeedback: [], prompt: composeScenePrompt(scene, args.prompt), provider, model,
@@ -588,7 +623,7 @@ export const requestEdit = mutation({
       if (!lesson.modelScope || lesson.modelScope.model === model && (lesson.modelScope.provider === null || lesson.modelScope.provider === provider)) lessonIds.push(lessonId);
     }
     const history = await editInstructionHistory(ctx, post, parent);
-    const input: Input = { ...parent.input, ...history, article: { title: post.title, content: post.content, signature: articleSignature(post) },
+    const input: Input = { ...parent.input, inputFidelity: ["gpt-image-1-mini", "gpt-image-1"].includes(model) ? parent.input.inputFidelity ?? "low" : undefined, ...history, article: { title: post.title, content: post.content, signature: articleSignature(post) },
       pins: { ...parent.input.pins, lessonIds },
       parentVersionId: parent._id, parentStorageId: parent.storageId, selectionAtQueue: state?.selectedPlanId && state.selectedSceneIndex !== undefined ? { planId: state.selectedPlanId, sceneIndex: state.selectedSceneIndex, refinedSceneSignature: stableInputSignature(state.refinedScene ?? null) } : undefined, selectedVersionIdAtQueue: parent._id, feedback: args.feedback.trim(),
       prompt: "", provider, model,
@@ -714,7 +749,7 @@ function reflectionContext(lineage: Doc<"v2VisualVersions">[], finalPresentation
   return { approvedArticle, originalInput: lineage[0].input, lineage: lineage.map(item => ({ versionId: item._id, parentVersionId: item.parentVersionId, input: item.input, prompt: item.input.prompt, revisedPrompt: item.revisedPrompt ?? null, feedback: item.feedback, provider: item.provider, model: item.model, storageId: item.storageId, sha256: item.sha256 })), finalPresentation };
 }
 
-async function verifiedReflectionContext(ctx: QueryCtx | MutationCtx, attempt: Doc<"v2VisualAttempts">) {
+export async function verifiedReflectionContext(ctx: QueryCtx | MutationCtx, attempt: Doc<"v2VisualAttempts">) {
   const reflection = await ctx.db.query("v2VisualReflections").withIndex("by_attempt", q => q.eq("attemptId", attempt._id)).unique();
   if (!reflection || reflection.deferredReason || reflection.lineageComplete !== true || !reflection.originalVersionId || !reflection.contextBytes || !reflection.approvedAlt || reflection.lineageVersionIds.length < 2 || reflection.lineageVersionIds.length > 64) return null;
   if (!await reflectionCurrent(ctx, attempt)) return null;
@@ -800,7 +835,10 @@ async function queueReflection(ctx: MutationCtx, post: Doc<"v2Posts">, version: 
   }
   const attemptId = await queueAttempt(ctx, post, "reflection", `reflection:${version._id}:${version.exportStorageId}:${previous[0]?._id ?? "first"}`, input, deferredReason ?? "reflection-route-unqualified");
   const existing = await ctx.db.query("v2VisualReflections").withIndex("by_attempt", q => q.eq("attemptId", attemptId)).unique();
-  if (!existing) await ctx.db.insert("v2VisualReflections", { userId: post.userId, brandId: post.brandId, postId: post._id, versionId: version._id, attemptId, approvalSignature, approvedExportStorageId: version.exportStorageId!, approvedExportHash: version.exportHash!, approvedAlt: version.approvedAlt!, approvedArticleSignature: reviewedArticleSignature, approvedExportMetadataSignature: stableInputSignature(version.exportMetadata), lineageVersionIds: lineage.map(item => item._id), ...(!deferredReason || ["reflection-context-too-large", "reflection-input-too-large"].includes(deferredReason) ? { originalVersionId: original._id } : {}), lineageComplete: !cursor && (!deferredReason || ["reflection-context-too-large", "reflection-input-too-large"].includes(deferredReason)), ...(cursor && ["reflection-lineage-read-limit", "reflection-lineage-too-long"].includes(deferredReason ?? "") ? { lineageResumeVersionId: cursor._id } : {}), contextBytes, ...(deferredReason ? { deferredReason } : {}), validationStatus: "untested", lessonIds: [], profileChangeProposals: [], createdAt: Date.now() });
+  if (!existing) {
+    await ctx.db.insert("v2VisualReflections", { userId: post.userId, brandId: post.brandId, postId: post._id, versionId: version._id, attemptId, approvalSignature, approvedExportStorageId: version.exportStorageId!, approvedExportHash: version.exportHash!, approvedAlt: version.approvedAlt!, approvedArticleSignature: reviewedArticleSignature, approvedExportMetadataSignature: stableInputSignature(version.exportMetadata), lineageVersionIds: lineage.map(item => item._id), ...(!deferredReason || ["reflection-context-too-large", "reflection-input-too-large"].includes(deferredReason) ? { originalVersionId: original._id } : {}), lineageComplete: !cursor && (!deferredReason || ["reflection-context-too-large", "reflection-input-too-large"].includes(deferredReason)), ...(cursor && ["reflection-lineage-read-limit", "reflection-lineage-too-long"].includes(deferredReason ?? "") ? { lineageResumeVersionId: cursor._id } : {}), contextBytes, ...(deferredReason ? { deferredReason } : {}), validationStatus: "untested", lessonIds: [], profileChangeProposals: [], createdAt: Date.now() });
+    if (!deferredReason) await ctx.scheduler.runAfter(0, internal.visualTextActions.executeQueuedReflection, { attemptId, userId: post.userId });
+  }
 }
 
 export const getReflectionContext = internalQuery({
@@ -1030,5 +1068,25 @@ export const get = query({
     }
     const withUrls = await Promise.all(versions.map(version => versionWithUrls(ctx, version)));
     return { articleSignature: articleSignature(post), state, attempts: attempts.map(attempt => { const safe = { ...attempt }; delete safe.claimKey; return safe; }), plans, versions: withUrls, reflections, budget, month };
+  },
+});
+
+/** Shared authenticated immutable dispatch input for image, planning and reflection executors. */
+export const getAttemptForDispatch = internalQuery({
+  args: { userId: v.string(), attemptId: v.id("v2VisualAttempts"), expectedStages: v.array(visualStageValidator), trustedReflectionScheduler: v.optional(v.boolean()) }, returns: visualAttemptDocValidator,
+  handler: async (ctx, args) => {
+    if (!args.trustedReflectionScheduler && await requireUserId(ctx) !== args.userId) throw new Error("Dispatch actor does not match authenticated identity");
+    const attempt = await ctx.db.get(args.attemptId);
+    if (!attempt || attempt.userId !== args.userId) throw new Error("Attempt not found");
+    if (args.trustedReflectionScheduler) {
+      let authenticatedActor: string | null = null;
+      try { authenticatedActor = await requireUserId(ctx); } catch (error) { if (!(error instanceof Error) || error.message !== "Unauthorized") throw error; }
+      if (authenticatedActor !== null || attempt.stage !== "reflection" || args.expectedStages.length !== 1 || args.expectedStages[0] !== "reflection") throw new Error("Trusted scheduler only accepts the exact saved reflection actor and stage");
+    }
+    const post = await ownedPost(ctx, args.userId, attempt.postId);
+    if (!args.expectedStages.includes(attempt.stage)) throw new Error("Attempt stage is not supported by this executor");
+    await validatePinnedInput(ctx, attempt);
+    if (attempt.stage !== "reflection" && articleSignature(post) !== attempt.input.article.signature) throw new Error("Article changed before dispatch; request a new attempt");
+    return attempt;
   },
 });

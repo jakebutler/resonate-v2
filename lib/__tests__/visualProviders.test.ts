@@ -72,7 +72,7 @@ describe("editorial visual provider boundary", () => {
       .toMatchObject({ status: "uncertain", reason: "claim-does-not-match-request", claimId: "offline-claim" });
   });
   it("keeps default routes unqualified, pins the production snapshot and accepts matching JPEG/WebP fixture signatures", async () => {
-    expect(VISUAL_PROVIDER_CAPABILITIES.find(route => route.provider === "openai")?.apiModelId).toBe("gpt-image-2-2026-04-21");
+    expect(VISUAL_PROVIDER_CAPABILITIES.find(route => route.provider === "openai" && route.model === "gpt-image-2")?.apiModelId).toBe("gpt-image-2-2026-04-21");
     expect(selectVisualProviderRoute({ operation: "generate", model: "gpt-image-2", referenceCount: 0, size: "1536x1024", outputFormat: "png", mode: "offline-contract" }).ok).toBe(false);
     for (const [format, bytes] of [["jpeg", [255, 216, 255]], ["webp", [82, 73, 70, 70, 0, 0, 0, 0, 87, 69, 66, 80]]] as const) {
       const request = await prepareVisualProviderRequest({ attemptId: "formats", lineageKey: "post-1/scene-1", operation: "generate", mode: "offline-contract", prompt: "Read the bend.", revisions: pins,
@@ -352,7 +352,9 @@ describe("editorial visual provider boundary", () => {
   it("prices observed text, image input and image output using separate provider rates", async () => {
     const usage = { textInputTokens: 10, imageInputTokens: 20, imageOutputTokens: 40 };
     expect(calculateVisualUsageCost("digitalocean", usage)).toBeCloseTo(0.00141, 10);
-    expect(calculateVisualUsageCost("openai", usage)).toBeCloseTo(0.000705, 10);
+    expect(calculateVisualUsageCost("openai", usage)).toBeCloseTo(0.00141, 10);
+    expect(calculateVisualUsageCost("openai", usage, "gpt-image-1-mini")).toBeCloseTo(0.00039, 10);
+    expect(calculateVisualUsageCost("openai", usage, "gpt-image-1")).toBeCloseTo(0.00185, 10);
     expect(calculateVisualUsageCost("openai", { ...usage, imageInputTokens: -1 })).toBeNull();
   });
   it("does not infer a DO reference wire contract from an asserted capability flag", async () => {

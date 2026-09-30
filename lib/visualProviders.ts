@@ -1,7 +1,7 @@
 export type VisualProviderId = "digitalocean" | "openai";
 export type VisualOperation = "generate" | "edit";
 export type VisualOutputFormat = "png" | "jpeg" | "webp";
-export type VisualProviderMode = "live" | "offline-contract";
+export type VisualProviderMode = "live" | "offline-contract" | "qualification-probe";
 export const MAX_VISUAL_IMAGE_BYTES = 20 * 1024 * 1024;
 
 function hasImageSignature(bytes: Uint8Array, mimeType: string): boolean {
@@ -21,7 +21,7 @@ export type VisualRouteCapability = {
   /** Canonical model identity; separate from the provider's API name. */
   model: string;
   apiModelId: string;
-  qualification: "unverified" | "live-receipt" | "speculative-fixture";
+  qualification: "unverified" | "live-receipt" | "speculative-fixture" | "authorized-probe";
   receiptIds: readonly string[];
   operations: readonly VisualOperation[];
   referenceInputs: boolean;
@@ -30,6 +30,8 @@ export type VisualRouteCapability = {
   outputFormats: readonly VisualOutputFormat[];
 };
 export const VISUAL_PROVIDER_CAPABILITIES: readonly VisualRouteCapability[] = [
+  { provider: "openai", model: "gpt-image-1", apiModelId: "gpt-image-1", qualification: "unverified", receiptIds: [], operations: ["generate", "edit"], referenceInputs: true, maxInputImages: 16, sizes: ["1024x1024", "1536x1024", "1024x1536"], outputFormats: ["png", "jpeg", "webp"] },
+  { provider: "openai", model: "gpt-image-1-mini", apiModelId: "gpt-image-1-mini", qualification: "unverified", receiptIds: [], operations: ["generate", "edit"], referenceInputs: true, maxInputImages: 16, sizes: ["1024x1024", "1536x1024", "1024x1536"], outputFormats: ["png", "jpeg", "webp"] },
   { provider: "digitalocean", model: "gpt-image-2", apiModelId: "openai-gpt-image-2",
     qualification: "unverified", receiptIds: [], operations: ["generate"],
     referenceInputs: false, maxInputImages: 0, sizes: ["1536x1024", "1024x1536"],
@@ -63,6 +65,7 @@ export function selectVisualProviderRoute(
     candidate.model === request.model &&
     (request.mode === "offline-contract"
       ? candidate.qualification === "speculative-fixture" && candidate.receiptIds.length === 0
+      : request.mode === "qualification-probe" ? candidate.qualification === "authorized-probe" && candidate.receiptIds.length === 0
       : candidate.qualification === "live-receipt" && candidate.receiptIds.length > 0) &&
     candidate.operations.includes(request.operation) &&
     (request.referenceCount === 0 || candidate.referenceInputs) &&
@@ -109,6 +112,7 @@ export type VisualProviderInput = {
   parentImage?: VisualImageInput & { versionId: string; model: string; provider: VisualProviderId };
   size: string;
   quality: "low" | "medium" | "high";
+  inputFidelity?: "low" | "high";
   outputFormat: VisualOutputFormat;
   previousOutcome?: "uncertain";
 };
@@ -130,7 +134,7 @@ export type PreparedVisualProviderRequest = {
     path: "/v1/images/edits" | "/v1/images/generations";
     encoding: "multipart" | "json";
     /** Transport appends images as ordered image[] parts for multipart. */
-    fields: { model: string; prompt: string; n: 1; size: string; quality: string;
+    fields: { model: string; prompt: string; n: 1; size: string; quality: string; input_fidelity?: "low" | "high";
       output_format: VisualOutputFormat; background: "opaque"; stream: false };
   };
 };
@@ -164,6 +168,7 @@ export async function prepareVisualProviderRequest(
   input = { ...input, revisions: { ...input.revisions, lessonRevisions: [...input.revisions.lessonRevisions] },
     references: input.references.map(image => ({ ...image })),
     ...(input.parentImage ? { parentImage: { ...input.parentImage } } : {}) };
+  if (input.prompt.length > 32_000) throw new Error("Image prompt exceeds documented character limit");
   if (input.operation !== "generate" && input.operation !== "edit") throw new Error("Invalid visual operation");
   if (!input.attemptId?.trim() || !input.lineageKey?.trim() || !input.prompt?.trim()) throw new Error("Attempt, lineage and prompt are required");
   if (input.model && input.modelOverride && input.model !== input.modelOverride) throw new Error("Conflicting model and modelOverride");
@@ -202,10 +207,11 @@ export async function prepareVisualProviderRequest(
   if (selection.route.provider === "digitalocean" && (images.length > 0 || input.operation === "edit")) {
     throw new Error("DigitalOcean reference/edit request contract is not established");
   }
+  if (input.inputFidelity && !["gpt-image-1-mini", "gpt-image-1"].includes(selection.route.model)) throw new Error("Input fidelity is only configured for explicit GPT Image1 routes");
   const request: PreparedVisualProviderRequest["request"] = {
     path: images.length ? "/v1/images/edits" : "/v1/images/generations",
     encoding: images.length ? "multipart" : "json", fields: {
-      model: selection.route.apiModelId, prompt: input.prompt, n: 1, size: input.size,
+      ...(input.inputFidelity ? { input_fidelity: input.inputFidelity } : {}), model: selection.route.apiModelId, prompt: input.prompt, n: 1, size: input.size,
       quality: input.quality, output_format: input.outputFormat, background: "opaque", stream: false,
     },
   };
@@ -229,6 +235,8 @@ export type VisualDispatchClaim = {
   /** Read from the separately persisted trusted claim, never copied from an untrusted request at interpretation. */
   requestSha256: string;
   maximumUsd: number;
+  /** Trusted durable quote/claim bridge verified this bound before dispatch. */
+  boundVerified?: boolean;
   mode: VisualProviderMode;
 };
 export type VisualProviderTransportResponse = { status: number; requestId?: string; body: unknown };
@@ -236,12 +244,13 @@ export type VisualTokenUsage = { textInputTokens: number; imageInputTokens: numb
 /** Verified 2026-09-30 from each provider's pricing page; no cached discount assumed. */
 export const VISUAL_TOKEN_RATES_USD_PER_MILLION = {
   digitalocean: { textInputTokens: 5, imageInputTokens: 8, imageOutputTokens: 30 },
-  openai: { textInputTokens: 2.5, imageInputTokens: 4, imageOutputTokens: 15 },
+  openai: { textInputTokens: 5, imageInputTokens: 8, imageOutputTokens: 30 },
 } as const;
 /** Usage-derived estimate, not an invoice receipt or a pre-dispatch maximum. */
-export function calculateVisualUsageCost(provider: VisualProviderId, usage: VisualTokenUsage): number | null {
+export function calculateVisualUsageCost(provider: VisualProviderId, usage: VisualTokenUsage, model = "gpt-image-2"): number | null {
   if (!Object.values(usage).every((value) => Number.isSafeInteger(value) && value >= 0)) return null;
-  const rates = VISUAL_TOKEN_RATES_USD_PER_MILLION[provider];
+  if (!["gpt-image-2", "gpt-image-1-mini", "gpt-image-1"].includes(model) || model !== "gpt-image-2" && provider !== "openai") return null;
+  const rates = model === "gpt-image-1-mini" ? { textInputTokens: 2, imageInputTokens: 2.5, imageOutputTokens: 8 } : model === "gpt-image-1" ? { textInputTokens: 5, imageInputTokens: 10, imageOutputTokens: 40 } : VISUAL_TOKEN_RATES_USD_PER_MILLION[provider];
   return (usage.textInputTokens * rates.textInputTokens + usage.imageInputTokens * rates.imageInputTokens +
     usage.imageOutputTokens * rates.imageOutputTokens) / 1_000_000;
 }
@@ -254,11 +263,11 @@ export type VisualProviderReceipt = {
   attemptId: string; claimId: string; maximumUsd: number; lineageKey: string;
   promptSha256: string; inputImages: { id: string; storageId: string; role: VisualImageInput["role"]; sha256: string }[];
   parentVersionId?: string; outputSha256: string[]; reportedModel?: string;
-  qualifiesRoute: false; evidence: "speculative-fixture" | "unqualified-response";
+  qualifiesRoute: false; evidence: "speculative-fixture" | "unqualified-response" | "authorized-probe";
   operation: VisualOperation; mode: VisualProviderMode; canonicalModel: string; revisions: VisualPinnedRevisions;
   feedbackSha256?: string; requestSha256: string; parentModel?: string;
   modelOverride: string | null; modelOverrideChangedParent: boolean;
-  settings: { n: 1; size: string; quality: string; outputFormat: VisualOutputFormat; background: "opaque"; stream: false };
+  settings: { n: 1; size: string; quality: string; inputFidelity?: "low" | "high"; outputFormat: VisualOutputFormat; background: "opaque"; stream: false };
   requestId?: string; usage: VisualTokenUsage | null;
 };
 export type VisualProviderResult =
@@ -320,7 +329,7 @@ export async function interpretVisualProviderResponse(
   } catch {
     return { status: "uncertain", reason: "request-provenance-invalid", claimId: claim.claimId };
   }
-  if (request.mode !== "offline-contract" && quoteVisualProviderCost(request.route).maximumUsd === null) {
+  if (request.mode !== "offline-contract" && (!claim.boundVerified || claim.maximumUsd <= 0 || (request.mode === "qualification-probe" ? request.route.qualification !== "authorized-probe" || request.route.receiptIds.length !== 0 : request.route.qualification !== "live-receipt" || !request.route.receiptIds.length))) {
     return { status: "uncertain", reason: "reliable-cost-bound-required", claimId: claim.claimId };
   }
   try {
@@ -328,7 +337,7 @@ export async function interpretVisualProviderResponse(
     if (!validRevisionPins(request.revisions) || request.prompt !== request.request.fields.prompt || !request.attemptId?.trim() || !request.lineageKey?.trim() ||
       fields.model !== request.route.apiModelId || fields.n !== 1 || !request.route.sizes.includes(fields.size) ||
       !request.route.outputFormats.includes(fields.output_format) || !["low", "medium", "high"].includes(fields.quality) ||
-      fields.background !== "opaque" || fields.stream !== false ||
+      fields.background !== "opaque" || fields.stream !== false || (fields.input_fidelity !== undefined && (!["gpt-image-1-mini", "gpt-image-1"].includes(request.route.model) || !["low", "high"].includes(fields.input_fidelity))) ||
       request.request.path !== (request.images.length ? "/v1/images/edits" : "/v1/images/generations") ||
       request.request.encoding !== (request.images.length ? "multipart" : "json") ||
       !request.route.operations.includes(request.operation) || request.images.length > request.route.maxInputImages ||
@@ -370,12 +379,12 @@ export async function interpretVisualProviderResponse(
     ...(request.feedback ? { feedbackSha256: await hashBytes(new TextEncoder().encode(request.feedback)) } : {}),
     requestSha256: request.requestSha256, ...(request.parentModel ? { parentModel: request.parentModel } : {}),
     modelOverride: request.modelOverride, modelOverrideChangedParent: Boolean(request.parentModel && request.modelOverride && request.parentModel !== request.modelOverride),
-    settings: { n: request.request.fields.n, size: request.request.fields.size, quality: request.request.fields.quality,
+    settings: { ...(request.request.fields.input_fidelity ? { inputFidelity: request.request.fields.input_fidelity } : {}), n: request.request.fields.n, size: request.request.fields.size, quality: request.request.fields.quality,
       outputFormat: request.request.fields.output_format, background: request.request.fields.background, stream: request.request.fields.stream },
     promptSha256: await hashBytes(new TextEncoder().encode(request.prompt)),
     inputImages: request.images.map(({ id, storageId, role, sha256 }) => ({ id, storageId, role, sha256 })),
     ...(request.parentVersionId ? { parentVersionId: request.parentVersionId } : {}), outputSha256: [], qualifiesRoute: false,
-    evidence: request.mode === "offline-contract" ? "speculative-fixture" : "unqualified-response",
+    evidence: request.mode === "offline-contract" ? "speculative-fixture" : request.mode === "qualification-probe" ? "authorized-probe" : "unqualified-response",
     ...(typeof body.model === "string" && /^[a-z0-9][a-z0-9._:-]{0,119}$/.test(body.model) && !containsOpaqueMaterial(body.model) ? { reportedModel: body.model } : {}),
     imageCount: data.length, usage,
     ...(typeof response.requestId === "string" && /^req_[A-Za-z0-9_-]{1,100}$/.test(response.requestId) ? { requestId: response.requestId } : {}),

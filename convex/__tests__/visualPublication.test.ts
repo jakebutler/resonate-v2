@@ -87,6 +87,13 @@ describe("server-owned visual publication", () => {
     expect(transport.create).not.toHaveBeenCalled();
     expect(records).toEqual([]);
   });
+  it("rejects an operator qualification probe even after human image approval", async () => {
+    const { user, snapshot, records } = await harness();
+    Object.assign(snapshot.visuals!.hero, { provider: "openai", model: "gpt-image-1-mini", quoteProvenance: "Reviewed operator qualification packet", qualification: "qualification-probe" });
+    await expect(user.action(anyApi.visualPublication.createPr, { postId: snapshot.post._id })).rejects.toThrow("Qualification probe images cannot be published");
+    expect(transport.create).not.toHaveBeenCalled();
+    expect(records).toEqual([]);
+  });
 
   it("publishes exactly one trusted saved snapshot and passes its complete hero and figure proofs to mocked transport", async () => {
     const { user, snapshot, bytes, records, reads } = await harness();

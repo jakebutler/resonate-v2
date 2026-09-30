@@ -4,6 +4,7 @@ import { visualWorkflowTables } from "./visualWorkflowTables";
 import { visualProfileTables } from "./visualProfileTables";
 import { visualFigureTables } from "./visualFigureTables";
 import { visualStorageTables } from "./visualStorageTables";
+import { visualTextTables } from "./visualTextTables";
 
 const v2BrandId = v.union(
   v.literal("personal"),
@@ -186,6 +187,7 @@ export default defineSchema({
   ...visualProfileTables,
   ...visualFigureTables,
   ...visualStorageTables,
+  ...visualTextTables,
   v2Brands: defineTable({
     brandId: v2BrandId,
     name: v.string(),

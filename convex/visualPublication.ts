@@ -28,6 +28,7 @@ export const createPr = action({
     const { post, intent } = snapshot;
     const hero = snapshot.visuals?.hero;
     if (!hero) throw new Error("Approve a prepared hero before creating a visual publication PR");
+    if (hero.qualification === "qualification-probe") throw new Error("Qualification probe images cannot be published");
     const blob = await ctx.storage.get(hero.storageId);
     if (!blob) throw new Error("Approved hero bytes are missing");
     if (blob.size >= 150_000) throw new Error("Approved hero must be below 150 KB");

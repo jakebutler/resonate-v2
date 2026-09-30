@@ -1,0 +1,80 @@
+import { v } from "convex/values";
+import { internalMutation, internalQuery, query, type QueryCtx, type MutationCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import { textRouteFields, textRouteDocValidator } from "./visualTextTables";
+import { prepareTextRequest, textMaximumMicros, visualTextCredential } from "../lib/visualTextRuntime";
+import { verifiedReflectionContext } from "./visualWorkflow";
+import { requireUserId, requireBrandAccess } from "./campaignAccess";
+import { publicationTransitionRequired } from "../lib/publicationReview";
+import { assertVisualAdmissionEnabled } from "./visualRollout";
+
+/** Trusted server evidence ingestion only. Absent records are unqualified; no client-supplied price or key grants admission. */
+export const registerReviewedTextRoute = internalMutation({
+  args: textRouteFields, returns: v.id("v2VisualTextRoutes"),
+  handler: async (ctx, args) => {
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$/.test(args.model) || !args.stages.length || new Set(args.stages).size !== args.stages.length) throw new Error("Reviewed explicit text model/stages required");
+    for (const amount of [args.maxInputBytes, args.maxInputTokens, args.maxMessageOverheadTokens, args.contextWindowTokens, args.maxOutputTokens, args.inputPriceMicrosPerMillion, args.outputPriceMicrosPerMillion]) if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error("Reviewed positive integer text bounds/prices required");
+    if (args.maxInputBytes > 220_000 || args.maxInputTokens > 1_000_000 || args.maxOutputTokens > 20_000 || args.maxInputTokens < args.maxInputBytes + args.maxMessageOverheadTokens || args.contextWindowTokens < args.maxInputTokens + args.maxOutputTokens || !Number.isSafeInteger(args.expiresAt) || args.expiresAt <= Date.now()) throw new Error("Invalid or expired text tokenizer/context bounds");
+    if (!args.capabilityReceiptIds.length || args.capabilityReceiptIds.length > 16 || [...args.capabilityReceiptIds, args.tokenBoundReceiptId, args.priceReceiptId].some(id => !/^[a-zA-Z0-9._:-]{1,160}$/.test(id)) || !args.reviewedBy.trim() || args.reviewedBy.length > 200 || !args.provenance.trim() || args.provenance.length > 1000) throw new Error("Trusted capability, UTF-8 token upper bound and price evidence required");
+    return ctx.db.insert("v2VisualTextRoutes", { ...args, maximumMicros: textMaximumMicros(args), enabled: true, createdAt: Date.now() });
+  },
+});
+
+async function routesForStage(ctx: QueryCtx | MutationCtx, stage: "planning" | "reflection") {
+  const routes: Doc<"v2VisualTextRoutes">[] = [];
+  for (const provider of ["openai", "cortex"] as const) {
+    const rows = await ctx.db.query("v2VisualTextRoutes").withIndex("by_provider", q => q.eq("provider", provider)).order("desc").take(21);
+    if (rows.length > 20) throw new Error("Text route history exceeds bounded lookup; archive inactive routes");
+    routes.push(...rows.filter(route => route.enabled && route.expiresAt > Date.now() && route.stages.includes(stage)));
+  }
+  return routes;
+}
+export const getReviewedTextRoutes = internalQuery({
+  args: { stage: v.union(v.literal("planning"), v.literal("reflection")) }, returns: v.array(textRouteDocValidator),
+  handler: (ctx, args) => routesForStage(ctx, args.stage),
+});
+
+async function preparedForAttempt(ctx: QueryCtx | MutationCtx, attempt: Doc<"v2VisualAttempts">, route: Doc<"v2VisualTextRoutes">) {
+  if (!route.enabled || route.expiresAt <= Date.now() || !["planning", "reflection"].includes(attempt.stage) || !route.stages.includes(attempt.stage as "planning" | "reflection") || route.maximumMicros !== textMaximumMicros(route)) throw new Error("Text route does not bind stored attempt");
+  const reflection = attempt.stage === "reflection" ? await verifiedReflectionContext(ctx, attempt) : null;
+  return prepareTextRequest({ ...attempt, stage: attempt.stage as "planning" | "reflection" }, route, reflection?.context);
+}
+export async function validateTextQuote(ctx: QueryCtx | MutationCtx, attempt: Doc<"v2VisualAttempts">, quote: Doc<"v2VisualDispatchQuotes">) {
+  const route = quote.textRouteId ? await ctx.db.get(quote.textRouteId) : null;
+  if (!route || quote.imageRouteId || quote.qualification !== "live-receipt" || quote.provider !== route.provider || quote.model !== route.model || quote.maximumMicros !== route.maximumMicros || quote.provenance !== route.provenance || JSON.stringify(quote.capabilityReceiptIds) !== JSON.stringify(route.capabilityReceiptIds)) throw new Error("No qualified text route and verified cost bound");
+  const prepared = await preparedForAttempt(ctx, attempt, route);
+  if (quote.requestSha256 !== prepared.requestSha256) throw new Error("Text quote differs from exact pinned request");
+}
+export const registerTextDispatchQuote = internalMutation({
+  args: { attemptId: v.id("v2VisualAttempts"), routeId: v.id("v2VisualTextRoutes"), requestSha256: v.string(), userId: v.string(), trustedReflectionScheduler: v.optional(v.boolean()) }, returns: v.id("v2VisualDispatchQuotes"),
+  handler: async (ctx, args) => {
+    const attempt = await ctx.db.get(args.attemptId), route = await ctx.db.get(args.routeId);
+    let authenticatedUserId: string | null = null;
+    try { authenticatedUserId = await requireUserId(ctx); } catch (error) { if (!(error instanceof Error) || error.message !== "Unauthorized") throw error; }
+    const userId = args.trustedReflectionScheduler && !authenticatedUserId && attempt?.stage === "reflection" ? args.userId : authenticatedUserId;
+    if (!userId) throw new Error("Unauthorized");
+    if (userId !== args.userId || args.trustedReflectionScheduler && attempt?.stage !== "reflection") throw new Error("Text dispatch actor mismatch");
+    if (!attempt || attempt.userId !== userId || attempt.status !== "queued" || !route) throw new Error("Queued owned text attempt required");
+    const member = await requireBrandAccess(ctx, userId, attempt.brandId);
+    if (!["owner", "editor"].includes(member.role)) throw new Error("Brand edit access denied");
+    assertVisualAdmissionEnabled(userId);
+    const prepared = await preparedForAttempt(ctx, attempt, route);
+    if (args.requestSha256 !== prepared.requestSha256) throw new Error("Text request hash differs from trusted preparation");
+    return ctx.db.insert("v2VisualDispatchQuotes", { attemptId: attempt._id, inputSignature: attempt.inputSignature, stage: attempt.stage, provider: route.provider, model: route.model, maximumMicros: route.maximumMicros, qualification: "live-receipt", boundVerified: true, capabilityReceiptIds: route.capabilityReceiptIds, provenance: route.provenance, requestSha256: prepared.requestSha256, textRouteId: route._id, createdAt: Date.now() });
+  },
+});
+
+export const getAvailability = query({
+  args: { postId: v.id("v2Posts") }, returns: v.object({ planning: v.boolean(), reflection: v.boolean(), reason: v.union(v.null(), v.string()) }),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx), post = await ctx.db.get(args.postId);
+    if (!post || post.userId !== userId) throw new Error("Post not found");
+    const member = await requireBrandAccess(ctx, userId, post.brandId);
+    if (!["owner", "editor"].includes(member.role)) throw new Error("Brand edit access denied");
+    if (post.channelId !== "corvo-blog" || publicationTransitionRequired(post)) return { planning: false, reflection: false, reason: "separate-publishing-transition-required" };
+    try { assertVisualAdmissionEnabled(userId); } catch { return { planning: false, reflection: false, reason: "editorial-visual-admissions-paused" }; }
+    const planning = (await routesForStage(ctx, "planning")).some(route => !!visualTextCredential(route.provider));
+    const reflection = (await routesForStage(ctx, "reflection")).some(route => !!visualTextCredential(route.provider));
+    return { planning, reflection, reason: planning || reflection ? null : "no-qualified-text-route-and-credential" };
+  },
+});

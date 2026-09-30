@@ -9,6 +9,10 @@ vi.mock("@/convex/_generated/api", () => ({ api: {
   visualWorkflow: Object.fromEntries(["get", "requestPlan", "selectScene", "requestGeneration", "requestEdit", "selectVersion", "approveHero", "confirmRelevance", "setMonthlyBudget", "cancelQueuedAttempt"].map((name) => [name, `workflow:${name}`])),
   visualProfiles: Object.fromEntries(["getProfile", "saveRevision", "uploadReference", "getSeedStatus", "resolveForPost", "setPostException", "applyCorvoArticle7Exception"].map((name) => [name, `profiles:${name}`])),
   visualExports: { prepareHero: "exports:prepareHero" },
+  visualProviderConfig: { getAvailability: "providers:getAvailability" },
+  visualProviderActions: { executeImageAttempt: "providers:executeImageAttempt" },
+  visualTextConfig: { getAvailability: "text:getAvailability" },
+  visualTextActions: { executeTextAttempt: "text:executeTextAttempt" },
 } }));
 
 const scenes = [
@@ -32,6 +36,8 @@ let workflow: unknown;
 let profile: unknown;
 let seedStatus: unknown;
 let resolvedPost: unknown;
+let routeAvailability: unknown;
+let textAvailability: unknown;
 const calls: Record<string, ReturnType<typeof vi.fn>> = {};
 function fixtureEnvironment() {
   vi.stubEnv("NODE_ENV", "development"); vi.stubEnv("NEXT_PUBLIC_E2E_BYPASS_AUTH", "1");
@@ -43,16 +49,50 @@ describe("EditorialVisualPanel", () => {
   beforeEach(() => {
     fixtureEnvironment();
     vi.clearAllMocks();
+    routeAvailability = { imageRoutes: [], reason: "Qualification pending" };
+    textAvailability = { planning: false, reflection: false, reason: "No approved text route" };
     workflow = emptyWorkflow; profile = profileFixture; resolvedPost = { postExceptionId: null, postException: null }; seedStatus = { imported: false, assets: [{ referenceId: "verified-1" }, { referenceId: null }], oneShotValidation: "not_tested", historicalModelId: null };
-    for (const name of ["requestPlan", "selectScene", "requestGeneration", "requestEdit", "selectVersion", "approveHero", "confirmRelevance", "setMonthlyBudget", "cancelQueuedAttempt", "saveRevision", "uploadReference", "prepareHero", "setPostException", "applyCorvoArticle7Exception"]) {
+    for (const name of ["requestPlan", "selectScene", "requestGeneration", "requestEdit", "selectVersion", "approveHero", "confirmRelevance", "setMonthlyBudget", "cancelQueuedAttempt", "saveRevision", "uploadReference", "prepareHero", "setPostException", "applyCorvoArticle7Exception", "executeImageAttempt", "executeTextAttempt"]) {
       calls[name] = vi.fn().mockResolvedValue(null);
     }
-    vi.mocked(useQuery).mockImplementation(((reference: unknown, args: unknown) => args === "skip" ? undefined : reference === "workflow:get" ? workflow : reference === "profiles:getSeedStatus" ? seedStatus : reference === "profiles:resolveForPost" ? resolvedPost : profile) as never);
+    vi.mocked(useQuery).mockImplementation(((reference: unknown, args: unknown) => args === "skip" ? undefined : reference === "text:getAvailability" ? textAvailability : reference === "providers:getAvailability" ? routeAvailability : reference === "workflow:get" ? workflow : reference === "profiles:getSeedStatus" ? seedStatus : reference === "profiles:resolveForPost" ? resolvedPost : profile) as never);
     vi.mocked(useMutation).mockImplementation(((reference: unknown) => calls[String(reference).split(":")[1]]) as never);
     vi.mocked(useAction).mockImplementation(((reference: unknown) => calls[String(reference).split(":")[1]]) as never);
   });
   afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
+  it("dispatches a saved scene plan through the approved text action without generating an image", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    textAvailability = { planning: true, reflection: false, reason: null };
+    calls.requestPlan.mockResolvedValue("attempt-text-plan");
+    calls.executeTextAttempt.mockResolvedValue({ status: "completed", planId: "planned-scenes", reflectionId: null, reason: null });
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    const plan = screen.getByRole("button", { name: "Plan visuals" });
+    expect(plan).toBeEnabled();
+    fireEvent.click(plan); fireEvent.click(plan);
+    await waitFor(() => expect(calls.executeTextAttempt).toHaveBeenCalledExactlyOnceWith({ attemptId: "attempt-text-plan" }));
+    expect(calls.requestPlan).toHaveBeenCalledTimes(1);
+    expect(calls.requestGeneration).not.toHaveBeenCalled();
+    expect(calls.executeImageAttempt).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Local offline rehearsal only/)).not.toBeInTheDocument();
+  });
 
+  it("dispatches the queued generation through the qualified server route after one explicit click", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0 } };
+    profile = { ...profileFixture, revision: { ...profileFixture.revision, defaultRoute: { provider: "digitalocean", model: "gpt-image-2", qualification: "unqualified" } } };
+    routeAvailability = { imageRoutes: [{ provider: "openai", model: "gpt-image-2", apiModelId: "gpt-image-2-2026-04-21", quality: "low", size: "1536x1024", outputFormat: "webp", generation: true, edit: true }], reason: null };
+    calls.requestGeneration.mockResolvedValue("attempt-real-route");
+    calls.executeImageAttempt.mockResolvedValue({ status: "completed", versionId: "hero-real-route", reason: null });
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    expect(calls.executeImageAttempt).not.toHaveBeenCalled();
+    const generate = screen.getByRole("button", { name: "Generate this concept" });
+    expect(generate).toBeEnabled();
+    fireEvent.click(generate); fireEvent.click(generate);
+    await waitFor(() => expect(calls.executeImageAttempt).toHaveBeenCalledWith({ attemptId: "attempt-real-route" }));
+    expect(calls.requestGeneration).toHaveBeenCalledTimes(1);
+    expect(calls.requestGeneration.mock.calls[0][0]).toMatchObject({ postId: "post-1", providerOverride: "openai", quality: "low", expectedArticleSignature: "article-current", expectedPlanId: "plan-1" });
+    expect(calls.executeImageAttempt).toHaveBeenCalledTimes(1);
+  });
   it("blocks unqualified and missing production routes while keeping saved asset review usable", () => {
     workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0, selectedVersionId: "hero-v2" }, versions: [versionFixture] };
     const variants = [
@@ -74,6 +114,60 @@ describe("EditorialVisualPanel", () => {
       view.unmount();
     }
     for (const name of ["requestPlan", "requestGeneration", "requestEdit"]) expect(calls[name]).not.toHaveBeenCalled();
+  });
+  it("requires an edit route matching the selected parent's saved quality", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0, selectedVersionId: "hero-v2" }, versions: [{ ...versionFixture, provider: "openai", model: "gpt-image-1-mini", input: { ...versionFixture.input, quality: "low" } }] };
+    routeAvailability = { imageRoutes: [{ provider: "openai", model: "gpt-image-1-mini", apiModelId: "gpt-image-1-mini", quality: "high", size: "1536x1024", outputFormat: "webp", generation: true, edit: true }], reason: null };
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    fireEvent.change(screen.getByLabelText("Edit feedback"), { target: { value: "Change only the handle." } });
+    expect(screen.getByRole("button", { name: "Edit selected version" })).toBeDisabled();
+    expect(calls.executeImageAttempt).not.toHaveBeenCalled();
+  });
+  it("pins the reviewed mini input fidelity with its low output quality", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0 } };
+    profile = { ...profileFixture, revision: { ...profileFixture.revision, defaultRoute: { provider: "openai", model: "gpt-image-1-mini", qualification: "unqualified" } } };
+    routeAvailability = { imageRoutes: [{ provider: "openai", model: "gpt-image-1-mini", apiModelId: "gpt-image-1-mini", quality: "low", inputFidelity: "high", size: "1536x1024", outputFormat: "webp", generation: true, edit: true }], reason: null };
+    calls.requestGeneration.mockResolvedValue("attempt-mini-fidelity");
+    calls.executeImageAttempt.mockResolvedValue({ status: "completed", versionId: "mini-result", reason: null });
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    fireEvent.click(screen.getByRole("button", { name: "Generate this concept" }));
+    await waitFor(() => expect(calls.requestGeneration).toHaveBeenCalledTimes(1));
+    expect(calls.requestGeneration.mock.calls[0][0]).toMatchObject({ quality: "low", inputFidelity: "high" });
+  });
+  it.each(["gpt-image-1-mini", "gpt-image-1"])("executes an edit of the selected %s parent without switching to the brand's Image 2 default", async model => {
+    vi.stubEnv("NODE_ENV", "production");
+    workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0, selectedVersionId: "hero-v2" }, versions: [{ ...versionFixture, provider: "openai", model, input: { ...versionFixture.input, quality: "low", inputFidelity: "low" } }] };
+    profile = { ...profileFixture, revision: { ...profileFixture.revision, defaultRoute: { provider: "digitalocean", model: "gpt-image-2", qualification: "unqualified" } } };
+    routeAvailability = { imageRoutes: [{ provider: "openai", model, apiModelId: model, quality: "low", inputFidelity: "low", size: "1536x1024", outputFormat: "webp", generation: true, edit: true }], reason: null };
+    calls.requestEdit.mockResolvedValue("attempt-mini-edit");
+    calls.executeImageAttempt.mockResolvedValue({ status: "completed", versionId: "mini-child", reason: null });
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    fireEvent.change(screen.getByLabelText("Edit feedback"), { target: { value: "Change only the handle." } });
+    const edit = screen.getByRole("button", { name: "Edit selected version" });
+    expect(edit).toBeEnabled();
+    fireEvent.click(edit); fireEvent.click(edit);
+    await waitFor(() => expect(calls.executeImageAttempt).toHaveBeenCalledExactlyOnceWith({ attemptId: "attempt-mini-edit" }));
+    expect(calls.requestEdit).toHaveBeenCalledTimes(1);
+    expect(calls.requestEdit.mock.calls[0][0]).toMatchObject({ expectedParentVersionId: "hero-v2", expectedPlanId: "plan-1", feedback: "Change only the handle." });
+    expect(calls.requestEdit.mock.calls[0][0]).not.toHaveProperty("modelOverride");
+  });
+  it("does not retry a lost generation action response after its attempt was accepted", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0 } };
+    profile = { ...profileFixture, revision: { ...profileFixture.revision, defaultRoute: { provider: "openai", model: "gpt-image-1-mini", qualification: "unqualified" } } };
+    routeAvailability = { imageRoutes: [{ provider: "openai", model: "gpt-image-1-mini", apiModelId: "gpt-image-1-mini", quality: "low", size: "1536x1024", outputFormat: "webp", generation: true, edit: true }], reason: null };
+    calls.requestGeneration.mockResolvedValue("attempt-uncertain");
+    calls.executeImageAttempt.mockRejectedValue(new Error("connection lost"));
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    const generate = screen.getByRole("button", { name: "Generate this concept" });
+    fireEvent.click(generate);
+    await screen.findByRole("alert");
+    expect(generate).toBeDisabled();
+    fireEvent.click(generate);
+    expect(calls.requestGeneration).toHaveBeenCalledTimes(1);
+    expect(calls.executeImageAttempt).toHaveBeenCalledTimes(1);
   });
   it("allows only exact fixture image overrides and keeps real provider selections pending qualification", () => {
     workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0, selectedVersionId: "hero-v2" }, versions: [versionFixture] };

@@ -4633,3 +4633,71 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/editorial-visual-generation
+
+## 09/30/2026 12:32:03 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	components/EditorialVisualPanel.tsx
+- M	components/__tests__/EditorialVisualPanel.test.tsx
+- A	convex/__tests__/visualProviderActions.test.ts
+- M	convex/__tests__/visualPublication.test.ts
+- A	convex/__tests__/visualTextActions.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/schema.ts
+- A	convex/visualProviderActions.ts
+- A	convex/visualProviderConfig.ts
+- M	convex/visualPublication.ts
+- A	convex/visualTextActions.ts
+- A	convex/visualTextConfig.ts
+- A	convex/visualTextTables.ts
+- M	convex/visualWorkflow.ts
+- M	convex/visualWorkflowTables.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- M	docs/editorial-visuals/providers/contracts.md
+- A	docs/editorial-visuals/providers/functional-first-packet.json
+- A	docs/editorial-visuals/providers/gpt-image-1-functional-bound.md
+- A	lib/__tests__/visualProviderRuntime.test.ts
+- M	lib/__tests__/visualProviders.test.ts
+- A	lib/__tests__/visualTextRuntime.test.ts
+- M	lib/github.ts
+- A	lib/visualProviderRuntime.ts
+- M	lib/visualProviders.ts
+- A	lib/visualTextRuntime.ts
+
+### Working Tree Snapshot
+
+- M  components/EditorialVisualPanel.tsx
+- M  components/__tests__/EditorialVisualPanel.test.tsx
+- A  convex/__tests__/visualProviderActions.test.ts
+- M  convex/__tests__/visualPublication.test.ts
+- A  convex/__tests__/visualTextActions.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/schema.ts
+- A  convex/visualProviderActions.ts
+- A  convex/visualProviderConfig.ts
+- M  convex/visualPublication.ts
+- A  convex/visualTextActions.ts
+- A  convex/visualTextConfig.ts
+- A  convex/visualTextTables.ts
+- M  convex/visualWorkflow.ts
+- M  convex/visualWorkflowTables.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/providers/contracts.md
+- A  docs/editorial-visuals/providers/functional-first-packet.json
+- A  docs/editorial-visuals/providers/gpt-image-1-functional-bound.md
+- A  lib/__tests__/visualProviderRuntime.test.ts
+- M  lib/__tests__/visualProviders.test.ts
+- A  lib/__tests__/visualTextRuntime.test.ts
+- M  lib/github.ts
+- A  lib/visualProviderRuntime.ts
+- M  lib/visualProviders.ts
+- A  lib/visualTextRuntime.ts
+
+### Branch
+
+- feat/editorial-visual-generation

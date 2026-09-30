@@ -22,7 +22,7 @@ export interface PublishImageAsset {
     sha256: string;
     fileName: string;
     contentType: "image/webp" | "image/svg+xml";
-    hero?: { provider: string; model: string; quoteProvenance: string; qualification: "offline-fixture" | "offline-contract" | "live-receipt"; approvedBy: string; approvedAt: number };
+    hero?: { provider: string; model: string; quoteProvenance: string; qualification: "offline-fixture" | "offline-contract" | "qualification-probe" | "live-receipt"; approvedBy: string; approvedAt: number };
     figure?: { spec: FigureSpec; rendererVersion: string; dataSignature: string; presentationSignature: string;
       postId: string; postContentSha256: string; postContentFingerprint: string; acceptedBy: string; acceptedAt: number;
       evidenceSources: Array<{ sourceId: string; sha256: string; revision: number; purpose: "article" | "claim-trace" | "data"; currentSourceId: string | null; currentSha256: string; currentRevision: number | null }> };
@@ -415,6 +415,7 @@ export async function prepareBlogPublication(params: BlogPublicationParams, opti
       if (asset.isCover || asset === hero) {
         const provenance = exported.hero;
         if (!provenance?.provider?.trim() || !provenance.model?.trim() || !provenance.quoteProvenance?.trim() || !provenance.approvedBy?.trim() || !Number.isFinite(provenance.approvedAt) || provenance.approvedAt <= 0) throw new BlogPostContractError(["Hero publication requires approved provider and actor provenance."]);
+        if (provenance.qualification === "qualification-probe") throw new BlogPostContractError(["Qualification probe images cannot be published."]);
         if (!options.allowFixture && (provenance.qualification !== "live-receipt" || /^offline-/i.test(provenance.provider) || /^offline-/i.test(provenance.model) || /offline|fixture/i.test(provenance.quoteProvenance) || provenance.approvedBy === "visual-rehearsal-only")) throw new BlogPostContractError(["Offline engineering visuals cannot be published."]);
         const metadata = await sharp(exported.bytes, { limitInputPixels: 40_000_000 }).metadata();
         if (exported.contentType !== "image/webp" || metadata.format !== "webp" || metadata.width !== 1600 || metadata.height !== 900 || (metadata.pages ?? 1) !== 1 || exported.bytes.byteLength >= 150_000) {

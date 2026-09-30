@@ -24,25 +24,39 @@ export const attemptInputValidator = v.object({
   provider: v.union(v.null(), v.string()),
   model: v.union(v.null(), v.string()),
   size: v.string(),
+  quality: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+  inputFidelity: v.optional(v.union(v.literal("low"), v.literal("high"))),
   outputFormat: v.union(v.literal("png"), v.literal("jpeg"), v.literal("webp")),
 });
 export const exportMetadataValidator = v.object({ width: v.number(), height: v.number(), bytes: v.number(), format: v.literal("webp"), crop: v.string() });
 
+export const imageRouteFields = {
+  qualification: v.optional(v.union(v.literal("live-receipt"), v.literal("qualification-probe"))), operatorUserId: v.optional(v.string()), probeAttemptId: v.optional(v.id("v2VisualAttempts")), reviewedPacketId: v.optional(v.string()),
+  provider: v.union(v.literal("digitalocean"), v.literal("openai")), model: v.string(), apiModelId: v.string(),
+  operations: v.array(v.union(v.literal("generate"), v.literal("edit"))), referenceInputs: v.boolean(), maxInputImages: v.number(),
+  size: v.string(), outputFormat: v.union(v.literal("png"), v.literal("jpeg"), v.literal("webp")), quality: v.union(v.literal("low"), v.literal("medium"), v.literal("high")), inputFidelity: v.optional(v.union(v.literal("low"), v.literal("high"))),
+  maximumMicros: v.number(), maxPromptBytes: v.number(), maxInputBytes: v.number(),
+  capabilityReceiptIds: v.array(v.string()), boundReceiptId: v.string(), reviewedBy: v.string(), provenance: v.string(), expiresAt: v.number(),
+};
+
 export const visualWorkflowTables = {
+  v2VisualProviderAllowances: defineTable({ provider: v.string(), reservedMicros: v.number(), spentMicros: v.number(), updatedAt: v.number() }).index("by_provider", ["provider"]),
+  v2VisualImageRoutes: defineTable({ ...imageRouteFields, enabled: v.boolean(), createdAt: v.number() }).index("by_provider_and_model", ["provider", "model"]),
   v2VisualBudgets: defineTable({ brandId: brandIdValidator, limitMicros: v.number(), unacknowledgedOverrunMicros: v.optional(v.number()), unacknowledgedLateChargeMicros: v.optional(v.number()), updatedBy: v.string(), updatedAt: v.number() }).index("by_brand", ["brandId"]),
   v2VisualBudgetMonths: defineTable({ brandId: brandIdValidator, month: v.string(), reservedMicros: v.number(), spentMicros: v.number(), overrunMicros: v.optional(v.number()), updatedAt: v.number() }).index("by_brand_and_month", ["brandId", "month"]),
-  v2VisualDispatchQuotes: defineTable({ attemptId: v.id("v2VisualAttempts"), inputSignature: v.string(), stage: visualStageValidator, provider: v.string(), model: v.string(), maximumMicros: v.number(), qualification: v.union(v.literal("offline-fixture"), v.literal("offline-contract"), v.literal("live-receipt")), boundVerified: v.boolean(), capabilityReceiptIds: v.array(v.string()), provenance: v.string(), createdAt: v.number() }).index("by_attempt", ["attemptId"]),
+  v2VisualDispatchQuotes: defineTable({ attemptId: v.id("v2VisualAttempts"), inputSignature: v.string(), stage: visualStageValidator, provider: v.string(), model: v.string(), maximumMicros: v.number(), qualification: v.union(v.literal("offline-fixture"), v.literal("offline-contract"), v.literal("qualification-probe"), v.literal("live-receipt")), boundVerified: v.boolean(), capabilityReceiptIds: v.array(v.string()), requestSha256: v.optional(v.string()), imageRouteId: v.optional(v.id("v2VisualImageRoutes")), textRouteId: v.optional(v.id("v2VisualTextRoutes")), provenance: v.string(), createdAt: v.number() }).index("by_attempt", ["attemptId"]),
   v2VisualAttempts: defineTable({
     userId: v.string(), brandId: brandIdValidator, postId: v.id("v2Posts"), stage: visualStageValidator,
     operationKey: v.string(), inputSignature: v.string(), input: attemptInputValidator,
     status: visualStatusValidator, pauseReason: v.optional(v.string()),
     reservationMonth: v.optional(v.string()), reservedMicros: v.optional(v.number()),
+    providerAllowanceReserved: v.optional(v.boolean()),
     quoteId: v.optional(v.id("v2VisualDispatchQuotes")), quotedProvider: v.optional(v.string()), quotedModel: v.optional(v.string()), quoteProvenance: v.optional(v.string()),
     claimKey: v.optional(v.string()), dispatchedAt: v.optional(v.number()),
     costOverrunMicros: v.optional(v.number()), reportedActualMicros: v.optional(v.number()), estimatedActualMicros: v.optional(v.number()),
     runningRecoverySignature: v.optional(v.string()), runningRecoveredBy: v.optional(v.string()),
     lateUsageReceipt: v.optional(v.string()), lateCompletionSignature: v.optional(v.string()), lateActualMicros: v.optional(v.number()), lateUsageKind: v.optional(v.union(v.literal("reported"), v.literal("estimated"))), lateUsageDeltaMicros: v.optional(v.number()), lateCostOverrunMicros: v.optional(v.number()), lateOutputStorageId: v.optional(v.id("_storage")),
-    ownerReconciledBy: v.optional(v.string()), ownerReconciliationSignature: v.optional(v.string()), usageReceipt: v.optional(v.string()), error: v.optional(v.string()), completionSignature: v.optional(v.string()),
+    pendingOutputStorageId: v.optional(v.id("_storage")), ownerReconciledBy: v.optional(v.string()), ownerReconciliationSignature: v.optional(v.string()), usageReceipt: v.optional(v.string()), error: v.optional(v.string()), completionSignature: v.optional(v.string()),
     resultPlanId: v.optional(v.id("v2VisualPlans")), resultVersionId: v.optional(v.id("v2VisualVersions")),
     createdAt: v.number(), updatedAt: v.number(),
   }).index("by_post", ["postId"]).index("by_post_and_stage_and_operation_key", ["postId", "stage", "operationKey"]).index("by_post_and_stage_and_status", ["postId", "stage", "status"]),
@@ -73,4 +87,4 @@ export const visualVersionDocValidator = v.object({ _id: v.id("v2VisualVersions"
 export const visualReflectionDocValidator = v.object({ _id: v.id("v2VisualReflections"), _creationTime: v.number(), ...visualWorkflowTables.v2VisualReflections.validator.fields });
 export const visualBudgetDocValidator = v.object({ _id: v.id("v2VisualBudgets"), _creationTime: v.number(), ...visualWorkflowTables.v2VisualBudgets.validator.fields });
 export const visualBudgetMonthDocValidator = v.object({ _id: v.id("v2VisualBudgetMonths"), _creationTime: v.number(), ...visualWorkflowTables.v2VisualBudgetMonths.validator.fields });
-export const publicationVisualsValidator = v.union(v.null(), v.object({ hero: v.object({ versionId: v.id("v2VisualVersions"), storageId: v.id("_storage"), sha256: v.string(), alt: v.string(), metadata: exportMetadataValidator, approvedBy: v.string(), approvedAt: v.number(), provider: v.string(), model: v.string(), quoteProvenance: v.string(), qualification: v.union(v.literal("offline-fixture"), v.literal("offline-contract"), v.literal("live-receipt")), url: v.string() }), articleSignature: v.string() }));
+export const publicationVisualsValidator = v.union(v.null(), v.object({ hero: v.object({ versionId: v.id("v2VisualVersions"), storageId: v.id("_storage"), sha256: v.string(), alt: v.string(), metadata: exportMetadataValidator, approvedBy: v.string(), approvedAt: v.number(), provider: v.string(), model: v.string(), quoteProvenance: v.string(), qualification: v.union(v.literal("offline-fixture"), v.literal("offline-contract"), v.literal("qualification-probe"), v.literal("live-receipt")), url: v.string() }), articleSignature: v.string() }));

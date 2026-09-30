@@ -215,6 +215,8 @@ export function EditorialVisualPanel(props: EditorialVisualPanelProps) {
 function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostContext }: EditorialVisualPanelProps) {
   const workflow = useQuery(api.visualWorkflow.get, { postId: postId as Id<"v2Posts"> });
   const profile = useQuery(api.visualProfiles.getProfile, { brandId });
+  const availability = useQuery(api.visualProviderConfig.getAvailability, { postId: postId as Id<"v2Posts"> });
+  const textAvailability = useQuery(api.visualTextConfig.getAvailability, { postId: postId as Id<"v2Posts"> });
   const seed = useQuery(api.visualProfiles.getSeedStatus, brandId === "corvo" ? { brandId: "corvo" } : "skip");
   const exactArticle7 = brandId === "corvo" && savedPostContext?.channelId === "corvo-blog" && savedPostContext.blogSlug === article7Slug && savedPostContext.title === article7Title;
   const postProfile = useQuery(api.visualProfiles.resolveForPost, exactArticle7 && profile ? { postId: postId as Id<"v2Posts"> } : "skip");
@@ -225,6 +227,8 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
   const requestEdit = useMutation(api.visualWorkflow.requestEdit);
   const cancelQueuedAttempt = useMutation(api.visualWorkflow.cancelQueuedAttempt);
   const prepareHero = useAction(api.visualExports.prepareHero);
+  const executeImageAttempt = useAction(api.visualProviderActions.executeImageAttempt);
+  const executeTextAttempt = useAction(api.visualTextActions.executeTextAttempt);
   const approveHero = useMutation(api.visualWorkflow.approveHero);
   const confirmRelevance = useMutation(api.visualWorkflow.confirmRelevance);
   const saveRevision = useMutation(api.visualProfiles.saveRevision);
@@ -271,13 +275,28 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
   const overrides = { ...(modelOverride.trim() ? { modelOverride: modelOverride.trim() } : {}), ...(providerOverride.trim() ? { providerOverride: providerOverride.trim() } : {}) };
   const localFixture = Boolean(localFixtureTokenUrl({ runtime: process.env.NODE_ENV, bypass: process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1", convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL, tokenUrl: process.env.NEXT_PUBLIC_VISUAL_FIXTURE_TOKEN_URL, vercel: Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.VERCEL) }));
   const brandRoute = profile?.revision.defaultRoute;
-  // No current production route has a verified maximum or a qualification setter.
-  const canPlan = localFixture && brandRoute?.provider === "offline-fixture" && brandRoute.model === "offline-fixture";
-  const canGenerate = canPlan && (overrides.providerOverride ?? brandRoute?.provider) === "offline-fixture" && (overrides.modelOverride ?? brandRoute?.model) === "offline-fixture";
+  const canFixturePlan = localFixture && brandRoute?.provider === "offline-fixture" && brandRoute.model === "offline-fixture";
+  const canPlan = canFixturePlan || textAvailability?.planning === true;
+  const fixtureGeneration = canFixturePlan && (overrides.providerOverride ?? brandRoute?.provider) === "offline-fixture" && (overrides.modelOverride ?? brandRoute?.model) === "offline-fixture";
+  const qualifiedRoutes = availability?.imageRoutes ?? [];
+  const requestedGenerationModel = overrides.modelOverride ?? brandRoute?.model ?? "gpt-image-2";
+  const generationRoutes = qualifiedRoutes.filter(route => route.generation && route.model === requestedGenerationModel);
+  const generationRoute = generationRoutes.find(route => route.provider === (overrides.providerOverride ?? brandRoute?.provider))
+    ?? (!overrides.providerOverride ? generationRoutes.find(route => route.provider === "digitalocean") ?? generationRoutes.find(route => route.provider === "openai") : undefined);
+  const canGenerate = fixtureGeneration || Boolean(generationRoute);
+  const generationOverrides = generationRoute && !fixtureGeneration ? { ...overrides, quality: generationRoute.quality, outputFormat: generationRoute.outputFormat, ...(generationRoute.inputFidelity ? { inputFidelity: generationRoute.inputFidelity } : {}), ...(generationRoute.provider !== brandRoute?.provider ? { providerOverride: generationRoute.provider } : {}), ...(generationRoute.model !== brandRoute?.model ? { modelOverride: generationRoute.model } : {}) } : overrides;
   const viewedScene = workflow && selectedPlan && selectedIndex !== undefined && selectedScene ? { expectedArticleSignature: workflow.articleSignature, expectedPlanId: selectedPlan._id, expectedSceneIndex: selectedIndex, expectedRefinedSceneSignature: stableInputSignature(workflow.state?.refinedScene ?? null) } : null;
   const generationSignature = JSON.stringify([postId, "generation", viewedScene, instructions, overrides, workflow?.attempts.filter(attempt => ["generation", "edit"].includes(attempt.stage)).map(attempt => [attempt._id, attempt.status])]);
   const selectedVersion = workflow?.versions.find(version => version._id === workflow.state?.selectedVersionId);
-  const canEdit = canPlan && (overrides.providerOverride ?? selectedVersion?.provider) === "offline-fixture" && (overrides.modelOverride ?? selectedVersion?.model) === "offline-fixture";
+  const fixtureEdit = canFixturePlan && (overrides.providerOverride ?? selectedVersion?.provider) === "offline-fixture" && (overrides.modelOverride ?? selectedVersion?.model) === "offline-fixture";
+  const requestedEditModel = overrides.modelOverride ?? selectedVersion?.model;
+  const supportsInputFidelity = (model: string | undefined) => model === "gpt-image-1-mini" || model === "gpt-image-1";
+  const editFidelity = supportsInputFidelity(requestedEditModel) ? selectedVersion?.input.inputFidelity ?? "low" : null;
+  const editRoutes = qualifiedRoutes.filter(route => route.edit && route.model === requestedEditModel && route.quality === (selectedVersion?.input.quality ?? "medium") && route.size === (selectedVersion?.input.size ?? "1536x1024") && route.outputFormat === (selectedVersion?.input.outputFormat ?? "webp") && (route.inputFidelity ?? (supportsInputFidelity(route.model) ? "low" : null)) === editFidelity);
+  const editRoute = editRoutes.find(route => route.provider === (overrides.providerOverride ?? selectedVersion?.provider))
+    ?? (!overrides.providerOverride ? editRoutes.find(route => route.provider === "digitalocean") ?? editRoutes.find(route => route.provider === "openai") : undefined);
+  const canEdit = fixtureEdit || Boolean(editRoute);
+  const editOverrides = editRoute && !fixtureEdit ? { ...overrides, ...(editRoute.provider !== selectedVersion?.provider ? { providerOverride: editRoute.provider } : {}) } : overrides;
   const selectionPending = pendingVersionId !== null && pendingVersionId !== workflow?.state?.selectedVersionId;
   if (pendingVersionId !== null && !selectionPending) setPendingVersionId(null);
   const editSignature = JSON.stringify([postId, "edit", viewedScene, selectedVersion?._id, feedback, overrides, workflow?.attempts.filter(attempt => ["generation", "edit"].includes(attempt.stage)).map(attempt => [attempt._id, attempt.status])]);
@@ -292,19 +311,40 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
     if (busyRef.current || !canEdit || pending || savedContentChanged || selectionPending || sceneSelectionPending || !viewedScene || !selectedVersion || !feedback.trim() || operations.current.get(editSignature)?.accepted) return;
     const operation = operations.current.get(editSignature) ?? { key: crypto.randomUUID(), accepted: false };
     operations.current.set(editSignature, operation);
-    await run(async () => { await requestEdit({ postId: postId as Id<"v2Posts">, operationKey: operation.key, feedback: feedback.trim(), ...viewedScene, expectedParentVersionId: selectedVersion._id, ...overrides }); operation.accepted = true; });
+    await run(async () => {
+      const attemptId = await requestEdit({ postId: postId as Id<"v2Posts">, operationKey: operation.key, feedback: feedback.trim(), ...viewedScene, expectedParentVersionId: selectedVersion._id, ...editOverrides });
+      operation.accepted = true;
+      if (!fixtureEdit) {
+        const result = await executeImageAttempt({ attemptId });
+        if (result.status !== "completed") setError(result.status === "uncertain" ? "The image request needs reconciliation. Inspect its saved receipt before taking another action." : "The image request did not start. Inspect the saved attempt and route before taking another action.");
+      }
+    });
   }
   async function plan() {
     if (busyRef.current || !canPlan || pending || savedContentChanged || !profile || operations.current.get(planSignature)?.accepted) return;
     const operation = operations.current.get(planSignature) ?? { key: crypto.randomUUID(), accepted: false };
     operations.current.set(planSignature, operation);
-    await run(async () => { await requestPlan({ postId: postId as Id<"v2Posts">, operationKey: operation.key }); operation.accepted = true; });
+    await run(async () => {
+      const attemptId = await requestPlan({ postId: postId as Id<"v2Posts">, operationKey: operation.key });
+      operation.accepted = true;
+      if (!canFixturePlan) {
+        const result = await executeTextAttempt({ attemptId });
+        if (result.status !== "completed" || result.reason) setError(result.status === "uncertain" ? "The planning request needs reconciliation. Inspect its saved receipt before taking another action." : "The planning request did not produce usable concepts. Inspect the saved attempt before requesting another plan.");
+      }
+    });
   }
   async function generate() {
     if (busyRef.current || !canGenerate || pending || savedContentChanged || sceneSelectionPending || !viewedScene || operations.current.get(generationSignature)?.accepted) return;
     const operation = operations.current.get(generationSignature) ?? { key: crypto.randomUUID(), accepted: false };
     operations.current.set(generationSignature, operation);
-    await run(async () => { await requestGeneration({ postId: postId as Id<"v2Posts">, operationKey: operation.key, ...viewedScene, ...(instructions.trim() ? { prompt: instructions.trim() } : {}), ...overrides }); operation.accepted = true; });
+    await run(async () => {
+      const attemptId = await requestGeneration({ postId: postId as Id<"v2Posts">, operationKey: operation.key, ...viewedScene, ...(instructions.trim() ? { prompt: instructions.trim() } : {}), ...generationOverrides });
+      operation.accepted = true;
+      if (!fixtureGeneration) {
+        const result = await executeImageAttempt({ attemptId });
+        if (result.status !== "completed") setError(result.status === "uncertain" ? "The image request needs reconciliation. Inspect its saved receipt before taking another action." : "The image request did not start. Inspect the saved attempt and route before taking another action.");
+      }
+    });
   }
   async function saveScene(planId: Id<"v2VisualPlans">, sceneIndex: number, refinedScene?: SceneConcept) {
     if (busyRef.current) return;
@@ -328,8 +368,10 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
       <p className="text-xs text-gray-500">Only the brand owner can set the shared monthly limit. Planning, images, edits and reflection use this budget.</p>
     </div></details>
     {brandRoute && <p className="text-sm text-amber-700">Brand route: {brandRoute.provider} · {brandRoute.model}. Qualification: {brandRoute.qualification}.</p>}
-    {!canPlan && <p className="text-sm text-amber-700">Qualification pending: new planning, generation and edit requests are disabled until provider evidence and a reliable cost bound are available.</p>}
-    {canPlan && <p className="text-sm text-amber-700">Local offline rehearsal only. No provider qualification or paid call is implied.</p>}
+    {generationRoute && !fixtureGeneration && <p className="text-sm text-gray-600">Generation route: {generationRoute.provider} · {generationRoute.apiModelId}.</p>}
+    {!canPlan && !canGenerate && !canEdit && <p className="text-sm text-amber-700">Qualification pending: new planning, generation and edit requests are disabled until provider evidence and a reliable cost bound are available.</p>}
+    {canFixturePlan && <p className="text-sm text-amber-700">Local offline rehearsal only. No provider qualification or paid call is implied.</p>}
+    {!canPlan && (canGenerate || canEdit) && <p className="text-sm text-amber-700">Scene planning is paused until an approved text route and cost bound are available.</p>}
     {canPlan && (!canGenerate || selectedVersion && !canEdit) && <p className="text-sm text-amber-700">The selected image route or override is unqualified; its image request is disabled.</p>}
     {profile === null && <p className="text-sm text-amber-700">Set up the brand visual profile before planning.</p>}
     {profile !== undefined && <ProfileEditor brandId={brandId} profile={profile} disabled={busy} onSave={async input => { let receipt: ProfileSaveReceipt | null = null; const saved = await run(async () => { receipt = await saveRevision(input); }); return saved ? receipt : null; }}
