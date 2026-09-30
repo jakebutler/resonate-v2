@@ -44,6 +44,7 @@ import type * as queuePlanning from "../queuePlanning.js";
 import type * as queueValidators from "../queueValidators.js";
 import type * as research from "../research.js";
 import type * as series from "../series.js";
+import type * as seriesReview from "../seriesReview.js";
 import type * as settings from "../settings.js";
 import type * as shapes from "../shapes.js";
 import type * as v2Migration from "../v2Migration.js";
@@ -90,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   queueValidators: typeof queueValidators;
   research: typeof research;
   series: typeof series;
+  seriesReview: typeof seriesReview;
   settings: typeof settings;
   shapes: typeof shapes;
   v2Migration: typeof v2Migration;

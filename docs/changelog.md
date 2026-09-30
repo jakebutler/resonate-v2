@@ -4572,3 +4572,37 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/epic-97-article-dependencies
+
+## 09/30/2026 05:26:28 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	components/SeriesReviewPanel.tsx
+- M	components/SeriesWorkspace.tsx
+- A	convex/__tests__/seriesReview.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- A	convex/seriesReview.ts
+- M	docs/epic-97-progress.md
+- A	e2e/series-review.spec.ts
+
+### Working Tree Snapshot
+
+- A  components/SeriesReviewPanel.tsx
+- M  components/SeriesWorkspace.tsx
+- A  convex/__tests__/seriesReview.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- A  convex/seriesReview.ts
+- M  docs/epic-97-progress.md
+- A  e2e/series-review.spec.ts
+
+### Branch
+
+- codex/epic-97-batch-approval

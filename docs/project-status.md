@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 05:09:50 PDT
+Last updated: 09/30/2026 05:26:28 PDT
 
 ## State
 
@@ -16,43 +16,27 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 3f26cdb feat(series): import reviewed prepared packages with durable recovery
+- 9aacca7 feat: verify article publication before companion delivery
 
 ## Recent Commits
 
+- 9aacca7 feat: verify article publication before companion delivery
 - 3f26cdb feat(series): import reviewed prepared packages with durable recovery
 - 70c5bbb feat(queue): add verified capacity planning and local reservations
 - 520bc47 Review Buffer destinations and reconcile delivery receipts fairly
 - 454a5a7 Adopt existing posts into durable publication series
-- bbe7d67 Complete approved blog exports with prepared heroes and bound artifacts
 
 ## Local Working Tree
 
-- A  components/ArticleDependencyPanel.tsx
-- M  components/PersistedPublishingPanel.tsx
+- A  components/SeriesReviewPanel.tsx
 - M  components/SeriesWorkspace.tsx
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
-- A  convex/__tests__/articleDependencies.test.ts
-- M  convex/__tests__/publishing.test.ts
-- M  convex/__tests__/queuePlanning.test.ts
+- A  convex/__tests__/seriesReview.test.ts
 - M  convex/_generated/api.d.ts
-- A  convex/articleDependencies.ts
-- A  convex/articlePublication.ts
-- A  convex/articleValidators.ts
-- M  convex/bufferDestinations.ts
 - M  convex/publishing.ts
-- M  convex/queuePlanning.ts
 - M  convex/schema.ts
-- M  convex/series.ts
+- A  convex/seriesReview.ts
 - M  docs/epic-97-progress.md
-- A  e2e/article-dependencies.spec.ts
-- A  lib/__tests__/articlePublication.test.ts
-- A  lib/articleAvailability.ts
-- A  lib/articleContracts.ts
-- A  lib/articlePublication.ts
-- M  lib/socialPayload.ts
-- M  package-lock.json
-- M  package.json
+- A  e2e/series-review.spec.ts
 
 ## Next Agent Pickup
 
@@ -61,4 +45,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- codex/epic-97-article-dependencies
+- codex/epic-97-batch-approval

@@ -882,19 +882,13 @@ export const deletePost = mutation({
   },
 });
 
-export const setApproval = mutation({
-  args: {
-    postId: v.id("v2Posts"),
-    approvalState: approvalValidator,
-  },
-  returns: v.any(),
-  handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+export async function applyEditorialApproval(ctx: MutationCtx, userId: string, post: Doc<"v2Posts">, approvalState: Doc<"v2Posts">["approvalState"]) {
+    const role = await requireBrandAccess(ctx,userId,post.brandId);
+    if(post.userId!==userId || role.role === "viewer") throw new Error("Editor access required");
     if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
-    const intent = await latestIntent(ctx, args.postId);
+    const intent = await latestIntent(ctx, post._id);
     if (!intent) throw new Error("Publishing intent not found");
-    if (args.approvalState === "approved" && post.channelId === "corvo-blog") {
+    if (approvalState === "approved" && post.channelId === "corvo-blog") {
       const missing = missingBlogEditorialFields(post);
       if (missing.length) throw new Error(`Review blog metadata before approval: ${missing.join(", ")}`);
     }
@@ -902,32 +896,37 @@ export const setApproval = mutation({
       ? blogEditorialFingerprint(post) : contentFingerprint(post.title, post.content, post.linkedinFirstComment);
     const now = Date.now();
     const nextStatus =
-      args.approvalState === "approved"
+      ["published","queued","publishing","submitted","cancel-requested","cancelled","removed"].includes(post.status) ? post.status :
+      approvalState === "approved"
         ? post.scheduledDate
           ? "scheduled"
           : "approved"
         : "draft";
 
-    await ctx.db.patch(args.postId, {
-      approvalState: args.approvalState,
+    await ctx.db.patch(post._id, {
+      approvalState: approvalState,
       status: nextStatus,
       contentFingerprint: fingerprint,
       updatedAt: now,
     });
     await ctx.db.patch(intent._id, {
-      approvalState: args.approvalState,
+      approvalState: approvalState,
       contentFingerprint: fingerprint,
       updatedAt: now,
     });
     await audit(ctx, {
       userId,
       brandId: post.brandId,
-      postId: args.postId,
+      postId: post._id,
       intentId: intent._id,
       action: "post.approval",
-      summary: `Approval changed to ${args.approvalState}.`,
+      summary: `Approval changed to ${approvalState}.`,
     });
-  },
+}
+
+export const setApproval = mutation({
+  args:{postId:v.id("v2Posts"),approvalState:approvalValidator},returns:v.any(),
+  handler:async(ctx,args)=>{const userId=await requireUserId(ctx);const post=await getOwnedPost(ctx,userId,args.postId);await applyEditorialApproval(ctx,userId,post,args.approvalState);}
 });
 
 export const reschedule = mutation({
