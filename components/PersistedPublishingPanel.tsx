@@ -22,6 +22,11 @@ import {
   X,
 } from "lucide-react";
 import { SocialConnectionsPanel } from "@/components/SocialConnectionsPanel";
+import { EditorialVisualPanel } from "@/components/EditorialVisualPanel";
+import { EditorialFigurePanel } from "@/components/EditorialFigurePanel";
+import { LinkedFigureEvidencePanel } from "@/components/LinkedFigureEvidencePanel";
+import { approvalArticleSignature, publicationMetadataSignature } from "@/lib/publicationReview";
+import { localFixtureTokenUrl } from "@/lib/localFixtureAuth";
 import { FilterGroup, toggleFilterSet } from "@/components/shell/FilterGroup";
 import { MainCard } from "@/components/shell/MainCard";
 import { MarkdownPreview } from "@/components/shell/MarkdownPreview";
@@ -44,6 +49,13 @@ import {
 } from "@/lib/domain";
 
 type CalendarView = "month" | "week";
+function visualPanelsEnabled() {
+  return process.env.NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED === "1" || Boolean(localFixtureTokenUrl({
+    runtime: process.env.NODE_ENV, bypass: process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1",
+    convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL, tokenUrl: process.env.NEXT_PUBLIC_VISUAL_FIXTURE_TOKEN_URL,
+    vercel: Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.VERCEL),
+  }));
+}
 type PersistedCalendarItem = {
   post: {
     _id: Id<"v2Posts">;
@@ -53,6 +65,7 @@ type PersistedCalendarItem = {
     title: string;
     content: string;
     linkedinFirstComment?: string;
+    contentFingerprint?: string;
     status: PostStatus;
     approvalState: string;
     scheduledDate?: string;
@@ -61,6 +74,7 @@ type PersistedCalendarItem = {
     sourceIdeaId?: string;
     sourceResearchBriefId?: string;
     sourceCampaignId?: string;
+    sourceExcerptIds?: string[];
     prUrl?: string;
     branchName?: string;
     blogExcerpt?: string;
@@ -165,6 +179,7 @@ function slugifyTitle(title: string) {
 }
 
 type BlogPublishSnapshot = {
+  articleChanged?: boolean;
   excerpt?: string;
   author?: string;
   category?: string;
@@ -182,7 +197,8 @@ function parseTagsInput(value: string) {
 
 function blogPrBlockedReason(
   post: PersistedCalendarItem["post"],
-  snapshot?: BlogPublishSnapshot | null
+  snapshot?: BlogPublishSnapshot | null,
+  approvedVisualHero = false
 ): string | null {
   if (!post.title.trim() || !post.content.trim()) {
     return "Title and content are required before opening a PR.";
@@ -201,15 +217,16 @@ function blogPrBlockedReason(
     snapshot?.heroImageUrl?.trim() ||
     post.heroImageUrl?.trim() ||
     post.heroImageStorageId;
-  if (!hero) return "Add a hero image before opening a PR.";
+  if (!hero && !approvedVisualHero) return "Add a hero image before opening a PR.";
   return null;
 }
 
 function blogPrReady(
   post: PersistedCalendarItem["post"],
-  snapshot?: BlogPublishSnapshot | null
+  snapshot?: BlogPublishSnapshot | null,
+  approvedVisualHero = false
 ) {
-  return blogPrBlockedReason(post, snapshot) === null;
+  return blogPrBlockedReason(post, snapshot, approvedVisualHero) === null;
 }
 
 function prStatusLabel(status?: string) {
@@ -519,6 +536,10 @@ export function PersistedPublishingPanel({
     () => visibleItems.find((item) => item.post._id === selectedPostId) ?? null,
     [selectedPostId, visibleItems]
   );
+  const visualUiEnabled = visualPanelsEnabled();
+  const approvalReview = useQuery(api.publishing.getApprovalReview, visualUiEnabled && isConvexAuthenticated && selectedItem?.post.channelId === "corvo-blog" ? { postId: selectedItem.post._id } : "skip");
+  const approvalReviewMatches = Boolean(selectedItem && approvalReview && approvalReview.articleSignature === approvalArticleSignature(selectedItem.post) && approvalReview.metadataSignature === publicationMetadataSignature(selectedItem.post));
+  const selectedVisualHero = Boolean(approvalReviewMatches && approvalReview?.hasVisuals && !approvalReview.blockedReason);
 
   async function handleSeed() {
     await seedWorkspace({});
@@ -565,7 +586,13 @@ export function PersistedPublishingPanel({
   }
 
   async function handleApprove(postId: Id<"v2Posts">) {
-    await setApproval({ postId, approvalState: "approved" });
+    const item = visibleItems.find(item => item.post._id === postId);
+    if (visualUiEnabled && item?.post.channelId === "corvo-blog") {
+      if (selectedItem?.post._id !== postId) { setManualSelectedPostId(postId); setMessage("Review the saved article and visuals in the composer before approving."); return; }
+      if (!approvalReviewMatches || !approvalReview || approvalReview.blockedReason) { setMessage(approvalReview?.blockedReason ?? "Wait for the current saved article and visual review before approving."); return; }
+      try { await setApproval({ postId, approvalState: "approved", expectedArticleSignature: approvalReview.articleSignature, expectedVisualSignature: approvalReview.visualSignature ?? undefined }); }
+      catch (error) { setMessage(error instanceof Error ? error.message : "Approval changed; reload and review."); return; }
+    } else await setApproval({ postId, approvalState: "approved" });
     setMessage("Approved item. Date-only reschedules now preserve approval.");
   }
 
@@ -575,6 +602,7 @@ export function PersistedPublishingPanel({
       title: string;
       content: string;
       linkedinFirstComment?: string;
+      expectedArticleSignature?: string;
       scheduledDate: string;
       scheduledTime: string;
       timezone: string;
@@ -617,6 +645,7 @@ export function PersistedPublishingPanel({
         postId: item.post._id,
         title: values.title.trim(),
         content: values.content,
+        ...(values.expectedArticleSignature !== undefined ? { expectedArticleSignature: values.expectedArticleSignature } : {}),
         ...(item.post.channelId === "linkedin" && values.linkedinFirstComment !== undefined
           ? { linkedinFirstComment: values.linkedinFirstComment.trim() }
           : {}),
@@ -821,7 +850,8 @@ export function PersistedPublishingPanel({
       setMessage("Approve the post before opening a pull request.");
       return;
     }
-    if (!blogPrReady(item.post, snapshot)) {
+    if (approvalReview?.hasVisuals && (!approvalReviewMatches || !approvalReview.publicationQualified || approvalReview.blockedReason)) { setMessage("Live visual provider qualification is required before opening a publication PR."); return; }
+    if (!blogPrReady(item.post, snapshot, selectedVisualHero)) {
       setMessage(
         "Fill in excerpt, author, category, at least one tag, content, and a hero image before opening a PR."
       );
@@ -893,7 +923,7 @@ export function PersistedPublishingPanel({
           ? prStatusRaw
           : "open";
 
-      await recordGithubPr({
+      if (!data.recorded) await recordGithubPr({
         postId: item.post._id,
         result: {
           prUrl: data.prUrl,
@@ -926,7 +956,7 @@ export function PersistedPublishingPanel({
     const response = await fetch("/api/blog-pr-status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prUrl }),
+      body: JSON.stringify({ prUrl, postId: item.post._id }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -934,7 +964,7 @@ export function PersistedPublishingPanel({
       return;
     }
 
-    await recordBlogPrStatus({
+    if (!data.recorded) await recordBlogPrStatus({
       postId: item.post._id,
       prStatus: data.prStatus,
       prNumber: data.prNumber ?? undefined,
@@ -1246,6 +1276,9 @@ export function PersistedPublishingPanel({
               bufferLiveGateResolved={bufferLiveGateResolved}
               devMode={devMode}
               item={selectedItem}
+              approvedVisualHero={selectedVisualHero}
+              visualPublicationBlockedReason={approvalReview?.hasVisuals && !approvalReview.publicationQualified ? "Live visual provider qualification is required before opening a publication PR." : undefined}
+              approvalBlockedReason={visualUiEnabled && selectedItem.post.channelId === "corvo-blog" && selectedItem.post.contentFingerprint !== undefined ? (!approvalReviewMatches ? "Wait for the current saved article and visual review." : approvalReview?.blockedReason ?? undefined) : undefined}
               openingPr={openingPrPostIds.has(selectedItem.post._id)}
               onApprove={handleApprove}
               onCheckPrStatus={() => void handleCheckPrStatus(selectedItem)}
@@ -1630,6 +1663,9 @@ function PublishingDetailDrawer(props: {
   devMode: boolean;
   item: PersistedCalendarItem;
   openingPr?: boolean;
+  approvedVisualHero?: boolean;
+  visualPublicationBlockedReason?: string;
+  approvalBlockedReason?: string;
   onApprove: (postId: Id<"v2Posts">) => void;
   onCheckPrStatus: () => void;
   onClose: () => void;
@@ -1643,6 +1679,7 @@ function PublishingDetailDrawer(props: {
   onSaveComposer: (values: {
     title: string;
     content: string;
+    expectedArticleSignature?: string;
     scheduledDate: string;
     scheduledTime: string;
     timezone: string;
@@ -1699,12 +1736,12 @@ function PublishingDetailDrawer(props: {
     null
   );
   const openPrDisabled =
-    !approved || !blogPrReady(post, publishSnapshot) || Boolean(existingPrUrl);
+    !approved || !blogPrReady(post, publishSnapshot, props.approvedVisualHero) || Boolean(existingPrUrl) || Boolean(props.visualPublicationBlockedReason) || Boolean(publishSnapshot?.articleChanged);
   const openPrBlockedReason = !approved
     ? "Approve the post before opening a PR."
     : existingPrUrl
       ? "Pull request already exists."
-      : blogPrBlockedReason(post, publishSnapshot);
+      : props.visualPublicationBlockedReason ?? blogPrBlockedReason(post, publishSnapshot, props.approvedVisualHero);
 
   return (
     <aside
@@ -1923,7 +1960,8 @@ function PublishingDetailDrawer(props: {
           <button
             aria-label={`Approve ${post.title}`}
             className="inline-flex items-center gap-1 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50"
-            disabled={approved}
+            disabled={approved || Boolean(props.approvalBlockedReason) || Boolean(publishSnapshot?.articleChanged)}
+            title={props.approvalBlockedReason}
             onClick={() => props.onApprove(post._id)}
             type="button"
           >
@@ -2068,6 +2106,7 @@ function PersistedPostComposer(props: {
     title: string;
     content: string;
     linkedinFirstComment?: string;
+    expectedArticleSignature?: string;
     scheduledDate: string;
     scheduledTime: string;
     timezone: string;
@@ -2087,10 +2126,29 @@ function PersistedPostComposer(props: {
   const intent = item.intent;
   // v2-owned storage module — the legacy posts.generateUploadUrl retires at
   // the ADR 0004 cutover.
-  const generateUploadUrl = useMutation(api.v2Storage.generateUploadUrl);
+  const uploadImage = useAction(api.v2Storage.uploadImage);
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
   const [linkedinFirstComment, setLinkedinFirstComment] = useState(post.linkedinFirstComment ?? "");
+  const [savedArticle, setSavedArticle] = useState({ title: post.title, content: post.content, firstComment: post.linkedinFirstComment ?? "" });
+  const [editorBaseSignature, setEditorBaseSignature] = useState(JSON.stringify({ title: post.title, content: post.content, linkedinFirstComment: post.linkedinFirstComment ?? "" }));
+  const [externalConflict, setExternalConflict] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  if (savedArticle.title !== post.title || savedArticle.content !== post.content || savedArticle.firstComment !== (post.linkedinFirstComment ?? "")) {
+    const clean = title === savedArticle.title && content === savedArticle.content && linkedinFirstComment === savedArticle.firstComment;
+    const acknowledged = title.trim() === post.title && content === post.content && linkedinFirstComment.trim() === (post.linkedinFirstComment ?? "");
+    setSavedArticle({ title: post.title, content: post.content, firstComment: post.linkedinFirstComment ?? "" });
+    if (clean || acknowledged) {
+      setTitle(post.title);
+      setContent(post.content);
+      setLinkedinFirstComment(post.linkedinFirstComment ?? "");
+      setEditorBaseSignature(JSON.stringify({ title: post.title, content: post.content, linkedinFirstComment: post.linkedinFirstComment ?? "" }));
+      setExternalConflict(false);
+    } else {
+      setExternalConflict(true);
+    }
+  }
   const [blogExcerpt, setBlogExcerpt] = useState(post.blogExcerpt ?? "");
   const [blogAuthor, setBlogAuthor] = useState(post.blogAuthor ?? DEFAULT_BLOG_AUTHOR);
   const [blogCategory, setBlogCategory] = useState(
@@ -2107,7 +2165,7 @@ function PersistedPostComposer(props: {
   const [heroUploadError, setHeroUploadError] = useState<string | null>(null);
   const resolvedHeroUrl = useQuery(
     api.v2Storage.getFileUrl,
-    heroImageStorageId ? { fileId: heroImageStorageId } : "skip"
+    heroImageStorageId ? { fileId: heroImageStorageId, postId: post._id } : "skip"
   );
   const [scheduledDate, setScheduledDate] = useState(
     normalizeScheduledDate(intent?.scheduledDate ?? post.scheduledDate) ?? ""
@@ -2130,7 +2188,7 @@ function PersistedPostComposer(props: {
     scheduledDate !== persistedScheduleDate ||
     scheduledTime !== (intent?.scheduledTime ?? post.scheduledTime ?? "") ||
     timezone !== (intent?.timezone ?? post.timezone ?? "America/Los_Angeles");
-  const blogTags = parseTagsInput(blogTagsInput);
+  const blogTags = useMemo(() => parseTagsInput(blogTagsInput), [blogTagsInput]);
   const blogMetadataChanged =
     post.channelId === "corvo-blog" &&
     (blogExcerpt !== (post.blogExcerpt ?? "") ||
@@ -2144,9 +2202,11 @@ function PersistedPostComposer(props: {
   const canSave =
     (contentChanged || scheduleChanged || blogMetadataChanged) && title.trim().length > 0;
 
+  const notifyPublishSnapshot = props.onPublishSnapshotChange;
   useEffect(() => {
-    if (post.channelId !== "corvo-blog" || !props.onPublishSnapshotChange) return;
-    props.onPublishSnapshotChange({
+    if (post.channelId !== "corvo-blog" || !notifyPublishSnapshot) return;
+    notifyPublishSnapshot({
+      articleChanged: contentChanged || externalConflict || saving,
       excerpt: blogExcerpt,
       author: blogAuthor,
       category: blogCategory,
@@ -2159,23 +2219,19 @@ function PersistedPostComposer(props: {
     blogCategory,
     blogExcerpt,
     blogSlug,
-    blogTagsInput,
+    blogTags,
+    contentChanged,
+    externalConflict,
+    saving,
     heroPreviewUrl,
     post.channelId,
-    props.onPublishSnapshotChange,
+    notifyPublishSnapshot,
   ]);
 
   async function handleHeroUpload(file: File) {
     setHeroUploading(true);
     try {
-      const uploadUrl = await generateUploadUrl();
-      const uploadRes = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
-      });
-      if (!uploadRes.ok) throw new Error("Hero image upload failed.");
-      const { storageId } = (await uploadRes.json()) as { storageId: Id<"_storage"> };
+      const { storageId } = await uploadImage({ brandId: post.brandId, fileName: file.name, contentType: file.type, bytes: await file.arrayBuffer() });
       setHeroImageStorageId(storageId);
       setHeroImageUrl("");
     } catch (error) {
@@ -2211,6 +2267,7 @@ function PersistedPostComposer(props: {
         </div>
       </div>
 
+      <fieldset disabled={saving} className="contents">
       <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
         <div className="space-y-3">
           <label className="block text-xs font-semibold text-gray-600">
@@ -2382,7 +2439,21 @@ function PersistedPostComposer(props: {
         </div>
       </div>
 
+      </fieldset>
+      {visualPanelsEnabled() && post.channelId === "corvo-blog" && <div className="mt-4">
+        <EditorialVisualPanel key={`hero-${post._id}`} postId={post._id} brandId={post.brandId} savedContentChanged={contentChanged || externalConflict || saving} savedPostContext={{ title: post.title, blogSlug: post.blogSlug, channelId: post.channelId }} />
+        {(post.sourceResearchBriefId || (post.sourceCampaignId && post.sourceExcerptIds?.length)) && <LinkedFigureEvidencePanel key={`linked-evidence-${post._id}`} postId={post._id} savedContentChanged={contentChanged || externalConflict || saving} />}
+        <EditorialFigurePanel key={`figures-${post._id}`} postId={post._id} brandId={post.brandId} savedContentChanged={contentChanged || externalConflict || saving} />
+      </div>}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        {externalConflict && <div role="alert" className="w-full text-sm text-amber-800">
+          The saved article changed while you were editing. Your unsaved text is preserved. Reload the saved article before saving.
+          <button type="button" className="ml-2 underline" onClick={() => {
+            setTitle(post.title); setContent(post.content); setLinkedinFirstComment(post.linkedinFirstComment ?? "");
+            setEditorBaseSignature(JSON.stringify({ title: post.title, content: post.content, linkedinFirstComment: post.linkedinFirstComment ?? "" })); setExternalConflict(false); setSaveError(null);
+          }}>Reload saved article</button>
+        </div>}
+        {saveError && <p role="alert" className="w-full text-sm text-red-700">{saveError}</p>}
         <p className="text-xs text-gray-500">
           {contentChanged || blogMetadataChanged
             ? "Content or metadata changed: saving will clear approval."
@@ -2392,11 +2463,13 @@ function PersistedPostComposer(props: {
         </p>
         <button
           className="inline-flex items-center gap-1 rounded-md bg-[#15616d] px-3 py-2 text-sm font-semibold text-white hover:bg-[#104d56] disabled:opacity-50"
-          disabled={!canSave}
-          onClick={() =>
-            props.onSave({
+          disabled={!canSave || saving || externalConflict}
+          onClick={async () => {
+            setSaving(true); setSaveError(null);
+            try { await props.onSave({
               title,
               content,
+              expectedArticleSignature: post.contentFingerprint === undefined ? undefined : editorBaseSignature,
               linkedinFirstComment: post.channelId === "linkedin" ? linkedinFirstComment : undefined,
               scheduledDate,
               scheduledTime,
@@ -2413,8 +2486,10 @@ function PersistedPostComposer(props: {
                     heroImageStorageId,
                   }
                 : undefined,
-            })
-          }
+            }); } catch (error) {
+              setSaveError(error instanceof Error ? error.message : "Composer changes could not be saved.");
+            } finally { setSaving(false); }
+          }}
           type="button"
         >
           <Save size={15} />

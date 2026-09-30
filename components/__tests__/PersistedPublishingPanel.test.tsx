@@ -15,6 +15,18 @@ vi.mock("convex/react", () => ({
 vi.mock("@/components/SocialConnectionsPanel", () => ({
   SocialConnectionsPanel: () => <div data-testid="social-connections-panel">Connections</div>,
 }));
+vi.mock("@/components/EditorialVisualPanel", () => ({
+  EditorialVisualPanel: ({ postId, savedContentChanged }: { postId: string; savedContentChanged: boolean }) =>
+    <section aria-label="Editorial visuals">Saved post {postId} · {savedContentChanged ? "Save article changes first" : "Article is saved"}</section>,
+}));
+vi.mock("@/components/EditorialFigurePanel", () => ({
+  EditorialFigurePanel: ({ savedContentChanged }: { savedContentChanged: boolean }) =>
+    <section aria-label="Informational figures">{savedContentChanged ? "Save article changes first" : "Evidence figures"}</section>,
+}));
+vi.mock("@/components/LinkedFigureEvidencePanel", () => ({
+  LinkedFigureEvidencePanel: ({ savedContentChanged }: { savedContentChanged: boolean }) =>
+    <section aria-label="Linked research for figures">{savedContentChanged ? "Save article changes first" : "Linked evidence"}</section>,
+}));
 
 vi.mock("@/convex/_generated/api", () => ({
   api: {
@@ -41,6 +53,7 @@ vi.mock("@/convex/_generated/api", () => ({
       cancelOrUnpublish: "bufferLive:cancelOrUnpublish",
     },
     v2Storage: {
+      uploadImage: "v2Storage:uploadImage",
       generateUploadUrl: "v2Storage:generateUploadUrl",
       getFileUrl: "v2Storage:getFileUrl",
     },
@@ -251,6 +264,7 @@ const blogItemWithPr = {
 describe("PersistedPublishingPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED", "1");
     bufferLiveEnabledMock = false;
     vi.stubGlobal("fetch", vi.fn());
     vi.mocked(useQuery).mockImplementation((reference, args) => {
@@ -284,6 +298,8 @@ describe("PersistedPublishingPanel", () => {
     });
     vi.mocked(useAction).mockImplementation((reference) => {
       switch (reference) {
+        case "v2Storage:uploadImage":
+          return vi.fn().mockResolvedValue({ storageId: "fixture-storage" });
         case "bufferLive:submit":
           return submitBufferLiveMock;
         case "bufferLive:cancelOrUnpublish":
@@ -327,6 +343,17 @@ describe("PersistedPublishingPanel", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps new visual panels and review queries disabled until explicit rollout", () => {
+    vi.stubEnv("NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED", "0");
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    expect(within(detail).queryByRole("region", { name: "Editorial visuals" })).not.toBeInTheDocument();
+    expect(within(detail).queryByRole("region", { name: "Informational figures" })).not.toBeInTheDocument();
+    expect(within(detail).queryByRole("region", { name: "Linked research for figures" })).not.toBeInTheDocument();
   });
 
   it("renders publishing calendar items with approval and submission state", () => {
@@ -829,6 +856,7 @@ describe("PersistedPublishingPanel", () => {
           method: "POST",
           body: JSON.stringify({
             prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/53",
+            postId: "post_5",
           }),
         })
       )
@@ -867,6 +895,20 @@ describe("PersistedPublishingPanel", () => {
     expect(
       await screen.findByText("Saved composer changes and cleared approval for re-review.")
     ).toBeInTheDocument();
+  });
+
+  it("locks article inputs while its save is in flight", async () => {
+    let finish!: () => void;
+    updateContentMock.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect Approved Reddit validation item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Content"), { target: { value: "Submitted article snapshot." } });
+    fireEvent.click(within(detail).getByRole("button", { name: "Save Composer Changes" }));
+    expect(within(detail).getByLabelText("Title")).toBeDisabled();
+    expect(within(detail).getByLabelText("Content")).toBeDisabled();
+    finish();
+    await waitFor(() => expect(within(detail).getByLabelText("Content")).not.toBeDisabled());
   });
 
   it("saves date-only composer edits without clearing approval", async () => {
@@ -924,6 +966,84 @@ describe("PersistedPublishingPanel", () => {
       )
     );
     expect(fetch).not.toHaveBeenCalled();
+  });
+  it("keeps visuals inside the saved blog composer and blocks unsaved article input", () => {
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const visuals = within(detail).getByRole("region", { name: "Editorial visuals" });
+    expect(visuals).toHaveTextContent("Saved post post_4 · Article is saved");
+    fireEvent.change(within(detail).getByLabelText("Content"), { target: { value: "Unsaved new story" } });
+    expect(visuals).toHaveTextContent("Save article changes first");
+  });
+
+  it("shows a newly persisted figure placement in an otherwise clean open composer", () => {
+    let current = blogItem;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [current];
+      return undefined;
+    });
+    const view = render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    current = { ...blogItem, post: { ...blogItem.post, content: `${blogItem.post.content}\n\nReviewed figure placement.` } };
+    view.rerender(<PersistedPublishingPanel />);
+    const detail = screen.getByLabelText("Publishing item detail");
+    expect(within(detail).getByLabelText("Content")).toHaveValue(current.post.content);
+    expect(within(detail).getByRole("region", { name: "Editorial visuals" })).toHaveTextContent("Article is saved");
+  });
+
+  it("recognizes the persisted acknowledgement of its own article edit without a false conflict", () => {
+    let current = blogItem;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [current];
+      return undefined;
+    });
+    const view = render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Content"), { target: { value: "Saved author edit." } });
+    current = { ...blogItem, post: { ...blogItem.post, content: "Saved author edit." } };
+    view.rerender(<PersistedPublishingPanel />);
+    expect(within(detail).queryByRole("button", { name: "Reload saved article" })).not.toBeInTheDocument();
+    expect(within(detail).getByRole("region", { name: "Editorial visuals" })).toHaveTextContent("Article is saved");
+  });
+
+  it("recognizes its trimmed title acknowledgement without a false conflict", () => {
+    let current = blogItem;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [current];
+      return undefined;
+    });
+    const view = render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Title"), { target: { value: "  Saved normalized title  " } });
+    current = { ...blogItem, post: { ...blogItem.post, title: "Saved normalized title" } };
+    view.rerender(<PersistedPublishingPanel />);
+    expect(within(detail).queryByRole("button", { name: "Reload saved article" })).not.toBeInTheDocument();
+    expect(within(detail).getByLabelText("Title")).toHaveValue("Saved normalized title");
+  });
+
+  it("preserves unsaved text and requires an explicit reload after the saved article changes", () => {
+    let current = blogItem;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [current];
+      return undefined;
+    });
+    const view = render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Content"), { target: { value: "Unsaved author edit." } });
+    current = { ...blogItem, post: { ...blogItem.post, content: `${blogItem.post.content}\n\nReviewed figure placement.` } };
+    view.rerender(<PersistedPublishingPanel />);
+    expect(within(detail).getByLabelText("Content")).toHaveValue("Unsaved author edit.");
+    expect(within(detail).getByRole("button", { name: "Save Composer Changes" })).toBeDisabled();
+    fireEvent.click(within(detail).getByRole("button", { name: "Reload saved article" }));
+    expect(within(detail).getByLabelText("Content")).toHaveValue(current.post.content);
   });
 
   it("reschedules blog posts with an open PR through Convex without client GitHub calls", async () => {

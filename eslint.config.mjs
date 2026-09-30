@@ -26,6 +26,7 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     "convex/_generated/**",
     "coverage/**",
+    ".convex/**",
     ".next/**",
     ".worktrees/**",
     "out/**",

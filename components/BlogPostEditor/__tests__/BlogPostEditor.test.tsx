@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useQuery, useMutation } from 'convex/react'
+import { useAction, useQuery, useMutation } from 'convex/react'
 import { Id } from '@/convex/_generated/dataModel'
 import { BlogPostEditor } from '@/components/BlogPostEditor/BlogPostEditor'
 
-vi.mock('convex/react', () => ({ useQuery: vi.fn(), useMutation: vi.fn() }))
+vi.mock('convex/react', () => ({ useAction: vi.fn(), useQuery: vi.fn(), useMutation: vi.fn() }))
 vi.mock('@/components/AIAssistant/AIAssistant', () => ({
   AIAssistant: ({ onUsePost }: { onUsePost: (text: string) => void }) => (
     <button onClick={() => onUsePost('# Draft from AI')}>use-blog-ai</button>
@@ -13,6 +13,7 @@ vi.mock('@/components/AIAssistant/AIAssistant', () => ({
 }))
 vi.mock('@/convex/_generated/api', () => ({
   api: {
+    v2Storage: { uploadImage: "v2Storage:uploadImage" },
     posts: {
       getById: 'posts:getById',
       create: 'posts:create',
@@ -37,6 +38,7 @@ describe('BlogPostEditor', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(useAction).mockReturnValue(vi.fn().mockResolvedValue({ storageId: "fixture-storage" }))
     vi.stubGlobal('fetch', vi.fn())
     vi.mocked(useQuery).mockReturnValue(undefined)
     vi.mocked(useMutation).mockImplementation((fn) => {

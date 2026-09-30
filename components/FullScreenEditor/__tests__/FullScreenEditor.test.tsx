@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
-import { useQuery, useMutation, useQueries } from 'convex/react'
+import { useAction, useQuery, useMutation, useQueries } from 'convex/react'
 import { FullScreenEditor } from '@/components/FullScreenEditor/FullScreenEditor'
 
 // ── Convex ──────────────────────────────────────────────────────────────────
 vi.mock('convex/react', () => ({
+  useAction: vi.fn(),
   useQuery: vi.fn(),
   useMutation: vi.fn(),
   useQueries: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock('convex/react', () => ({
 
 vi.mock('@/convex/_generated/api', () => ({
   api: {
+    v2Storage: { uploadImage: "v2Storage:uploadImage" },
     posts: {
       getById: 'posts:getById',
       create: 'posts:create',
@@ -169,6 +171,7 @@ async function flushPromises() {
 describe('FullScreenEditor', () => {
   const mockCreate = vi.fn().mockResolvedValue('new-post-id')
   const mockUpdate = vi.fn().mockResolvedValue(undefined)
+  const mockUploadImage = vi.fn().mockResolvedValue({ storageId: 'storage-1' })
   const mockGenerateUploadUrl = vi.fn().mockResolvedValue('https://upload.example.com')
 
   let originalScrollIntoView: typeof HTMLElement.prototype.scrollIntoView | undefined
@@ -178,6 +181,8 @@ describe('FullScreenEditor', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.useFakeTimers()
+    vi.mocked(useAction).mockReturnValue(mockUploadImage)
+    mockUploadImage.mockResolvedValue({ storageId: 'storage-1' })
     mockCreate.mockResolvedValue('new-post-id')
     mockUpdate.mockResolvedValue(undefined)
     mockGenerateUploadUrl.mockResolvedValue('https://upload.example.com')
@@ -571,6 +576,7 @@ describe('FullScreenEditor', () => {
     render(<FullScreenEditor postId="new" />)
 
     const file = new File(['image'], 'hero.png', { type: 'image/png' })
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => new Uint8Array([137,80,78,71,13,10,26,10,1]).buffer })
     fireEvent.click(screen.getByRole('button', { name: /insert image/i }))
     fireEvent.change(screen.getByLabelText(/upload image/i), {
       target: { files: [file] },
@@ -579,7 +585,8 @@ describe('FullScreenEditor', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(mockGenerateUploadUrl).toHaveBeenCalled()
+    expect(mockUploadImage).toHaveBeenCalledWith(expect.objectContaining({ fileName: 'hero.png', contentType: 'image/png' }))
+    expect(fetch).not.toHaveBeenCalled()
     expect(mockInsertImage).toHaveBeenCalledWith(
       expect.objectContaining({
         fileId: 'storage-1',
@@ -596,6 +603,7 @@ describe('FullScreenEditor', () => {
     render(<FullScreenEditor postId="new" />)
 
     const file = new File(['image'], 'hero.png', { type: 'image/png' })
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => new Uint8Array([137,80,78,71,13,10,26,10,1]).buffer })
     fireEvent.click(screen.getByRole('button', { name: /insert image/i }))
     fireEvent.change(screen.getByLabelText(/upload image/i), {
       target: { files: [file] },

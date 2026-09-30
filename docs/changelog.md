@@ -4387,3 +4387,59 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/editorial-visual-generation
+
+## 09/30/2026 08:22:03 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	components/BlogPostEditor/BlogPostEditor.tsx
+- M	components/BlogPostEditor/__tests__/BlogPostEditor.test.tsx
+- M	components/ConvexClientProvider.tsx
+- A	components/EditorialFigurePanel.tsx
+- A	components/EditorialVisualPanel.tsx
+- M	components/FullScreenEditor/FullScreenEditor.tsx
+- M	components/FullScreenEditor/__tests__/FullScreenEditor.test.tsx
+- A	components/LinkedFigureEvidencePanel.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/ConvexClientProvider.test.tsx
+- A	components/__tests__/EditorialFigurePanel.test.tsx
+- A	components/__tests__/EditorialVisualPanel.test.tsx
+- A	components/__tests__/LinkedFigureEvidencePanel.test.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	eslint.config.mjs
+
+### Working Tree Snapshot
+
+- M  components/BlogPostEditor/BlogPostEditor.tsx
+- M  components/BlogPostEditor/__tests__/BlogPostEditor.test.tsx
+- M  components/ConvexClientProvider.tsx
+- A  components/EditorialFigurePanel.tsx
+- A  components/EditorialVisualPanel.tsx
+- M  components/FullScreenEditor/FullScreenEditor.tsx
+- M  components/FullScreenEditor/__tests__/FullScreenEditor.test.tsx
+- A  components/LinkedFigureEvidencePanel.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/ConvexClientProvider.test.tsx
+- A  components/__tests__/EditorialFigurePanel.test.tsx
+- A  components/__tests__/EditorialVisualPanel.test.tsx
+- A  components/__tests__/LinkedFigureEvidencePanel.test.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  eslint.config.mjs
+- ?? docs/editorial-visuals/
+- ?? scripts/export-local-visual-fixture.mjs
+- ?? scripts/import-visual-seed.mjs
+- ?? scripts/publish-visual-tickets.py
+- ?? scripts/visual-fixture-issuer.mjs
+- ?? scripts/visual-fixture-rehearsal.mjs
+- ?? scripts/visual-linked-fixture-rehearsal.mjs
+- ?? scripts/visual-provider-qualification-packet.py
+- ?? scripts/visual-provider-qualification-packet.test.py
+
+### Branch
+
+- feat/editorial-visual-generation

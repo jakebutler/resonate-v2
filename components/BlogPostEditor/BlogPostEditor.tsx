@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -36,7 +36,7 @@ export function BlogPostEditor({ open, postId, initialDate, onClose, onSaved }: 
   const createPost = useMutation(api.posts.create);
   const updatePost = useMutation(api.posts.update);
   const removePost = useMutation(api.posts.remove);
-  const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
+  const uploadImage = useAction(api.v2Storage.uploadImage);
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -100,13 +100,7 @@ export function BlogPostEditor({ open, postId, initialDate, onClose, onSaved }: 
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
-        const uploadUrl = await generateUploadUrl();
-        const res = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-        const { storageId } = await res.json();
+        const { storageId } = await uploadImage({ fileName: file.name, contentType: file.type, bytes: await file.arrayBuffer() });
         setFileIds((prev) => [...prev, storageId as Id<"_storage">]);
       }
     } finally {
