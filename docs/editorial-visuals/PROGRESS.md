@@ -1,5 +1,11 @@
 # Editorial visuals progress
 
+## September 30, 10:16 PDT checkpoint
+
+The repaired `ca79746` passed full coverage (1,073 plus one existing skip), lint, both production typechecks, Next build and a strict production dry run with zero deleted indexes. Its final independent Sol xhigh backend/figures reviews nevertheless returned CHANGES_REQUIRED: a retained merged post could re-enter new publication after legacy reschedule, despite the repaired authoring freeze. The coordinator's actual public-action RED proved one mocked transport call. A shared lifecycle guard now rejects terminal/merged state for publication snapshots, visual final approval and trusted recording; the review query explains the block. Sixty-five publishing/storage/action regressions pass, including preservation during an in-flight merge and no automatic retry. These final repairs need a new exact candidate, re-review and CI.
+
+The actual served local composer reloaded its removed numeric figure history, original saved body and empty schedule. The detached local reader loaded the 1,600×900 hero and both vector figures with caption/source/alt intact. These remain fictional engineering fixtures. UI review is pending because the review service rejected additional reviewer threads; no failure or missing receipt is counted as approval. PR #131 stays draft; no merge, production deployment, real publication or paid call occurred. Both separate cumulative provider ledgers remain spent/reserved $0.
+
 ## September 30, 09:40 PDT checkpoint
 
 Final candidate review found two defects in `c390c98`: concurrent scheduling could record a stale first PR as current, and figure writes could modify published/merged posts. Both have actual public-interface RED/GREEN repairs. The repaired server now defaults new visual admissions to paused, retains existing reservations and settlement during containment, and freezes hero/linked/figure changes for a retained merged PR. Root compatibility tests preserve older open-composer hero reads through indexed server ownership and provide an authenticated reload error for deprecated uploads. Thirty publishing/storage integration tests pass, plus 185 worker regression tests with one existing source-master skip; scoped lint and both production typechecks pass. Full exact-candidate checks and fresh independent review are next.

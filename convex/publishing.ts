@@ -735,6 +735,11 @@ async function currentVisualApprovalSignature(ctx: QueryCtx | MutationCtx, post:
     figures: figures.map(figure => ({ candidateId: figure.candidateId, dataSignature: figure.dataSignature, presentationSignature: figure.presentationSignature, rendererVersion: figure.rendererVersion, acceptedBy: figure.acceptedBy, acceptedAt: figure.acceptedAt, evidenceSources: figure.evidenceSources })) };
   return hashVisualBytes(new TextEncoder().encode(stableInputSignature(proof)).buffer);
 }
+function assertNewPublicationLifecycle(post: Doc<"v2Posts">) {
+  if (["pr-created", "submitted", "published", "unavailable"].includes(post.status) || post.blogPrStatus === "merged") {
+    throw new Error("This publication lifecycle requires a separate publishing transition");
+  }
+}
 async function assertReviewedApproval(ctx: MutationCtx, post: Doc<"v2Posts">, expectedArticleSignature?: string, expectedVisualSignature?: string) {
   if (expectedArticleSignature !== undefined && expectedArticleSignature !== exactApprovalArticle(post)) throw new Error("Reviewed article changed; reload before final approval");
   if (post.channelId !== "corvo-blog") return;
@@ -742,7 +747,7 @@ async function assertReviewedApproval(ctx: MutationCtx, post: Doc<"v2Posts">, ex
   if (await hasVisualPublication(ctx, post._id)) {
     if (!expectedArticleSignature || !expectedVisualSignature) throw new Error("Review the current article and visual snapshot before final approval");
     if (expectedVisualSignature !== signature) throw new Error("Reviewed visuals changed; reload before final approval");
-    if (["pr-created", "published", "unavailable"].includes(post.status)) throw new Error("This publication lifecycle does not permit final approval");
+    assertNewPublicationLifecycle(post);
   }
 }
 
@@ -754,7 +759,7 @@ export const getApprovalReview = query({
     const articleSignature = exactApprovalArticle(post);
     const hasVisuals = await hasVisualPublication(ctx, post._id);
     const metadataSignature = publicationMetadataSignature(post);
-    try { const visuals = await buildPublicationVisuals(ctx, post); return { articleSignature, metadataSignature, hasVisuals, publicationQualified: !hasVisuals || visuals?.hero.qualification === "live-receipt", visualSignature: await currentVisualApprovalSignature(ctx, post), blockedReason: null }; }
+    try { if (hasVisuals) assertNewPublicationLifecycle(post); const visuals = await buildPublicationVisuals(ctx, post); return { articleSignature, metadataSignature, hasVisuals, publicationQualified: !hasVisuals || visuals?.hero.qualification === "live-receipt", visualSignature: await currentVisualApprovalSignature(ctx, post), blockedReason: null }; }
     catch (error) { return { articleSignature, metadataSignature, hasVisuals, publicationQualified: false, visualSignature: null, blockedReason: error instanceof Error ? error.message : "Visual review is incomplete" }; }
   },
 });
@@ -774,10 +779,11 @@ export const getPostForPublication = query({
     if (!postId) throw new Error("Post not found");
     const post = await getOwnedPost(ctx, userId, postId, true);
     if (post.channelId !== "corvo-blog") throw new Error("Only blog posts can create publication packages");
+    assertNewPublicationLifecycle(post);
     if (post.approvalState !== "approved") throw new Error("Post is not approved for publishing");
     const intent = await latestIntent(ctx, post._id);
     if (!intent || intent.approvalState !== "approved" || intent.contentFingerprint !== fingerprintPostContent(post)) throw new Error("Publishing intent approval is stale");
-    if (post.variantReviewStatus === "pending" || post.variantReviewStatus === "rejected" || ["pr-created", "published", "unavailable"].includes(post.status)) throw new Error("Post lifecycle does not permit a new publication");
+    if (post.variantReviewStatus === "pending" || post.variantReviewStatus === "rejected") throw new Error("Post lifecycle does not permit a new publication");
     const visuals = await buildPublicationVisuals(ctx, post);
     const figures = await buildPublicationFigures(ctx, post);
     if (figures.length && !visuals?.hero) throw new Error("Approve a prepared hero before publishing informational figures");
@@ -1422,6 +1428,7 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
     }
     if (!trusted && await hasVisualPublication(ctx, post._id)) throw new Error("Visual PR state requires server verification");
     if (trusted) {
+      assertNewPublicationLifecycle(post);
       assertVisualPrTarget(args.result.prUrl, args.result.prNumber);
       await assertReviewedApproval(ctx, post, args.expectedArticleSignature, args.expectedVisualSignature);
       if (post.approvalState !== "approved" || post.variantReviewStatus === "pending" || post.variantReviewStatus === "rejected") throw new Error("Publication approval changed before PR recording");

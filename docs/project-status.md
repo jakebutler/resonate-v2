@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 09:50:56 PDT
+Last updated: 09/30/2026 10:18:07 PDT
 
 ## State
 
@@ -16,39 +16,24 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- c390c98 docs: record visual contracts and guarded offline rehearsals
+- ca79746 fix: pause visual admissions and preserve publication consistency
 
 ## Recent Commits
 
+- ca79746 fix: pause visual admissions and preserve publication consistency
 - c390c98 docs: record visual contracts and guarded offline rehearsals
 - 4f59b60 feat: integrate opt-in visuals into the saved composer
 - 48a28c0 feat: persist guarded editorial visuals and evidence-bound figures
 - b8b6e44 Merge pull request #96 from jakebutler/codex/linkedin-first-comment
-- c91ecdb feat: preserve LinkedIn first comments through approval and Buffer submission
 
 ## Local Working Tree
 
-- M  convex/__tests__/visualFigures.test.ts
-- M  convex/__tests__/visualPublication.test.ts
-- M  convex/__tests__/visualPublishingIntegration.test.ts
-- A  convex/__tests__/visualRollout.test.ts
-- M  convex/_generated/api.d.ts
+- A  convex/__tests__/visualPublicationLifecycle.test.ts
 - M  convex/publishing.ts
-- M  convex/schema.ts
-- M  convex/v2Storage.ts
-- M  convex/visualFigures.ts
-- M  convex/visualLinkedEvidence.ts
-- M  convex/visualProfiles.ts
-- M  convex/visualPublication.ts
-- A  convex/visualRollout.ts
-- M  convex/visualStorageAccess.ts
-- M  convex/visualWorkflow.ts
 - M  docs/editorial-visuals/PROGRESS.md
 - M  docs/editorial-visuals/publication-action.md
 - M  docs/editorial-visuals/release-preflight.md
-- A  docs/editorial-visuals/rollout.md
-- M  lib/publicationReview.ts
-- M  tests/setup.ts
+- M  docs/editorial-visuals/rollout.md
 
 ## Next Agent Pickup
 

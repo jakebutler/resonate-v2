@@ -4567,3 +4567,31 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - feat/editorial-visual-generation
+
+## 09/30/2026 10:18:07 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	convex/__tests__/visualPublicationLifecycle.test.ts
+- M	convex/publishing.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- M	docs/editorial-visuals/publication-action.md
+- M	docs/editorial-visuals/release-preflight.md
+- M	docs/editorial-visuals/rollout.md
+
+### Working Tree Snapshot
+
+- A  convex/__tests__/visualPublicationLifecycle.test.ts
+- M  convex/publishing.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/publication-action.md
+- M  docs/editorial-visuals/release-preflight.md
+- M  docs/editorial-visuals/rollout.md
+
+### Branch
+
+- feat/editorial-visual-generation
