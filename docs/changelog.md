@@ -4301,3 +4301,46 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/epic-97-blog-contract
+
+## 09/30/2026 02:41:12 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched the main dashboard surfaces.
+
+### Staged Changes
+
+- M	app/page.tsx
+- A	app/series/page.tsx
+- M	components/PersistedPublishingPanel.tsx
+- A	components/SeriesWorkspace.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	components/shell/Shell.tsx
+- A	convex/__tests__/series.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- A	convex/series.ts
+- M	docs/epic-97-progress.md
+- A	e2e/series.spec.ts
+
+### Working Tree Snapshot
+
+- M  app/page.tsx
+- A  app/series/page.tsx
+- M  components/PersistedPublishingPanel.tsx
+- A  components/SeriesWorkspace.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  components/shell/Shell.tsx
+- A  convex/__tests__/series.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- A  convex/series.ts
+- M  docs/epic-97-progress.md
+- A  e2e/series.spec.ts
+
+### Branch
+
+- codex/epic-97-series-foundation

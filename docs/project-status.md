@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 02:27:52 PDT
+Last updated: 09/30/2026 02:41:12 PDT
 
 ## State
 
@@ -13,46 +13,35 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 ## Session Focus
 
 - Updated repository documentation and handoff records.
-- Touched auth or environment wiring.
+- Touched the main dashboard surfaces.
 
 ## Last Completed Task
 
-- b8b6e44 Merge pull request #96 from jakebutler/codex/linkedin-first-comment
+- bbe7d67 Complete approved blog exports with prepared heroes and bound artifacts
 
 ## Recent Commits
 
+- bbe7d67 Complete approved blog exports with prepared heroes and bound artifacts
 - b8b6e44 Merge pull request #96 from jakebutler/codex/linkedin-first-comment
 - c91ecdb feat: preserve LinkedIn first comments through approval and Buffer submission
 - 38238c9 Merge pull request #95 from jakebutler/codex/publishing-navigation
 - ffd3339 fix: make spawned drafts reachable in publishing workspace
-- c6bd2fb Merge pull request #94 from jakebutler/feat/jake-voice-profile
 
 ## Local Working Tree
 
-- M  app/api/publish/__tests__/route.test.ts
-- M  app/api/publish/route.ts
-- A  components/BlogExportPreview.tsx
-- M  components/ConvexClientProvider.tsx
+- M  app/page.tsx
+- A  app/series/page.tsx
 - M  components/PersistedPublishingPanel.tsx
+- A  components/SeriesWorkspace.tsx
 - M  components/__tests__/PersistedPublishingPanel.test.tsx
-- A  convex.json
-- A  convex/__tests__/blogExport.test.ts
-- M  convex/__tests__/queue.test.ts
+- M  components/shell/Shell.tsx
+- A  convex/__tests__/series.test.ts
 - M  convex/_generated/api.d.ts
-- A  convex/blogHero.ts
-- A  convex/blogValidators.ts
-- M  convex/githubPrSync.ts
 - M  convex/publishing.ts
 - M  convex/schema.ts
-- A  docs/epic-97-progress.md
-- A  e2e/blog-export.spec.ts
-- M  lib/__tests__/github.test.ts
-- A  lib/__tests__/prepareBlogHero.test.ts
-- A  lib/blogContract.ts
-- M  lib/github.ts
-- A  lib/prepareBlogHero.ts
-- M  package-lock.json
-- M  package.json
+- A  convex/series.ts
+- M  docs/epic-97-progress.md
+- A  e2e/series.spec.ts
 
 ## Next Agent Pickup
 
@@ -61,4 +50,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- codex/epic-97-blog-contract
+- codex/epic-97-series-foundation

@@ -179,6 +179,9 @@ const ideaFlavor = v.union(
 );
 
 export default defineSchema({
+  postSeries: defineTable({userId:v.string(),brandId:v2BrandId,title:v.string(),revision:v.number(),createdAt:v.number(),updatedAt:v.number()}).index("by_user",["userId"]).index("by_user_and_brand",["userId","brandId"]),
+  seriesEntries: defineTable({seriesId:v.id("postSeries"),key:v.string(),sequence:v.number(),articlePostId:v.id("v2Posts"),companionPostIds:v.array(v.id("v2Posts"))}).index("by_series_and_sequence",["seriesId","sequence"]).index("by_series_and_key",["seriesId","key"]),
+  seriesPostLinks: defineTable({seriesId:v.id("postSeries"),entryId:v.id("seriesEntries"),postId:v.id("v2Posts")}).index("by_series",["seriesId"]).index("by_series_and_post",["seriesId","postId"]).index("by_post",["postId"]),
   v2Brands: defineTable({
     brandId: v2BrandId,
     name: v.string(),

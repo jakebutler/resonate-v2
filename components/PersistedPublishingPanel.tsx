@@ -354,11 +354,14 @@ function renderJson(value: unknown) {
 
 export function PersistedPublishingPanel({
   initialPostId,
+  initialSeriesId,
   devMode = false,
 }: {
   initialPostId?: string;
+  initialSeriesId?: string;
   devMode?: boolean;
 } = {}) {
+  const [seriesFilter, setSeriesFilter] = useState(initialSeriesId ?? "");
   const [brandFilters, setBrandFilters] = useState<BrandId[]>(["corvo"]);
   const [platformFilters, setPlatformFilters] = useState<ChannelId[]>([
     "linkedin",
@@ -418,10 +421,12 @@ export function PersistedPublishingPanel({
     );
   }, [linkedBrandId, linkedChannelId, linkedStatus]);
 
+  const seriesList = useQuery(api.series.list, isConvexAuthenticated ? {} : "skip") as import("@/convex/_generated/dataModel").Doc<"postSeries">[] | undefined;
   const items = useQuery(
     api.publishing.listCalendarItems,
     isConvexAuthenticated
       ? {
+          ...(seriesFilter ? {seriesId: seriesFilter as Id<"postSeries">} : {}),
           brandIds: brandFilters,
           platformIds: platformFilters,
           statuses: statusFilters,
@@ -987,6 +992,7 @@ export function PersistedPublishingPanel({
       sidebar={
         <>
           <SidebarCard className="space-y-3">
+            <label className="block text-sm">Series<select aria-label="Calendar series filter" className="w-full rounded border p-2" value={seriesFilter} onChange={e => setSeriesFilter(e.target.value)}><option value="">All series</option>{seriesList?.map(series => <option key={series._id} value={series._id}>{series.title}</option>)}</select></label>
             <FilterGroup
               label="Brands"
               onChange={(id) => setBrandFilters(toggleFilterSet(brandFilters, id))}

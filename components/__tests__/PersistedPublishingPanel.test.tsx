@@ -18,6 +18,7 @@ vi.mock("@/components/SocialConnectionsPanel", () => ({
 
 vi.mock("@/convex/_generated/api", () => ({
   api: {
+    series: {list:"series:list"},
     publishing: {
       listBrands: "publishing:listBrands",
       getPostById: "publishing:getPostById",

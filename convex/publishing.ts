@@ -1,3 +1,4 @@
+import { ownedSeries } from "./series";
 import { blogArtifactValidator, preparedHeroValidator } from "./blogValidators";
 import { blogEditorialFingerprint, missingBlogEditorialFields } from "../lib/blogContract";
 import { previewSeedIdeas, previewSeedPosts } from "./previewSeedData";
@@ -561,6 +562,7 @@ export const listPosts = query({
 
 export const listCalendarItems = query({
   args: {
+    seriesId: v.optional(v.id("postSeries")),
     brandIds: v.optional(v.array(brandIdValidator)),
     platformIds: v.optional(v.array(channelIdValidator)),
     statuses: v.optional(
@@ -582,6 +584,13 @@ export const listCalendarItems = query({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const accessibleBrands = await accessibleBrandIds(ctx, userId);
+    let seriesPostIds: Set<string> | null = null;
+    if (args.seriesId) {
+      await ownedSeries(ctx, userId, args.seriesId);
+      const links = await ctx.db.query("seriesPostLinks").withIndex("by_series", q => q.eq("seriesId", args.seriesId!)).take(5001);
+      if (links.length > 5000) throw new Error("Series is too large for one calendar view; use paginated series entries.");
+      seriesPostIds = new Set(links.map(link => link.postId));
+    }
     // Push the status filter into the index when provided: the calendar no
     // longer scans every post of every status and filters in JS.
     const posts = args.statuses?.length
@@ -602,6 +611,7 @@ export const listCalendarItems = query({
           .withIndex("by_user", (q) => q.eq("userId", userId))
           .collect();
     const filteredPosts = posts
+      .filter(post => !seriesPostIds || seriesPostIds.has(post._id))
       .filter((post) => accessibleBrands.has(post.brandId))
       .filter(
         (post) =>
@@ -785,6 +795,7 @@ export const deletePost = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
+    if (await ctx.db.query("seriesPostLinks").withIndex("by_post", q => q.eq("postId", post._id)).first()) throw new Error("Detach the post from its series before deleting it.");
     const intents = await ctx.db
       .query("v2PublishingIntents")
       .withIndex("by_post", (q) => q.eq("postId", args.postId))

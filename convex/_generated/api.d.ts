@@ -33,6 +33,7 @@ import type * as previewSeedData from "../previewSeedData.js";
 import type * as publishing from "../publishing.js";
 import type * as queue from "../queue.js";
 import type * as research from "../research.js";
+import type * as series from "../series.js";
 import type * as settings from "../settings.js";
 import type * as shapes from "../shapes.js";
 import type * as v2Migration from "../v2Migration.js";
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   publishing: typeof publishing;
   queue: typeof queue;
   research: typeof research;
+  series: typeof series;
   settings: typeof settings;
   shapes: typeof shapes;
   v2Migration: typeof v2Migration;

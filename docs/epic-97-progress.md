@@ -15,7 +15,7 @@ New and recovered article receipts include repository, branch, PR number, MDX pa
 ## Verification status
 
 - Implemented locally: Track A.
-- Automated regression: 88 files / 742 tests and coverage gates passed (76.95% lines). Additional bounded noisy-image and stale-callback hardening has focused test coverage. Typecheck and Next build passed. The repository typecheck excludes tests; a standalone test-inclusive tsc reports legacy fixture typing errors and is not its gate.
+- Automated regression: 88 files / 743 tests and coverage gates passed (76.85% lines). Additional bounded noisy-image and stale-callback hardening has focused test coverage. Typecheck and Next build passed. The repository typecheck excludes tests; a standalone test-inclusive tsc reports legacy fixture typing errors and is not its gate.
 - Mocked browser: canonical root composer save, saved preview, fixture approval, mocked Open PR, and reload passed. Providers and Convex WebSocket results are intercepted; this is not signed-in production verification or live delivery.
 - Code review: self-review using the Convex reviewer checklist; human PR review pending.
 - Merge: not authorized or performed.
@@ -31,3 +31,9 @@ New and recovered article receipts include repository, branch, PR number, MDX pa
 5. C4 #108.
 
 Keep #49/#51 parked. New series links must retain post IDs, schedules, copy, source links, approvals and receipts. Editorial approval and explicit queue release review remain separate.
+
+## Series adoption (#100)
+
+Implemented in a stacked branch after #109: durable brand-scoped grouping links, paginated entries/post picker, attach/detach/reorder, progress counts, calendar filtering and canonical composer links. No post or publishing record is rewritten. Duplicate membership/cycles and cross-user/brand IDs are rejected. Linked posts must be detached before deletion. New groups and controls require editor access.
+
+Verification: 15-article/30-companion Convex fixture preserves original post rows byte for byte across adoption, reorder and detachment; ownership/brand/channel rejection and calendar filtering pass. Existing composer tests (30) and Next build pass. Mocked Playwright verifies all 45 linked rows, reorder/reload and calendar navigation; the rendered full-page screenshot was inspected. Human review, merge, deployment and real delivery remain pending.
