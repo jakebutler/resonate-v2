@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { PersistedPublishingPanel } from "@/components/PersistedPublishingPanel";
 
+vi.mock("@/components/BufferDestinationPanel",()=>({BufferDestinationPanel:()=>null}));
+vi.mock("@/components/DeliveryReceiptPanel",()=>({DeliveryReceiptPanel:()=>null}));
 vi.mock("convex/react", () => ({
   useAction: vi.fn(),
   useMutation: vi.fn(),
@@ -370,12 +372,12 @@ describe("PersistedPublishingPanel", () => {
     expect(useQuery).toHaveBeenCalledWith("publishing:listCalendarItems", {
       brandIds: ["corvo"],
       platformIds: ["linkedin", "reddit", "corvo-blog"],
-      statuses: ["draft", "scheduled", "submitted", "needs-review", "pr-created"],
+      statuses: ["draft", "scheduled", "submitted", "queued", "publishing", "published", "cancel-requested", "cancelled", "removed", "provider-draft", "needs-review", "pr-created"],
     });
 
     fireEvent.click(screen.getByText("FreshProof"));
     fireEvent.click(screen.getByText("YouTube"));
-    fireEvent.click(screen.getByText("Published"));
+    fireEvent.click(screen.getByRole("checkbox", {name:"Published",exact:true}));
 
     const calendarCalls = vi
       .mocked(useQuery)
@@ -385,7 +387,7 @@ describe("PersistedPublishingPanel", () => {
       {
         brandIds: ["corvo", "freshproof"],
         platformIds: ["linkedin", "reddit", "corvo-blog", "youtube"],
-        statuses: ["draft", "scheduled", "submitted", "needs-review", "pr-created", "published"],
+        statuses: ["draft", "scheduled", "submitted", "queued", "publishing", "cancel-requested", "cancelled", "removed", "provider-draft", "needs-review", "pr-created"],
       },
     ]);
   });
@@ -1101,7 +1103,7 @@ describe("PersistedPublishingPanel", () => {
     );
     expect(submitMockProviderMock).not.toHaveBeenCalled();
     expect(
-      await screen.findByText("Submitted to Buffer queue for LinkedIn.")
+      await screen.findByText("Queued in Buffer for LinkedIn; publication is still pending.")
     ).toBeInTheDocument();
   });
 

@@ -1,3 +1,7 @@
+import { linkedInPayload } from "../lib/socialPayload";
+import { destinationSubmissionHold, readDestination } from "./bufferDestinations";
+import { applyRefresh } from "./bufferDelivery";
+import { destinationValidator, deliveryStatusValidator } from "./bufferValidators";
 import { ownedSeries } from "./series";
 import { blogArtifactValidator, preparedHeroValidator } from "./blogValidators";
 import { blogEditorialFingerprint, missingBlogEditorialFields } from "../lib/blogContract";
@@ -533,6 +537,7 @@ export const listPosts = query({
           v.literal("approved"),
           v.literal("scheduled"),
           v.literal("submitted"),
+          v.literal("queued"), v.literal("publishing"), v.literal("cancel-requested"), v.literal("cancelled"), v.literal("removed"), v.literal("provider-draft"),
           v.literal("published"),
           v.literal("needs-review"),
           v.literal("failed"),
@@ -572,6 +577,7 @@ export const listCalendarItems = query({
           v.literal("approved"),
           v.literal("scheduled"),
           v.literal("submitted"),
+          v.literal("queued"), v.literal("publishing"), v.literal("cancel-requested"), v.literal("cancelled"), v.literal("removed"), v.literal("provider-draft"),
           v.literal("published"),
           v.literal("needs-review"),
           v.literal("failed"),
@@ -796,6 +802,11 @@ export const deletePost = mutation({
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
     if (await ctx.db.query("seriesPostLinks").withIndex("by_post", q => q.eq("postId", post._id)).first()) throw new Error("Detach the post from its series before deleting it.");
+    if(post.prUrl||post.blogArtifact||post.blogExportClaimKey)throw new Error("Publication receipts and pending exports must be retained; this post cannot be deleted.");
+    const receipt=await ctx.db.query("v2PublishAttempts").withIndex("by_post",q=>q.eq("postId",post._id)).take(101);
+    if(receipt.length>100||receipt.some(attempt=>attempt.providerId!=="mock"))throw new Error("Publication attempt history must be retained; this post cannot be deleted.");
+    const liveStates=await ctx.db.query("v2ProviderStates").withIndex("by_post",q=>q.eq("postId",post._id)).take(101);
+    if(liveStates.length>100||liveStates.some(state=>state.simulated!==true&&state.providerPostId&&!state.providerPostId.startsWith("mock-")))throw new Error("Provider receipts must be retained; this post cannot be deleted.");
     const intents = await ctx.db
       .query("v2PublishingIntents")
       .withIndex("by_post", (q) => q.eq("postId", args.postId))
@@ -1196,8 +1207,7 @@ export const submitMockProvider = mutation({
     if (existingAttempt) {
       const retryable =
         args.retry &&
-        (latestAttempt?.status === "retryable-failure" ||
-          latestAttempt?.status === "ambiguous");
+        latestAttempt?.status === "retryable-failure";
       if (!retryable) {
         return {
           submitted: false,
@@ -1742,26 +1752,7 @@ function isBufferLiveSubmissionEnvApproved() {
   return process.env.BUFFER_LIVE_SUBMISSION === "approved";
 }
 
-function assembleLinkedInSubmissionContent(
-  content: string,
-  platformSettings: Doc<"v2Posts">["platformSettings"]
-) {
-  const settings =
-    platformSettings && typeof platformSettings === "object"
-      ? (platformSettings as { hashtags?: unknown; cta?: string })
-      : undefined;
-  // Migrated posts may store hashtags as a string; only array entries are used.
-  const rawHashtags = settings?.hashtags;
-  const hashtagList = Array.isArray(rawHashtags) ? rawHashtags : [];
-  const hashtags = hashtagList
-    .filter((tag): tag is string => typeof tag === "string")
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
-  const body = content.trim();
-  if (hashtags.length === 0) return body;
-  return `${body}\n\n${hashtags.join(" ")}`;
-}
+const assembleLinkedInSubmissionContent=linkedInPayload;
 
 function isLiveBufferProviderPostId(providerPostId: string | undefined): boolean {
   if (!providerPostId?.trim()) return false;
@@ -1771,6 +1762,7 @@ function isLiveBufferProviderPostId(providerPostId: string | undefined): boolean
 function mapProviderStateToPostStatus(
   providerStateStatus: Doc<"v2ProviderStates">["status"]
 ): Doc<"v2Posts">["status"] {
+  if (["queued","publishing","cancel-requested","cancelled","removed","provider-draft"].includes(providerStateStatus)) return providerStateStatus as Doc<"v2Posts">["status"];
   if (providerStateStatus === "published") return "published";
   if (providerStateStatus === "needs-review") return "needs-review";
   if (providerStateStatus === "unavailable") return "unavailable";
@@ -1795,48 +1787,10 @@ export const listProviderStatesByStatus = internalQuery({
 });
 
 export const recordBufferStatusRefresh = internalMutation({
-  args: {
-    providerStateId: v.id("v2ProviderStates"),
-    postId: v.id("v2Posts"),
-    providerStateStatus: v.string(),
-    providerPostId: v.optional(v.string()),
-    reason: v.optional(v.string()),
-    sanitizedResponse: v.optional(v.any()),
-  },
-  handler: async (ctx, args) => {
-    const state = await ctx.db.get(args.providerStateId);
-    if (!state) return { updated: false };
-    const post = await ctx.db.get(args.postId);
-    if (!post) return { updated: false };
-    const nextPostStatus = mapProviderStateToPostStatus(
-      args.providerStateStatus as Doc<"v2ProviderStates">["status"]
-    );
-    const now = Date.now();
-    await ctx.db.patch(args.providerStateId, {
-      status: args.providerStateStatus as Doc<"v2ProviderStates">["status"],
-      providerPostId: args.providerPostId ?? state.providerPostId,
-      lastResponseSummary: args.reason ?? state.lastResponseSummary,
-      updatedAt: now,
-    });
-    if (post.status !== nextPostStatus) {
-      await ctx.db.patch(post._id, { status: nextPostStatus, updatedAt: now });
-    }
-    await audit(ctx, {
-      userId: post.userId,
-      brandId: post.brandId,
-      postId: post._id,
-      action: "provider.status_refresh",
-      summary:
-        args.reason ??
-        `Buffer status refresh: provider ${args.providerStateStatus}, post ${nextPostStatus}.`,
-      metadata: {
-        providerStateId: String(args.providerStateId),
-        providerStateStatus: args.providerStateStatus,
-      },
-    });
-    return { updated: true };
-  },
+  args: {providerStateId:v.id("v2ProviderStates"),postId:v.id("v2Posts"),providerStateStatus:deliveryStatusValidator,providerPostId:v.optional(v.string()),reason:v.optional(v.string()),sanitizedResponse:v.optional(v.any()),checkedAt:v.optional(v.number()),expectedAttemptId:v.optional(v.id("v2PublishAttempts")),ok:v.optional(v.boolean())},
+  returns:v.any(),handler:async(ctx,args)=>applyRefresh(ctx,args),
 });
+
 
 export const bufferLiveSubmissionEnabled = query({
   args: {},
@@ -1858,7 +1812,8 @@ export const getBufferSubmissionContext = internalQuery({
       return { eligible: false as const, reason: "Post not found" };
     }
     try {
-      await requireBrandAccess(ctx, args.userId, post.brandId);
+      const access=await requireBrandAccess(ctx, args.userId, post.brandId);
+      if(access.role==="viewer")return {eligible:false as const,reason:"Editor access required for Buffer dispatch."};
     } catch {
       return { eligible: false as const, reason: "Brand access denied" };
     }
@@ -1910,6 +1865,10 @@ export const getBufferSubmissionContext = internalQuery({
       };
     }
 
+    const destinationReason=await destinationSubmissionHold(ctx,post);
+    if(destinationReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:destinationReason};
+    const reviewedDestination=(await readDestination(ctx,post.userId,post.brandId))!.destination!;
+
     const previousAttempts = await ctx.db
       .query("v2PublishAttempts")
       .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
@@ -1924,8 +1883,7 @@ export const getBufferSubmissionContext = internalQuery({
     if (existingAttempt) {
       const retryable =
         args.retry &&
-        (latestAttempt?.status === "retryable-failure" ||
-          latestAttempt?.status === "ambiguous");
+        latestAttempt?.status === "retryable-failure";
       if (!retryable) {
         return {
           eligible: false as const,
@@ -1967,6 +1925,7 @@ export const getBufferSubmissionContext = internalQuery({
         scheduledTime: intent.scheduledTime,
         timezone: intent.timezone,
         idempotencyKey,
+        expectedDestination:reviewedDestination,
       },
     };
   },
@@ -1983,7 +1942,8 @@ export const getBufferCancelContext = internalQuery({
       return { eligible: false as const, reason: "Post not found" };
     }
     try {
-      await requireBrandAccess(ctx, args.userId, post.brandId);
+      const access=await requireBrandAccess(ctx, args.userId, post.brandId);
+      if(access.role==="viewer")return {eligible:false as const,reason:"Editor access required for Buffer dispatch."};
     } catch {
       return { eligible: false as const, reason: "Brand access denied" };
     }
@@ -2049,15 +2009,7 @@ const bufferAttemptStatusValidator = v.union(
   v.literal("unavailable")
 );
 
-const bufferProviderStateStatusValidator = v.union(
-  v.literal("not-submitted"),
-  v.literal("submitted"),
-  v.literal("published"),
-  v.literal("needs-review"),
-  v.literal("failed"),
-  v.literal("unavailable"),
-  v.literal("cancel-intent-recorded")
-);
+const bufferProviderStateStatusValidator = deliveryStatusValidator;
 
 export const claimBufferSubmission = internalMutation({
   args: {
@@ -2091,6 +2043,7 @@ export const claimBufferSubmission = internalMutation({
         scheduledTime: v.optional(v.string()),
         timezone: v.string(),
         idempotencyKey: v.string(),
+        expectedDestination: destinationValidator,
       }),
     })
   ),
@@ -2101,7 +2054,8 @@ export const claimBufferSubmission = internalMutation({
       return { eligible: false as const, reason: "Post not found" };
     }
     try {
-      await requireBrandAccess(ctx, args.userId, post.brandId);
+      const access=await requireBrandAccess(ctx, args.userId, post.brandId);
+      if(access.role==="viewer")return {eligible:false as const,reason:"Editor access required for Buffer dispatch."};
     } catch {
       return { eligible: false as const, reason: "Brand access denied" };
     }
@@ -2153,6 +2107,10 @@ export const claimBufferSubmission = internalMutation({
       };
     }
 
+    const destinationReason=await destinationSubmissionHold(ctx,post);
+    if(destinationReason)return {eligible:false as const,brandId:post.brandId,intentId:intent._id,reason:destinationReason};
+    const reviewedDestination=(await readDestination(ctx,post.userId,post.brandId))!.destination!;
+
     const previousAttempts = await ctx.db
       .query("v2PublishAttempts")
       .withIndex("by_intent", (q) => q.eq("intentId", intent._id))
@@ -2176,8 +2134,7 @@ export const claimBufferSubmission = internalMutation({
     if (existingAttempt) {
       const retryable =
         args.retry &&
-        (latestAttempt?.status === "retryable-failure" ||
-          latestAttempt?.status === "ambiguous");
+        latestAttempt?.status === "retryable-failure";
       if (!retryable) {
         return {
           eligible: false as const,
@@ -2267,6 +2224,7 @@ export const claimBufferSubmission = internalMutation({
       submission: {
         ...submissionSnapshot,
         idempotencyKey,
+        expectedDestination:reviewedDestination,
       },
     };
   },
@@ -2315,7 +2273,11 @@ export const recordBufferSubmitResult = internalMutation({
     const intent = await ctx.db.get(args.intentId);
     if (!intent) throw new Error("Publishing intent not found");
 
+    const attempt=await ctx.db.get(args.attemptId);
+    if(!attempt || attempt.postId!==post._id || attempt.intentId!==intent._id || attempt.idempotencyKey!==args.idempotencyKey)throw new Error("Submission receipt identity mismatch");
+    if(attempt.status!=="pending")return {recorded:true as const,attemptId:attempt._id,submitted:attempt.status==="success",stale:false};
     const now = Date.now();
+    if(args.sanitizedResponse?.firstCommentUnsupported===true){const destination=await readDestination(ctx,post.userId,post.brandId);if(destination?.destination && attempt.submissionSnapshot.firstComment)await ctx.db.patch(destination._id,{destination:{...destination.destination,firstComment:{value:"unsupported",source:"provider-observation",checkedAt:now,evidence:"Definitive Buffer response rejected first-comment entitlement for this account."}}});}
     const intentStillValid =
       intent.approvalState === "approved" &&
       intent.contentFingerprint === contentFingerprint(post.title, post.content, post.linkedinFirstComment) &&
@@ -2325,15 +2287,15 @@ export const recordBufferSubmitResult = internalMutation({
 
     const effectiveOk = args.ok && intentStillValid;
     const effectiveStatus = !intentStillValid
-      ? ("permanent-failure" as const)
+      ? (args.ok ? "success" as const : args.status === "pending" ? "ambiguous" as const : args.status)
       : args.status === "pending"
         ? ("ambiguous" as const)
         : args.status;
     const effectiveProviderStatus = !intentStillValid
-      ? ("failed" as const)
+      ? ("needs-review" as const)
       : args.providerStateStatus;
     const staleReason =
-      "Approval or content changed while Buffer submission was in flight; provider result was not applied to post state.";
+      "Approval or content changed while Buffer submission was in flight; provider receipt retained and post held for review.";
 
     const summary = !intentStillValid
       ? staleReason
@@ -2343,6 +2305,7 @@ export const recordBufferSubmitResult = internalMutation({
 
     await ctx.db.patch(args.attemptId, {
       status: effectiveStatus,
+      providerPostId:args.providerPostId,observedDeliveryStatus:args.providerStateStatus,
       sanitizedResponse: sanitizeProviderResponse(
         args.sanitizedResponse &&
           typeof args.sanitizedResponse === "object" &&
@@ -2354,12 +2317,12 @@ export const recordBufferSubmitResult = internalMutation({
     });
 
     await ctx.db.patch(args.intentId, {
-      activeBufferClaimKey: undefined,
+      activeBufferClaimKey: effectiveStatus==="ambiguous" ? args.idempotencyKey : undefined,
       updatedAt: now,
     });
 
     // Only advance provider/post state when the claimed intent is still approved & unchanged.
-    if (intentStillValid) {
+    if (intentStillValid || args.providerPostId) {
       const providerState = await ctx.db
         .query("v2ProviderStates")
         .withIndex("by_intent", (q) => q.eq("intentId", args.intentId))
@@ -2371,6 +2334,10 @@ export const recordBufferSubmitResult = internalMutation({
         providerPostId: args.providerPostId,
         lastAttemptId: args.attemptId,
         lastResponseSummary: summary,
+        lastCheckedAt:now, lastReceipt:sanitizeProviderResponse(args.sanitizedResponse),
+        dueAt: typeof args.sanitizedResponse?.dueAt === "string" ? args.sanitizedResponse.dueAt : undefined,
+        destination:(await readDestination(ctx,post.userId,post.brandId))?.destination,
+
         updatedAt: now,
       };
       if (providerState) {
@@ -2434,7 +2401,7 @@ export const recordBufferCancelResult = internalMutation({
     await requireBrandAccess(ctx, args.userId, post.brandId);
 
     const now = Date.now();
-    const summary = args.ok
+    const provisionalSummary = args.ok
       ? args.intentType === "unpublish"
         ? "Buffer unpublish/delete recorded."
         : "Buffer cancel/delete recorded."
@@ -2445,21 +2412,18 @@ export const recordBufferCancelResult = internalMutation({
       .withIndex("by_intent", (q) => q.eq("intentId", args.intentId))
       .first();
 
-    // Failed cancels stay retryable: keep prior live Buffer state when present.
-    const nextStatus = args.ok
-      ? args.providerStateStatus
-      : providerState?.status === "cancel-intent-recorded"
-        ? providerState.status
-        : args.providerStateStatus === "cancel-intent-recorded"
-          ? "failed"
-          : args.providerStateStatus;
+    if(providerState?.providerPostId!==args.providerPostId)return {recorded:true as const,ok:false};
+    const confirmed=args.ok && args.sanitizedResponse?.deletionConfirmed===true && args.providerPostId===providerState?.providerPostId;
+    const summary=confirmed?provisionalSummary:"Cancellation lacks definitive matching proof; delivery remains unverified.";
+    const nextStatus = providerState?.status==="cancelled" ? "cancelled" as const : providerState?.status==="removed" ? "removed" as const : confirmed ? ((providerState?.publishedAt || providerState?.status === "published") ? "removed" as const : "cancelled" as const) : (providerState?.status === "published" ? "published" as const : "cancel-requested" as const);
 
     const providerPatch = {
       providerId: "buffer" as const,
       status: nextStatus,
       simulated: false,
       providerPostId: args.providerPostId ?? providerState?.providerPostId,
-      lastResponseSummary: summary,
+      lastResponseSummary: confirmed ? summary : "Cancellation remains unverified; inspect the receipt before retrying.",
+      lastReceipt:sanitizeProviderResponse(args.sanitizedResponse),lastCheckedAt:now,
       updatedAt: now,
     };
     if (providerState) {
@@ -2473,6 +2437,7 @@ export const recordBufferCancelResult = internalMutation({
       });
     }
 
+    if(nextStatus!=="published")await ctx.db.patch(post._id,{status:nextStatus,updatedAt:now});
     await audit(ctx, {
       userId: args.userId,
       brandId: args.brandId,
@@ -2480,10 +2445,10 @@ export const recordBufferCancelResult = internalMutation({
       intentId: args.intentId,
       action:
         args.intentType === "unpublish"
-          ? args.ok
+          ? confirmed
             ? "provider.buffer_unpublish"
             : "provider.buffer_unpublish_failed"
-          : args.ok
+          : confirmed
             ? "provider.buffer_cancel"
             : "provider.buffer_cancel_failed",
       summary,
@@ -2499,7 +2464,7 @@ export const recordBufferCancelResult = internalMutation({
       },
     });
 
-    return { recorded: true as const, ok: args.ok };
+    return { recorded: true as const, ok: confirmed };
   },
 });
 

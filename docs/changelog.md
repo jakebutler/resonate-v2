@@ -4344,3 +4344,67 @@ Append-only session log for repository-level updates. Each documentation refresh
 ### Branch
 
 - codex/epic-97-series-foundation
+
+## 09/30/2026 03:19:52 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	components/BufferDestinationPanel.tsx
+- A	components/DeliveryReceiptPanel.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/SocialConnectionsPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- A	convex/__tests__/bufferFoundations.test.ts
+- M	convex/__tests__/publishing.test.ts
+- M	convex/_generated/api.d.ts
+- A	convex/bufferDelivery.ts
+- A	convex/bufferDestinations.ts
+- M	convex/bufferLive.ts
+- A	convex/bufferValidators.ts
+- M	convex/crons.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- M	docs/epic-97-progress.md
+- A	e2e/buffer-foundations.spec.ts
+- A	lib/__tests__/bufferContracts.test.ts
+- M	lib/__tests__/providerAdapters.test.ts
+- A	lib/bufferContracts.ts
+- M	lib/domain.ts
+- M	lib/providerAdapters.ts
+- A	lib/socialPayload.ts
+- A	vercel.json
+
+### Working Tree Snapshot
+
+- A  components/BufferDestinationPanel.tsx
+- A  components/DeliveryReceiptPanel.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/SocialConnectionsPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex/__tests__/bufferFoundations.test.ts
+- M  convex/__tests__/publishing.test.ts
+- M  convex/_generated/api.d.ts
+- A  convex/bufferDelivery.ts
+- A  convex/bufferDestinations.ts
+- M  convex/bufferLive.ts
+- A  convex/bufferValidators.ts
+- M  convex/crons.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- M  docs/epic-97-progress.md
+- A  e2e/buffer-foundations.spec.ts
+- A  lib/__tests__/bufferContracts.test.ts
+- M  lib/__tests__/providerAdapters.test.ts
+- A  lib/bufferContracts.ts
+- M  lib/domain.ts
+- M  lib/providerAdapters.ts
+- A  lib/socialPayload.ts
+- A  vercel.json
+
+### Branch
+
+- codex/epic-97-buffer-foundations

@@ -1,4 +1,6 @@
 "use client";
+import { BufferDestinationPanel } from "./BufferDestinationPanel";
+import { DeliveryReceiptPanel } from "./DeliveryReceiptPanel";
 import { BlogExportPreview } from "./BlogExportPreview";
 
 import Link from "next/link";
@@ -54,6 +56,7 @@ type PersistedCalendarItem = {
     title: string;
     content: string;
     linkedinFirstComment?: string;
+    platformSettings?: unknown;
     status: PostStatus;
     approvalState: string;
     scheduledDate?: string;
@@ -142,7 +145,8 @@ const statusOptions: Array<{ id: PostStatus; label: string }> = [
   { id: "draft", label: "Draft" },
   { id: "approved", label: "Approved" },
   { id: "scheduled", label: "Scheduled" },
-  { id: "submitted", label: "Submitted" },
+  { id: "submitted", label: "Submitted (legacy)" },
+  {id:"queued",label:"Queued"}, {id:"publishing",label:"Publishing"}, {id:"cancel-requested",label:"Cancel requested"}, {id:"cancelled",label:"Cancelled"}, {id:"removed",label:"Removed"}, {id:"provider-draft",label:"Provider draft"},
   { id: "published", label: "Published" },
   { id: "needs-review", label: "Needs Review" },
   { id: "failed", label: "Failed" },
@@ -371,7 +375,7 @@ export function PersistedPublishingPanel({
   const [statusFilters, setStatusFilters] = useState<PostStatus[]>([
     "draft",
     "scheduled",
-    "submitted",
+    "submitted", "queued", "publishing", "published", "cancel-requested", "cancelled", "removed", "provider-draft",
     "needs-review",
     "pr-created",
   ]);
@@ -510,16 +514,16 @@ export function PersistedPublishingPanel({
     [visibleDateKeys, visibleItems]
   );
   const providerSummary = useMemo(() => {
-    const submitted = visibleItems.filter(
-      (item) => item.providerState?.status === "submitted"
-    ).length;
+    const submitted=visibleItems.filter(item=>item.providerState?.status==="submitted").length;
+    const queued=visibleItems.filter(item=>["queued","publishing"].includes(item.providerState?.status??"")).length;
+    const published=visibleItems.filter(item=>item.providerState?.status==="published").length;
     const needsReview = visibleItems.filter(
       (item) => item.providerState?.status === "needs-review"
     ).length;
     const notSubmitted = visibleItems.filter(
       (item) => item.providerState?.status === "not-submitted"
     ).length;
-    return { submitted, needsReview, notSubmitted };
+    return { submitted, queued, published, needsReview, notSubmitted };
   }, [visibleItems]);
   const autoSelectedPostId = useMemo(() => {
     if (!initialPostId || loading) return null;
@@ -685,7 +689,7 @@ export function PersistedPublishingPanel({
         }
         setMessage(
           result.submitted
-            ? "Submitted to Buffer queue for LinkedIn."
+            ? "Queued in Buffer for LinkedIn; publication is still pending."
             : (result.reason ?? "Buffer submission was skipped.")
         );
       } catch (error) {
@@ -1028,7 +1032,7 @@ export function PersistedPublishingPanel({
         <MainCard className={selectedItem ? "order-2 min-w-0 lg:order-1" : undefined}>
             <div className="grid gap-3 border-b border-black/10 p-4 sm:grid-cols-3">
               <Metric label="Not submitted" value={providerSummary.notSubmitted} />
-              <Metric label="Submitted" value={providerSummary.submitted} />
+              <Metric label="Queued / publishing" value={providerSummary.queued} /><Metric label="Published" value={providerSummary.published} /><Metric label="Legacy unverified" value={providerSummary.submitted} />
               <Metric label="Needs review" value={providerSummary.needsReview} />
             </div>
 
@@ -1446,7 +1450,7 @@ function AgendaItem(props: {
   const submitDisabled =
     !approved ||
     !intent?.scheduledDate ||
-    providerState?.status === "submitted" ||
+    ["submitted","queued","publishing","published","cancel-requested","cancelled","removed"].includes(providerState?.status ?? "") ||
     providerIntentRecorded ||
     props.bufferLiveBusy ||
     (showLiveBuffer && !brandHasBufferLinkedInMapping(post.brandId));
@@ -1606,6 +1610,8 @@ function AgendaItem(props: {
           )}
           <button
             aria-label={`Delete ${post.title}`}
+            disabled={Boolean(existingPrUrl) || hasLiveBufferProviderPost(providerState)}
+            title={Boolean(existingPrUrl) || hasLiveBufferProviderPost(providerState) ? "Publication receipts are retained." : undefined}
             className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
             onClick={() => props.onDelete(post._id, post.title)}
             type="button"
@@ -1711,7 +1717,7 @@ function PublishingDetailDrawer(props: {
   const submitDisabled =
     !approved ||
     !intent?.scheduledDate ||
-    providerState?.status === "submitted" ||
+    ["submitted","queued","publishing","published","cancel-requested","cancelled","removed"].includes(providerState?.status ?? "") ||
     providerIntentRecorded ||
     props.bufferLiveBusy ||
     (showLiveBuffer && !brandHasBufferLinkedInMapping(post.brandId));
@@ -1812,6 +1818,7 @@ function PublishingDetailDrawer(props: {
               </div>
             )}
 
+            {isLinkedIn && <><BufferDestinationPanel brandId={post.brandId} post={post}/><DeliveryReceiptPanel postId={post._id}/></>}
             <PersistedPostComposer
               embedded
               item={item}
@@ -2068,6 +2075,8 @@ function PublishingDetailDrawer(props: {
           )}
           <button
             aria-label={`Delete ${post.title}`}
+            disabled={Boolean(existingPrUrl) || hasLiveBufferProviderPost(providerState)}
+            title={Boolean(existingPrUrl) || hasLiveBufferProviderPost(providerState) ? "Publication receipts are retained." : undefined}
             className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
             onClick={() => props.onDelete(post._id, post.title)}
             type="button"

@@ -1,3 +1,4 @@
+import { destinationValidator, deliveryStatusValidator } from "./bufferValidators";
 import { preparedHeroValidator } from "./blogValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
@@ -38,6 +39,7 @@ const v2PostStatus = v.union(
   v.literal("approved"),
   v.literal("scheduled"),
   v.literal("submitted"),
+  v.literal("queued"), v.literal("publishing"), v.literal("cancel-requested"), v.literal("cancelled"), v.literal("removed"), v.literal("provider-draft"),
   v.literal("published"),
   v.literal("needs-review"),
   v.literal("failed"),
@@ -45,15 +47,7 @@ const v2PostStatus = v.union(
   v.literal("pr-created")
 );
 
-const v2ProviderStateStatus = v.union(
-  v.literal("not-submitted"),
-  v.literal("submitted"),
-  v.literal("published"),
-  v.literal("needs-review"),
-  v.literal("failed"),
-  v.literal("unavailable"),
-  v.literal("cancel-intent-recorded")
-);
+const v2ProviderStateStatus = deliveryStatusValidator;
 
 const v2AttemptStatus = v.union(
   v.literal("pending"),
@@ -179,6 +173,8 @@ const ideaFlavor = v.union(
 );
 
 export default defineSchema({
+  bufferDestinations:defineTable({userId:v.string(),brandId:v2BrandId,destination:v.optional(destinationValidator),error:v.optional(v.string()),updatedAt:v.number()}).index("by_user_and_brand",["userId","brandId"]),
+  bufferPollControl:defineTable({key:v.string(),backoffUntil:v.optional(v.number()),claimedUntil:v.optional(v.number())}).index("by_key",["key"]),
   postSeries: defineTable({userId:v.string(),brandId:v2BrandId,title:v.string(),revision:v.number(),createdAt:v.number(),updatedAt:v.number()}).index("by_user",["userId"]).index("by_user_and_brand",["userId","brandId"]),
   seriesEntries: defineTable({seriesId:v.id("postSeries"),key:v.string(),sequence:v.number(),articlePostId:v.id("v2Posts"),companionPostIds:v.array(v.id("v2Posts"))}).index("by_series_and_sequence",["seriesId","sequence"]).index("by_series_and_key",["seriesId","key"]),
   seriesPostLinks: defineTable({seriesId:v.id("postSeries"),entryId:v.id("seriesEntries"),postId:v.id("v2Posts")}).index("by_series",["seriesId"]).index("by_series_and_post",["seriesId","postId"]).index("by_post",["postId"]),
@@ -223,6 +219,7 @@ export default defineSchema({
     title: v.string(),
     content: v.string(),
     linkedinFirstComment: v.optional(v.string()),
+    destinationReview:v.optional(v.object({identity:v.string(),fingerprint:v.string(),schedule:v.string(),checkedAt:v.number(),actor:v.string()})),
     status: v2PostStatus,
     approvalState: v2ApprovalState,
     scheduledDate: v.optional(v.string()),
@@ -314,13 +311,16 @@ export default defineSchema({
     prUrl: v.optional(v.string()),
     lastAttemptId: v.optional(v.id("v2PublishAttempts")),
     lastResponseSummary: v.optional(v.string()),
+    lastCheckedAt:v.optional(v.number()), providerUpdatedAt:v.optional(v.number()),
+    dueAt:v.optional(v.string()), publishedAt:v.optional(v.string()), publishedUrl:v.optional(v.string()),
+    destination:v.optional(destinationValidator), lastReceipt:v.optional(v.any()), lastReadError:v.optional(v.string()),
     simulated: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_post", ["postId"])
     .index("by_intent", ["intentId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"]).index("by_status_and_last_checked",["status","lastCheckedAt"]),
 
   v2PublishAttempts: defineTable({
     postId: v.id("v2Posts"),
@@ -329,6 +329,7 @@ export default defineSchema({
     providerId: v2ProviderId,
     status: v2AttemptStatus,
     idempotencyKey: v.string(),
+    providerPostId:v.optional(v.string()), observedDeliveryStatus:v.optional(v2ProviderStateStatus),
     retryCount: v.number(),
     submissionSnapshot: v.object({
       postId: v.string(),

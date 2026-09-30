@@ -17,7 +17,10 @@ import type * as __tests___helpers_mockMutationCtx from "../__tests__/helpers/mo
 import type * as backfill from "../backfill.js";
 import type * as blogHero from "../blogHero.js";
 import type * as blogValidators from "../blogValidators.js";
+import type * as bufferDelivery from "../bufferDelivery.js";
+import type * as bufferDestinations from "../bufferDestinations.js";
 import type * as bufferLive from "../bufferLive.js";
+import type * as bufferValidators from "../bufferValidators.js";
 import type * as campaignAccess from "../campaignAccess.js";
 import type * as campaigns from "../campaigns.js";
 import type * as cohesion from "../cohesion.js";
@@ -53,7 +56,10 @@ declare const fullApi: ApiFromModules<{
   backfill: typeof backfill;
   blogHero: typeof blogHero;
   blogValidators: typeof blogValidators;
+  bufferDelivery: typeof bufferDelivery;
+  bufferDestinations: typeof bufferDestinations;
   bufferLive: typeof bufferLive;
+  bufferValidators: typeof bufferValidators;
   campaignAccess: typeof campaignAccess;
   campaigns: typeof campaigns;
   cohesion: typeof cohesion;

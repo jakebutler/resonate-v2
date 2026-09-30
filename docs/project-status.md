@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/30/2026 02:41:12 PDT
+Last updated: 09/30/2026 03:19:52 PDT
 
 ## State
 
@@ -13,35 +13,45 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 ## Session Focus
 
 - Updated repository documentation and handoff records.
-- Touched the main dashboard surfaces.
 
 ## Last Completed Task
 
-- bbe7d67 Complete approved blog exports with prepared heroes and bound artifacts
+- 454a5a7 Adopt existing posts into durable publication series
 
 ## Recent Commits
 
+- 454a5a7 Adopt existing posts into durable publication series
 - bbe7d67 Complete approved blog exports with prepared heroes and bound artifacts
 - b8b6e44 Merge pull request #96 from jakebutler/codex/linkedin-first-comment
 - c91ecdb feat: preserve LinkedIn first comments through approval and Buffer submission
 - 38238c9 Merge pull request #95 from jakebutler/codex/publishing-navigation
-- ffd3339 fix: make spawned drafts reachable in publishing workspace
 
 ## Local Working Tree
 
-- M  app/page.tsx
-- A  app/series/page.tsx
+- A  components/BufferDestinationPanel.tsx
+- A  components/DeliveryReceiptPanel.tsx
 - M  components/PersistedPublishingPanel.tsx
-- A  components/SeriesWorkspace.tsx
+- M  components/SocialConnectionsPanel.tsx
 - M  components/__tests__/PersistedPublishingPanel.test.tsx
-- M  components/shell/Shell.tsx
-- A  convex/__tests__/series.test.ts
+- A  convex/__tests__/bufferFoundations.test.ts
+- M  convex/__tests__/publishing.test.ts
 - M  convex/_generated/api.d.ts
+- A  convex/bufferDelivery.ts
+- A  convex/bufferDestinations.ts
+- M  convex/bufferLive.ts
+- A  convex/bufferValidators.ts
+- M  convex/crons.ts
 - M  convex/publishing.ts
 - M  convex/schema.ts
-- A  convex/series.ts
 - M  docs/epic-97-progress.md
-- A  e2e/series.spec.ts
+- A  e2e/buffer-foundations.spec.ts
+- A  lib/__tests__/bufferContracts.test.ts
+- M  lib/__tests__/providerAdapters.test.ts
+- A  lib/bufferContracts.ts
+- M  lib/domain.ts
+- M  lib/providerAdapters.ts
+- A  lib/socialPayload.ts
+- A  vercel.json
 
 ## Next Agent Pickup
 
@@ -50,4 +60,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- codex/epic-97-series-foundation
+- codex/epic-97-buffer-foundations

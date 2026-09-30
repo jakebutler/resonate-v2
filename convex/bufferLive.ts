@@ -1,6 +1,9 @@
 "use node";
 
 import { v } from "convex/values";
+import { type BufferRequestBudget, BufferRequestBudgetError } from "../lib/bufferContracts";
+import { brandIdValidator } from "./campaignAccess";
+import { resolveBufferLinkedInChannelId } from "../lib/providerAdapters";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import {
@@ -14,8 +17,9 @@ function isFlagApproved(value: string | undefined): boolean {
   return normalized === "approved" || normalized === "true" || normalized === "1";
 }
 
-function bufferAdapterContext() {
+function bufferAdapterContext(requestBudget?:BufferRequestBudget) {
   return {
+    requestBudget,
     env: {
       BUFFER_API_KEY: process.env.BUFFER_API_KEY,
       BUFFER_LIVE_SUBMISSION: process.env.BUFFER_LIVE_SUBMISSION,
@@ -31,18 +35,8 @@ function isBufferLiveGateOn() {
   return process.env.BUFFER_LIVE_SUBMISSION === "approved";
 }
 
-function providerFailureFromError(error: unknown): ProviderResult {
-  const message = error instanceof Error ? error.message : "Buffer provider call failed.";
-  return {
-    ok: false,
-    status: "retryable-failure",
-    providerStateStatus: "failed",
-    reason: message,
-    sanitizedResponse: {
-      providerId: "buffer",
-      error: message,
-    },
-  };
+function providerFailureFromError(_error: unknown): ProviderResult {
+  return {ok:false,status:"ambiguous",providerStateStatus:"needs-review",reason:"Provider call did not return a definitive receipt; reconcile before retrying.",sanitizedResponse:{providerId:"buffer",outcome:"uncertain"}};
 }
 
 export const submit = action({
@@ -201,7 +195,7 @@ export const cancelOrUnpublish = action({
       result = providerFailureFromError(error);
     }
 
-    await ctx.runMutation(internal.publishing.recordBufferCancelResult, {
+    const receipt=await ctx.runMutation(internal.publishing.recordBufferCancelResult, {
       postId: args.postId,
       userId,
       intentId: prepared.intentId,
@@ -216,56 +210,43 @@ export const cancelOrUnpublish = action({
 
     return {
       recorded: true,
-      ok: result.ok,
+      ok: receipt.ok,
       liveGateOff: false,
       reason: result.ok ? undefined : result.reason,
     };
   },
 });
 
-/**
- * Cron target (convex/crons.ts): posts submitted to Buffer stay "submitted"
- * forever without a status-refresh loop, leaving "published" unreachable for
- * Buffer-routed channels. Runs hourly, bounded, and only for live
- * (non-simulated) Buffer provider states.
- */
+/** Existing hourly cron target: oldest checked first; request budget and persisted backoff. */
 export const refreshSubmittedStatuses = internalAction({
-  args: {},
-  handler: async (ctx): Promise<{ refreshed: number }> => {
-    if (!isBufferLiveGateOn()) return { refreshed: 0 };
-
-    const submitted = await ctx.runQuery(
-      internal.publishing.listProviderStatesByStatus,
-      { status: "submitted", limit: 50 }
-    );
-
-    let refreshed = 0;
-    for (const state of submitted) {
-      if (state.providerId && state.providerId !== "buffer") continue;
-      const providerPostId = state.providerPostId?.trim();
-      if (!providerPostId || providerPostId.startsWith("mock-")) continue;
-
-      let result: ProviderResult;
-      try {
-        result = await bufferProviderAdapter.refreshStatus(
-          providerPostId,
-          bufferAdapterContext()
-        );
-      } catch (error) {
-        result = providerFailureFromError(error);
+  args:{},returns:v.object({refreshed:v.number()}),handler:async(ctx):Promise<{refreshed:number}>=>{
+    if(!isBufferLiveGateOn()||!await ctx.runMutation(internal.bufferDelivery.claimPoll,{}))return {refreshed:0};
+    const budget:BufferRequestBudget={remaining:Math.min(20,Math.max(1,Number(process.env.BUFFER_POLL_REQUEST_BUDGET)||6))};const context=bufferAdapterContext(budget);let refreshed=0;
+    try {
+      const states=await ctx.runQuery(internal.bufferDelivery.oldestActive,{limit:Math.min(50,budget.remaining)});
+      for(const state of states){if(budget.remaining<=0||(budget.backoffUntil??0)>Date.now())break;
+        if(state.status==="cancel-intent-recorded"){await ctx.runMutation(internal.bufferDelivery.reconcileLegacyCancellation,{providerStateId:state._id});continue;}
+        const checkedAt=Date.now();let result:ProviderResult;
+        try{result=await bufferProviderAdapter.refreshStatus(state.providerPostId!,context);}catch(error){if(error instanceof BufferRequestBudgetError)break;result=providerFailureFromError(error);}
+        await ctx.runMutation(internal.publishing.recordBufferStatusRefresh,{providerStateId:state._id,postId:state.postId,providerStateStatus:result.providerStateStatus,providerPostId:state.providerPostId,expectedAttemptId:state.lastAttemptId,checkedAt,ok:result.ok,sanitizedResponse:result.sanitizedResponse});if(result.ok)refreshed++;
       }
-      if (!result.ok) continue;
-
-      await ctx.runMutation(internal.publishing.recordBufferStatusRefresh, {
-        providerStateId: state._id,
-        postId: state.postId,
-        providerStateStatus: result.providerStateStatus,
-        providerPostId: result.providerPostId ?? providerPostId,
-        reason: result.reason,
-        sanitizedResponse: result.sanitizedResponse,
-      });
-      refreshed += 1;
-    }
-    return { refreshed };
+    }finally{await ctx.runMutation(internal.bufferDelivery.finishPoll,{backoffUntil:budget.backoffUntil});}
+    return {refreshed};
   },
 });
+export const refreshStatus = action({args:{postId:v.id("v2Posts")},returns:v.any(),handler:async(ctx,args):Promise<{updated:boolean;reason?:string}>=>{
+  const userId=await requireActionUserId(ctx);const state: import("./_generated/dataModel").Doc<"v2ProviderStates"> = await ctx.runQuery(internal.bufferDelivery.refreshContext,{...args,userId});
+  if(!isBufferLiveGateOn())return {updated:false,reason:"Live provider gate is off."};
+  if(!await ctx.runMutation(internal.bufferDelivery.claimPoll,{}))return {updated:false,reason:"Provider check is already running or rate limited; wait before checking again."};
+  const budget:BufferRequestBudget={remaining:1};try{
+    if(state.status==="cancel-intent-recorded")return {updated:await ctx.runMutation(internal.bufferDelivery.reconcileLegacyCancellation,{providerStateId:state._id})};
+    const checkedAt=Date.now();let result:ProviderResult;try{result=await bufferProviderAdapter.refreshStatus(state.providerPostId!,bufferAdapterContext(budget));}catch(error){result=providerFailureFromError(error);}
+    return await ctx.runMutation(internal.publishing.recordBufferStatusRefresh,{providerStateId:state._id,postId:state.postId,providerStateStatus:result.providerStateStatus,providerPostId:state.providerPostId,expectedAttemptId:state.lastAttemptId,checkedAt,ok:result.ok,sanitizedResponse:result.sanitizedResponse});
+  }finally{await ctx.runMutation(internal.bufferDelivery.finishPoll,{backoffUntil:budget.backoffUntil});}
+}});
+export const refreshDestination=action({args:{brandId:brandIdValidator},returns:v.any(),handler:async(ctx,args):Promise<{verified:boolean;reason?:string}>=>{
+  const userId=await requireActionUserId(ctx);await ctx.runQuery(internal.bufferDestinations.authorized,{...args,userId});
+  const context=bufferAdapterContext({remaining:22});if(!context.liveProviderValidationApproved||!context.env.BUFFER_API_KEY)return {verified:false,reason:"Read-only provider validation requires the configured approval gate and credential."};
+  const control=await ctx.runQuery(internal.bufferDelivery.control,{});if((control?.backoffUntil??0)>Date.now())return {verified:false,reason:"Provider rate limited; wait before checking."};
+  try{const result=await resolveBufferLinkedInChannelId(args.brandId,context);await ctx.runMutation(internal.bufferDestinations.record,{...args,userId,...(result.ok?{destination:result.destination}:{error:result.reason})});return {verified:result.ok,...(!result.ok?{reason:result.reason}:{})};}catch{await ctx.runMutation(internal.bufferDestinations.record,{...args,userId,error:"Destination lookup failed; review the connection."});return {verified:false,reason:"Destination lookup failed; review the connection."};}finally{if(context.requestBudget?.backoffUntil)await ctx.runMutation(internal.bufferDelivery.recordBackoff,{backoffUntil:context.requestBudget.backoffUntil});}
+}});

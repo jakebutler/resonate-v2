@@ -1,3 +1,5 @@
+import {socialReleaseVersion} from "../../lib/socialPayload";
+import {destinationIdentity} from "../../lib/bufferContracts";
 import { convexTest } from "convex-test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -138,6 +140,11 @@ describe("v2 publishing platform settings", () => {
     expect(v2Types).toContain("export type CorvoBlogPlatformSettings");
   });
 });
+
+async function reviewFixtureDestination(t:ReturnType<typeof convexTest>,user:ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,userId:string,postId:Id<"v2Posts">){
+ const d={channelId:"fixture-channel",organizationId:"fixture-org",displayName:"Fixture Page",handle:"corvo-labs-us",accountType:"page",disconnected:false,locked:false,queuePaused:false,flagsVerified:true,checkedAt:Date.now(),firstComment:{value:"supported" as const,source:"operator-confirmed" as const,checkedAt:Date.now(),evidence:"Sanitized fixture account"}};
+ await t.mutation(internal.bufferDestinations.record,{userId,brandId:"corvo",destination:d});const post=(await t.run(ctx=>ctx.db.get(postId)))!;await user.mutation(api.bufferDestinations.pin,{postId,expectedVersion:socialReleaseVersion(post),identity:destinationIdentity(d)});
+}
 
 describe("publishing cross-brand authorization", () => {
   it("denies setApproval on a lower-db post for corvo-only members", async () => {
@@ -402,6 +409,7 @@ describe("publishing cross-brand authorization", () => {
       approvalState: "approved",
     });
 
+    await reviewFixtureDestination(t,asUser,userId,postId);
     const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, {
       postId,
       userId,
@@ -483,6 +491,7 @@ describe("publishing cross-brand authorization", () => {
     expect(blocked).toMatchObject({ eligible: false, reason: "Post is not approved." });
 
     await asUser.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    await reviewFixtureDestination(t,asUser,userId,postId);
     const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, { postId, userId });
     if (!claimed.eligible) throw new Error("expected approved comment to be eligible");
     expect(claimed.submission.firstComment).toBe(firstComment);
@@ -491,7 +500,7 @@ describe("publishing cross-brand authorization", () => {
 
     await asUser.mutation(api.publishing.updateContent, { postId, linkedinFirstComment: firstComment + "-changed" });
     await asUser.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
-    const { idempotencyKey, ...submissionSnapshot } = claimed.submission;
+    const { idempotencyKey, expectedDestination: _destination, ...submissionSnapshot } = claimed.submission;
     const recorded = await asUser.mutation(internal.publishing.recordBufferSubmitResult, {
       postId, userId, intentId: claimed.intentId, brandId: claimed.brandId,
       attemptId: claimed.attemptId, idempotencyKey, retryCount: claimed.retryCount,
@@ -515,6 +524,7 @@ describe("publishing cross-brand authorization", () => {
       approvalState: "approved",
     });
 
+    await reviewFixtureDestination(t,asUser,userId,postId);
     const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, {
       postId,
       userId,
@@ -543,7 +553,7 @@ describe("publishing cross-brand authorization", () => {
       status: "success",
       providerStateStatus: "submitted",
       providerPostId: "buffer-cancel-1",
-      sanitizedResponse: { providerId: "buffer" },
+      sanitizedResponse: { providerId: "buffer", deletionConfirmed:true },
     });
 
     const cancelContext = await asUser.query(internal.publishing.getBufferCancelContext, {
@@ -563,7 +573,7 @@ describe("publishing cross-brand authorization", () => {
       ok: true,
       providerStateStatus: "cancel-intent-recorded",
       providerPostId: cancelContext.providerPostId,
-      sanitizedResponse: { providerId: "buffer", deleted: true },
+      sanitizedResponse: { providerId: "buffer", deletionConfirmed: true },
     });
 
     const providerState = await t.run(async (ctx) => {
@@ -578,7 +588,7 @@ describe("publishing cross-brand authorization", () => {
             .first()
         : null;
     });
-    expect(providerState?.status).toBe("cancel-intent-recorded");
+    expect(providerState?.status).toBe("cancelled");
     expect(providerState?.simulated).toBe(false);
   });
   it("rejects Buffer claim for unapproved LinkedIn and leaves no attempts", async () => {
@@ -592,6 +602,7 @@ describe("publishing cross-brand authorization", () => {
       scheduledDate: "2026-06-20",
     });
 
+    await reviewFixtureDestination(t,asUser,userId,postId);
     const claimed = await asUser.mutation(internal.publishing.claimBufferSubmission, {
       postId,
       userId,

@@ -31,6 +31,7 @@ export type PostStatus =
   | "approved"
   | "scheduled"
   | "submitted"
+  | "queued" | "publishing" | "cancel-requested" | "cancelled" | "removed" | "provider-draft"
   | "published"
   | "needs-review"
   | "failed"
@@ -40,6 +41,7 @@ export type PostStatus =
 export type ProviderStateStatus =
   | "not-submitted"
   | "submitted"
+  | "queued" | "publishing" | "cancel-requested" | "cancelled" | "removed" | "provider-draft"
   | "published"
   | "needs-review"
   | "failed"
@@ -267,7 +269,8 @@ export const STATUS_LABELS: Record<PostStatus, string> = {
   draft: "Draft",
   approved: "Approved",
   scheduled: "Scheduled",
-  submitted: "Submitted",
+  submitted: "Submitted (legacy unverified)",
+  queued:"Queued", publishing:"Publishing", "cancel-requested":"Cancel requested", cancelled:"Cancelled", removed:"Removed from Buffer after publication", "provider-draft":"Provider draft — scheduling required",
   published: "Published",
   "needs-review": "Needs Review",
   failed: "Failed",

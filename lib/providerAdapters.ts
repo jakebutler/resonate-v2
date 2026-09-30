@@ -1,3 +1,4 @@
+import { type BufferDestination, type BufferRequestBudget, BufferRequestBudgetError, observeBufferRateLimit, safeLinkedInUrl, destinationHold, destinationIdentity } from "./bufferContracts";
 import type {
   BrandId,
   ChannelId,
@@ -19,6 +20,7 @@ export type ProviderSubmission = {
   timezone: string;
   idempotencyKey: string;
   providerPostId?: string;
+  expectedDestination?: BufferDestination;
   subreddit?: string;
 };
 
@@ -28,6 +30,7 @@ export type ProviderAdapterContext = {
   env: Record<string, string | undefined>;
   liveProviderValidationApproved?: boolean;
   fetchImpl?: typeof fetch;
+  requestBudget?: BufferRequestBudget;
 };
 
 export type ProviderResult = {
@@ -287,14 +290,19 @@ function createBufferGraphqlClient(context: ProviderAdapterContext) {
   return {
     apiKey,
     async graphql(query: string, variables?: Record<string, unknown>) {
+      const budget=context.requestBudget;
+      if(budget && (budget.remaining<=0 || (budget.backoffUntil??0)>Date.now()))throw new BufferRequestBudgetError(budget.backoffUntil);
+      if(budget)budget.remaining-=1;
       const response = await fetchImpl("https://api.buffer.com", {
         method: "POST",
+        signal:AbortSignal.timeout(15000),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({ query, variables }),
       });
+      if(budget)observeBufferRateLimit(response,budget);
       const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       return { response, data };
     },
@@ -320,18 +328,18 @@ function bufferMutationPayload(
   return payload;
 }
 
-function mapBufferPostStatus(status: unknown): ProviderStateStatus {
+export function mapBufferPostStatus(status: unknown): ProviderStateStatus {
   const normalized = String(status ?? "").toLowerCase();
   if (normalized === "sent") return "published";
   if (normalized === "error") return "failed";
   if (normalized === "needs_approval") return "needs-review";
-  if (normalized === "scheduled" || normalized === "sending" || normalized === "draft") {
-    return "submitted";
-  }
+  if (normalized === "scheduled") return "queued";
+  if (normalized === "sending") return "publishing";
+  if (normalized === "draft") return "provider-draft";
   return "needs-review";
 }
 
-async function listBufferLinkedInChannels(context: ProviderAdapterContext) {
+export async function listBufferLinkedInChannels(context: ProviderAdapterContext) {
   const client = createBufferGraphqlClient(context);
   const accountResult = await client.graphql(`query BufferAccount {
     account {
@@ -362,14 +370,21 @@ async function listBufferLinkedInChannels(context: ProviderAdapterContext) {
     ? (account.organizations as Array<Record<string, unknown>>)
     : [];
 
-  const channelResults = await Promise.all(
-    organizations.map(async (organization) => {
+  if(organizations.length>20)return {ok:false as const,reason:"Too many organizations for bounded discovery.",sanitizedResponse:{complete:false}};
+  const channelResults = [];
+  for(const organization of organizations){
+    channelResults.push(await (async () => {
       const channelsResult = await client.graphql(
         `query BufferChannels($organizationId: OrganizationId!) {
           channels(input: { organizationId: $organizationId }) {
             id
             name
             displayName
+            organizationId
+            type
+            externalLink
+            isDisconnected
+            isLocked
             service
             isQueuePaused
           }
@@ -391,8 +406,8 @@ async function listBufferLinkedInChannels(context: ProviderAdapterContext) {
               >)
             : [],
       };
-    })
-  );
+    })());
+  }
 
   const failedChannelQuery = channelResults.find((result) => !result.ok);
   if (failedChannelQuery) {
@@ -413,11 +428,11 @@ async function listBufferLinkedInChannels(context: ProviderAdapterContext) {
   return { ok: true as const, linkedinChannels };
 }
 
-async function resolveBufferLinkedInChannelId(
+export async function resolveBufferLinkedInChannelId(
   brandId: BrandId,
   context: ProviderAdapterContext
 ): Promise<
-  | { ok: true; channelId: string; channelName: string }
+  | { ok: true; channelId: string; channelName: string; destination: BufferDestination }
   | { ok: false; reason: string; sanitizedResponse: Record<string, unknown> }
 > {
   if (!brandHasBufferLinkedInMapping(brandId)) {
@@ -445,9 +460,8 @@ async function resolveBufferLinkedInChannelId(
     };
   }
 
-  const channel = channelsResult.linkedinChannels.find(
-    (item) => String(item.name ?? "") === expectedName
-  );
+  const matches = channelsResult.linkedinChannels.filter(item => String(item.name ?? "") === expectedName);
+  const channel = matches.length === 1 ? matches[0] : undefined;
   if (!channel?.id) {
     return {
       ok: false,
@@ -464,6 +478,7 @@ async function resolveBufferLinkedInChannelId(
     ok: true,
     channelId: String(channel.id),
     channelName: expectedName,
+    destination:{channelId:String(channel.id),organizationId:String(channel.organizationId??""),displayName:String(channel.displayName??expectedName),handle:expectedName,accountType:String(channel.type??"unknown"),profileUrl:safeLinkedInUrl(channel.externalLink),disconnected:channel.isDisconnected===true,locked:channel.isLocked===true,queuePaused:channel.isQueuePaused===true,flagsVerified:typeof channel.isDisconnected==="boolean"&&typeof channel.isLocked==="boolean"&&typeof channel.isQueuePaused==="boolean"&&typeof channel.organizationId==="string",checkedAt:Date.now(),firstComment:{value:"unknown",source:"unknown",checkedAt:Date.now(),evidence:"Provider does not expose verified first-comment plan entitlement in Channel."}},
   };
 }
 
@@ -1093,6 +1108,12 @@ export const bufferProviderAdapter: ProviderAdapter = {
       };
     }
 
+    if(submission.expectedDestination) {
+      const expected=submission.expectedDestination;
+      const hold=destinationHold({...channel.destination,firstComment:expected.firstComment},Boolean(submission.firstComment?.trim()));
+      if(destinationIdentity(channel.destination)!==destinationIdentity(expected)||hold)return {ok:false,status:"permanent-failure",providerStateStatus:"needs-review",reason:hold??"Reviewed destination changed; review again.",sanitizedResponse:{providerId,phase:"preflight",destinationChanged:destinationIdentity(channel.destination)!==destinationIdentity(expected)}};
+    }
+
     const dueAt = scheduleToUtcIso({
       scheduledDate: submission.scheduledDate,
       scheduledTime: submission.scheduledTime,
@@ -1138,10 +1159,8 @@ export const bufferProviderAdapter: ProviderAdapter = {
       const reason = mutationError ?? errors[0]?.message ?? "Buffer createPost failed.";
       return {
         ok: false,
-        status: classifyProviderError({
-          status: createResult.response.status,
-          message: String(reason),
-        }),
+        status: createResult.response.status>=500 || (!mutationError && !errors.length && !providerPostId) || Boolean(providerPostId) ? "ambiguous" : classifyProviderError({status:createResult.response.status,message:String(reason)}),
+        providerPostId,
         providerStateStatus: "failed",
         reason: String(reason),
         sanitizedResponse: sanitizeProviderPayload({
@@ -1152,6 +1171,7 @@ export const bufferProviderAdapter: ProviderAdapter = {
           status: createResult.response.status,
           errors,
           mutationError,
+          firstCommentUnsupported:Boolean(submission.firstComment&&/first.?comment/i.test(String(reason))&&/plan|paid|upgrade|not supported|not available/i.test(String(reason))),
         }),
       };
     }
@@ -1166,6 +1186,7 @@ export const bufferProviderAdapter: ProviderAdapter = {
         providerId,
         idempotencyKey: submission.idempotencyKey,
         channelName: channel.channelName,
+        destination:channel.destination,
         dueAt,
         providerPostId: redactProviderId(providerPostId),
         status: createdPost.status,
@@ -1212,7 +1233,7 @@ export const bufferProviderAdapter: ProviderAdapter = {
       payload && typeof payload.message === "string" ? payload.message : undefined;
     const deletedId = payload?.id ? String(payload.id) : undefined;
 
-    if (!deleteResult.response.ok || errors.length || mutationError || !deletedId) {
+    if (!deleteResult.response.ok || errors.length || mutationError || !deletedId || deletedId!==submission.providerPostId) {
       const reason = mutationError ?? errors[0]?.message ?? "Buffer deletePost failed.";
       return {
         ok: false,
@@ -1238,13 +1259,14 @@ export const bufferProviderAdapter: ProviderAdapter = {
     return {
       ok: true,
       status: "success",
-      providerStateStatus: "cancel-intent-recorded",
+      providerStateStatus: intentType === "unpublish" ? "removed" : "cancelled",
       providerPostId: deletedId,
       sanitizedResponse: sanitizeProviderPayload({
         providerId,
         intentType,
         idempotencyKey: submission.idempotencyKey,
         providerPostId: redactProviderId(deletedId),
+        deletionConfirmed:deletedId===submission.providerPostId,
         credential: "[server-secret-present]",
       }),
     };
@@ -1269,6 +1291,10 @@ export const bufferProviderAdapter: ProviderAdapter = {
           status
           dueAt
           shareMode
+          updatedAt
+          sentAt
+          externalLink
+          channelId
         }
       }`,
       { id: providerPostId }
@@ -1313,6 +1339,7 @@ export const bufferProviderAdapter: ProviderAdapter = {
         status: post.status,
         dueAt: post.dueAt,
         shareMode: post.shareMode,
+        providerUpdatedAt:post.updatedAt, publishedAt:post.sentAt, publishedUrl:post.externalLink, channelId:post.channelId,
         credential: "[server-secret-present]",
       }),
     };
