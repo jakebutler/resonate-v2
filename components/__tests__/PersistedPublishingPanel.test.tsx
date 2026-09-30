@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { PersistedPublishingPanel } from "@/components/PersistedPublishingPanel";
 
+vi.mock("@/components/BufferDestinationPanel",()=>({BufferDestinationPanel:()=>null}));
+vi.mock("@/components/ArticleDependencyPanel",()=>({ArticleDependencyPanel:()=>null}));
+vi.mock("@/components/DeliveryReceiptPanel",()=>({DeliveryReceiptPanel:()=>null}));
 vi.mock("convex/react", () => ({
   useAction: vi.fn(),
   useMutation: vi.fn(),
@@ -18,6 +21,8 @@ vi.mock("@/components/SocialConnectionsPanel", () => ({
 
 vi.mock("@/convex/_generated/api", () => ({
   api: {
+    articlePublication:{refresh:"articlePublication:refresh"},
+    series: {list:"series:list"},
     publishing: {
       listBrands: "publishing:listBrands",
       getPostById: "publishing:getPostById",
@@ -36,6 +41,7 @@ vi.mock("@/convex/_generated/api", () => ({
       recordBlogPrStatus: "publishing:recordBlogPrStatus",
       deletePost: "publishing:deletePost",
     },
+    blogHero: {prepare: "blogHero:prepare"},
     bufferLive: {
       submit: "bufferLive:submit",
       cancelOrUnpublish: "bufferLive:cancelOrUnpublish",
@@ -84,6 +90,7 @@ const recordGithubPrMock = vi.fn().mockResolvedValue({
   attemptId: "attempt_pr_1",
 });
 const updateBlogMetadataMock = vi.fn().mockResolvedValue({ updated: true });
+const checkArticlePublicationMock=vi.fn().mockResolvedValue({recorded:true,reason:"Production deployment is pending."});
 const recordBlogPrStatusMock = vi.fn().mockResolvedValue({
   updated: true,
   prStatus: "open",
@@ -203,6 +210,8 @@ const blogItem = {
     blogCategory: "strategy",
     blogTags: ["Corvo Labs", "Publishing"],
     blogSlug: "approved-corvo-blog-pr-item",
+    blogPublicationIntent: "published", coverImageAlt: "Reviewed hero",
+    heroImageStorageId: "source", preparedHero: {sourceStorageId: "source", storageId: "prepared", width:1600, height:900, mimeType:"image/webp", byteLength:1000, sha256:"hash", crop:"centre"},
     heroImageUrl: "https://cdn.example/hero.jpg",
   },
   intent: {
@@ -284,6 +293,9 @@ describe("PersistedPublishingPanel", () => {
     });
     vi.mocked(useAction).mockImplementation((reference) => {
       switch (reference) {
+        case "articlePublication:refresh":return checkArticlePublicationMock;
+        case "blogHero:prepare":
+          return vi.fn().mockResolvedValue(null);
         case "bufferLive:submit":
           return submitBufferLiveMock;
         case "bufferLive:cancelOrUnpublish":
@@ -364,12 +376,12 @@ describe("PersistedPublishingPanel", () => {
     expect(useQuery).toHaveBeenCalledWith("publishing:listCalendarItems", {
       brandIds: ["corvo"],
       platformIds: ["linkedin", "reddit", "corvo-blog"],
-      statuses: ["draft", "scheduled", "submitted", "needs-review", "pr-created"],
+      statuses: ["draft", "scheduled", "submitted", "queued", "publishing", "published", "cancel-requested", "cancelled", "removed", "provider-draft", "needs-review", "pr-created"],
     });
 
     fireEvent.click(screen.getByText("FreshProof"));
     fireEvent.click(screen.getByText("YouTube"));
-    fireEvent.click(screen.getByText("Published"));
+    fireEvent.click(screen.getByRole("checkbox", {name:"Published",exact:true}));
 
     const calendarCalls = vi
       .mocked(useQuery)
@@ -379,7 +391,7 @@ describe("PersistedPublishingPanel", () => {
       {
         brandIds: ["corvo", "freshproof"],
         platformIds: ["linkedin", "reddit", "corvo-blog", "youtube"],
-        statuses: ["draft", "scheduled", "submitted", "needs-review", "pr-created", "published"],
+        statuses: ["draft", "scheduled", "submitted", "queued", "publishing", "cancel-requested", "cancelled", "removed", "provider-draft", "needs-review", "pr-created"],
       },
     ]);
   });
@@ -581,9 +593,7 @@ describe("PersistedPublishingPanel", () => {
     );
     expect(publishPayload).toMatchObject({
       postId: "post_4",
-      scheduleTrigger: "pr-body",
-      status: "draft",
-      coverImageAlt: "Cover image for Approved Corvo Blog PR item",
+
     });
     expect(publishPayload).not.toHaveProperty("title");
     expect(publishPayload).not.toHaveProperty("excerpt");
@@ -593,6 +603,7 @@ describe("PersistedPublishingPanel", () => {
       expect(recordGithubPrMock).toHaveBeenCalledWith({
         postId: "post_4",
         result: {
+          artifact: undefined,
           prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/42",
           branchName: "resonate/blog-post-2026-06-12-approved-corvo-blog-pr-item",
           prNumber: 42,
@@ -792,7 +803,7 @@ describe("PersistedPublishingPanel", () => {
     });
   }, 15000);
 
-  it("checks blog PR status and records it in Convex", async () => {
+  it("checks server-owned article publication evidence without trusting a client merge receipt", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -822,24 +833,8 @@ describe("PersistedPublishingPanel", () => {
       })
     );
 
-    await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        "/api/blog-pr-status",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/53",
-          }),
-        })
-      )
-    );
-    await waitFor(() =>
-      expect(recordBlogPrStatusMock).toHaveBeenCalledWith({
-        postId: "post_5",
-        prStatus: "merged",
-        prNumber: 53,
-      })
-    );
+    await waitFor(()=>expect(checkArticlePublicationMock).toHaveBeenCalledWith({postId:"post_5"}));
+    expect(recordBlogPrStatusMock).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled();
   });
 
   it("saves content edits through the single composer and clears approval", async () => {
@@ -1096,7 +1091,7 @@ describe("PersistedPublishingPanel", () => {
     );
     expect(submitMockProviderMock).not.toHaveBeenCalled();
     expect(
-      await screen.findByText("Submitted to Buffer queue for LinkedIn.")
+      await screen.findByText("Queued in Buffer for LinkedIn; publication is still pending.")
     ).toBeInTheDocument();
   });
 

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 09/29/2026 20:37:59 PDT
+Last updated: 09/30/2026 12:14:18 PDT
 
 ## State
 
@@ -12,31 +12,26 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- 38238c9 Merge pull request #95 from jakebutler/codex/publishing-navigation
+- 1b77d73 feat(queue): dispatch exact reviewed batches with durable capacity claims
 
 ## Recent Commits
 
-- 38238c9 Merge pull request #95 from jakebutler/codex/publishing-navigation
-- ffd3339 fix: make spawned drafts reachable in publishing workspace
-- c6bd2fb Merge pull request #94 from jakebutler/feat/jake-voice-profile
-- c3edf1b feat: wire Jake's personal voice profile into drafting as the Corvo default
-- 4dc7e07 chore: regenerate convex api bindings (v2Storage module entry from prod codegen)
+- 1b77d73 feat(queue): dispatch exact reviewed batches with durable capacity claims
+- 92aad6c feat: approve exact selected series versions atomically
+- 9aacca7 feat: verify article publication before companion delivery
+- 3f26cdb feat(series): import reviewed prepared packages with durable recovery
+- 70c5bbb feat(queue): add verified capacity planning and local reservations
 
 ## Local Working Tree
 
-- M  components/PersistedPublishingPanel.tsx
-- M  components/__tests__/PersistedPublishingPanel.test.tsx
-- M  convex/__tests__/publishing.test.ts
-- M  convex/bufferLive.ts
-- M  convex/publishing.ts
-- M  convex/schema.ts
-- M  lib/__tests__/providerAdapters.test.ts
-- M  lib/domain.ts
-- M  lib/providerAdapters.ts
+- M  .github/workflows/test.yml
+- A  convex/tsconfig.json
+- M  docs/epic-97-progress.md
+- M  lib/__tests__/articlePublication.test.ts
 
 ## Next Agent Pickup
 
@@ -45,4 +40,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- codex/linkedin-first-comment
+- codex/epic-97-reviewed-queue

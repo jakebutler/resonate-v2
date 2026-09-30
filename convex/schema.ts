@@ -1,3 +1,7 @@
+import {companionLinkValidator,publicationEvidenceValidator} from "./articleValidators";
+import {queueObservationValidator} from "./queueValidators";
+import { destinationValidator, deliveryStatusValidator } from "./bufferValidators";
+import { preparedHeroValidator } from "./blogValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -37,6 +41,7 @@ const v2PostStatus = v.union(
   v.literal("approved"),
   v.literal("scheduled"),
   v.literal("submitted"),
+  v.literal("queued"), v.literal("publishing"), v.literal("cancel-requested"), v.literal("cancelled"), v.literal("removed"), v.literal("provider-draft"),
   v.literal("published"),
   v.literal("needs-review"),
   v.literal("failed"),
@@ -44,15 +49,7 @@ const v2PostStatus = v.union(
   v.literal("pr-created")
 );
 
-const v2ProviderStateStatus = v.union(
-  v.literal("not-submitted"),
-  v.literal("submitted"),
-  v.literal("published"),
-  v.literal("needs-review"),
-  v.literal("failed"),
-  v.literal("unavailable"),
-  v.literal("cancel-intent-recorded")
-);
+const v2ProviderStateStatus = deliveryStatusValidator;
 
 const v2AttemptStatus = v.union(
   v.literal("pending"),
@@ -178,6 +175,27 @@ const ideaFlavor = v.union(
 );
 
 export default defineSchema({
+  articlePublications:defineTable({userId:v.string(),postId:v.id("v2Posts"),key:v.string(),evidence:publicationEvidenceValidator}).index("by_post_and_time",["postId","evidence.checkedAt"]).index("by_post_and_key",["postId","key"]),
+  preparedImportPackages:defineTable({userId:v.string(),brandId:v2BrandId,packageKey:v.string(),title:v.string(),seriesId:v.optional(v.id("postSeries")),reviewBytes:v.optional(v.number()),createdAt:v.number()}).index("by_user_and_key",["userId","packageKey"]),
+  preparedImportReviews:defineTable({userId:v.string(),brandId:v2BrandId,packageId:v.id("preparedImportPackages"),packageKey:v.string(),entryKey:v.string(),sourceHash:v.string(),items:v.any(),hero:v.any(),heroSourceHash:v.string(),attachedHeroStorageId:v.optional(v.id("_storage")),actions:v.array(v.string()),reason:v.optional(v.string()),checkedAt:v.number()}).index("by_user_entry_hash",["userId","packageKey","entryKey","sourceHash"]).index("by_user_package",["userId","packageKey"]),
+  preparedImportAssets:defineTable({userId:v.string(),sourceHash:v.string(),preparedHash:v.string(),status:v.union(v.literal("pending"),v.literal("ready")),sourceStorageId:v.optional(v.id("_storage")),storageId:v.optional(v.id("_storage")),createdAt:v.number()}).index("by_user_source",["userId","sourceHash","preparedHash"]),
+  preparedImportReceipts:defineTable({userId:v.string(),packageId:v.id("preparedImportPackages"),entryKey:v.string(),sourceHash:v.string(),seriesId:v.id("postSeries"),entryId:v.id("seriesEntries"),postIds:v.array(v.id("v2Posts")),assetId:v.optional(v.id("preparedImportAssets")),createdAt:v.number()}).index("by_package_and_entry",["packageId","entryKey"]),
+  queueReleaseReviews:defineTable({userId:v.string(),brandId:v2BrandId,seriesId:v.optional(v.id("postSeries")),seriesRevision:v.optional(v.number()),postIds:v.array(v.id("v2Posts")),snapshotId:v.optional(v.id("queueObservations")),reservations:v.any(),createdAt:v.number(),status:v.union(v.literal("reviewed"),v.literal("running"),v.literal("stopped"),v.literal("complete")),runId:v.optional(v.string()),claimedUntil:v.optional(v.number()),authorizedAt:v.optional(v.number()),actor:v.optional(v.string()),reason:v.optional(v.string())}).index("by_user_and_brand",["userId","brandId"]),
+  queueReleaseRows:defineTable({reviewId:v.id("queueReleaseReviews"),postId:v.id("v2Posts"),retry:v.optional(v.boolean()),reviewVersion:v.string(),payloadHash:v.string(),snapshot:v.any(),deliveryStatus:v.optional(v2ProviderStateStatus),status:v.union(v.literal("ready"),v.literal("executing"),v.literal("queued"),v.literal("held"),v.literal("failed"),v.literal("needs-review")),reason:v.optional(v.string()),attemptId:v.optional(v.id("v2PublishAttempts")),providerPostId:v.optional(v.string()),updatedAt:v.number()}).index("by_review",["reviewId"]),
+  queuePlans: defineTable({userId:v.string(),brandId:v2BrandId,seriesId:v.optional(v.id("postSeries")),checkedAt:v.number(),snapshotId:v.optional(v.id("queueObservations")),capacity:v.any(),rows:v.array(v.object({postId:v.id("v2Posts"),dueAt:v.union(v.string(),v.null()),hold:v.union(v.string(),v.null()),eligible:v.boolean()}))}).index("by_user_and_brand",["userId","brandId"]),
+  queueObservations:defineTable({userId:v.string(),brandId:v2BrandId,observation:queueObservationValidator,identity:v.string(),checkedAt:v.number()}).index("by_user_and_brand",["userId","brandId"]).index("by_identity_and_time",["identity","checkedAt"]),
+  queueConstraints:defineTable({userId:v.string(),brandId:v2BrandId,identity:v.string(),channelId:v.string(),organizationId:v.string(),channelLimit:v.number(),organizationLimit:v.optional(v.number()),dailyLimit:v.optional(v.number()),evidence:v.string(),actor:v.string(),checkedAt:v.number(),revision:v.number()}).index("by_user_and_identity",["userId","identity"]),
+  queueReservations:defineTable({userId:v.string(),brandId:v2BrandId,seriesId:v.id("postSeries"),postId:v.id("v2Posts"),identity:v.string(),channelId:v.string(),organizationId:v.string(),status:v.union(v.literal("reserved"),v.literal("consumed"),v.literal("released")),providerPostId:v.optional(v.string()),actor:v.string(),updatedAt:v.number()}).index("by_identity",["identity"]).index("by_organization",["organizationId"]).index("by_org_and_status",["organizationId","status"]).index("by_post_and_identity",["postId","identity"]),
+  queueDispatchGuards:defineTable({identity:v.string(),revision:v.number()}).index("by_identity",["identity"]),
+  queueDispatchClaims:defineTable({userId:v.string(),postId:v.id("v2Posts"),intentId:v.id("v2PublishingIntents"),attemptId:v.id("v2PublishAttempts"),identity:v.string(),channelId:v.string(),organizationId:v.string(),destination:v.optional(destinationValidator),reviewVersion:v.optional(v.string()),snapshotId:v.optional(v.id("queueObservations")),reviewRowId:v.optional(v.id("queueReleaseRows")),dueAt:v.optional(v.string()),status:v.union(v.literal("active"),v.literal("uncertain"),v.literal("confirmed"),v.literal("released")),providerPostId:v.optional(v.string()),updatedAt:v.number()}).index("by_identity",["identity"]).index("by_organization",["organizationId"]).index("by_org_and_status",["organizationId","status"]).index("by_attempt",["attemptId"]).index("by_post",["postId"]),
+  bufferDestinations:defineTable({userId:v.string(),brandId:v2BrandId,destination:v.optional(destinationValidator),error:v.optional(v.string()),updatedAt:v.number()}).index("by_user_and_brand",["userId","brandId"]),
+  bufferPollControl:defineTable({key:v.string(),backoffUntil:v.optional(v.number()),claimedUntil:v.optional(v.number())}).index("by_key",["key"]),
+  seriesReviewSelections:defineTable({userId:v.string(),seriesId:v.id("postSeries"),postIds:v.array(v.id("v2Posts")),revision:v.number(),updatedAt:v.number()}).index("by_user_and_series",["userId","seriesId"]),
+  seriesReviewPackets:defineTable({userId:v.string(),seriesId:v.id("postSeries"),selectionId:v.id("seriesReviewSelections"),selectionRevision:v.number(),seriesRevision:v.number(),status:v.union(v.literal("reviewed"),v.literal("approved")),createdAt:v.number(),approvedAt:v.optional(v.number()),actor:v.optional(v.string())}).index("by_user_and_series",["userId","seriesId"]),
+  seriesReviewRows:defineTable({packetId:v.id("seriesReviewPackets"),postId:v.id("v2Posts"),editorialVersion:v.string(),reviewVersion:v.string(),snapshot:v.any(),approvedAt:v.optional(v.number()),actor:v.optional(v.string())}).index("by_packet",["packetId"]),
+  postSeries: defineTable({userId:v.string(),brandId:v2BrandId,title:v.string(),revision:v.number(),createdAt:v.number(),updatedAt:v.number()}).index("by_user",["userId"]).index("by_user_and_brand",["userId","brandId"]),
+  seriesEntries: defineTable({seriesId:v.id("postSeries"),key:v.string(),sequence:v.number(),articlePostId:v.id("v2Posts"),companionPostIds:v.array(v.id("v2Posts"))}).index("by_series_and_sequence",["seriesId","sequence"]).index("by_series_and_key",["seriesId","key"]),
+  seriesPostLinks: defineTable({seriesId:v.id("postSeries"),entryId:v.id("seriesEntries"),postId:v.id("v2Posts")}).index("by_series",["seriesId"]).index("by_series_and_post",["seriesId","postId"]).index("by_post",["postId"]),
   v2Brands: defineTable({
     brandId: v2BrandId,
     name: v.string(),
@@ -219,6 +237,8 @@ export default defineSchema({
     title: v.string(),
     content: v.string(),
     linkedinFirstComment: v.optional(v.string()),
+    companionLink:v.optional(companionLinkValidator),
+    destinationReview:v.optional(v.object({identity:v.string(),fingerprint:v.string(),schedule:v.string(),checkedAt:v.number(),actor:v.string()})),
     status: v2PostStatus,
     approvalState: v2ApprovalState,
     scheduledDate: v.optional(v.string()),
@@ -233,8 +253,17 @@ export default defineSchema({
     blogCategory: v.optional(v.string()),
     blogTags: v.optional(v.array(v.string())),
     blogSlug: v.optional(v.string()),
+    blogPublicationIntent: v.optional(v.union(v.literal("draft"), v.literal("published"))),
+    coverImageAlt: v.optional(v.string()),
+    preparedHero: v.optional(preparedHeroValidator),
     heroImageUrl: v.optional(v.string()),
     heroImageStorageId: v.optional(v.id("_storage")),
+    blogArtifact: v.optional(v.object({
+      repository: v.string(), prNumber: v.number(), branchName: v.string(),
+      mdxPath: v.string(), heroPath: v.optional(v.string()), canonicalUrl: v.string(),
+    })),
+    blogSyncPending: v.optional(v.string()),
+    blogExportClaimKey: v.optional(v.string()),
     blogPrNumber: v.optional(v.number()),
     blogPrStatus: v.optional(
       v.union(
@@ -287,6 +316,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_post", ["postId"])
+    .index("by_post_and_updated_at", ["postId", "updatedAt"])
     .index("by_user", ["userId"])
     .index("by_brand", ["brandId"])
     .index("by_schedule", ["scheduledDate"]),
@@ -300,13 +330,16 @@ export default defineSchema({
     prUrl: v.optional(v.string()),
     lastAttemptId: v.optional(v.id("v2PublishAttempts")),
     lastResponseSummary: v.optional(v.string()),
+    lastCheckedAt:v.optional(v.number()), providerUpdatedAt:v.optional(v.number()),
+    dueAt:v.optional(v.string()), publishedAt:v.optional(v.string()), publishedUrl:v.optional(v.string()),
+    destination:v.optional(destinationValidator), lastReceipt:v.optional(v.any()), lastReadError:v.optional(v.string()),
     simulated: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_post", ["postId"])
     .index("by_intent", ["intentId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"]).index("by_status_and_last_checked",["status","lastCheckedAt"]),
 
   v2PublishAttempts: defineTable({
     postId: v.id("v2Posts"),
@@ -315,6 +348,7 @@ export default defineSchema({
     providerId: v2ProviderId,
     status: v2AttemptStatus,
     idempotencyKey: v.string(),
+    providerPostId:v.optional(v.string()), observedDeliveryStatus:v.optional(v2ProviderStateStatus),
     retryCount: v.number(),
     submissionSnapshot: v.object({
       postId: v.string(),
@@ -333,7 +367,7 @@ export default defineSchema({
   })
     .index("by_post", ["postId"])
     .index("by_intent", ["intentId"])
-    .index("by_idempotency_key", ["idempotencyKey"]),
+    .index("by_idempotency_key", ["idempotencyKey"]).index("by_provider_and_status",["providerId","status"]),
 
   v2AuditEvents: defineTable({
     userId: v.string(),

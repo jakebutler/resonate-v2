@@ -536,7 +536,7 @@ describe("v2 provider adapters", () => {
     expect(result).toMatchObject({
       ok: true,
       status: "success",
-      providerStateStatus: "submitted",
+      providerStateStatus: "queued",
       providerPostId: "buffer-post-1234567890",
     });
     expect(JSON.stringify(result.sanitizedResponse)).not.toContain("buffer-secret");
@@ -592,7 +592,7 @@ describe("v2 provider adapters", () => {
     expect(result).toMatchObject({
       ok: true,
       status: "success",
-      providerStateStatus: "cancel-intent-recorded",
+      providerStateStatus: "cancelled",
       providerPostId: "buffer-post-1234567890",
     });
   });

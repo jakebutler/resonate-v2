@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "packageKey": "sanitized-editorial-series",
+  "brandId": "corvo",
+  "title": "Prepared editorial series",
+  "entries": [
+    {
+      "key": "article-01",
+      "article": {
+        "title": "Prepared article",
+        "contentFile": "article-01/article.md",
+        "heroFile": "article-01/hero.png",
+        "crop": "centre",
+        "coverImageAlt": "An editor checks the source against the final article.",
+        "publicationIntent": "published",
+        "excerpt": "The exact reviewed summary.",
+        "author": "Fixture Editor",
+        "category": "Editorial workflow",
+        "tags": ["Editing", "Evidence"],
+        "slug": "prepared-article",
+        "scheduledDate": "2030-10-07",
+        "scheduledTime": "09:00",
+        "timezone": "America/Los_Angeles"
+      },
+      "companions": [
+        {
+          "key": "launch",
+          "channelId": "linkedin",
+          "title": "Prepared launch companion",
+          "contentFile": "article-01/linkedin-launch.md",
+          "firstComment": "https://corvolabs.com/blog/2030-10-07-prepared-article",
+          "scheduledDate": "2030-10-07",
+          "scheduledTime": "11:00",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "key": "follow-up",
+          "channelId": "linkedin",
+          "title": "Prepared follow-up companion",
+          "contentFile": "article-01/linkedin-follow-up.md",
+          "scheduledDate": "2030-10-10",
+          "scheduledTime": "09:00",
+          "timezone": "America/Los_Angeles"
+        }
+      ]
+    }
+  ]
+}

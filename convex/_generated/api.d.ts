@@ -8,9 +8,23 @@
  * @module
  */
 
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 import type * as __tests___helpers_mockMutationCtx from "../__tests__/helpers/mockMutationCtx.js";
+import type * as articleDependencies from "../articleDependencies.js";
+import type * as articlePublication from "../articlePublication.js";
+import type * as articleValidators from "../articleValidators.js";
 import type * as backfill from "../backfill.js";
+import type * as blogHero from "../blogHero.js";
+import type * as blogValidators from "../blogValidators.js";
+import type * as bufferAttempts from "../bufferAttempts.js";
+import type * as bufferDelivery from "../bufferDelivery.js";
+import type * as bufferDestinations from "../bufferDestinations.js";
 import type * as bufferLive from "../bufferLive.js";
+import type * as bufferValidators from "../bufferValidators.js";
 import type * as campaignAccess from "../campaignAccess.js";
 import type * as campaigns from "../campaigns.js";
 import type * as cohesion from "../cohesion.js";
@@ -22,26 +36,45 @@ import type * as ideas from "../ideas.js";
 import type * as mockAck from "../mockAck.js";
 import type * as opsAudit from "../opsAudit.js";
 import type * as posts from "../posts.js";
+import type * as preparedImportActions from "../preparedImportActions.js";
+import type * as preparedImports from "../preparedImports.js";
 import type * as previewSeedData from "../previewSeedData.js";
 import type * as publishing from "../publishing.js";
 import type * as queue from "../queue.js";
+import type * as queueDispatch from "../queueDispatch.js";
+import type * as queuePlanning from "../queuePlanning.js";
+import type * as queueRelease from "../queueRelease.js";
+import type * as queueValidators from "../queueValidators.js";
 import type * as research from "../research.js";
+import type * as series from "../series.js";
+import type * as seriesReview from "../seriesReview.js";
 import type * as settings from "../settings.js";
 import type * as shapes from "../shapes.js";
 import type * as v2Migration from "../v2Migration.js";
 import type * as v2Storage from "../v2Storage.js";
 import type * as workflow from "../workflow.js";
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
-
+/**
+ * A utility for referencing Convex functions in your app's API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
 declare const fullApi: ApiFromModules<{
   "__tests__/helpers/mockMutationCtx": typeof __tests___helpers_mockMutationCtx;
+  articleDependencies: typeof articleDependencies;
+  articlePublication: typeof articlePublication;
+  articleValidators: typeof articleValidators;
   backfill: typeof backfill;
+  blogHero: typeof blogHero;
+  blogValidators: typeof blogValidators;
+  bufferAttempts: typeof bufferAttempts;
+  bufferDelivery: typeof bufferDelivery;
+  bufferDestinations: typeof bufferDestinations;
   bufferLive: typeof bufferLive;
+  bufferValidators: typeof bufferValidators;
   campaignAccess: typeof campaignAccess;
   campaigns: typeof campaigns;
   cohesion: typeof cohesion;
@@ -53,38 +86,28 @@ declare const fullApi: ApiFromModules<{
   mockAck: typeof mockAck;
   opsAudit: typeof opsAudit;
   posts: typeof posts;
+  preparedImportActions: typeof preparedImportActions;
+  preparedImports: typeof preparedImports;
   previewSeedData: typeof previewSeedData;
   publishing: typeof publishing;
   queue: typeof queue;
+  queueDispatch: typeof queueDispatch;
+  queuePlanning: typeof queuePlanning;
+  queueRelease: typeof queueRelease;
+  queueValidators: typeof queueValidators;
   research: typeof research;
+  series: typeof series;
+  seriesReview: typeof seriesReview;
   settings: typeof settings;
   shapes: typeof shapes;
   v2Migration: typeof v2Migration;
   v2Storage: typeof v2Storage;
   workflow: typeof workflow;
 }>;
-
-/**
- * A utility for referencing Convex functions in your app's public API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
 export declare const api: FilterApi<
   typeof fullApi,
   FunctionReference<any, "public">
 >;
-
-/**
- * A utility for referencing Convex functions in your app's internal API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = internal.myModule.myFunction;
- * ```
- */
 export declare const internal: FilterApi<
   typeof fullApi,
   FunctionReference<any, "internal">
