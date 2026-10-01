@@ -41,6 +41,23 @@ describe("editorial scene planning", () => {
     expect(scenes.every(scene => retained.article.includes(scene.articleAnchor))).toBe(true);
   });
 
+  it("applies the anchor size limit to the canonical exact excerpt", () => {
+    const stories = (articleAnchor: string) => [
+      { title: "Repair", subject: "Raven mechanic", metaphor: "Inspection", action: "Removes damaged gear", reveal: "Missing tooth", articleConnection: "The source describes repair.", articleAnchor },
+      { title: "Crossing", subject: "Bridge builder", metaphor: "Connection", action: "Lowers weighted basket", reveal: "Bending joint", articleConnection: "The source describes a test.", articleAnchor },
+      { title: "Garden", subject: "Gardener", metaphor: "Growth", action: "Prunes tangled branch", reveal: "Sunlit bud", articleConnection: "The source describes a choice.", articleAnchor },
+    ];
+    const exactMaximum = "a".repeat(2000);
+    const scenes = stories('"' + exactMaximum + '"');
+    expect(validateScenePlan(scenes, exactMaximum)).toEqual({ valid: true, reasons: [] });
+    expect(scenes.every(scene => scene.articleAnchor === exactMaximum)).toBe(true);
+
+    const oversizedExcerpt = "a".repeat(2001);
+    const oversizedScenes = stories('"' + oversizedExcerpt + '"');
+    expect(validateScenePlan(oversizedScenes, oversizedExcerpt)).toEqual({ valid: false, reasons: ["Scene 1 is oversized", "Scene 2 is oversized", "Scene 3 is oversized"] });
+    expect(oversizedScenes.every(scene => scene.articleAnchor === oversizedExcerpt)).toBe(true);
+  });
+
   it("preserves genuine source quotes and rejects every nonexact or unmatched presentation anchor", () => {
     const stories = (articleAnchor: string) => [
       { title: "Repair", subject: "Raven mechanic", metaphor: "Inspection", action: "Removes damaged gear", reveal: "Missing tooth", articleConnection: "The source describes repair.", articleAnchor },
