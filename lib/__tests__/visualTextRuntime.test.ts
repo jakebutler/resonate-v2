@@ -10,6 +10,70 @@ const attempt = { _id: "fictional-attempt", stage: "planning" as const, input: {
 describe("bounded text runtime", () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
+  it("omits an echoed supplied credential from a Cortex HTTP failure receipt", async () => {
+    const cortex = { ...route, provider: "cortex" as const };
+    const prepared = await prepareTextRequest(attempt, cortex);
+    const key = "opaqueFakeCredential";
+    vi.stubEnv("CORTEX_BASE_URL", "https://cortex.corvolabs.com");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "SPECULATIVE private provider body" }), {
+      status: 502,
+      headers: { "x-request-id": `req_echo${key}`, "x-private-header": "SPECULATIVE private header" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await dispatchTextRequest(prepared, { claimKey: "claim", requestSha256: prepared.requestSha256, maximumMicros: cortex.maximumMicros, provider: cortex.provider, model: cortex.model }, key);
+    expect(result).toMatchObject({ status: "uncertain", receipt: expect.any(String) });
+    const receipt = JSON.parse(result.receipt!);
+    expect(receipt).toMatchObject({ provider: "cortex", httpStatus: 502, usage: null });
+    expect(receipt.requestId).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain(key);
+    expect(JSON.stringify(result)).not.toContain("private provider body");
+    expect(JSON.stringify(result)).not.toContain("private header");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["req_echosk-fictional-secret", "req_echosk_fictional", "req_echodop_v1_fictional", "req_echodor_v1_fictional", "req_echoghp_fictional", "req_echoGITHUB_PAT_fictional"])("omits embedded credential-shaped request ID %s without dropping HTTP status", async requestId => {
+    const cortex = { ...route, provider: "cortex" as const };
+    const prepared = await prepareTextRequest(attempt, cortex);
+    vi.stubEnv("CORTEX_BASE_URL", "https://cortex.corvolabs.com");
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 502, headers: { "x-request-id": requestId } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await dispatchTextRequest(prepared, { claimKey: "claim", requestSha256: prepared.requestSha256, maximumMicros: cortex.maximumMicros, provider: cortex.provider, model: cortex.model }, "opaqueFakeCredential");
+    expect(result).toMatchObject({ status: "uncertain", receipt: expect.any(String) });
+    const receipt = JSON.parse(result.receipt!);
+    expect(receipt.httpStatus).toBe(502);
+    expect(receipt.requestId).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain(requestId);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([{ status: 200, requestId: "req_fictional_gateway" }, { status: 502, requestId: `req_${"a".repeat(100)}` }])("retains ordinary bounded request IDs and HTTP status $status", async ({ status, requestId }) => {
+    const cortex = { ...route, provider: "cortex" as const };
+    const prepared = await prepareTextRequest(attempt, cortex);
+    vi.stubEnv("CORTEX_BASE_URL", "https://cortex.corvolabs.com");
+    const body = { model: cortex.model, choices: [{ finish_reason: "stop", message: { content: "{}" } }], usage: { prompt_tokens: 10, completion_tokens: 5 } };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { "x-request-id": requestId } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await dispatchTextRequest(prepared, { claimKey: "claim", requestSha256: prepared.requestSha256, maximumMicros: cortex.maximumMicros, provider: cortex.provider, model: cortex.model }, "opaqueFakeCredential");
+    expect(result.status).toBe(status === 200 ? "received" : "uncertain");
+    expect(JSON.parse(result.receipt!)).toMatchObject({ httpStatus: status, requestId, usage: { inputTokens: 10, outputTokens: 5 } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an interrupted response uncertain without retaining echoed credentials or raw stream errors", async () => {
+    const cortex = { ...route, provider: "cortex" as const };
+    const prepared = await prepareTextRequest(attempt, cortex);
+    const key = "opaqueFakeCredential";
+    vi.stubEnv("CORTEX_BASE_URL", "https://cortex.corvolabs.com");
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.error(new Error(`SPECULATIVE private stream failure ${key}`)); } });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(body, { status: 502, headers: { "x-request-id": `req_echo${key}` } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await dispatchTextRequest(prepared, { claimKey: "claim", requestSha256: prepared.requestSha256, maximumMicros: cortex.maximumMicros, provider: cortex.provider, model: cortex.model }, key);
+    expect(result).toEqual({ status: "uncertain", reason: "text-transport-uncertain" });
+    expect(JSON.stringify(result)).not.toContain(key);
+    expect(JSON.stringify(result)).not.toContain("private stream failure");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("binds exact pinned context and output limit to the quote hash and refuses tampered dispatch", async () => {
     const prepared = await prepareTextRequest(attempt, route);
     expect(textMaximumMicros(route)).toBe(29_000);
