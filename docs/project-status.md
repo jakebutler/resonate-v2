@@ -1,5 +1,7 @@
 # Project Status
 
+Latest checkpoint: Article activation fixes, September 30, 2026 at 21:28 PDT (October 1 at 04:28 UTC). All preceding release sections below are historical snapshots; the activation section at the end records the current scope and holds.
+
 Recorded checkpoint: September 30, 2026. This document describes PR #133 and its release boundary; it is not a live `git status` report. Verify the actual branch, worktree and remote head before resuming.
 
 ## Implementation
@@ -34,3 +36,16 @@ The frozen `3e69417` backend/text-pixel scope has independent approval. Separate
 ### Resumed editorial visual repairs (2026-10-01 02:34 UTC)
 
 The isolated author branch contains the confirmed publication, HTML/evidence, provider/budget and composer repairs. The UI slice and corrected backend slice have independent approval; the publication/figure follow-up and final exact-candidate integration remain under review. One invalid PNG test fixture has been replaced with real encoded bytes; this preserves the stronger decoder guard. Fresh CI and actual served composer/reader qualification are still required before release. PR #131 is unmerged; provider qualification, new human image approval and key-creation confirmation remain pending. No provider spend, deployment, article or LinkedIn publishing/scheduling occurred. Preserve the existing upstream publishing history and production routing state.
+
+
+## Article activation fixes — September 30, 2026 at 21:28 PDT (October 1 at 04:28 UTC)
+
+Recorded activation checkpoint, not a live branch report. PR #131 is now merged as `a87c3ee`; its main CI passed and the publishing records remained unchanged before activation. Jake explicitly approved existing article publication/adoption, the exact twenty remaining companion versions and faster dates, Free rolling batches, and one disposable create/cancel qualification followed by delivery only after technical fixes pass. New application merge/deployment remains a separate approval.
+
+The six existing website PRs #74–#79 are merged at their approved heads. Website Production is READY at `8030650`. Existing accepted Buffer posts must retain their IDs, copy and dates and must never be resubmitted. The approved series is `sd7f2nq56e64mcryh246zppqv18fdve3`; do not repeat series setup.
+
+This fix recognizes Vercel's non-transient Production bot deployment only with a matching successful bot status, retains exact merge ancestry/source/hero and canonical copy checks, supports both Node DNS lookup callback forms with one validated address, and makes shared-library changes trigger a Convex deployment in CI while excluding `lib/__tests__/` changes. The focused 55 tests, full unit suite with coverage, lint, typecheck, Next.js production build and native Convex dry-run passed. No indexes would be deleted.
+
+Application merge/deployment, server publication qualification and provider create/cancel/submission remain held pending the exact tested software release. Free queue refill remains operator initiated. No plan purchase, paid generation or lower-db pipeline is authorized. Preserve the primary checkout and unrelated worktrees. The preceding editorial-visual checkpoints are historical evidence; re-ground live receipts before acting.
+
+Legacy hero compatibility: accept only the exact dated or undated directory derived from the bound article slug; preserve source, hash and inline placement checks. All fifteen live articles passed the complete candidate read-only verifier against website Production `8030650`.

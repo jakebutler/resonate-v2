@@ -115,7 +115,8 @@ jobs:
             exit 0
           fi
 
-          if git diff --name-only "$before" "${{ github.sha }}" -- convex/ | grep -q .; then
+          # Conservatively include shared dependencies, excluding unit-test-only changes.
+          if git diff --name-only "$before" "${{ github.sha }}" -- convex/ lib/ ':(exclude,glob)lib/__tests__/**' package.json package-lock.json | grep -q .; then
             echo "convex_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "convex_changed=false" >> "$GITHUB_OUTPUT"

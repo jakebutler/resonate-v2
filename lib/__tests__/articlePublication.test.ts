@@ -43,6 +43,13 @@ function githubFixture(
     ancestor?: boolean;
     changedBlob?: boolean;
     sourceContent?: string;
+    productionFlag?: boolean;
+    transient?: boolean;
+    creator?: string;
+    environment?: string;
+    statusCreator?: string;
+    statusEnvironment?: string;
+    newerUnrecognized?: boolean;
     figurePath?: string;
     figureBytes?: string;
     mdxContent?: string;
@@ -79,13 +86,23 @@ function githubFixture(
         {
           id: 10,
           sha: options.sha ?? "merge",
-          environment: "Production",
-          production_environment: true,
+          environment: options.environment ?? "Production",
+          production_environment: options.productionFlag ?? true,
+          transient_environment: options.transient,
+          creator: { login: options.creator },
           created_at: "2030-10-07T16:00:00Z",
         },
+        ...(options.newerUnrecognized ? [{
+          id: 11, sha: "later", environment: "Production",
+          production_environment: false, creator: { login: "other-bot" },
+          created_at: "2030-10-07T17:00:00Z",
+        }] : []),
       ];
     else if (url.includes("/deployments/10/statuses"))
-      data = [{ state: options.deployment ?? "success" }];
+      data = [{ state: options.deployment ?? "success",
+        environment: options.statusEnvironment,
+        creator: { login: options.statusCreator },
+      }];
     else if (url.includes("/compare/"))
       data = {
         status: options.ancestor ? "ahead" : "diverged",
@@ -116,6 +133,67 @@ function githubFixture(
   return { calls, fetch };
 }
 describe("separate publication facts", () => {
+  const vercel = {
+    productionFlag: false, transient: false, creator: "vercel[bot]",
+    statusCreator: "vercel[bot]", statusEnvironment: "Production",
+  };
+  it.each([false, true])("qualifies the exact legacy undated hero directory (inline hero %s)", async inline => {
+    const heroSourceUrl = "https://example.org/reviewed-legacy-hero.webp";
+    const heroPath = "corvo-labs-enhanced/public/images/blog/fixture/hero.webp";
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#15616d" } }).webp().toBuffer();
+    const heroSha256 = createHash("sha256").update(heroBytes).digest("hex");
+    const content = input.content + (inline ? `\n\n![Exact alt](${heroSourceUrl})` : "");
+    const rendered = content.replace(heroSourceUrl, "/images/blog/fixture/hero.webp");
+    githubFixture({ ...vercel, heroPath, heroBytes, mdxContent: `---\ntitle: "Reviewed article"\nstatus: "published"\ncoverImage: "/images/blog/fixture/hero.webp"\n---\n\n${rendered}` });
+    const available = vi.fn(async () => ({ availability: "verified" as const, expectedHash: "expected", observedHash: "observed" }));
+    const result = await readArticlePublication({ ...input, content, heroSha256, artifact: { ...artifact, heroPath, heroSha256, heroSourceUrl } }, available);
+    expect(result.evidence).toMatchObject({ availability: "verified", deploymentContainsArticle: true });
+    expect(available).toHaveBeenCalledWith(expect.objectContaining({ content: rendered }));
+  });
+  it.each(["directory", "bytes"])("holds a legacy hero with changed %s", async failure => {
+    const heroPath = "corvo-labs-enhanced/public/images/blog/fixture/hero.webp";
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#15616d" } }).webp().toBuffer();
+    const heroSha256 = createHash("sha256").update(heroBytes).digest("hex");
+    githubFixture({ ...vercel, heroPath, heroBytes: failure === "bytes" ? Buffer.from("changed bytes") : heroBytes,
+      mdxContent: `---\ntitle: "Reviewed article"\nstatus: "published"\ncoverImage: "/images/blog/fixture/hero.webp"\n---\n\n${input.content}` });
+    const available = vi.fn();
+    const result = await readArticlePublication({ ...input, heroSha256, artifact: { ...artifact, heroSha256,
+      heroSourceUrl: "https://example.org/reviewed-legacy-hero.webp", heroPath: failure === "directory" ? heroPath.replace("fixture/", "other/") : heroPath } }, available);
+    expect(result.evidence.availability).not.toBe("verified");
+    expect(result.evidence.reason).toMatch(/hero/i);
+    expect(available).not.toHaveBeenCalled();
+  });
+  it.each([{}, { sha: "later", ancestor: true }])(
+    "accepts Vercel's non-transient Production receipt with its matching successful status (%j)",
+    async options => {
+      githubFixture({ ...vercel, ...options });
+      const result = await readArticlePublication(input, async () => ({
+        availability: "verified", expectedHash: "expected", observedHash: "observed",
+      }));
+      expect(result.evidence).toMatchObject({ availability: "verified", deploymentState: "success" });
+    },
+  );
+  it.each([
+    [{ creator: "other-bot" }, /Production deployment has not been verified/],
+    [{ transient: true }, /Production deployment has not been verified/],
+    [{ transient: undefined }, /Production deployment has not been verified/],
+    [{ environment: "Preview" }, /Production deployment has not been verified/],
+    [{ statusEnvironment: "Preview" }, /Vercel Production status identity/],
+    [{ statusCreator: "other-bot" }, /Vercel Production status identity/],
+    [{ statusCreator: undefined }, /Vercel Production status identity/],
+    [{ deployment: "pending" }, /Production deployment is pending/],
+    [{ deployment: "failure" }, /Production deployment is failure/],
+    [{ newerUnrecognized: true }, /Production deployment has not been verified/],
+    [{ sha: "later", ancestor: true, changedBlob: true }, /Production contains a different article artifact/],
+    [{ sha: "unrelated" }, /Production deployment does not include the article merge commit/],
+  ] as const)("holds mismatched Vercel or latest Production evidence (%j)", async (options, reason) => {
+    githubFixture({ ...vercel, ...options });
+    const available = vi.fn();
+    const result = await readArticlePublication(input, available);
+    expect(result.evidence.availability).not.toBe("verified");
+    expect(result.evidence.reason).toMatch(reason);
+    expect(available).not.toHaveBeenCalled();
+  });
   it("rejects a present empty hero hash before reading GitHub or canonical availability", async () => {
     const { fetch } = githubFixture();
     const available = vi.fn(async () => ({ availability: "verified" as const }));

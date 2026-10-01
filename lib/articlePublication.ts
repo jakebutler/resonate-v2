@@ -37,8 +37,13 @@ export function articleBodyForArtifact(content: string, artifact: Pick<BlogArtif
   const appRoot = process.env.BLOG_APP_ROOT || "corvo-labs-enhanced";
   let body = content;
   if (artifact.heroSourceUrl !== undefined) {
+    const heroPaths = [
+      `${appRoot}/public/images/blog/${slug}/hero.webp`,
+      // Existing reviewed articles used the same slug without the date prefix.
+      `${appRoot}/public/images/blog/${slug.slice(11)}/hero.webp`,
+    ];
     if (!artifact.heroSourceUrl || artifact.heroSourceUrl.length > 4096 || /[\r\n\0]/u.test(artifact.heroSourceUrl) ||
-      artifact.heroPath !== `${appRoot}/public/images/blog/${slug}/hero.webp` || !/^[a-f0-9]{64}$/u.test(artifact.heroSha256 ?? "")) throw new Error("Bound hero identity or path is unverified.");
+      !heroPaths.includes(artifact.heroPath ?? "") || !/^[a-f0-9]{64}$/u.test(artifact.heroSha256 ?? "")) throw new Error("Bound hero identity or path is unverified.");
     const source = artifact.heroSourceUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     // Match the preparer's exact approved image identity, never other external URLs.
     body = body.replace(new RegExp(`(!\\[[^\\]]*]\\()${source}(\\))`, "g"), (_match, before: string, after: string) => `${before}${artifact.heroPath!.slice(`${appRoot}/public`.length)}${after}`);
@@ -276,15 +281,26 @@ export async function readArticlePublication(
     }
     if (!complete)
       throw new Error("Production deployment pagination is incomplete.");
+    const productionEnvironment =
+      process.env.BLOG_PRODUCTION_ENVIRONMENT || "Production";
     const deployment = deployments
       .filter(
-        (d) =>
-          d.environment ===
-            (process.env.BLOG_PRODUCTION_ENVIRONMENT || "Production") &&
-          d.production_environment === true,
+        (d) => d.environment === productionEnvironment,
       )
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-    if (!deployment?.sha || !Number.isSafeInteger(deployment.id))
+    // Vercel labels its GitHub deployment Production but sets the optional
+    // production_environment flag false. Require its non-transient bot receipt
+    // and matching status identity, rather than accepting arbitrary labels.
+    const vercelProduction =
+      deployment?.production_environment === false &&
+      deployment.transient_environment === false &&
+      deployment.creator?.login === "vercel[bot]";
+    if (
+      !deployment?.sha ||
+      !Number.isSafeInteger(deployment.id) ||
+      deployment.transient_environment === true ||
+      !(deployment.production_environment === true || vercelProduction)
+    )
       throw new Error("Production deployment has not been verified.");
     evidence.deploymentId = deployment.id;
     evidence.deploymentSha = deployment.sha;
@@ -293,6 +309,12 @@ export async function readArticlePublication(
       `/deployments/${deployment.id}/statuses?per_page=1`,
     );
     const status = statuses?.[0];
+    if (
+      vercelProduction &&
+      (status?.environment !== productionEnvironment ||
+        status.creator?.login !== "vercel[bot]")
+    )
+      throw new Error("Vercel Production status identity is unverified.");
     evidence.deploymentState = status?.state ?? "unknown";
     if (evidence.deploymentState !== "success")
       throw new Error(`Production deployment is ${evidence.deploymentState}.`);

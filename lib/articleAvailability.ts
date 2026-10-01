@@ -191,8 +191,12 @@ async function pinnedHtml(
           "User-Agent": "Resonate article availability check",
           Accept: "text/html",
         },
-        lookup: (_hostname, _options, callback) =>
-          callback(null, address.address, address.family),
+        // Node's automatic family selection requests an array. Both callback
+        // forms contain only the single address validated above.
+        lookup: (_hostname, options, callback) =>
+          options.all
+            ? callback(null, [address])
+            : callback(null, address.address, address.family),
         timeout: 10000,
       },
       (res) => {

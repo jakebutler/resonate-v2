@@ -5393,3 +5393,11 @@ Addressed the 18 initial comments on PR #133 before merge: confirmed cancellatio
 - Reconcile per-attempt budget overruns across acknowledgement epochs, stop oversized streams, validate native reference bytes and hold ambiguous legacy text-route history before dispatch.
 - Preserve human tracker edits, constrain fictional reader tables and run offline image tooling guards in CI. Replace one corrupt rollout test fixture with a real PNG without weakening native validation.
 - Backend and UI scoped reviews are approved; final publication/figure review, exact final CI and served qualification remain pending. Provider spending, merge, deployment and real content publication remain zero.
+
+## September 30, 2026 — Article activation readiness fixes
+
+Vercel Production receipts with a false GitHub production flag now require non-transient vercel[bot] deployment and matching status identity. Latest unrecognized Production receipts remain held; exact merge ancestry, source/hero hashes and rendered copy checks are preserved. DNS-pinned HTTPS supports scalar and all-address Node lookup callbacks without a second DNS resolution. Shared library changes now trigger production Convex deployment in CI.
+
+Validation: 55 focused tests, full unit suite with coverage, lint, typecheck, Next.js build and native Convex dry-run passed. Release approval and live provider qualification are separate from these checks. Deployment detection excludes shared-library unit tests; Vercel negative regressions assert the exact failed qualification gate.
+
+Legacy hero compatibility: accept only the exact dated or undated directory derived from the bound article slug; preserve source, hash and inline placement checks. All fifteen live articles passed the complete candidate read-only verifier against website Production `8030650`.
