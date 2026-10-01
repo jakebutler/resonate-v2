@@ -115,7 +115,8 @@ jobs:
             exit 0
           fi
 
-          if git diff --name-only "$before" "${{ github.sha }}" -- convex/ | grep -q .; then
+          # Convex actions import shared libraries; those changes must deploy too.
+          if git diff --name-only "$before" "${{ github.sha }}" -- convex/ lib/ package.json package-lock.json | grep -q .; then
             echo "convex_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "convex_changed=false" >> "$GITHUB_OUTPUT"

@@ -276,15 +276,26 @@ export async function readArticlePublication(
     }
     if (!complete)
       throw new Error("Production deployment pagination is incomplete.");
+    const productionEnvironment =
+      process.env.BLOG_PRODUCTION_ENVIRONMENT || "Production";
     const deployment = deployments
       .filter(
-        (d) =>
-          d.environment ===
-            (process.env.BLOG_PRODUCTION_ENVIRONMENT || "Production") &&
-          d.production_environment === true,
+        (d) => d.environment === productionEnvironment,
       )
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-    if (!deployment?.sha || !Number.isSafeInteger(deployment.id))
+    // Vercel labels its GitHub deployment Production but sets the optional
+    // production_environment flag false. Require its non-transient bot receipt
+    // and matching status identity, rather than accepting arbitrary labels.
+    const vercelProduction =
+      deployment?.production_environment === false &&
+      deployment.transient_environment === false &&
+      deployment.creator?.login === "vercel[bot]";
+    if (
+      !deployment?.sha ||
+      !Number.isSafeInteger(deployment.id) ||
+      deployment.transient_environment === true ||
+      !(deployment.production_environment === true || vercelProduction)
+    )
       throw new Error("Production deployment has not been verified.");
     evidence.deploymentId = deployment.id;
     evidence.deploymentSha = deployment.sha;
@@ -293,6 +304,12 @@ export async function readArticlePublication(
       `/deployments/${deployment.id}/statuses?per_page=1`,
     );
     const status = statuses?.[0];
+    if (
+      vercelProduction &&
+      (status?.environment !== productionEnvironment ||
+        status.creator?.login !== "vercel[bot]")
+    )
+      throw new Error("Vercel Production status identity is unverified.");
     evidence.deploymentState = status?.state ?? "unknown";
     if (evidence.deploymentState !== "success")
       throw new Error(`Production deployment is ${evidence.deploymentState}.`);

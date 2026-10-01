@@ -5393,3 +5393,29 @@ Addressed the 18 initial comments on PR #133 before merge: confirmed cancellatio
 - Reconcile per-attempt budget overruns across acknowledgement epochs, stop oversized streams, validate native reference bytes and hold ambiguous legacy text-route history before dispatch.
 - Preserve human tracker edits, constrain fictional reader tables and run offline image tooling guards in CI. Replace one corrupt rollout test fixture with a real PNG without weakening native validation.
 - Backend and UI scoped reviews are approved; final publication/figure review, exact final CI and served qualification remain pending. Provider spending, merge, deployment and real content publication remain zero.
+
+## 09/30/2026 21:11:11 PDT
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	.github/workflows/test.yml
+- A	lib/__tests__/articleAvailabilityTransport.test.ts
+- M	lib/__tests__/articlePublication.test.ts
+- M	lib/articleAvailability.ts
+- M	lib/articlePublication.ts
+
+### Working Tree Snapshot
+
+- M  .github/workflows/test.yml
+- A  lib/__tests__/articleAvailabilityTransport.test.ts
+- M  lib/__tests__/articlePublication.test.ts
+- M  lib/articleAvailability.ts
+- M  lib/articlePublication.ts
+
+### Branch
+
+- codex/resonate-activation-readiness

@@ -43,6 +43,13 @@ function githubFixture(
     ancestor?: boolean;
     changedBlob?: boolean;
     sourceContent?: string;
+    productionFlag?: boolean;
+    transient?: boolean;
+    creator?: string;
+    environment?: string;
+    statusCreator?: string;
+    statusEnvironment?: string;
+    newerUnrecognized?: boolean;
     figurePath?: string;
     figureBytes?: string;
     mdxContent?: string;
@@ -79,13 +86,23 @@ function githubFixture(
         {
           id: 10,
           sha: options.sha ?? "merge",
-          environment: "Production",
-          production_environment: true,
+          environment: options.environment ?? "Production",
+          production_environment: options.productionFlag ?? true,
+          transient_environment: options.transient,
+          creator: { login: options.creator },
           created_at: "2030-10-07T16:00:00Z",
         },
+        ...(options.newerUnrecognized ? [{
+          id: 11, sha: "later", environment: "Production",
+          production_environment: false, creator: { login: "other-bot" },
+          created_at: "2030-10-07T17:00:00Z",
+        }] : []),
       ];
     else if (url.includes("/deployments/10/statuses"))
-      data = [{ state: options.deployment ?? "success" }];
+      data = [{ state: options.deployment ?? "success",
+        environment: options.statusEnvironment,
+        creator: { login: options.statusCreator },
+      }];
     else if (url.includes("/compare/"))
       data = {
         status: options.ancestor ? "ahead" : "diverged",
@@ -116,6 +133,36 @@ function githubFixture(
   return { calls, fetch };
 }
 describe("separate publication facts", () => {
+  const vercel = {
+    productionFlag: false, transient: false, creator: "vercel[bot]",
+    statusCreator: "vercel[bot]", statusEnvironment: "Production",
+  };
+  it.each([{}, { sha: "later", ancestor: true }])(
+    "accepts Vercel's non-transient Production receipt with its matching successful status (%j)",
+    async options => {
+      githubFixture({ ...vercel, ...options });
+      const result = await readArticlePublication(input, async () => ({
+        availability: "verified", expectedHash: "expected", observedHash: "observed",
+      }));
+      expect(result.evidence).toMatchObject({ availability: "verified", deploymentState: "success" });
+    },
+  );
+  it.each([
+    { creator: "other-bot" }, { transient: true }, { transient: undefined },
+    { environment: "Preview" }, { statusEnvironment: "Preview" },
+    { statusCreator: "other-bot" }, { statusCreator: undefined },
+    { deployment: "pending" }, { deployment: "failure" },
+    { newerUnrecognized: true }, { sourceContent: "Changed copy" },
+    { sha: "later", ancestor: true, changedBlob: true },
+    { sha: "unrelated" },
+  ])("holds mismatched Vercel or latest Production evidence (%j)", async options => {
+    githubFixture({ ...vercel, ...options });
+    const available = vi.fn();
+    const result = await readArticlePublication(input, available);
+    expect(result.evidence.availability).not.toBe("verified");
+    expect(result.evidence.reason).toBeTruthy();
+    expect(available).not.toHaveBeenCalled();
+  });
   it("rejects a present empty hero hash before reading GitHub or canonical availability", async () => {
     const { fetch } = githubFixture();
     const available = vi.fn(async () => ({ availability: "verified" as const }));
