@@ -51,6 +51,8 @@ type HtmlSpan = { start: number; end: number };
 /** HTML5 parser owns nesting, comments and escaped/raw script closure semantics. */
 function htmlSourceSpans(lines: FigureArticleLine[]): HtmlSpan[] {
   const input = lines.map(line => line.eligible ? line.raw : line.raw.replace(/[^\r\n]/g, " ")).join("\n");
+  // Unsupported declarations cannot prove a recovery boundary. Only Markdown literals are masked.
+  if (/<(?:\?|!\[CDATA\[|![a-z])/iu.test(input)) return [{ start: 0, end: input.length }];
   // Fragment parsing can ignore document/table-context wrappers. Refuse these unsupported forms;
   // no lexical closing-tag heuristic grants recovery or evidence from their apparent interior.
   if (/<(?:html|head|body|frameset|frame|caption|col|colgroup|tbody|td|tfoot|th|thead|tr)(?=\s|\/|>|$)/iu.test(input)) return [{ start: 0, end: input.length }];
@@ -77,16 +79,13 @@ export function getFigureArticleStructure(content: string): FigureArticleLine[] 
     const line = { raw, start: offset, end: offset + raw.length, row: index + 1, eligible: true, tableRow: false, topLevelEligible: false }; offset += raw.length + 1; return line;
   });
   let fence: { character: string; length: number } | null = null;
-  let htmlClose: string | null = null; let list = false;
+  let list = false;
   // Literal Markdown structures cannot open an HTML region in the parser input.
   for (const line of lines) {
     const raw = line.raw;
     if (fence) { if (new RegExp(`^ {0,3}${fence.character}{${fence.length},}\\s*$`, "u").test(raw)) fence = null; line.eligible = false; continue; }
     const opening = /^ {0,3}(`{3,}|~{3,})/u.exec(raw)?.[1];
     if (opening) { fence = { character: opening[0], length: opening.length }; line.eligible = false; continue; }
-    if (htmlClose) { if (raw.includes(htmlClose)) htmlClose = null; line.eligible = false; continue; }
-    const special = /^ {0,3}<\?/u.test(raw) ? "?>" : /^ {0,3}<!\[CDATA\[/u.test(raw) ? "]]>" : /^ {0,3}<![A-Z]/u.test(raw) ? ">" : null;
-    if (special) { if (!raw.includes(special)) htmlClose = special; line.eligible = false; continue; }
     if (!raw.trim()) list = false;
     if (/^ {0,3}(?:[-+*]|\d{1,9}[.)])\s+/u.test(raw)) list = true;
     line.eligible = !list && !/^(?: {4}| *\t| {0,3}>)/u.test(raw);

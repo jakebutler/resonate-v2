@@ -24,6 +24,42 @@ async function harness(article = content) {
   return { t, user, postId };
 }
 describe("persistent evidence-bound figures", () => {
+  it.each([
+    ["DOCTYPE", "<!DOCTYPE html> <div hidden>"],
+    ["processing instruction", "<?xml?> <div hidden>"],
+    ["CDATA", "<![CDATA[ harmless ]]> <div hidden>"],
+    ["multiline DOCTYPE", "<!DOCTYPE html\n> <div hidden>"],
+    ["multiline processing instruction", "<?xml\n?> <div hidden>"],
+    ["multiline CDATA", "<![CDATA[ harmless\n]]> <div hidden>"],
+  ])("withholds hidden evidence and publication figures after an unsupported %s opener", async (_kind, prefix) => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | reports fault |";
+    const article = `${prefix}\n\n## Hidden evidence\n\n${table}\n\n</div>`;
+    const { user, postId } = await harness(article);
+    const plan = await user.mutation(figureApi.planFigures, { postId });
+    // Retain the full unsafe path as RED evidence, rather than only checking the parser.
+    if (plan.candidateIds.length) {
+      const candidate = await user.query(figureApi.getCandidate, { candidateId: plan.candidateIds[0] });
+      await user.mutation(figureApi.acceptCandidate, { candidateId: candidate._id, expectedDataSignature: candidate.dataSignature, expectedPresentationSignature: candidate.presentationSignature });
+      expect(await user.query(figureApi.getPublicationFigures, { postId })).toHaveLength(1);
+    }
+    expect(plan.candidateIds).toEqual([]);
+    expect((await user.query(api.publishing.getPostById, { postId }))?.content).toBe(article);
+    expect(await user.query(figureApi.getPublicationFigures, { postId })).toEqual([]);
+  });
+
+  it.each(["fenced", "indented", "list", "blockquote"])("preserves visible accepted figures after %s literal declaration examples", async mode => {
+    const markers = "<!DOCTYPE html> <div hidden>\n<?xml?> <div hidden>\n<![CDATA[ harmless ]]> <div hidden>";
+    const literal = mode === "fenced" ? `\`\`\`markdown\n${markers}\n\`\`\`` : mode === "indented" ? markers.split("\n").map(line => `    ${line}`).join("\n") : mode === "list" ? `- ${markers.replaceAll("\n", "\n  ")}` : markers.split("\n").map(line => `> ${line}`).join("\n");
+    const article = `${literal}\n\n## Visible evidence\n\n| from | to | relation |\n|---|---|---|\n| Reader | Editor | visible feedback |`;
+    const { user, postId } = await harness(article);
+    const plan = await user.mutation(figureApi.planFigures, { postId });
+    expect(plan.candidateIds).toHaveLength(1);
+    const candidate = await user.query(figureApi.getCandidate, { candidateId: plan.candidateIds[0] });
+    expect(candidate.spec.rows).toEqual([["Reader", "Editor", "visible feedback"]]);
+    await user.mutation(figureApi.acceptCandidate, { candidateId: candidate._id, expectedDataSignature: candidate.dataSignature, expectedPresentationSignature: candidate.presentationSignature });
+    expect(await user.query(figureApi.getPublicationFigures, { postId })).toHaveLength(1);
+  });
+
   it("excludes hidden evidence in double-escaped script text until the real script and outer HTML close", async () => {
     const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | reports fault |";
     const hidden = `<div hidden>\n<script><!--<script>\n</script>\n</div>\n\n## Hidden evidence\n\n${table}`;

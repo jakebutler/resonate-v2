@@ -138,13 +138,30 @@ describe("evidence-bound figures", () => {
       expect(() => assertFigureInsertionAnchor(content, open)).toThrow(/structure|top-level/);
     }
   });
-  it("excludes processing instructions, declarations and CDATA until their exact HTML terminator", () => {
+  it("withholds evidence throughout articles containing unsupported processing instructions, declarations or CDATA", () => {
     const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Reader | unseen relation |";
     for (const [open, close] of [["<?hidden", "?>"], ["<!DOCTYPE hidden [", "]>"], ["<![CDATA[", "]]>"]]) {
       const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const, content: `${open}\n${table}\n${close}` };
       expect(planFigureCandidates(source, []).candidates).toEqual([]);
-      expect(planFigureCandidates({ ...source, content: source.content + `\n\n## Visible\n\n${table}` }, []).candidates).toHaveLength(1);
+      expect(planFigureCandidates({ ...source, content: source.content + `\n\n## Visible\n\n${table}` }, []).candidates).toEqual([]);
       expect(() => assertFigureInsertionAnchor(source.content, open)).toThrow(/structure|top-level/);
+    }
+  });
+  it("keeps unsupported declaration examples inside Markdown literal regions from poisoning visible article evidence", () => {
+    const markers = "<!DOCTYPE html> <div hidden>\n<?xml?> <div hidden>\n<![CDATA[ harmless ]]> <div hidden>";
+    const table = "| from | to | relation |\n|---|---|---|\n| Reader | Editor | visible feedback |";
+    const examples = [
+      `\`\`\`markdown\n${markers}\n\`\`\``,
+      markers.split("\n").map(line => `    ${line}`).join("\n"),
+      `- ${markers.replaceAll("\n", "\n  ")}`,
+      markers.split("\n").map(line => `> ${line}`).join("\n"),
+    ];
+    for (const example of examples) {
+      const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const, content: `${example}\n\n## Visible\n\n${table}` };
+      const plan = planFigureCandidates(source, []);
+      expect(plan.candidates, example).toHaveLength(1);
+      expect(plan.candidates[0].rows).toEqual([["Reader", "Editor", "visible feedback"]]);
+      expect(() => assertFigureInsertionAnchor(source.content, "## Visible")).not.toThrow();
     }
   });
   it("shares literal MDX-safe insertion and current article evidence proof without relying on shifted archive offsets", () => {
