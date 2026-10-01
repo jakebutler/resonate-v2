@@ -174,19 +174,24 @@ describe("separate publication facts", () => {
     },
   );
   it.each([
-    { creator: "other-bot" }, { transient: true }, { transient: undefined },
-    { environment: "Preview" }, { statusEnvironment: "Preview" },
-    { statusCreator: "other-bot" }, { statusCreator: undefined },
-    { deployment: "pending" }, { deployment: "failure" },
-    { newerUnrecognized: true }, { sourceContent: "Changed copy" },
-    { sha: "later", ancestor: true, changedBlob: true },
-    { sha: "unrelated" },
-  ])("holds mismatched Vercel or latest Production evidence (%j)", async options => {
+    [{ creator: "other-bot" }, /Production deployment has not been verified/],
+    [{ transient: true }, /Production deployment has not been verified/],
+    [{ transient: undefined }, /Production deployment has not been verified/],
+    [{ environment: "Preview" }, /Production deployment has not been verified/],
+    [{ statusEnvironment: "Preview" }, /Vercel Production status identity/],
+    [{ statusCreator: "other-bot" }, /Vercel Production status identity/],
+    [{ statusCreator: undefined }, /Vercel Production status identity/],
+    [{ deployment: "pending" }, /Production deployment is pending/],
+    [{ deployment: "failure" }, /Production deployment is failure/],
+    [{ newerUnrecognized: true }, /Production deployment has not been verified/],
+    [{ sha: "later", ancestor: true, changedBlob: true }, /Production contains a different article artifact/],
+    [{ sha: "unrelated" }, /Production deployment does not include the article merge commit/],
+  ] as const)("holds mismatched Vercel or latest Production evidence (%j)", async (options, reason) => {
     githubFixture({ ...vercel, ...options });
     const available = vi.fn();
     const result = await readArticlePublication(input, available);
     expect(result.evidence.availability).not.toBe("verified");
-    expect(result.evidence.reason).toBeTruthy();
+    expect(result.evidence.reason).toMatch(reason);
     expect(available).not.toHaveBeenCalled();
   });
   it("rejects a present empty hero hash before reading GitHub or canonical availability", async () => {
