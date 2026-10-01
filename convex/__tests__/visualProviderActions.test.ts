@@ -68,11 +68,11 @@ async function claim(t: ReturnType<typeof convexTest>, attemptId: string, maximu
   return t.mutation(api.visualWorkflow.claimAttempt, { attemptId });
 }
 
-async function selectedPlan(withReference = false) {
+async function selectedPlan(withReference: boolean | { width: number; height: number } = false) {
   const result = await setup();
   const revision = await configureProfile(result.user);
   const referenceId = withReference ? await result.t.run(async ctx => {
-    const referenceBytes = await sharp({ create: { width: 32, height: 24, channels: 3, background: "#456789" } }).webp().toBuffer();
+    const referenceBytes = await sharp({ create: { width: typeof withReference === "object" ? withReference.width : 32, height: typeof withReference === "object" ? withReference.height : 24, channels: 3, background: "#456789" } }).webp().toBuffer();
     const storageId = await ctx.storage.store(new Blob([Uint8Array.from(referenceBytes).buffer], { type: "image/webp" }));
     const id = await ctx.db.insert("v2VisualReferences", { brandId: "corvo", storageId, sha256: createHash("sha256").update(referenceBytes).digest("hex"), byteLength: referenceBytes.length, contentType: "image/webp", fileName: "SPECULATIVE-reference.webp", kind: "upload", seedAssetKey: null, article: null, approvalProvenance: null, sourceDocumentSha256: null, sourceRecord: "offline fixture", historicalProvider: null, historicalModelId: null, uploadedBy: "author", createdAt: 1 });
     await ctx.db.patch(revision.profileRevisionId, { referenceBindings: [{ referenceId: id, role: "identity" }] });
@@ -102,8 +102,8 @@ async function reviewedTestRoute(t: ReturnType<typeof convexTest>) {
     expiresAt: Date.now() + 60_000,
   });
 }
-async function queued() {
-  const result = await selectedPlan();
+async function queued(referenceSize?: { width: number; height: number }) {
+  const result = await selectedPlan(referenceSize ?? false);
   await result.user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1_000_000 });
   const current = await result.user.query(api.visualWorkflow.get, { postId: result.postId });
   const attemptId = await result.user.mutation(api.visualWorkflow.requestGeneration, {
@@ -118,6 +118,94 @@ async function successResponse(width = 1536, height = 1024) {
   return new Response(JSON.stringify({ model: "gpt-image-2-2026-04-21", data: [{ b64_json: bytes.toString("base64"), revised_prompt: "Fictional raven repairs a gear" }], usage: { input_tokens_details: { text_tokens: 10, image_tokens: 20 }, output_tokens: 30 } }), { status: 200, headers: { "x-request-id": "req_fictional" } });
 }
 describe("actual server image execution (SPECULATIVE offline contract doubles)", () => {
+  it.each([{ width: 2000, height: 1000 }, { width: 1701, height: 900 }, { width: 1600, height: 1001 }])("blocks a compressed oversized Image2 reference $width×$height before quote, reservation, claim or HTTP", async dimensions => {
+    const { t, user, postId, attemptId } = await queued(dimensions);
+    await reviewedTestRoute(t);
+    const fetchMock = vi.fn().mockImplementation(() => successResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const envelope = () => t.run(async ctx => ({
+      attempt: await ctx.db.get(attemptId),
+      quotes: await ctx.db.query("v2VisualDispatchQuotes").withIndex("by_attempt", q => q.eq("attemptId", attemptId)).collect(),
+      month: await ctx.db.query("v2VisualBudgetMonths").first(),
+      allowance: await ctx.db.query("v2VisualProviderAllowances").first(),
+    }));
+    const before = await envelope();
+    expect(before.attempt!.input.references).toHaveLength(1);
+    expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toEqual({ status: "blocked", versionId: null, reason: "gpt-image-2-input-dimensions-exceed-reviewed-envelope" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await envelope()).toEqual(before);
+    expect((await user.query(api.visualWorkflow.get, { postId })).versions).toHaveLength(0);
+  });
+
+  it("blocks Image2 edit aggregate bytes exceeding the reviewed bound even when each parent/reference fits", async () => {
+    const { t, user, postId, attemptId } = await queued({ width: 32, height: 24 });
+    const routeId = await reviewedTestRoute(t);
+    const fetchMock = vi.fn().mockImplementation(() => successResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const generated = await user.action(api.visualProviderActions.executeImageAttempt, { attemptId });
+    expect(generated.status).toBe("completed");
+    const bound = await t.run(async ctx => {
+      const parent = (await ctx.db.get(generated.versionId!))!;
+      const reference = (await ctx.db.query("v2VisualReferences").first())!;
+      const actualBytes = [(await ctx.storage.get(parent.storageId))!.size, (await ctx.storage.get(reference.storageId))!.size];
+      const maxInputBytes = Math.max(...actualBytes);
+      await ctx.db.patch(routeId, { maxInputBytes });
+      return { actualBytes, maxInputBytes };
+    });
+    expect(bound.actualBytes.every(bytes => bytes <= bound.maxInputBytes)).toBe(true);
+    expect(bound.actualBytes.reduce((sum, bytes) => sum + bytes, 0)).toBeGreaterThan(bound.maxInputBytes);
+    const editId = await user.mutation(api.visualWorkflow.requestEdit, { postId, operationKey: "aggregate-bound", feedback: "Move the gear closer." });
+    fetchMock.mockClear();
+    const envelope = () => t.run(async ctx => ({
+      attempt: await ctx.db.get(editId),
+      quotes: await ctx.db.query("v2VisualDispatchQuotes").withIndex("by_attempt", q => q.eq("attemptId", editId)).collect(),
+      month: await ctx.db.query("v2VisualBudgetMonths").first(),
+      allowance: await ctx.db.query("v2VisualProviderAllowances").first(),
+    }));
+    const before = await envelope();
+    expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId: editId })).toEqual({ status: "blocked", versionId: null, reason: "reviewed-input-bound-exceeded" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await envelope()).toEqual(before);
+  });
+
+  it("blocks an oversized decoded Image2 edit parent even when its persisted output contract matches", async () => {
+    const { t, user, postId, attemptId } = await queued();
+    const routeId = await reviewedTestRoute(t);
+    const fetchMock = vi.fn().mockImplementation(() => successResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const generated = await user.action(api.visualProviderActions.executeImageAttempt, { attemptId });
+    expect(generated.status).toBe("completed");
+    const bytes = await sharp({ create: { width: 1701, height: 900, channels: 3, background: "#456789" } }).webp().toBuffer();
+    await t.run(async ctx => {
+      const parent = (await ctx.db.get(generated.versionId!))!;
+      const storageId = await ctx.storage.store(new Blob([Uint8Array.from(bytes).buffer], { type: "image/webp" }));
+      await ctx.db.patch(parent._id, { storageId, sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.length, width: 1701, height: 900, input: { ...parent.input, size: "1701x900" } });
+      await ctx.db.patch(routeId, { size: "1701x900" });
+    });
+    const editId = await user.mutation(api.visualWorkflow.requestEdit, { postId, operationKey: "oversized-parent", feedback: "Move the gear closer." });
+    fetchMock.mockClear();
+    expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId: editId })).toEqual({ status: "blocked", versionId: null, reason: "gpt-image-2-input-dimensions-exceed-reviewed-envelope" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    const saved = await user.query(api.visualWorkflow.get, { postId });
+    expect(saved.attempts.find((attempt: { _id: string }) => attempt._id === editId)).toMatchObject({ status: "queued" });
+    expect(saved.month.reservedMicros).toBe(0);
+    expect(await t.run(ctx => ctx.db.query("v2VisualDispatchQuotes").withIndex("by_attempt", q => q.eq("attemptId", editId)).collect())).toEqual([]);
+  });
+
+  it("preserves the broader decoded reference envelope for other image models", async () => {
+    const { t, user, postId } = await selectedPlan({ width: 2000, height: 1000 });
+    await user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1_000_000 });
+    const routeId = await reviewedTestRoute(t);
+    await t.run(ctx => ctx.db.patch(routeId, { model: "gpt-image-1-mini", apiModelId: "gpt-image-1-mini", quality: "low", inputFidelity: "low" }));
+    const attemptId = await user.mutation(api.visualWorkflow.requestGeneration, { postId, operationKey: "other-model-envelope", providerOverride: "openai", modelOverride: "gpt-image-1-mini", quality: "low" });
+    const body = await (await successResponse()).json();
+    body.model = "gpt-image-1-mini";
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toMatchObject({ status: "completed" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("cancels an oversized declared provider response while retaining the uncertain hold", async () => {
     const f = await queued(); await reviewedTestRoute(f.t);
     const cancelled = vi.fn();
@@ -236,15 +324,21 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("sends actual ordered identity references for generation, then selected parent first followed by the same reference", async () => {
-    const { t, user, postId, referenceId } = await selectedPlan(true);
-    await user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1_000_000 }); await reviewedTestRoute(t);
+  it.each([{ width: 1448, height: 1086 }, { width: 1672, height: 941 }, { width: 1600, height: 1000 }, { width: 1700, height: 941 }])("admits Image2 reference $width×$height and its 1536×1024 parent at the exact aggregate byte bound", async dimensions => {
+    const { t, user, postId, referenceId } = await selectedPlan(dimensions);
+    await user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1_000_000 }); const routeId = await reviewedTestRoute(t);
     const fetchMock = vi.fn().mockImplementation(() => successResponse()); vi.stubGlobal("fetch", fetchMock);
     const attemptId = await user.mutation(api.visualWorkflow.requestGeneration, { postId, operationKey: "owned-ref", providerOverride: "openai" });
     expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toMatchObject({ status: "completed" });
     const form = fetchMock.mock.calls[0][1].body as FormData;
     const referenceBytes = await t.run(async ctx => (await ctx.storage.get((await ctx.db.get(referenceId!))!.storageId))!.arrayBuffer());
     expect(Buffer.from(await (form.getAll("image[]")[0] as Blob).arrayBuffer())).toEqual(Buffer.from(referenceBytes));
+    await t.run(async ctx => {
+      const parent = (await ctx.db.query("v2VisualVersions").first())!;
+      expect(parent).toMatchObject({ width: 1536, height: 1024 });
+      const parentBytes = (await ctx.storage.get(parent.storageId))!.size;
+      await ctx.db.patch(routeId, { maxInputBytes: parentBytes + referenceBytes.byteLength });
+    });
     const editId = await user.mutation(api.visualWorkflow.requestEdit, { postId, operationKey: "owned-ref-edit", feedback: "Move the raven closer to the gear." });
     expect(await user.action(api.visualProviderActions.executeImageAttempt, { attemptId: editId })).toMatchObject({ status: "completed" });
     const editForm = fetchMock.mock.calls[1][1].body as FormData;
