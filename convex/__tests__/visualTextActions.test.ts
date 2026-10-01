@@ -99,6 +99,31 @@ describe("authenticated text executor", () => {
   });
 
 
+  it("rejects an echoed reflection controller without saving lessons and settles known usage once", async () => {
+    const f = await approvedReflection();
+    const controller = f.reflectionAttempt.input.prompt;
+    vi.mocked(fetch).mockResolvedValueOnce(response({ ...reflectionOutput, candidatePrompt: `  ${controller}  ` }));
+    expect(await f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.reflectionAttempt._id })).toMatchObject({ status: "completed", reflectionId: null, reason: "text-reflection-schema-invalid" });
+    const state = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(state.reflections.every((reflection: { candidatePrompt?: string; lessonIds?: string[] }) => reflection.candidatePrompt === undefined && !(reflection.lessonIds?.length))).toBe(true);
+    expect(state.attempts.find((attempt: { _id: string }) => attempt._id === f.reflectionAttempt._id)).toMatchObject({ status: "failed", estimatedActualMicros: 200, usageReceipt: expect.any(String) });
+    expect(state.month).toMatchObject({ spentMicros: 400, reservedMicros: 0 });
+    expect(await f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.reflectionAttempt._id })).toMatchObject({ status: "blocked", reason: "attempt-not-queued" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts an unchanged original image prompt with no new lessons", async () => {
+    const f = await approvedReflection();
+    const before = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    const originalPrompt = before.versions.find((version: { _id: string }) => version._id === f.exported.originalId).input.prompt;
+    vi.mocked(fetch).mockResolvedValueOnce(response({ candidatePrompt: originalPrompt, lessons: [], profileChangeProposals: [] }));
+    expect(await f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.reflectionAttempt._id })).toMatchObject({ status: "completed", reflectionId: expect.any(String), reason: null });
+    const state = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(state.reflections[0]).toMatchObject({ candidatePrompt: originalPrompt, lessonIds: [], validationStatus: "untested" });
+    expect(state.month).toMatchObject({ spentMicros: 400, reservedMicros: 0 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("sends the actual approved final pixels and exact ordered inputs through the public reflection action", async () => {
     const f = await approvedReflection();
     vi.mocked(fetch).mockResolvedValueOnce(response(reflectionOutput));
