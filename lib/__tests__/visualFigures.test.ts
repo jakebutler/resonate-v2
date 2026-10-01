@@ -22,6 +22,7 @@ describe("evidence-bound figures", () => {
       const root = parseFragment(svg).childNodes[0];
       expect("tagName" in root && root.tagName, spec.family).toBe("svg");
       expect("attrs" in root && root.attrs.find(attribute => attribute.name === "font-family")?.value, spec.family).toBe("Inter, system-ui, sans-serif");
+      expect(svg, spec.family).not.toMatch(/<text\b[^>]*(?:font-family|style)\s*=/iu);
       expect(svg, spec.family).not.toMatch(/@font-face|<style|<link|url\(/iu);
     }
   });
