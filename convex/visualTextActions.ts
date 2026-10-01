@@ -71,7 +71,7 @@ async function execute(ctx: ActionCtx, args: { attemptId: Id<"v2VisualAttempts">
         return { status: "completed", planId, reflectionId: null, reason: null };
       }
       let reflection;
-      try { reflection = parseReflectionOutput(result.output); } catch {
+      try { reflection = parseReflectionOutput(result.output, claim.input.prompt); } catch {
         await ctx.runMutation(internal.visualWorkflow.failAttempt, { attemptId: attempt._id, claimKey: claim.claimKey, reason: "Text reflection output failed strict schema validation", ...usage });
         return { status: "completed", planId: null, reflectionId: null, reason: "text-reflection-schema-invalid" };
       }

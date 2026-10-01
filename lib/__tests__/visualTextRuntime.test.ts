@@ -26,6 +26,32 @@ describe("bounded text runtime", () => {
     expect(instruction).toMatch(/no (?:surrounding )?prose/i);
   });
 
+  it("asks reflection to revise the original image prompt from the accepted edit and final pixels", async () => {
+    const pixels = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#f08030" } }).webp().toBuffer();
+    const identity = { storageId: "fictional-owned-export", sha256: createHash("sha256").update(pixels).digest("hex"), bytes: pixels.length, width: 1600 as const, height: 900 as const, contentType: "image/webp" as const };
+    const visionRoute = { ...route, maxInputTokens: 22_000, maximumMicros: 30_000, vision: { protocol: "chat-completions-image-url" as const, detail: "low" as const, maxImageBytes: 149_999, maxImageInputTokens: 1000, maxRequestBytes: 225_000, capabilityReceiptIds: ["SPECULATIVE-vision"], tokenBoundReceiptId: "SPECULATIVE-tokens", priceReceiptId: "SPECULATIVE-price" } };
+    const controller = "Reflect on the immutable original input; candidate prompts remain untested.";
+    const originalPrompt = "Create a matte paper raven repairing a gear at a workbench. Keep the screwdriver handle dark teal.";
+    const feedback = "Change only the screwdriver handle from dark teal to warm orange; preserve the raven and gear.";
+    const context = JSON.stringify({ originalInput: { ...attempt.input, prompt: originalPrompt }, lineage: [{ feedback: null }, { feedback }], finalPresentation: { exportHash: identity.sha256 } });
+    const prepared = await prepareTextRequest({ ...attempt, stage: "reflection", input: { ...attempt.input, prompt: controller } }, visionRoute, context, { identity, bytes: pixels });
+    const messages = prepared.body.messages as { role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] }[];
+    const system = messages[0].content as string;
+    expect(system).toMatch(/candidatePrompt.*complete revised image.generation prompt/i);
+    expect(system).toContain("reflectionContext.originalInput.prompt");
+    expect(system).toMatch(/ordered.*feedback/i);
+    expect(system).toMatch(/do not (?:copy|echo).*reflection.*(?:controller|control)/i);
+    expect(system).toMatch(/do not duplicate.*(?:seed|existing).*lessons/i);
+    expect(system).toMatch(/no.*(?:new|supported).*lesson.*lessons.*\[\]/i);
+    const user = messages[1].content as { type: string; text?: string; image_url?: { url: string } }[];
+    const supplied = JSON.parse(user[0].text!);
+    expect(supplied.reflectionControlInstructions).toBe(controller);
+    expect(supplied.instructions).toBeUndefined();
+    expect(supplied.reflectionContext.originalInput.prompt).toBe(originalPrompt);
+    expect(supplied.reflectionContext.lineage[1].feedback).toBe(feedback);
+    expect(user[1].image_url!.url).toBe(`data:image/webp;base64,${pixels.toString("base64")}`);
+  });
+
   it("omits an echoed supplied credential from a Cortex HTTP failure receipt", async () => {
     const cortex = { ...route, provider: "cortex" as const };
     const prepared = await prepareTextRequest(attempt, cortex);
