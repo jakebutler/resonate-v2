@@ -24,9 +24,9 @@ function bounded(text: string, maximum: number, label: string) {
 function exactExcerpt(source: Doc<"v2ResearchSources">) {
   // Only these explicit stored passage fields are understood; never serialize or infer from raw.
   const raw: unknown = source.raw;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "";
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { text: "", format: "markdown" as const };
   const value = raw as Record<string, unknown>;
-  return typeof value.excerpt === "string" ? bounded(value.excerpt, 8192, "Source excerpt") : typeof value.csv === "string" ? bounded(value.csv, 8192, "Source CSV") : "";
+  return typeof value.excerpt === "string" ? { text: bounded(value.excerpt, 8192, "Source excerpt"), format: "markdown" as const } : typeof value.csv === "string" ? { text: bounded(value.csv, 8192, "Source CSV"), format: "csv" as const } : { text: "", format: "markdown" as const };
 }
 async function ownedPost(ctx: QueryCtx | MutationCtx, userId: string, postId: Id<"v2Posts">, write: boolean) {
   const post = await ctx.db.get(postId);
@@ -68,11 +68,13 @@ export async function resolveLinkedEvidenceSnapshot(ctx: QueryCtx | MutationCtx,
   account(maps);
   if (maps.length > 4) throw new Error("Linked snapshot supports at most four claim maps");
   const records: EvidenceRecord[] = [];
-  const provenanceSources: { id: string; sourceId: string; title: string; url: string; status: string; updatedAt: number; sha256: string }[] = [];
+  const provenanceSources: { id: string; sourceId: string; title: string; url: string; status: string; updatedAt: number; sha256: string; format?: "csv" }[] = [];
+  const csvSourceIds = new Set<string>();
   for (const source of sources) {
-    const text = exactExcerpt(source);
+    const { text, format } = exactExcerpt(source);
+    if (format === "csv") csvSourceIds.add(source._id);
     const sha256 = await textHash(text);
-    provenanceSources.push({ id: source._id, sourceId: source.sourceId, title: bounded(source.title, 1000, "Source title"), url: bounded(source.url, 2000, "Source URL"), status: source.status, updatedAt: source.updatedAt, sha256 });
+    provenanceSources.push({ id: source._id, sourceId: source.sourceId, title: bounded(source.title, 1000, "Source title"), url: bounded(source.url, 2000, "Source URL"), status: source.status, updatedAt: source.updatedAt, sha256, ...(format === "csv" ? { format } : {}) });
     records.push({ kind: "source-excerpt", id: source._id, sourceIds: [source.sourceId], status: source.status, eligible: source.status === "accepted" && Boolean(text.trim()), text, sha256, updatedAt: source.updatedAt, reason: source.status !== "accepted" ? "Source is not accepted" : !text.trim() ? "No exact stored source excerpt or CSV" : null });
   }
   const provenanceMaps: { id: string; status: string; updatedAt: number }[] = [];
@@ -124,10 +126,27 @@ export async function resolveLinkedEvidenceSnapshot(ctx: QueryCtx | MutationCtx,
   const provenance = { links, brief: brief ? { id: briefId, status: brief.status, updatedAt: brief.updatedAt } : null, campaign: campaign ? { id: campaign._id, status: campaign.status, updatedAt: campaign.updatedAt } : null, sources: provenanceSources, claimMaps: provenanceMaps, corpusExcerpts: provenanceExcerpts, records: records.map(({ text: _text, ...metadata }) => { void _text; return metadata; }) };
   const eligible = records.filter(record => record.eligible);
   const passages = [...new Set(eligible.map(record => record.text))];
-  const content = `Stored linked research snapshot; review statuses are preserved. No new research or approval is inferred.\n\nProvenance:\n\`\`\`json\n${stableInputSignature(provenance)}\n\`\`\`\n\n${passages.map(text => `Records with this exact passage:\n\`\`\`json\n${stableInputSignature(eligible.filter(record => record.text === text).map(({ text: _text, ...metadata }) => { void _text; return metadata; }))}\n\`\`\`\n\n${text}`).join("\n\n")}`;
+  const csvErrors: string[] = [];
+  const renderPassage = (text: string) => {
+    if (!eligible.some(record => record.text === text && csvSourceIds.has(record.id))) return text;
+    const csv = parseFigureSource({ id: "pending", name: "Linked research.csv", format: "csv", purpose: "claim-trace", content: text });
+    const fence = "`".repeat(Math.max(3, ...[...text.matchAll(/`+/gu)].map(match => match[0].length + 1)));
+    const original = `Original CSV passage (unchanged):\n${fence}csv\n${text}\n${fence}`;
+    if (csv.errors.length || csv.tables.length !== 1) { csvErrors.push(...csv.errors); return original; }
+    const table = csv.tables[0];
+    const markdown = [table.columns, table.columns.map(() => "---"), ...table.rows].map(row => `| ${row.join(" | ")} |`).join("\n");
+    const rendered = parseFigureSource({ id: "pending", name: "Linked research.md", format: "markdown", purpose: "claim-trace", content: markdown });
+    if (rendered.errors.length || rendered.tables.length !== 1 || stableInputSignature({ columns: rendered.tables[0].columns, rows: rendered.tables[0].rows }) !== stableInputSignature({ columns: table.columns, rows: table.rows })) {
+      csvErrors.push("CSV cells cannot be represented as an exact supported Markdown table; original passage remains available for inspection");
+      return original;
+    }
+    return `${original}\n\nExact CSV rows rendered as Markdown:\n\n${markdown}`;
+  };
+  const content = `Stored linked research snapshot; review statuses are preserved. No new research or approval is inferred.\n\nProvenance:\n\`\`\`json\n${stableInputSignature(provenance)}\n\`\`\`\n\n${passages.map(text => `Records with this exact passage:\n\`\`\`json\n${stableInputSignature(eligible.filter(record => record.text === text).map(({ text: _text, ...metadata }) => { void _text; return metadata; }))}\n\`\`\`\n\n${renderPassage(text)}`).join("\n\n")}`;
   bounded(content, 65536, "Linked evidence snapshot");
   if (serializedUtf8Bytes(records) > 100_000) throw new Error("Linked inspection exceeds bounded snapshot limit");
   const parsed = parseFigureSource({ id: "pending", name: "Linked research.md", format: "markdown", purpose: "claim-trace", content });
+  parsed.errors.push(...csvErrors);
   const reasons = [...new Set([...records.filter(record => !record.eligible).map(record => record.reason!), ...parsed.errors, ...(!parsed.tables.length ? ["No exact structured rows in accepted linked content; text remains available for inspection"] : [])])];
   const snapshotHash = await textHash(stableInputSignature({ provenance, records }));
   const { source } = await currentHead(ctx, post);

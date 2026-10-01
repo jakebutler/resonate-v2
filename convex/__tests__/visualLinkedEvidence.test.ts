@@ -22,6 +22,52 @@ async function setup() {
 }
 
 describe("linked visual evidence", () => {
+  it("imports accepted CSV-only evidence as exact numerical figure trace while retaining its original passage", async () => {
+    const { t, user, postId, briefId, claimMapId } = await setup();
+    const csv = 'label,value,unit,population,denominator,citation\nAlpha,12,cases,Reviewed set,80 labels,"Fixture report Table 2"\nBeta,20,cases,Reviewed set,80 labels,"Fixture report Table 2"';
+    await t.run(async ctx => {
+      const source = (await ctx.db.query("v2ResearchSources").withIndex("by_brief", q => q.eq("researchBriefId", briefId)).first())!;
+      await ctx.db.patch(source._id, { raw: { csv, ignoredPrivatePayload: "DO NOT COPY RAW" } });
+      const claim = (await ctx.db.query("v2Claims").withIndex("by_claim_map", q => q.eq("claimMapId", claimMapId)).first())!;
+      await ctx.db.patch(claim._id, { status: "unreviewed", text: "No accepted claim table; only the accepted CSV is eligible." });
+    });
+    const snapshot = await user.query(api.visualLinkedEvidence.getSnapshot, { postId });
+    expect(snapshot.records.find((record: { kind: string }) => record.kind === "source-excerpt")).toMatchObject({ text: csv, eligible: true, status: "accepted" });
+    const imported = await user.mutation(api.visualLinkedEvidence.importLinkedEvidence, { postId, expectedSnapshotHash: snapshot.snapshotHash, expectedSourceId: snapshot.expectedSourceId });
+    const source = await user.query(api.visualFigures.getSource, { sourceId: imported.sourceId });
+    expect(source.content).toContain(csv);
+    expect(source.content).not.toContain("DO NOT COPY RAW");
+    expect(source.parseErrors).toEqual([]);
+    const planned = await user.mutation(api.visualFigures.planFigures, { postId });
+    expect(planned.candidateIds).toHaveLength(1);
+    const candidate = await user.query(api.visualFigures.getCandidate, { candidateId: planned.candidateIds[0] });
+    expect(candidate.spec.rows).toEqual([["Alpha", "12", "cases", "Reviewed set", "80 labels", "Fixture report Table 2"], ["Beta", "20", "cases", "Reviewed set", "80 labels", "Fixture report Table 2"]]);
+    expect(candidate.spec.claimTraceEvidence.every((binding: { sourceId: string }) => binding.sourceId === imported.sourceId)).toBe(true);
+    await t.run(async ctx => {
+      const linked = (await ctx.db.query("v2ResearchSources").withIndex("by_brief", q => q.eq("researchBriefId", briefId)).first())!;
+      await ctx.db.patch(linked._id, { raw: { excerpt: csv } });
+    });
+    await expect(user.query(api.visualLinkedEvidence.getCurrentImport, { postId })).rejects.toThrow("Linked evidence changed after import");
+    expect((await user.query(api.visualFigures.getSource, { sourceId: imported.sourceId })).content).toBe(source.content);
+  });
+  it.each([
+    'label,value,unit,population,denominator,citation\n"Alpha|Injected",12,cases,Reviewed set,80 labels,Fixture report Table 2',
+    'label,value,unit,population,denominator,citation\n"Alpha,12,cases,Reviewed set,80 labels,Fixture report Table 2',
+  ])("retains unsupported CSV for inspection without turning it into figure trace", async csv => {
+    const { t, user, postId, briefId, claimMapId } = await setup();
+    await t.run(async ctx => {
+      const source = (await ctx.db.query("v2ResearchSources").withIndex("by_brief", q => q.eq("researchBriefId", briefId)).first())!;
+      const claim = (await ctx.db.query("v2Claims").withIndex("by_claim_map", q => q.eq("claimMapId", claimMapId)).first())!;
+      await ctx.db.patch(source._id, { raw: { csv } });
+      await ctx.db.patch(claim._id, { status: "unreviewed" });
+    });
+    const snapshot = await user.query(api.visualLinkedEvidence.getSnapshot, { postId });
+    const saved = await user.mutation(api.visualLinkedEvidence.importLinkedEvidence, { postId, expectedSnapshotHash: snapshot.snapshotHash, expectedSourceId: null });
+    const source = await user.query(api.visualFigures.getSource, { sourceId: saved.sourceId });
+    expect(source.content).toContain(csv);
+    expect(source.parseErrors.length).toBeGreaterThan(0);
+    expect((await user.mutation(api.visualFigures.planFigures, { postId })).candidateIds).toEqual([]);
+  });
   it("applies linked freshness only to owned referenced sources when a publication supplies a bounded source list", async () => {
     const { t, user, postId, briefId } = await setup();
     const snapshot = await user.query(api.visualLinkedEvidence.getSnapshot, { postId });
