@@ -248,6 +248,23 @@ describe("authenticated text executor", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("holds legacy active route overflow explicitly before selecting an older route or dispatching", async () => {
+    const f = await setup();
+    // Pre-upgrade trusted ingestion allowed this state. Do not silently pick a truncated subset.
+    for (let i = 0; i < 20; i++) await f.t.run(ctx => ctx.db.insert("v2VisualTextRoutes", { ...route, provider: "openai", stages: ["planning", "reflection"], model: `fictional-legacy-older-${i}`, maximumMicros: 29_000, enabled: true, createdAt: Date.now() }));
+    await f.t.run(ctx => ctx.db.insert("v2VisualTextRoutes", { ...route, provider: "openai", stages: ["planning", "reflection"], expiresAt: Date.now() + 60_000, maximumMicros: 29_000, enabled: true, createdAt: Date.now() }));
+    const before = await f.t.run(ctx => ctx.db.query("v2VisualTextRoutes").collect());
+    vi.mocked(fetch).mockResolvedValueOnce(response({ scenes }));
+    await expect(f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.attemptId })).rejects.toThrow("text-route-history-reconciliation-required");
+    expect(await f.user.query(api.visualTextConfig.getAvailability, { postId: f.postId })).toEqual({ planning: false, reflection: false, reason: "text-route-history-reconciliation-required" });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await f.t.run(ctx => ctx.db.query("v2VisualDispatchQuotes").collect())).toEqual([]);
+    const state = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(state.month).toBeNull();
+    expect(state.attempts[0]).toMatchObject({ status: "queued" });
+    expect(await f.t.run(ctx => ctx.db.query("v2VisualTextRoutes").collect())).toEqual(before);
+  });
+
   it("keeps planning queued without reserving or HTTP when no trusted route exists", async () => {
     const { user, postId, attemptId } = await setup();
     expect(await user.action(api.visualTextActions.executeTextAttempt, { attemptId })).toMatchObject({ status: "blocked", reason: "no-qualified-text-route-and-cost-bound" });

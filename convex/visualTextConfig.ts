@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery, query, type QueryCtx, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { textRouteFields, textRouteDocValidator } from "./visualTextTables";
@@ -7,6 +7,8 @@ import { verifiedReflectionContext } from "./visualWorkflow";
 import { requireUserId, requireBrandAccess } from "./campaignAccess";
 import { publicationTransitionRequired } from "../lib/publicationReview";
 import { assertVisualAdmissionEnabled } from "./visualRollout";
+
+const routeHistoryReconciliationRequired = "text-route-history-reconciliation-required";
 
 /** Trusted server evidence ingestion only. Absent records are unqualified; no client-supplied price or key grants admission. */
 export const registerReviewedTextRoute = internalMutation({
@@ -31,7 +33,9 @@ async function routesForStage(ctx: QueryCtx | MutationCtx, stage: "planning" | "
   const routes: Doc<"v2VisualTextRoutes">[] = [];
   for (const provider of ["openai", "cortex"] as const) {
     if (!visualTextOriginAllowed(provider)) continue;
-    const rows = await ctx.db.query("v2VisualTextRoutes").withIndex("by_provider_and_enabled_and_expires_at", q => q.eq("provider", provider).eq("enabled", true).gt("expiresAt", Date.now())).order("desc").take(20);
+    const rows = await ctx.db.query("v2VisualTextRoutes").withIndex("by_provider_and_enabled_and_expires_at", q => q.eq("provider", provider).eq("enabled", true).gt("expiresAt", Date.now())).order("desc").take(21);
+    // Older ingestion could exceed the cap. A truncated expiry-ordered subset cannot prove route priority.
+    if (rows.length > 20) throw new ConvexError(routeHistoryReconciliationRequired);
     routes.push(...rows.sort((a, b) => b._creationTime - a._creationTime).filter(route => route.enabled && route.expiresAt > Date.now() && route.stages.includes(stage) && (stage !== "reflection" || !!route.vision)));
   }
   return routes;
@@ -83,8 +87,13 @@ export const getAvailability = query({
     if (!["owner", "editor"].includes(member.role)) throw new Error("Brand edit access denied");
     if (post.channelId !== "corvo-blog" || publicationTransitionRequired(post)) return { planning: false, reflection: false, reason: "separate-publishing-transition-required" };
     try { assertVisualAdmissionEnabled(userId); } catch { return { planning: false, reflection: false, reason: "editorial-visual-admissions-paused" }; }
-    const planning = (await routesForStage(ctx, "planning")).some(route => !!visualTextCredential(route.provider));
-    const reflection = (await routesForStage(ctx, "reflection")).some(route => !!visualTextCredential(route.provider));
-    return { planning, reflection, reason: planning || reflection ? null : "no-qualified-text-route-and-credential" };
+    try {
+      const planning = (await routesForStage(ctx, "planning")).some(route => !!visualTextCredential(route.provider));
+      const reflection = (await routesForStage(ctx, "reflection")).some(route => !!visualTextCredential(route.provider));
+      return { planning, reflection, reason: planning || reflection ? null : "no-qualified-text-route-and-credential" };
+    } catch (error) {
+      if (error instanceof ConvexError && error.data === routeHistoryReconciliationRequired) return { planning: false, reflection: false, reason: routeHistoryReconciliationRequired };
+      throw error;
+    }
   },
 });
