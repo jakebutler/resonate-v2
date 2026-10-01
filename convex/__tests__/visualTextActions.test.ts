@@ -295,6 +295,7 @@ describe("authenticated text executor", () => {
   });
 
   it("selects the first reviewed route with its actual credential before any reservation", async () => {
+    vi.stubEnv("CORTEX_BASE_URL", "https://cortex.corvolabs.com");
     const { t, user, postId, attemptId } = await setup();
     await t.mutation(api.visualTextConfig.registerReviewedTextRoute, route);
     await t.mutation(api.visualTextConfig.registerReviewedTextRoute, { ...route, provider: "cortex" });
