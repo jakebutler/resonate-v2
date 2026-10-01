@@ -34,6 +34,7 @@ export const executeImageAttempt = action({
     if (!routes.length) return blocked("no-qualified-route-and-cost-bound");
     const parent: Doc<"v2VisualVersions"> | null = attempt.input.parentVersionId ? await ctx.runQuery(internal.visualWorkflow.getVersionForExport, { userId, versionId: attempt.input.parentVersionId }) : null;
     let totalInputBytes = 0;
+    const decodedInputs: { width: number; height: number }[] = [];
     async function retainedImage(storageId: Id<"_storage">, id: string, role: VisualImageInput["role"], sha256: string): Promise<{ image: VisualImageInput; verified: Awaited<ReturnType<typeof verifyVisualOutput>> }> {
       const blob = await ctx.storage.get(storageId);
       if (!blob || blob.size > MAX_VISUAL_IMAGE_BYTES || !["image/png", "image/jpeg", "image/webp"].includes(blob.type)) throw new Error("Pinned image bytes unavailable or invalid");
@@ -41,6 +42,7 @@ export const executeImageAttempt = action({
       if (totalInputBytes > MAX_VISUAL_IMAGE_BYTES) throw new Error("Aggregate pinned input bytes exceed the20MiB runtime bound");
       const bytes = new Uint8Array(await blob.arrayBuffer());
       const verified = await verifyVisualOutput(bytes, blob.type);
+      decodedInputs.push({ width: verified.width, height: verified.height });
       return { image: { storageId, id, role, sha256, mimeType: blob.type as VisualImageInput["mimeType"], bytes }, verified };
     }
     const references: VisualImageInput[] = [];
@@ -52,6 +54,10 @@ export const executeImageAttempt = action({
       try { retainedParent = await retainedImage(parent.storageId, parent._id, "edit-parent", parent.sha256); }
       catch { return blocked("edit-parent-output-contract-mismatch"); }
     }
+    // The generic Image2 cost bound covers ordinary landscape inputs, including an edit parent.
+    if (routes[0].model === "gpt-image-2" && decodedInputs.some(image =>
+      image.width > 1700 || image.height > 1700 || image.width * image.height > 1_600_000
+    )) return blocked("gpt-image-2-input-dimensions-exceed-reviewed-envelope");
     if (parent && retainedParent) {
       const [width, height] = parent.input.size.split("x").map(Number);
       const mimeType = `image/${parent.input.outputFormat}`;
@@ -66,7 +72,9 @@ export const executeImageAttempt = action({
     const prepared = await prepareVisualProviderRequest({ mode, attemptId: attempt._id, lineageKey: `${attempt.postId}:${attempt.stage}:${attempt.operationKey}`, operation: attempt.stage === "edit" ? "edit" : "generate", model: attempt.input.model ?? undefined,
       ...(parent && attempt.input.model !== parent.model ? { modelOverride: attempt.input.model ?? undefined } : {}), preferredProvider: attempt.input.provider as VisualProviderId | undefined,
       prompt: attempt.input.prompt, feedback: attempt.input.feedback ?? undefined, revisions: { articleRevision: createHash("sha256").update(attempt.input.article.signature).digest("hex"), profileRevision: attempt.input.pins.profileRevisionId, lessonRevisions: attempt.input.pins.lessonIds }, references, parentImage, size: attempt.input.size, quality: attempt.input.quality ?? "medium", inputFidelity: attempt.input.inputFidelity, outputFormat: attempt.input.outputFormat }, capabilities);
-    if (new TextEncoder().encode(prepared.prompt).length > route.maxPromptBytes || prepared.images.some(image => image.bytes.length > route.maxInputBytes)) return blocked("reviewed-input-bound-exceeded");
+    if (new TextEncoder().encode(prepared.prompt).length > route.maxPromptBytes || prepared.images.some(image => image.bytes.length > route.maxInputBytes) ||
+      (route.model === "gpt-image-2" && prepared.images.reduce((total, image) => total + image.bytes.byteLength, 0) > route.maxInputBytes)
+    ) return blocked("reviewed-input-bound-exceeded");
     const key = visualProviderCredential(route.provider);
     if (!key) return blocked("provider-credential-unavailable");
     const quoteId = await ctx.runMutation(internal.visualProviderConfig.registerImageDispatchQuote, { attemptId: attempt._id, routeId: route._id, requestSha256: prepared.requestSha256 });
