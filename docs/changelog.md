@@ -5401,27 +5401,3 @@ Vercel Production receipts with a false GitHub production flag now require non-t
 Validation: 55 focused tests, full unit suite with coverage, lint, typecheck, Next.js build and native Convex dry-run passed. Release approval and live provider qualification are separate from these checks. Deployment detection excludes shared-library unit tests; Vercel negative regressions assert the exact failed qualification gate.
 
 Legacy hero compatibility: accept only the exact dated or undated directory derived from the bound article slug; preserve source, hash and inline placement checks. All fifteen live articles passed the complete candidate read-only verifier against website Production `8030650`.
-
-## 10/01/2026 13:05:29 PDT
-
-### Summary
-
-- Updated repository documentation and handoff records.
-
-### Staged Changes
-
-- M	docs/editorial-visuals/figures.md
-- M	docs/editorial-visuals/reader-rehearsal.md
-- M	lib/__tests__/visualFigures.test.ts
-- M	lib/visualFigures.ts
-
-### Working Tree Snapshot
-
-- M  docs/editorial-visuals/figures.md
-- M  docs/editorial-visuals/reader-rehearsal.md
-- M  lib/__tests__/visualFigures.test.ts
-- M  lib/visualFigures.ts
-
-### Branch
-
-- codex/visual-figure-sans
