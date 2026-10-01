@@ -8,6 +8,7 @@ import { BlogExportPreview } from "./BlogExportPreview";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import type { FunctionReturnType } from "convex/server";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
   CalendarDays,
@@ -54,6 +55,7 @@ import {
 } from "@/lib/domain";
 
 type CalendarView = "month" | "week";
+type BlogApprovalReview = FunctionReturnType<typeof api.publishing.getApprovalReview>;
 function visualPanelsEnabled() {
   return process.env.NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED === "1" || Boolean(localFixtureTokenUrl({
     runtime: process.env.NODE_ENV, bypass: process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1",
@@ -242,6 +244,16 @@ function blogPrReady(
   approvedVisualHero = false
 ) {
   return blogPrBlockedReason(post, snapshot, approvedVisualHero) === null;
+}
+
+function approvalReviewMatchesPost(post: PersistedCalendarItem["post"], review: BlogApprovalReview | undefined) {
+  return Boolean(review && review.articleSignature === approvalArticleSignature(post) && review.metadataSignature === publicationMetadataSignature(post));
+}
+function visualPublicationReviewReason(post: PersistedCalendarItem["post"], review: BlogApprovalReview | undefined, enabled: boolean): string | null {
+  if (!enabled || (post.contentFingerprint === undefined && !review?.hasVisuals)) return null;
+  if (!approvalReviewMatchesPost(post, review)) return "Wait for the target's current saved article and visual review.";
+  if (review?.blockedReason) return review.blockedReason;
+  return review?.hasVisuals && !review.publicationQualified ? "Live visual provider qualification is required before opening a publication PR." : null;
 }
 
 function prStatusLabel(status?: string) {
@@ -863,7 +875,8 @@ export function PersistedPublishingPanel({
   }
   async function handleCreatePr(
     item: PersistedCalendarItem,
-    snapshot?: BlogPublishSnapshot | null
+    snapshot?: BlogPublishSnapshot | null,
+    targetReview?: BlogApprovalReview
   ) {
     if (item.post.channelId !== "corvo-blog") {
       setMessage("Open PR is only available for Corvo Blog posts.");
@@ -873,8 +886,11 @@ export function PersistedPublishingPanel({
       setMessage("Approve the post before opening a pull request.");
       return;
     }
-    if (approvalReview?.hasVisuals && (!approvalReviewMatches || !approvalReview.publicationQualified || approvalReview.blockedReason)) { setMessage("Live visual provider qualification is required before opening a publication PR."); return; }
-    if (!blogPrReady(item.post, snapshot, selectedVisualHero)) {
+    const review = targetReview ?? (item.post._id === selectedItem?.post._id ? approvalReview : undefined);
+    const reviewReason = visualPublicationReviewReason(item.post, review, visualUiEnabled);
+    if (reviewReason) { setMessage(reviewReason); return; }
+    const targetVisualHero = Boolean(approvalReviewMatchesPost(item.post, review) && review?.hasVisuals && !review.blockedReason);
+    if (!blogPrReady(item.post, snapshot, targetVisualHero)) {
       setMessage(
         "Fill in excerpt, author, category, at least one tag, content, and a hero image before opening a PR."
       );
@@ -1264,11 +1280,12 @@ export function PersistedPublishingPanel({
                           bufferLiveGateResolved={bufferLiveGateResolved}
                           devMode={devMode}
                           item={item}
+                          visualUiEnabled={visualUiEnabled}
                           key={item.post._id}
                           openingPr={openingPrPostIds.has(item.post._id)}
                           onApprove={handleApprove}
                           onCheckPrStatus={() => void handleCheckPrStatus(item)}
-                          onCreatePr={(snapshot) => void handleCreatePr(item, snapshot)}
+                          onCreatePr={(snapshot, review) => void handleCreatePr(item, snapshot, review)}
                           onInspect={() => setManualSelectedPostId(item.post._id)}
                           onProviderIntent={handleProviderIntent}
                           onDelete={handleDelete}
@@ -1443,10 +1460,11 @@ function AgendaItem(props: {
   bufferLiveGateResolved: boolean;
   devMode: boolean;
   item: PersistedCalendarItem;
+  visualUiEnabled: boolean;
   openingPr?: boolean;
   onApprove: (postId: Id<"v2Posts">) => void;
   onCheckPrStatus: () => void;
-  onCreatePr: (snapshot: BlogPublishSnapshot | null) => void;
+  onCreatePr: (snapshot: BlogPublishSnapshot | null, review?: BlogApprovalReview) => void;
   onDelete: (postId: Id<"v2Posts">, title: string) => void;
   onInspect: () => void;
   onProviderIntent: (
@@ -1458,6 +1476,9 @@ function AgendaItem(props: {
 }) {
   const { item } = props;
   const post = item.post;
+  const targetReview = useQuery(api.publishing.getApprovalReview, props.visualUiEnabled && post.channelId === "corvo-blog" ? { postId: post._id } : "skip");
+  const targetVisualHero = Boolean(approvalReviewMatchesPost(post, targetReview) && targetReview?.hasVisuals && !targetReview.blockedReason);
+  const reviewReason = visualPublicationReviewReason(post, targetReview, props.visualUiEnabled);
   const intent = item.intent;
   const providerState = item.providerState;
   const approved = post.approvalState === "approved";
@@ -1481,7 +1502,7 @@ function AgendaItem(props: {
     props.bufferLiveBusy ||
     (showLiveBuffer && !brandHasBufferLinkedInMapping(post.brandId));
   const openPrDisabled =
-    !approved || !blogPrReady(post) || Boolean(existingPrUrl);
+    !approved || !blogPrReady(post, null, targetVisualHero) || Boolean(existingPrUrl) || Boolean(reviewReason);
 
   return (
     <article className="py-4">
@@ -1579,13 +1600,15 @@ function AgendaItem(props: {
                 existingPrUrl={existingPrUrl}
                 iconSize={14}
                 loading={Boolean(props.openingPr)}
-                onClick={() => props.onCreatePr(null)}
+                onClick={() => props.onCreatePr(null, targetReview)}
                 size="sm"
                 title={
                   !approved
                     ? "Approve the post before opening a PR."
-                    : !blogPrReady(post)
-                      ? blogPrBlockedReason(post) ?? undefined
+                    : reviewReason
+                      ? reviewReason
+                      : !blogPrReady(post, null, targetVisualHero)
+                      ? blogPrBlockedReason(post, null, targetVisualHero) ?? undefined
                       : existingPrUrl
                         ? "Pull request already exists."
                         : undefined
@@ -2279,8 +2302,10 @@ function PersistedPostComposer(props: {
   ]);
 
   async function handleHeroUpload(file: File) {
+    setHeroUploadError("");
     setHeroUploading(true);
     try {
+      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG or WebP image.");
       const { storageId } = await uploadImage({ brandId: post.brandId, fileName: file.name, contentType: file.type, bytes: await file.arrayBuffer() });
       setHeroImageStorageId(storageId);
       setHeroImageUrl("");
@@ -2482,7 +2507,7 @@ function PersistedPostComposer(props: {
               <label className="block text-xs font-semibold text-gray-600">
                 Upload hero image
                 <input
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/webp"
                   className="mt-1 block w-full text-xs"
                   disabled={heroUploading}
                   onChange={(event) => {

@@ -46,6 +46,7 @@ export function BlogPostEditor({ open, postId, initialDate, onClose, onSaved }: 
   const [tab, setTab] = useState<Tab>("write");
   const [fileIds, setFileIds] = useState<Id<"_storage">[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [githubPrUrl, setGithubPrUrl] = useState("");
   const [saving, setSaving] = useState(false);
@@ -97,12 +98,16 @@ export function BlogPostEditor({ open, postId, initialDate, onClose, onSaved }: 
 
   const handleUpload = async (files: FileList | null) => {
     if (!files) return;
+    setUploadError("");
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
+        if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG or WebP image.");
         const { storageId } = await uploadImage({ fileName: file.name, contentType: file.type, bytes: await file.arrayBuffer() });
         setFileIds((prev) => [...prev, storageId as Id<"_storage">]);
       }
+    } catch (error) {
+      setUploadError(error instanceof Error ? `Image upload failed: ${error.message}` : "Image upload failed. Inspect attachments before trying again.");
     } finally {
       setUploading(false);
     }
@@ -431,10 +436,12 @@ export function BlogPostEditor({ open, postId, initialDate, onClose, onSaved }: 
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*"
+            accept="image/png,image/jpeg,image/webp"
             className="hidden"
             onChange={(e) => handleUpload(e.target.files)}
           />
+
+          {uploadError && <p role="alert" className="mt-2 text-xs text-red-600">{uploadError}</p>}
 
           {fileIds.length > 0 && (
             <p className="text-xs text-gray-500 mt-2">{fileIds.length} file(s) attached</p>

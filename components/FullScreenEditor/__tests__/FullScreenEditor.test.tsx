@@ -169,6 +169,18 @@ async function flushPromises() {
 }
 
 describe('FullScreenEditor', () => {
+  it('rejects unsupported SVG before upload and advertises only supported raster formats', async () => {
+    render(<FullScreenEditor postId="new" />)
+    const picker = screen.getByLabelText(/upload image/i)
+    const svg = new File(['<svg></svg>'], 'diagram.svg', { type: 'image/svg+xml' })
+    fireEvent.change(picker, { target: { files: [svg] } })
+    await flushPromises()
+    expect(mockUploadImage).not.toHaveBeenCalled()
+    expect(mockInsertImage).not.toHaveBeenCalled()
+    expect(screen.getByText('Choose a PNG, JPEG or WebP image.')).toBeVisible()
+    expect(picker).toHaveAttribute('accept', 'image/png,image/jpeg,image/webp')
+  })
+
   const mockCreate = vi.fn().mockResolvedValue('new-post-id')
   const mockUpdate = vi.fn().mockResolvedValue(undefined)
   const mockUploadImage = vi.fn().mockResolvedValue({ storageId: 'storage-1' })

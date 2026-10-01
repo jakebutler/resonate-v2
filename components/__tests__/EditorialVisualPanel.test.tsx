@@ -46,6 +46,17 @@ function fixtureEnvironment() {
 }
 
 describe("EditorialVisualPanel", () => {
+  it("disables version selection while image dispatch is pending and permits it after completion", () => {
+    workflow = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [versionFixture], attempts: [{ _id: "pending-image", stage: "generation", status: "queued" }] };
+    const view = render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    expect(screen.getByRole("button", { name: "Select version 1" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Select version 1" }));
+    expect(calls.selectVersion).not.toHaveBeenCalled();
+    workflow = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [versionFixture], attempts: [{ _id: "pending-image", stage: "generation", status: "completed" }] };
+    view.rerender(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    expect(screen.getByRole("button", { name: "Select version 1" })).toBeEnabled();
+  });
+
   beforeEach(() => {
     fixtureEnvironment();
     vi.clearAllMocks();

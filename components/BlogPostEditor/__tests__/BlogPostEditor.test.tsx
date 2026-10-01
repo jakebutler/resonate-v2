@@ -31,6 +31,21 @@ function futureDateYMD() {
 }
 
 describe('BlogPostEditor', () => {
+  it('advertises only supported raster images and shows a rejected attachment without saving it', async () => {
+    const upload = vi.fn().mockRejectedValue(new Error('Image exceeds 5 MiB'))
+    vi.mocked(useAction).mockReturnValue(upload)
+    render(<BlogPostEditor open={true} onClose={vi.fn()} onSaved={vi.fn()} postId={null} />)
+    const picker = document.querySelector('input[type="file"]')!
+    expect(picker).toHaveAttribute('accept', 'image/png,image/jpeg,image/webp')
+    const file = new File(['image'], 'hero.png', { type: 'image/png' })
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => new Uint8Array([1]).buffer })
+    fireEvent.change(picker, { target: { files: [file] } })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Image exceeds 5 MiB')
+    expect(upload).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/file\(s\) attached/)).not.toBeInTheDocument()
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
   const mockCreate = vi.fn().mockResolvedValue('new_id')
   const mockUpdate = vi.fn().mockResolvedValue(undefined)
   const mockRemove = vi.fn().mockResolvedValue(undefined)

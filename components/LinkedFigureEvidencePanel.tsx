@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 export function LinkedFigureEvidencePanel({ postId, savedContentChanged }: { postId: string; savedContentChanged: boolean }) {
   const snapshot = useQuery(api.visualLinkedEvidence.getSnapshot, { postId: postId as Id<"v2Posts"> });
   const importEvidence = useMutation(api.visualLinkedEvidence.importLinkedEvidence);
-  const [reviewedHash, setReviewedHash] = useState<string | null>(null);
+  const [reviewedSnapshotKey, setReviewedSnapshotKey] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [pendingSourceId, setPendingSourceId] = useState<string | null>(null);
   const [observedSourceId, setObservedSourceId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const reviewKey = JSON.stringify([postId, snapshot?.snapshotHash ?? null, snapshot?.expectedSourceId ?? null]);
+  if (reviewedSnapshotKey !== null && reviewedSnapshotKey !== reviewKey) setReviewedSnapshotKey(null);
   const matchedReceipt = Boolean(pendingSourceId && snapshot?.expectedSourceId === pendingSourceId);
   const observed = matchedReceipt || Boolean(observedSourceId && snapshot?.expectedSourceId === observedSourceId);
   const waiting = Boolean(pendingSourceId && !matchedReceipt);
@@ -22,7 +24,7 @@ export function LinkedFigureEvidencePanel({ postId, savedContentChanged }: { pos
     if (!waiting) return;
     const timeout = setTimeout(() => {
       setPendingSourceId(null);
-      setReviewedHash(null);
+      setReviewedSnapshotKey(null);
       setError("The import receipt was not observed. Reload and inspect saved evidence before another explicit import.");
     }, 10000);
     return () => clearTimeout(timeout);
@@ -31,7 +33,7 @@ export function LinkedFigureEvidencePanel({ postId, savedContentChanged }: { pos
   if (snapshot === null) return null;
   if (!snapshot.records.length && !snapshot.content) return null;
   const eligible = snapshot.records.some(record => record.eligible) && Boolean(snapshot.content);
-  const reviewed = reviewedHash === snapshot.snapshotHash;
+  const reviewed = reviewedSnapshotKey === reviewKey;
   const disabled = savedContentChanged || requesting || waiting;
   return <section aria-label="Linked research for figures" className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
     <h2 className="text-sm font-semibold">Linked research</h2>
@@ -43,12 +45,12 @@ export function LinkedFigureEvidencePanel({ postId, savedContentChanged }: { pos
       {record.reason && <p className="mt-2 text-xs text-amber-700">{record.reason}</p>}
     </details>)}
     {snapshot.reasons.map((reason, index) => <p key={index} className="text-xs text-amber-700">{reason}</p>)}
-    <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={reviewed} disabled={disabled || !eligible} onChange={event => setReviewedHash(event.target.checked ? snapshot.snapshotHash : null)} />I checked the linked passages and their review status.</label>
+    <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={reviewed} disabled={disabled || !eligible} onChange={event => setReviewedSnapshotKey(event.target.checked ? reviewKey : null)} />I checked the linked passages and their review status.</label>
     <Button type="button" variant="outline" disabled={disabled || !reviewed || !eligible} onClick={() => {
       setRequesting(true); setError(""); setPendingSourceId(null); setObservedSourceId(null);
       void importEvidence({ postId: postId as Id<"v2Posts">, expectedSnapshotHash: snapshot.snapshotHash, expectedSourceId: snapshot.expectedSourceId })
-        .then(receipt => { setPendingSourceId(receipt.sourceId); setReviewedHash(null); })
-        .catch(() => { setReviewedHash(null); setError("The import outcome needs inspection. Reload saved evidence before another explicit import."); })
+        .then(receipt => { setPendingSourceId(receipt.sourceId); setReviewedSnapshotKey(null); })
+        .catch(() => { setReviewedSnapshotKey(null); setError("The import outcome needs inspection. Reload saved evidence before another explicit import."); })
         .finally(() => setRequesting(false));
     }}>Import linked research</Button>
     {waiting && <p role="status" className="text-xs text-gray-600">Import recorded; waiting for the saved evidence.</p>}

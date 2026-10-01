@@ -560,6 +560,7 @@ export function FullScreenEditor({ postId, initialDate }: FullScreenEditorProps)
 
       for (const file of Array.from(files)) {
         try {
+          if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG or WebP image.");
           const optimizedFile = await optimizeImage(file);
           const { storageId } = await uploadImage({ fileName: file.name, contentType: optimizedFile.type || file.type, bytes: await optimizedFile.arrayBuffer() });
           const previewUrl = URL.createObjectURL(optimizedFile);
@@ -821,7 +822,7 @@ export function FullScreenEditor({ postId, initialDate }: FullScreenEditorProps)
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg,image/webp"
             className="hidden"
             aria-label="Upload image"
             onChange={handleImageInputChange}

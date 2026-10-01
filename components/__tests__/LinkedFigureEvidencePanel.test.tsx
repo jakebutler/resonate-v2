@@ -7,6 +7,23 @@ vi.mock("convex/react", () => ({ useQuery: () => queries.snapshot, useMutation: 
 vi.mock("@/convex/_generated/api", () => ({ api: { visualLinkedEvidence: { getSnapshot: "snapshot", importLinkedEvidence: "import" } } }));
 
 describe("linked figure evidence import", () => {
+  it("requires fresh acknowledgement when the evidence head or post changes even with the same snapshot hash", () => {
+    const view = render(<LinkedFigureEvidencePanel postId="post-1" savedContentChanged={false} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /checked the linked passages/ }));
+    expect(screen.getByRole("button", { name: "Import linked research" })).toBeEnabled();
+    queries.snapshot = { ...(queries.snapshot as object), expectedSourceId: "new-head" };
+    view.rerender(<LinkedFigureEvidencePanel postId="post-1" savedContentChanged={false} />);
+    expect(screen.getByRole("checkbox", { name: /checked the linked passages/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Import linked research" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /checked the linked passages/ }));
+    view.rerender(<LinkedFigureEvidencePanel postId="post-2" savedContentChanged={false} />);
+    expect(screen.getByRole("checkbox", { name: /checked the linked passages/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Import linked research" })).toBeDisabled();
+    view.rerender(<LinkedFigureEvidencePanel postId="post-1" savedContentChanged={false} />);
+    expect(screen.getByRole("checkbox", { name: /checked the linked passages/ })).not.toBeChecked();
+    expect(importEvidence).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     queries.snapshot = { snapshotHash: "viewed-hash", expectedSourceId: null, sourceKey: "linked-research", content: "Exact fictional supporting passage", records: [{ kind: "claim", id: "claim-1", sourceIds: ["source-1"], status: "accepted", eligible: true, text: "Exact fictional supporting passage", sha256: "passage-hash", updatedAt: 1, reason: null }], reasons: [] };

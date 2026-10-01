@@ -412,7 +412,7 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
         onSave={refinedScene => void saveScene(selectedPlan._id, selectedIndex, refinedScene)} onGenerate={() => void generate()} />}
     {Boolean(workflow?.versions.length) && <div className="space-y-3">
       <h3 className="text-sm font-semibold">Image versions</h3>
-      <div className="flex flex-wrap gap-2">{workflow?.versions.map((version, index) => <Button key={version._id} type="button" variant="outline" disabled={busy || savedContentChanged} aria-pressed={version._id === selectedVersion?._id}
+      <div className="flex flex-wrap gap-2">{workflow?.versions.map((version, index) => <Button key={version._id} type="button" variant="outline" disabled={busy || pending || selectionPending || savedContentChanged} aria-pressed={version._id === selectedVersion?._id}
         onClick={() => { setPendingVersionId(version._id); void run(() => selectVersion({ postId: postId as Id<"v2Posts">, versionId: version._id })).then(saved => { if (!saved) setPendingVersionId(null); }); }}>Select version {(workflow?.versions.length ?? 0) - index}</Button>)}</div>
       {selectedVersion && <div className="space-y-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}

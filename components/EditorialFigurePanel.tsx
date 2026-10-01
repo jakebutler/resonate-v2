@@ -43,6 +43,7 @@ function FigureCard({ candidate, state, disabled, onAccept, onDecline, onEdit, o
     {previewError && <p role="alert" className="text-sm text-red-700">{previewError}</p>}
     <p className="text-sm text-gray-700">{candidate.spec.presentation.caption}</p>
     <p className="text-xs text-gray-600">{candidate.spec.presentation.sourceNote}</p>
+    <p className="text-xs text-gray-600">Alt text: {candidate.spec.presentation.alt}</p>
     {state?.reviewReason && <p className="text-sm text-amber-700">{state.reviewReason}</p>}
     <details><summary className="cursor-pointer text-sm font-semibold">Exact evidence rows</summary>
       {[...candidate.spec.evidence, ...candidate.spec.claimTraceEvidence].map((span, index) => <div key={index} className="mt-2">
@@ -74,7 +75,7 @@ function FigureCard({ candidate, state, disabled, onAccept, onDecline, onEdit, o
         <Button type="button" variant="outline" disabled={disabled || terminal || !dirty || !validDraft} onClick={() => onEdit({ rows, palette, insertionAnchor: anchor })}>Save figure edit</Button>
       </div>
     </details>
-    <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={reviewed} disabled={disabled || !loaded || terminal} onChange={event => setReviewedFor(event.target.checked ? reviewIdentity : null)} />I reviewed the evidence, values, units, relationships, caption and placement.</label>
+    <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={reviewed} disabled={disabled || !loaded || terminal} onChange={event => setReviewedFor(event.target.checked ? reviewIdentity : null)} />I reviewed the evidence, values, units, relationships, caption, alt text and placement.</label>
     <div className="flex flex-wrap gap-2">
       <Button type="button" disabled={disabled || terminal || dirty || !loaded || !reviewed || Boolean(previewError)} onClick={onAccept}>Accept figure</Button>
       <Button type="button" variant="outline" disabled={disabled || terminal || Boolean(state?.insertedBlock)} onClick={onDecline}>Decline figure</Button>

@@ -17,6 +17,19 @@ async function fixture() {
   return { _id: "figure-1", spec, ...await figureSignatures(spec) };
 }
 describe("EditorialFigurePanel", () => {
+  it("shows the exact figure alt text and explicitly includes it in the acceptance acknowledgement", async () => {
+    const candidate = await fixture();
+    workspace = { sources: [], plan: { _id: "plan-1", reasons: [] }, candidates: [candidate], states: [{ selectedCandidateId: candidate._id, status: "proposed", insertedBlock: null }] };
+    render(<EditorialFigurePanel postId="post-1" brandId="corvo" />);
+    const preview = await screen.findByRole("img", { name: candidate.spec.presentation.alt });
+    expect(screen.getByText(`Alt text: ${candidate.spec.presentation.alt}`)).toBeVisible();
+    const acknowledgement = screen.getByRole("checkbox", { name: /reviewed.*alt text/i });
+    expect(screen.getByRole("button", { name: "Accept figure" })).toBeDisabled();
+    fireEvent.load(preview);
+    fireEvent.click(acknowledgement);
+    expect(screen.getByRole("button", { name: "Accept figure" })).toBeEnabled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks(); workspace = { sources: [], plan: null, candidates: [], states: [] };
     vi.stubGlobal("crypto", webcrypto);
