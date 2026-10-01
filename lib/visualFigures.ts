@@ -1,4 +1,5 @@
 import { hashVisualBytes } from "./visualProfile";
+import { parseFragment, type DefaultTreeAdapterTypes } from "parse5";
 
 export type FigureSource = {
   id: string; name: string; format: "markdown" | "text" | "csv";
@@ -46,42 +47,28 @@ function csvCells(line: string): string[] | null {
 }
 
 export type FigureArticleLine = { raw: string; start: number; end: number; row: number; eligible: boolean; tableRow: boolean; topLevelEligible: boolean };
-type HtmlRegion = { stack: string[]; tag: string | null; quote: string | null; comment: boolean; invalid: boolean };
-const voidHtmlTag = /^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/u;
-const rawTextHtmlTag = /^(?:script|style|textarea|title)$/u;
-/** Conservative lexical boundary only: malformed nesting cannot expose later Markdown. */
-function scanHtmlRegion(region: HtmlRegion, raw: string): void {
-  for (let index = 0; index < raw.length; index++) {
-    if (region.comment) {
-      if (raw.startsWith("-->", index)) { region.comment = false; index += 2; }
-      continue;
-    }
-    if (region.tag === null) {
-      const parent = region.stack.at(-1);
-      if (parent && rawTextHtmlTag.test(parent) && !new RegExp(`^</${parent}(?=\\s|>)`, "iu").test(raw.slice(index))) continue;
-      if (raw.startsWith("<!--", index)) { region.comment = true; index += 3; continue; }
-      if (raw[index] !== "<") continue;
-      region.tag = "<";
-      continue;
-    }
-    const char = raw[index]; region.tag += char;
-    if (region.quote) { if (char === region.quote) region.quote = null; continue; }
-    if (char === '"' || char === "'") { region.quote = char; continue; }
-    if (char !== ">") continue;
-    const tag = /^<(\/)?([a-z][a-z0-9-]*)(?=\s|\/|>)/iu.exec(region.tag);
-    if (tag) {
-      const name = tag[2].toLowerCase();
-      if (tag[1]) {
-        if (region.stack.at(-1) === name) region.stack.pop();
-        else if (!voidHtmlTag.test(name)) region.invalid = true;
-      } else if (!voidHtmlTag.test(name)) {
-        // Raw HTML nonvoid elements do not acquire a closing boundary from '/>'.
-        region.stack.push(name);
-      }
-    }
-    region.tag = null;
+type HtmlSpan = { start: number; end: number };
+/** HTML5 parser owns nesting, comments and escaped/raw script closure semantics. */
+function htmlSourceSpans(lines: FigureArticleLine[]): HtmlSpan[] {
+  const input = lines.map(line => line.eligible ? line.raw : line.raw.replace(/[^\r\n]/g, " ")).join("\n");
+  // Fragment parsing can ignore document/table-context wrappers. Refuse these unsupported forms;
+  // no lexical closing-tag heuristic grants recovery or evidence from their apparent interior.
+  if (/<(?:html|head|body|frameset|frame|caption|col|colgroup|tbody|td|tfoot|th|thead|tr)(?=\s|\/|>|$)/iu.test(input)) return [{ start: 0, end: input.length }];
+  let incompleteTag = false;
+  const parsed = parseFragment(input, { sourceCodeLocationInfo: true, onParseError: error => { if (error.code === "eof-in-tag") incompleteTag = true; } });
+  // Incomplete tokens are swallowed without an element/source location. No recovery is proved.
+  if (incompleteTag) return [{ start: 0, end: input.length }];
+  const pending: DefaultTreeAdapterTypes.Node[] = [parsed];
+  const spans: HtmlSpan[] = []; let count = 0;
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (++count > 50000) return [{ start: 0, end: input.length }];
+    const location = node.sourceCodeLocation;
+    if (location && ("tagName" in node || node.nodeName === "#comment")) spans.push({ start: location.startOffset, end: location.endOffset });
+    if ("childNodes" in node) pending.push(...node.childNodes);
+    if ("content" in node) pending.push(node.content);
   }
-  if (region.tag !== null) region.tag += "\n";
+  return spans.sort((a, b) => a.start - b.start || b.end - a.end);
 }
 /** Shared conservative Markdown structure mask for evidence and visible top-level placement. */
 export function getFigureArticleStructure(content: string): FigureArticleLine[] {
@@ -90,57 +77,46 @@ export function getFigureArticleStructure(content: string): FigureArticleLine[] 
     const line = { raw, start: offset, end: offset + raw.length, row: index + 1, eligible: true, tableRow: false, topLevelEligible: false }; offset += raw.length + 1; return line;
   });
   let fence: { character: string; length: number } | null = null;
-  let comment = false; let mdxComment = false; let unsupportedMdxExpression = false; let htmlRegion: HtmlRegion | null = null; let htmlClose: string | null = null; let list = false;
+  let htmlClose: string | null = null; let list = false;
+  // Literal Markdown structures cannot open an HTML region in the parser input.
   for (const line of lines) {
     const raw = line.raw;
     if (fence) { if (new RegExp(`^ {0,3}${fence.character}{${fence.length},}\\s*$`, "u").test(raw)) fence = null; line.eligible = false; continue; }
-    if (htmlRegion) {
-      scanHtmlRegion(htmlRegion, raw);
-      if (!htmlRegion.stack.length && htmlRegion.tag === null && !htmlRegion.comment && !htmlRegion.invalid) htmlRegion = null;
-      line.eligible = false; continue;
-    }
-    if (unsupportedMdxExpression) { line.eligible = false; continue; }
-    if (/^\s*(?:import|export)\b/u.test(raw)) {
-      // MDX modules can hide Markdown-shaped data in JavaScript strings.
-      // This constrained planner does not recover a module's parsing boundary.
-      unsupportedMdxExpression = true; line.eligible = false; continue;
-    }
-    const commentStart = /\{\s*\/\*/u.exec(raw);
-    if (mdxComment || (commentStart && raw.indexOf("{") === commentStart.index)) {
-      // Inspect the first comment terminator. A later terminator can belong
-      // to a string in a trailing expression and grants no recovery authority.
-      const close = raw.indexOf("*/", mdxComment ? 0 : commentStart!.index + commentStart![0].length);
-      if (close < 0) mdxComment = true;
-      else {
-        mdxComment = false;
-        if (!/^\s*\}\s*$/u.test(raw.slice(close + 2))) unsupportedMdxExpression = true;
-      }
-      line.eligible = false; continue;
-    }
-    if (raw.includes("{")) {
-      // This planner does not parse JavaScript. A brace in a string or comment
-      // cannot prove that an MDX expression ended; refuse the remaining region.
-      unsupportedMdxExpression = true;
-      line.eligible = false; continue;
-    }
-    if (htmlClose) { if (raw.includes(htmlClose)) htmlClose = null; line.eligible = false; continue; }
-    if (comment) { comment = !raw.includes("-->"); line.eligible = false; continue; }
-    const html = /^ {0,3}<([a-z][a-z0-9-]*)(?:\s|>|\/|$)/iu.exec(raw);
-    if (html) {
-      htmlRegion = { stack: [], tag: null, quote: null, comment: false, invalid: false };
-      scanHtmlRegion(htmlRegion, raw);
-      if (!htmlRegion.stack.length && htmlRegion.tag === null && !htmlRegion.comment && !htmlRegion.invalid) htmlRegion = null;
-      line.eligible = false; continue;
-    }
-    if (raw.includes("<!--")) { comment = !raw.includes("-->", Math.max(0, raw.indexOf("<!--"))); line.eligible = false; continue; }
-    const special = /^ {0,3}<\?/u.test(raw) ? "?>" : /^ {0,3}<!\[CDATA\[/u.test(raw) ? "]]>" : /^ {0,3}<![A-Z]/u.test(raw) ? ">" : null;
-    if (special) { if (!raw.includes(special)) htmlClose = special; line.eligible = false; continue; }
-    if (/^ {0,3}<\//u.test(raw)) { line.eligible = false; continue; }
     const opening = /^ {0,3}(`{3,}|~{3,})/u.exec(raw)?.[1];
     if (opening) { fence = { character: opening[0], length: opening.length }; line.eligible = false; continue; }
+    if (htmlClose) { if (raw.includes(htmlClose)) htmlClose = null; line.eligible = false; continue; }
+    const special = /^ {0,3}<\?/u.test(raw) ? "?>" : /^ {0,3}<!\[CDATA\[/u.test(raw) ? "]]>" : /^ {0,3}<![A-Z]/u.test(raw) ? ">" : null;
+    if (special) { if (!raw.includes(special)) htmlClose = special; line.eligible = false; continue; }
     if (!raw.trim()) list = false;
     if (/^ {0,3}(?:[-+*]|\d{1,9}[.)])\s+/u.test(raw)) list = true;
     line.eligible = !list && !/^(?: {4}| *\t| {0,3}>)/u.test(raw);
+  }
+  const initialHtml = htmlSourceSpans(lines);
+  let mdxComment = false; let unsupportedMdxExpression = false;
+  for (const line of lines) {
+    if (!line.eligible) continue;
+    const raw = line.raw;
+    if (unsupportedMdxExpression) { line.eligible = false; continue; }
+    const brace = raw.indexOf("{");
+    const position = line.start + Math.max(brace, 0);
+    const enclosedHtml = initialHtml.some(span => span.start <= position && span.end > position);
+    if (!mdxComment && enclosedHtml) continue; // JavaScript inside real raw HTML is HTML, not an MDX expression.
+    if (/^\s*(?:import|export)\b/u.test(raw)) { unsupportedMdxExpression = true; line.eligible = false; continue; }
+    const commentStart = /\{\s*\/\*/u.exec(raw);
+    if (mdxComment || (commentStart && raw.indexOf("{") === commentStart.index)) {
+      const close = raw.indexOf("*/", mdxComment ? 0 : commentStart!.index + commentStart![0].length);
+      // Unsupported HTML-shaped literals in MDX comments cannot prove parser recovery.
+      if (/<[a-z!/?]/iu.test(raw)) unsupportedMdxExpression = true;
+      if (close < 0) mdxComment = true;
+      else { mdxComment = false; if (!/^\s*\}\s*$/u.test(raw.slice(close + 2))) unsupportedMdxExpression = true; }
+      line.eligible = false; continue;
+    }
+    if (brace >= 0) { unsupportedMdxExpression = true; line.eligible = false; }
+  }
+  const html = htmlSourceSpans(lines);
+  for (const line of lines) {
+    if (html.some(span => span.start < line.end && span.end > line.start)) line.eligible = false;
+    if (/^ {0,3}<\//u.test(line.raw)) line.eligible = false;
   }
   for (let index = 0; index + 1 < lines.length; index++) {
     const header = lines[index].eligible ? cells(lines[index].raw) : null;

@@ -5,6 +5,50 @@ import { planFigureCandidates, assertFigureEvidence, renderFigureSvg, figureSign
 const citedNumeric = (content: string) => content.split("\n").map(line => line.trim().startsWith("|") ? line + (line.includes("| value |") ? " citation |" : /^\|[-:| ]+\|$/u.test(line) ? "---|" : " Evaluation report, Table 2 |") : line).join("\n");
 
 describe("evidence-bound figures", () => {
+  it("refuses unsupported context wrapper tags ignored by HTML fragment parsing", () => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | unseen feedback |";
+    for (const tag of ["tr", "td", "thead", "html", "head", "body", "frameset"]) {
+      const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const,
+        content: `<!-- preceding comment --> <${tag} hidden>\n\n## Hidden\n\n${table}\n\n</${tag}>` };
+      expect(planFigureCandidates(source, []).candidates, tag).toEqual([]);
+      expect(() => assertFigureInsertionAnchor(source.content, "## Hidden")).toThrow(/structure|top-level/);
+    }
+  });
+
+  it("fails closed on incomplete HTML tags whose swallowed source has no emitted element location", () => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | unseen feedback |";
+    for (const open of ["<div hidden", '<div title="unfinished']) {
+      const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const,
+        content: `${open}\n\n## Hidden\n\n${table}` };
+      expect(planFigureCandidates(source, []).candidates, open).toEqual([]);
+      expect(() => assertFigureInsertionAnchor(source.content, "## Hidden")).toThrow(/structure|top-level/);
+    }
+  });
+
+  it("does not mistake a closed HTML prefix for containment of a following hidden MDX expression", () => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | unseen feedback |";
+    for (const prefix of ["<!-- closed -->", "<br>", "<span>closed</span>"]) {
+      const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const,
+        content: `## Appendix\n\n${prefix} {false && (\n\n${table}\n\n)}` };
+      expect(planFigureCandidates(source, []).candidates, prefix).toEqual([]);
+    }
+  });
+
+  it("preserves UTF-16 evidence offsets and visible data after real HTML closure in a substantial article", () => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Reader | Editor | sends feedback |";
+    const prose = Array.from({ length: 160 }, (_, index) => `Paragraph ${index}: ${"Ordinary article copy 🚦 with visible discussion. ".repeat(8)}`).join("\n\n");
+    const content = `${prose}\n\n\`\`\`markdown\n<div hidden>🚦\n\`\`\`\n\n<!-- opening --> <div hidden>\n<script>const sample = {closed: false};</script>\n\n## Hidden\n\n${table.replace("Reader", "Hidden")}\n\n</div>\n\n## Visible\n\n${table}`;
+    const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const, content };
+    const plan = planFigureCandidates(source, []);
+    expect(plan.candidates).toHaveLength(1);
+    const spec = plan.candidates[0];
+    expect(spec.rows).toEqual([["Reader", "Editor", "sends feedback"]]);
+    expect(spec.insertionAnchor).toBe("## Visible");
+    expect(spec.evidence.every(span => content.slice(span.start, span.end) === span.text)).toBe(true);
+    expect(() => assertFigureInsertionAnchor(content, spec.insertionAnchor)).not.toThrow();
+    expect(() => assertFigureCurrentArticle(spec, content)).not.toThrow();
+  });
+
   it("omits unusable table anchors across all five families while retaining corroborated headed tables", () => {
     const tables = [
       citedNumeric("| label | value | unit | population | denominator |\n|---|---|---|---|---|\n| Alpha | 12 | cases | Set | 80 |\n| Beta | 20 | cases | Set | 80 |"),

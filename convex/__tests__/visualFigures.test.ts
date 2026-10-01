@@ -24,6 +24,38 @@ async function harness(article = content) {
   return { t, user, postId };
 }
 describe("persistent evidence-bound figures", () => {
+  it("excludes hidden evidence in double-escaped script text until the real script and outer HTML close", async () => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | reports fault |";
+    const hidden = `<div hidden>\n<script><!--<script>\n</script>\n</div>\n\n## Hidden evidence\n\n${table}`;
+    const { user, postId } = await harness(hidden);
+    expect((await user.mutation(figureApi.planFigures, { postId })).candidateIds).toEqual([]);
+    expect((await user.query(api.publishing.getPostById, { postId }))?.content).toBe(hidden);
+    const closed = `${hidden}\n</script>\n</div>\n\n## Visible evidence\n\n${table.replace("Hidden", "Reader")}`;
+    await user.mutation(api.publishing.updateContent, { postId, content: closed });
+    const visible = await user.mutation(figureApi.planFigures, { postId });
+    expect(visible.candidateIds).toHaveLength(1);
+    const candidate = await user.query(figureApi.getCandidate, { candidateId: visible.candidateIds[0] });
+    expect(candidate.spec.rows).toEqual([["Reader", "Editor", "reports fault"]]);
+    await user.mutation(figureApi.acceptCandidate, { candidateId: candidate._id, expectedDataSignature: candidate.dataSignature, expectedPresentationSignature: candidate.presentationSignature });
+    expect(await user.query(figureApi.getPublicationFigures, { postId })).toHaveLength(1);
+  });
+
+  it("excludes hidden HTML opened after a leading comment and restores visibility only after its real closure", async () => {
+    const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | reports fault |";
+    const hidden = `<!-- leading --> <div hidden>\n<section>\n</section>\n\n## Hidden evidence\n\n${table}\n\n</div>`;
+    const { user, postId } = await harness(hidden);
+    const blocked = await user.mutation(figureApi.planFigures, { postId });
+    expect(blocked.candidateIds).toEqual([]);
+    expect((await user.query(api.publishing.getPostById, { postId }))?.content).toBe(hidden);
+    await user.mutation(api.publishing.updateContent, { postId, content: `${hidden}\n\n## Visible evidence\n\n${table.replace("Hidden", "Reader")}` });
+    const visible = await user.mutation(figureApi.planFigures, { postId });
+    expect(visible.candidateIds).toHaveLength(1);
+    const candidate = await user.query(figureApi.getCandidate, { candidateId: visible.candidateIds[0] });
+    expect(candidate.spec.rows).toEqual([["Reader", "Editor", "reports fault"]]);
+    await user.mutation(figureApi.acceptCandidate, { candidateId: candidate._id, expectedDataSignature: candidate.dataSignature, expectedPresentationSignature: candidate.presentationSignature });
+    expect(await user.query(figureApi.getPublicationFigures, { postId })).toHaveLength(1);
+  });
+
   it("omits a table-only article candidate with an unusable anchor and preserves saved prose", async () => {
     const table = "| from | to | relation |\n|---|---|---|\n| Reader | Editor | sends feedback |";
     const { user, postId } = await harness(table);
