@@ -29,3 +29,8 @@ PR #131 integrates the current publishing safeguards, approved-image pixel refle
 ## Editorial visual review checkpoint — September 30, 15:32 PDT
 
 The frozen `3e69417` backend/text-pixel scope has independent approval. Separate export/UI/reader review requested replay filename-set and current PR-head repairs; the coordinator's repaired helper and callback-aware route fixtures pass 94 affected tests, configured typecheck and scoped lint. A new frozen candidate, independent repair review and exact CI are pending. The previous CI failed the two route test doubles. Credential confirmation, actual provider qualification and verified backend-first release ordering remain pending; no merge, deployment or real publication has occurred.
+
+
+### Resumed editorial visual repairs (2026-10-01 02:34 UTC)
+
+The isolated author branch contains the confirmed publication, HTML/evidence, provider/budget and composer repairs. The UI slice and corrected backend slice have independent approval; the publication/figure follow-up and final exact-candidate integration remain under review. One invalid PNG test fixture has been replaced with real encoded bytes; this preserves the stronger decoder guard. Fresh CI and actual served composer/reader qualification are still required before release. PR #131 is unmerged; provider qualification, new human image approval and key-creation confirmation remain pending. No provider spend, deployment, article or LinkedIn publishing/scheduling occurred. Preserve the existing upstream publishing history and production routing state.

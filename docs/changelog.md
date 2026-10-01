@@ -1,6 +1,6 @@
 # Changelog
 
-Append-only session log for repository-level updates. Each documentation refresh should add one new entry at the bottom.
+Append-only session log for repository-level updates. Each documentation refresh should add one new entry at the bottom. Historical entries retain their original author-session timestamps when integrated from parallel branches; their append position does not establish release chronology.
 
 ## 03/16/2026 00:42:14 PDT
 
@@ -5384,3 +5384,12 @@ Addressed the 18 initial comments on PR #133 before merge: confirmed cancellatio
 ### Branch
 
 - codex/approved-image-reflection
+
+
+## 2026-10-01 02:34 UTC — Editorial visual repair checkpoint
+
+- Bind native publication records to current approval and prepared hero bytes; reject malformed retained hashes before verification. Preserve exact complete figure source-note paragraphs.
+- Use HTML5 source locations with conservative unsupported-declaration holds; retain Unicode scene distinctions and exact linked CSV provenance. Bind composer review state to its target post and current source head.
+- Reconcile per-attempt budget overruns across acknowledgement epochs, stop oversized streams, validate native reference bytes and hold ambiguous legacy text-route history before dispatch.
+- Preserve human tracker edits, constrain fictional reader tables and run offline image tooling guards in CI. Replace one corrupt rollout test fixture with a real PNG without weakening native validation.
+- Backend and UI scoped reviews are approved; final publication/figure review, exact final CI and served qualification remain pending. Provider spending, merge, deployment and real content publication remain zero.

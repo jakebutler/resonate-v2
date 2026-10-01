@@ -29,8 +29,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Offline image qualification packet checks
-        run: python3 scripts/visual-provider-qualification-packet.test.py
+      - name: Offline image tooling checks
+        run: |
+          python3 scripts/visual-provider-qualification-packet.test.py
+          python3 -B -m unittest scripts/test_publish_visual_tickets.py -v
 
       - name: Offline visual fixture guards
         run: |

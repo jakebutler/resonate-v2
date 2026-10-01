@@ -1,5 +1,19 @@
 ## Integrated review repair — September 30, 15:30 PDT
 
+
+## Current resumed repair checkpoint — 2026-10-01 02:34 UTC
+
+The isolated author branch includes committed repairs for the confirmed native publication binding, evidence extraction, provider/budget, composer identity and offline fixture defects. PR #131 still points to the previous 6a5f748 candidate until integration and push. Implementation and release qualification remain distinct.
+
+The twelve-path composer slice has independent approval. The sixteen-path backend slice has independent approval at c51622e after a legacy active-route overflow was changed to an explicit pre-dispatch reconciliation hold. The publication/figure follow-up review is running against that same frozen core candidate; the initial review's declaration/PI/CDATA finding now has six public RED/GREEN repairs and literal-code controls. Accepted linked CSV retains its original passage and exact structured rows; unsupported rows remain inspection-only.
+
+The first full resumed test run passed 1,415 tests with one existing skip and found one corrupt historical PNG fixture. The fixture now uses real Sharp-generated PNG bytes; all 21 rollout tests pass. Fresh full CI, final exact-candidate review, native migration confidence and actual served composer/reader checks remain release gates. Prior green checks do not cover this checkpoint.
+
+The tracker publisher preserves human prose/checklist bytes and updates only its marked link block; its five mocked-gh tests are now wired into CI alongside the offline qualification packet and fixture guards. Committed documentation separates historical receipts from current implementation.
+
+No key, paid provider call, reservation, merge, deployment, real article/LinkedIn publication or schedule was created during these repairs. DigitalOcean and direct OpenAI each retain their separate cumulative $5 allowance at $0 actual / $0 reserved. Provider qualification and new human aesthetic approval remain incomplete; the existing action-time key confirmation remains pending.
+
+
 The independent backend/text-pixel review approved exact `3e69417` with 391 passing tests, one existing skip, both production typechecks and all 581 frozen file hashes verified. The separate export/UI/reader review requested two fail-closed replay repairs: distinct complete compare filenames and a current branch/PR head bound to the verified artifact. Public regression tests reproduced both failures; the repaired helper now rejects them without an additional remote write. The publication-route test double also invokes main’s before-write callback and resets per-test mutation state. Ninety-four affected tests, configured typecheck and scoped lint pass. Fresh independent repair review and exact-candidate hosted CI are required.
 
 The `3e69417` CI result is a failure: two publication-route callback test-double failures, now repaired; lint, typecheck and E2E passed. No predecessor CI/review is approval of this repair. Provider spend/reservations remain zero under the separate $5 caps; restricted key confirmation, real functional generation/edit qualification and release ordering remain pending. No real article publication, merge or production deployment has occurred.

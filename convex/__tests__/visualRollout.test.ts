@@ -4,6 +4,7 @@ import { convexTest } from "convex-test";
 import { anyApi } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
+import sharp from "sharp";
 
 const modules = import.meta.glob("../**/*.ts");
 const api = anyApi;
@@ -83,7 +84,7 @@ describe("server visual rollout admission", () => {
 
   it("pauses new reference bytes before storage and preserves owned immutable reference inspection", async () => {
     const { t, user } = await setup();
-    const bytes = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64")).buffer;
+    const bytes = Uint8Array.from(await sharp({ create: { width: 1, height: 1, channels: 4, background: "#123456" } }).png().toBuffer()).buffer;
     const uploaded = await user.action(api.visualProfiles.uploadReference, { brandId: "corvo", fileName: "fixture.png", contentType: "image/png", bytes });
     const before = await user.query(api.visualProfiles.getReference, uploaded);
     const stored = await t.run(ctx => ctx.db.system.query("_storage").take(4));

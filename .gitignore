@@ -14,6 +14,7 @@
 /coverage
 /playwright-report/
 /test-results/
+__pycache__/
 
 # next.js
 /.next/
