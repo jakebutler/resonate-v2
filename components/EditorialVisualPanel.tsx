@@ -367,7 +367,7 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
       <Button type="button" variant="outline" disabled={busy || !budgetInput.trim()} onClick={() => void saveBudget()}>Save visual budget</Button>
       <p className="text-xs text-gray-500">Only the brand owner can set the shared monthly limit. Planning, images, edits and reflection use this budget.</p>
     </div></details>
-    {brandRoute && <p className="text-sm text-amber-700">Brand route: {brandRoute.provider} · {brandRoute.model}. Qualification: {brandRoute.qualification}.</p>}
+    {brandRoute && <p className="text-sm text-gray-600">Brand default: {brandRoute.provider} · {brandRoute.model}.</p>}
     {generationRoute && !fixtureGeneration && <p className="text-sm text-gray-600">Generation route: {generationRoute.provider} · {generationRoute.apiModelId}.</p>}
     {!canPlan && !canGenerate && !canEdit && <p className="text-sm text-amber-700">Qualification pending: new planning, generation and edit requests are disabled until provider evidence and a reliable cost bound are available.</p>}
     {canFixturePlan && <p className="text-sm text-amber-700">Local offline rehearsal only. No provider qualification or paid call is implied.</p>}

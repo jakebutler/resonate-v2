@@ -59,6 +59,12 @@ export function validateScenePlan(scenes: SceneConcept[], article: string): { va
     if (Object.values(scene).some((value) => !value.trim())) reasons.push(`Scene ${i + 1} is incomplete`);
     const limits: Record<keyof SceneConcept, number> = { title: 200, subject: 2000, metaphor: 2000, action: 4000, reveal: 4000, articleConnection: 4000, articleAnchor: 2000 };
     if (Object.entries(scene).some(([field, value]) => value.length > limits[field as keyof SceneConcept]) || serializedUtf8Bytes(scene) > 24_000) reasons.push(`Scene ${i + 1} is oversized`);
+    if (!article.includes(scene.articleAnchor)) {
+      const anchor = scene.articleAnchor;
+      const quoted = anchor.length >= 2 && [['"', '"'], ["'", "'"], ["“", "”"], ["‘", "’"]].some(([open, close]) => anchor.startsWith(open) && anchor.endsWith(close));
+      // Keep persisted anchors exact: remove only a presentation pair proven absent from the article.
+      if (quoted && article.includes(anchor.slice(1, -1))) scene.articleAnchor = anchor.slice(1, -1);
+    }
     if (scene.articleAnchor.trim().length < 12 || !article.includes(scene.articleAnchor)) reasons.push(`Scene ${i + 1} lacks an exact article anchor`);
     const story = words(`${scene.subject} ${scene.metaphor} ${scene.action} ${scene.reveal}`);
     if (!story.size) reasons.push(`Scene ${i + 1} lacks letter or number story detail`);

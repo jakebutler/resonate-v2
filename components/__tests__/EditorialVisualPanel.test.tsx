@@ -71,6 +71,22 @@ describe("EditorialVisualPanel", () => {
     vi.mocked(useAction).mockImplementation(((reference: unknown) => calls[String(reference).split(":")[1]]) as never);
   });
   afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
+  it("shows a neutral brand default while qualified availability enables planning and generation", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0 } };
+    profile = { ...profileFixture, revision: { ...profileFixture.revision, defaultRoute: { provider: "openai", model: "gpt-image-2", qualification: "unqualified" } } };
+    textAvailability = { planning: true, reflection: true, reason: null };
+    routeAvailability = { imageRoutes: [{ provider: "openai", model: "gpt-image-2", apiModelId: "gpt-image-2-2026-04-21", quality: "medium", size: "1536x1024", outputFormat: "png", generation: true, edit: true }], reason: null };
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    expect(screen.getByText("Brand default: openai · gpt-image-2.")).toHaveClass("text-gray-600");
+    expect(screen.queryByText(/Qualification: unqualified/)).not.toBeInTheDocument();
+    expect(screen.getByText("Generation route: openai · gpt-image-2-2026-04-21.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Plan visuals" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Generate this concept" })).toBeEnabled();
+    expect(calls.executeTextAttempt).not.toHaveBeenCalled();
+    expect(calls.executeImageAttempt).not.toHaveBeenCalled();
+  });
+
   it("dispatches a saved scene plan through the approved text action without generating an image", async () => {
     vi.stubEnv("NODE_ENV", "production");
     textAvailability = { planning: true, reflection: false, reason: null };

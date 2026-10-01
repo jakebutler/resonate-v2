@@ -2,6 +2,67 @@ import { describe, expect, it } from "vitest";
 import { validateScenePlan, articleSignature, classifyArticleChange, canIssueLocalFixtureQuote, isOfflineContractRuntime } from "../visualWorkflow";
 
 describe("editorial scene planning", () => {
+  it("canonicalizes presentation quotes in the retained native scene anchors to exact article text", () => {
+    const retained = {
+  "article": "This private fictional draft exists only to verify the saved Resonate composer. It is unapproved, unscheduled, and must never be published.\n\nIn the fictional workshop, a builder tests a hand drill on a scrap board before working on an unfinished frame. The board remains on the bench as a record of that choice. This story describes no real company, customer, measurement, or research result.",
+  "scenes": [
+    {
+      "action": "The builder carefully tests the hand drill on the scrap board",
+      "articleAnchor": "\"In the fictional workshop, a builder tests a hand drill\"",
+      "articleConnection": "This scene reflects the meticulous testing of tools, as described in this private fictional draft.",
+      "metaphor": "The hand drill is a promise of creation",
+      "reveal": "The scrap board bears marks of the builder's choices",
+      "subject": "Builder in a workshop",
+      "title": "Testing the Tool"
+    },
+    {
+      "action": "The camera focuses on the worn surface of the scrap board",
+      "articleAnchor": "\"The board remains on the bench as a record of that choice\"",
+      "articleConnection": "The article emphasizes the significance of choices made in the workshop environment.",
+      "metaphor": "The board represents the weight of unfinished projects",
+      "reveal": "Each mark reveals the journey of thought and experiment",
+      "subject": "Scrap board on the workbench",
+      "title": "Mark of Decisions"
+    },
+    {
+      "action": "The builder prepares to attach pieces to the frame",
+      "articleAnchor": "\"before working on an unfinished frame\"",
+      "articleConnection": "The narrative digs into the idea of unfinished work as a reflection of real efforts.",
+      "metaphor": "An unfinished frame symbolizes potential and possibility",
+      "reveal": "The incomplete structure hints at the futility and promise of creation",
+      "subject": "Frame being constructed",
+      "title": "The Unfinished Frame"
+    }
+  ]
+};
+    const scenes = structuredClone(retained.scenes);
+    expect(validateScenePlan(scenes, retained.article)).toEqual({ valid: true, reasons: [] });
+    expect(scenes.map(scene => scene.articleAnchor)).toEqual(retained.scenes.map(scene => scene.articleAnchor.slice(1, -1)));
+    expect(scenes.every(scene => retained.article.includes(scene.articleAnchor))).toBe(true);
+  });
+
+  it("preserves genuine source quotes and rejects every nonexact or unmatched presentation anchor", () => {
+    const stories = (articleAnchor: string) => [
+      { title: "Repair", subject: "Raven mechanic", metaphor: "Inspection", action: "Removes damaged gear", reveal: "Missing tooth", articleConnection: "The source describes repair.", articleAnchor },
+      { title: "Crossing", subject: "Bridge builder", metaphor: "Connection", action: "Lowers weighted basket", reveal: "Bending joint", articleConnection: "The source describes a test.", articleAnchor },
+      { title: "Garden", subject: "Gardener", metaphor: "Growth", action: "Prunes tangled branch", reveal: "Sunlit bud", articleConnection: "The source describes a choice.", articleAnchor },
+    ];
+    const anchor = "repair the broken gear";
+    const quoted = stories('"' + anchor + '"');
+    expect(validateScenePlan(quoted, 'The source says "' + anchor + '" before acting.').valid).toBe(true);
+    expect(quoted.every(scene => scene.articleAnchor === '"' + anchor + '"')).toBe(true);
+    for (const [open, close] of [['"', '"'], ["'", "'"], ["“", "”"], ["‘", "’"]]) {
+      const wrapped = stories(open + anchor + close);
+      expect(validateScenePlan(wrapped, "Choose to " + anchor + " before acting.").valid).toBe(true);
+      expect(wrapped.every(scene => scene.articleAnchor === anchor)).toBe(true);
+    }
+    for (const invalid of ['"' + anchor, anchor + '"', "'" + anchor + '"', '"Repair the broken gear"', '"repair the broken...gear"', '"repair the broken … gear"', '""' + anchor + '""']) {
+      const scenes = stories(invalid);
+      expect(validateScenePlan(scenes, "Choose to " + anchor + " before acting.")).toMatchObject({ valid: false, reasons: expect.arrayContaining(["Scene 1 lacks an exact article anchor"]) });
+      expect(scenes.every(scene => scene.articleAnchor === invalid)).toBe(true);
+    }
+  });
+
   it("never classifies changed link targets, autolinks, or raw HTML identifiers as spelling fixes", () => {
     for (const content of ["Read [source](https://example.invalid/recieved).", "Read <https://example.invalid/recieved>.", '<div id="recieved">Stored anchor</div>', "Read https://example.invalid/recieved."]) {
       const before = { title: "Inspect first", content };
