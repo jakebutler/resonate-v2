@@ -39,6 +39,7 @@ jobs:
           node scripts/visual-fixture-issuer.mjs --self-test
           node scripts/visual-fixture-rehearsal.mjs --self-test
           node scripts/visual-linked-fixture-rehearsal.mjs --self-test
+          node scripts/export-local-visual-fixture.mjs --self-test
 
       - name: Run Vitest with coverage
         run: npm run test:ci

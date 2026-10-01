@@ -1309,7 +1309,7 @@ export function PersistedPublishingPanel({
               devMode={devMode}
               item={selectedItem}
               approvedVisualHero={selectedVisualHero}
-              visualPublicationBlockedReason={approvalReview?.hasVisuals && !approvalReview.publicationQualified ? "Live visual provider qualification is required before opening a publication PR." : undefined}
+              visualPublicationBlockedReason={visualPublicationReviewReason(selectedItem.post, approvalReview, visualUiEnabled) ?? undefined}
               approvalBlockedReason={visualUiEnabled && selectedItem.post.channelId === "corvo-blog" && selectedItem.post.contentFingerprint !== undefined ? (!approvalReviewMatches ? "Wait for the current saved article and visual review." : approvalReview?.blockedReason ?? undefined) : undefined}
               openingPr={openingPrPostIds.has(selectedItem.post._id)}
               onApprove={handleApprove}
@@ -2305,8 +2305,11 @@ function PersistedPostComposer(props: {
     setHeroUploadError("");
     setHeroUploading(true);
     try {
-      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG or WebP image.");
-      const { storageId } = await uploadImage({ brandId: post.brandId, fileName: file.name, contentType: file.type, bytes: await file.arrayBuffer() });
+      const extension = file.name.match(/\.(png|jpe?g|webp)$/i)?.[1].toLowerCase();
+      const extensionType = extension === "png" ? "image/png" : extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension === "webp" ? "image/webp" : "";
+      const contentType = file.type || extensionType;
+      if (!["image/png", "image/jpeg", "image/webp"].includes(contentType) || (file.type && extensionType && file.type !== extensionType)) throw new Error("Choose a PNG, JPEG or WebP image.");
+      const { storageId } = await uploadImage({ brandId: post.brandId, fileName: file.name, contentType, bytes: await file.arrayBuffer() });
       setHeroImageStorageId(storageId);
       setHeroImageUrl("");
     } catch (error) {

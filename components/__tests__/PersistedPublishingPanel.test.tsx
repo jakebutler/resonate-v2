@@ -273,6 +273,97 @@ const blogItemWithPr = {
 };
 
 describe("PersistedPublishingPanel", () => {
+  it("disables detail Open PR with the current non-visual export review reason", () => {
+    const current = { ...blogItem, post: { ...blogItem.post, contentFingerprint: "current-article" } };
+    const query = vi.mocked(useQuery).getMockImplementation()!;
+    vi.mocked(useQuery).mockImplementation((reference, args) => {
+      if (reference === "publishing:listCalendarItems") return [current];
+      if (reference === "publishing:getApprovalReview" && args !== "skip") return {
+        articleSignature: approvalArticleSignature(current.post),
+        metadataSignature: publicationMetadataSignature(current.post),
+        hasVisuals: false, publicationQualified: true, visualSignature: null,
+        blockedReason: "Prepare the current native hero export before publication.",
+      };
+      return query(reference, args);
+    });
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const button = within(detail).getByRole("button", { name: "Open PR" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "Prepare the current native hero export before publication.");
+    expect(within(detail).getByText("Prepare the current native hero export before publication.")).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(["loading", "stale article", "stale metadata"])("fails closed detail Open PR while its non-visual review is %s", (state) => {
+    const current = { ...blogItem, post: { ...blogItem.post, contentFingerprint: "current-article" } };
+    const query = vi.mocked(useQuery).getMockImplementation()!;
+    vi.mocked(useQuery).mockImplementation((reference, args) => {
+      if (reference === "publishing:listCalendarItems") return [current];
+      if (reference === "publishing:getApprovalReview" && args !== "skip") return state === "loading" ? undefined : {
+        articleSignature: state === "stale article" ? "old-article" : approvalArticleSignature(current.post),
+        metadataSignature: state === "stale metadata" ? "old-metadata" : publicationMetadataSignature(current.post),
+        hasVisuals: false, publicationQualified: true, visualSignature: null, blockedReason: null,
+      };
+      return query(reference, args);
+    });
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const button = within(screen.getByLabelText("Publishing item detail")).getByRole("button", { name: "Open PR" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "Wait for the target's current saved article and visual review.");
+    fireEvent.click(button);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([["hero.PNG", "image/png"], ["hero.jpg", "image/jpeg"], ["hero.jpeg", "image/jpeg"], ["hero.webp", "image/webp"]])("uploads a supported %s hero with missing OS MIME using its explicit extension", async (name, contentType) => {
+    const upload = vi.fn().mockResolvedValue({ storageId: "new-supported-hero" });
+    const action = vi.mocked(useAction).getMockImplementation()!;
+    vi.mocked(useAction).mockImplementation(reference => reference === "v2Storage:uploadImage" ? upload : action(reference));
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const file = new File(["fixture bytes validated by upload action"], name);
+    const bytes = new Uint8Array([1]).buffer;
+    Object.defineProperty(file, "arrayBuffer", { value: async () => bytes });
+    fireEvent.change(within(detail).getByLabelText("Upload hero image"), { target: { files: [file] } });
+    await waitFor(() => expect(upload).toHaveBeenCalledWith({ brandId: "corvo", fileName: name, contentType, bytes }));
+    expect(within(detail).queryByRole("alert")).not.toBeInTheDocument();
+    expect(updateBlogMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a hero whose nonempty MIME conflicts with its explicit raster extension", async () => {
+    const upload = vi.fn().mockResolvedValue({ storageId: "conflicting-hero" });
+    const action = vi.mocked(useAction).getMockImplementation()!;
+    vi.mocked(useAction).mockImplementation(reference => reference === "v2Storage:uploadImage" ? upload : action(reference));
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const file = new File(["fixture"], "hero.png", { type: "image/jpeg" });
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new Uint8Array([1]).buffer });
+    fireEvent.change(within(detail).getByLabelText("Upload hero image"), { target: { files: [file] } });
+    expect(await within(detail).findByRole("alert")).toHaveTextContent("Choose a PNG, JPEG or WebP image.");
+    expect(upload).not.toHaveBeenCalled();
+    expect(within(detail).getByLabelText("Hero image URL")).toHaveValue(blogItem.post.heroImageUrl);
+  });
+
+  it.each([["hero.svg", ""], ["hero.avif", ""], ["hero.png.svg", ""], ["hero.png", "image/svg+xml"], ["hero.jpg", "application/octet-stream"]])("rejects unsupported hero %s with declared MIME %s without invoking upload", async (name, type) => {
+    const upload = vi.fn();
+    const action = vi.mocked(useAction).getMockImplementation()!;
+    vi.mocked(useAction).mockImplementation(reference => reference === "v2Storage:uploadImage" ? upload : action(reference));
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const file = new File(["unsupported"], name, { type });
+    fireEvent.change(within(detail).getByLabelText("Upload hero image"), { target: { files: [file] } });
+    expect(await within(detail).findByRole("alert")).toHaveTextContent("Choose a PNG, JPEG or WebP image.");
+    expect(upload).not.toHaveBeenCalled();
+    expect(within(detail).getByLabelText("Hero image URL")).toHaveValue(blogItem.post.heroImageUrl);
+    expect(updateBlogMetadataMock).not.toHaveBeenCalled();
+  });
+
   it("advertises supported hero rasters and visibly preserves the saved hero after a rejected upload", async () => {
     const upload = vi.fn().mockRejectedValue(new Error("Image exceeds 5 MiB"));
     const action = vi.mocked(useAction).getMockImplementation()!;

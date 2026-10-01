@@ -14,6 +14,37 @@ spec.loader.exec_module(publisher)
 
 
 class PublisherIssueBodyTests(unittest.TestCase):
+    def test_existing_empty_issue_receives_generated_links_when_body_is_null_or_absent(self):
+        url = "https://github.com/jakebutler/resonate-v2/issues/23"
+        links = "## Parent and dependency links\n\nParent: current-parent"
+        for payload in ({"body": None}, {}):
+            with self.subTest(payload=payload):
+                edited_bodies = []
+
+                def run(command, **kwargs):
+                    if command[1:3] == ["issue", "list"]:
+                        result = [{"title": "V01: Example", "url": url}]
+                    elif command[1:3] == ["issue", "view"]:
+                        result = payload
+                    elif command[1:3] == ["issue", "edit"]:
+                        self.assertEqual(command[3], url)
+                        body_file = Path(command[command.index("--body-file") + 1])
+                        edited_bodies.append(body_file.read_text(encoding="utf-8"))
+                        result = {}
+                    else:
+                        self.fail(f"unexpected gh command: {command}")
+                    return subprocess.CompletedProcess(command, 0, json.dumps(result), "")
+
+                with tempfile.TemporaryDirectory() as directory, patch.object(publisher.subprocess, "run", side_effect=run):
+                    result = publisher.publish(
+                        "V01: Example", "prepared body is not authoritative", "v01.md",
+                        links, Path(directory),
+                    )
+                self.assertEqual(result, url)
+                self.assertEqual(edited_bodies, [
+                    f"\n\n{publisher.LINKS_START}\n{links}\n{publisher.LINKS_END}\n"
+                ])
+
     def test_main_child_failure_preserves_existing_parent_links_and_manual_body(self):
         parent_url = "https://github.com/jakebutler/resonate-v2/issues/23"
         original = (

@@ -1,10 +1,46 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { planFigureCandidates, assertFigureEvidence, renderFigureSvg, figureSignatures, parseFigureSource, assertFigureCurrentArticle, buildFigureMarkdownBlock, assertFigureInsertionAnchor, assertFigureMarkdownBlockPlacement } from "../visualFigures";
+import { planFigureCandidates, assertFigureEvidence, renderFigureSvg, figureSignatures, parseFigureSource, assertFigureCurrentArticle, buildFigureMarkdownBlock, assertFigureInsertionAnchor, assertFigureMarkdownBlockPlacement, getFigureArticleStructure } from "../visualFigures";
 
 const citedNumeric = (content: string) => content.split("\n").map(line => line.trim().startsWith("|") ? line + (line.includes("| value |") ? " citation |" : /^\|[-:| ]+\|$/u.test(line) ? "---|" : " Evaluation report, Table 2 |") : line).join("\n");
 
 describe("evidence-bound figures", () => {
+  it("maps a bounded article with thousands of HTML breaks without exhaustive per-line searches", () => {
+    const breakCount = 24000;
+    const table = "| from | to | relation |\n|---|---|---|\n| Reader 🚦 | Editor | visible feedback |";
+    const content = `${"<br>\n".repeat(breakCount)}\n<div hidden>\n<section>closed</section>\n\n## Hidden\n\n${table.replace("Reader 🚦", "Hidden")}\n\n</div>\n\n## Visible\n\n${table}`;
+    const source = { id: "a", name: "Article", format: "markdown" as const, purpose: "article" as const, content };
+    expect(new TextEncoder().encode(content).length).toBeLessThan(200000);
+    // Count aggregate intrinsic searches during the public calls, with a deterministic
+    // work limit instead of a machine-dependent timing assertion. No parser internals
+    // or private span arrays are inspected, and the intrinsic is always restored.
+    const originalSome = Array.prototype.some;
+    const searchBudget = breakCount * 100;
+    let searches = 0;
+    let structure: ReturnType<typeof getFigureArticleStructure>;
+    let plan: ReturnType<typeof planFigureCandidates>;
+    Array.prototype.some = function (predicate, thisArg) {
+      return originalSome.call(this, (value, index, array) => {
+        if (++searches > searchBudget) throw new Error("Public article mapping exceeded its bounded search budget");
+        return predicate.call(thisArg, value, index, array);
+      });
+    };
+    try {
+      structure = getFigureArticleStructure(content);
+      plan = planFigureCandidates(source, []);
+    } finally {
+      Array.prototype.some = originalSome;
+    }
+    expect(searches).toBeLessThan(searchBudget);
+    expect(structure.slice(0, breakCount).every(line => !line.eligible)).toBe(true);
+    expect(structure.find(line => line.raw === "## Hidden")?.topLevelEligible).toBe(false);
+    expect(structure.find(line => line.raw === "## Visible")?.topLevelEligible).toBe(true);
+    expect(plan.candidates).toHaveLength(1);
+    expect(plan.candidates[0].rows).toEqual([["Reader 🚦", "Editor", "visible feedback"]]);
+    expect(plan.candidates[0].insertionAnchor).toBe("## Visible");
+    expect(plan.candidates[0].evidence.every(span => content.slice(span.start, span.end) === span.text)).toBe(true);
+  }, 30000);
+
   it("refuses unsupported context wrapper tags ignored by HTML fragment parsing", () => {
     const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | unseen feedback |";
     for (const tag of ["tr", "td", "thead", "html", "head", "body", "frameset"]) {

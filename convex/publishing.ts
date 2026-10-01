@@ -1542,7 +1542,7 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
       const suppliesHeroBinding = [artifact.heroSha256, artifact.coverImageAlt, artifact.heroSourceUrl, artifact.editorialFingerprint].some(value => value !== undefined);
       if (suppliesHeroBinding && (!post.preparedHero || post.preparedHero.sourceStorageId !== post.heroImageStorageId ||
         !/^[a-f0-9]{64}$/u.test(artifact.heroSha256 ?? "") || artifact.heroSha256 !== post.preparedHero.sha256 ||
-        artifact.coverImageAlt !== post.coverImageAlt?.trim() || artifact.heroSourceUrl !== post.heroImageUrl ||
+        artifact.coverImageAlt?.trim() !== post.coverImageAlt?.trim() || artifact.heroSourceUrl !== post.heroImageUrl ||
         (artifact.editorialFingerprint !== undefined && artifact.editorialFingerprint !== blogEditorialFingerprint(post)))) {
         throw new Error("Recorded hero binding must match the current approved prepared hero");
       }

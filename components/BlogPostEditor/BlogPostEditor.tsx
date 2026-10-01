@@ -51,6 +51,14 @@ export function BlogPostEditor({ open, postId, initialDate, onClose, onSaved }: 
   const [githubPrUrl, setGithubPrUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadSessionRef = useRef(0);
+
+  useEffect(() => {
+    uploadSessionRef.current += 1;
+    setUploadError("");
+    setUploading(false);
+    return () => { uploadSessionRef.current += 1; };
+  }, [open, postId]);
 
   // NOTE: This useEffect is intentionally duplicated in LinkedInPostEditor.tsx.
   // Both editors prefill scheduledDate when opened from the calendar.
@@ -98,18 +106,33 @@ export function BlogPostEditor({ open, postId, initialDate, onClose, onSaved }: 
 
   const handleUpload = async (files: FileList | null) => {
     if (!files) return;
+    const session = uploadSessionRef.current;
     setUploadError("");
     setUploading(true);
+    const attached: string[] = [];
+    const rejected: string[] = [];
     try {
       for (const file of Array.from(files)) {
-        if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG or WebP image.");
-        const { storageId } = await uploadImage({ fileName: file.name, contentType: file.type, bytes: await file.arrayBuffer() });
-        setFileIds((prev) => [...prev, storageId as Id<"_storage">]);
+        if (session !== uploadSessionRef.current) return;
+        try {
+          if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG or WebP image.");
+          const bytes = await file.arrayBuffer();
+          if (session !== uploadSessionRef.current) return;
+          const { storageId } = await uploadImage({ fileName: file.name, contentType: file.type, bytes });
+          if (session !== uploadSessionRef.current) return;
+          setFileIds((prev) => prev.includes(storageId as Id<"_storage">) ? prev : [...prev, storageId as Id<"_storage">]);
+          attached.push(file.name);
+        } catch (error) {
+          if (session !== uploadSessionRef.current) return;
+          rejected.push(`${file.name}: ${error instanceof Error ? error.message : "Upload failed. Inspect attachments before trying again."}`);
+        }
       }
-    } catch (error) {
-      setUploadError(error instanceof Error ? `Image upload failed: ${error.message}` : "Image upload failed. Inspect attachments before trying again.");
+      if (rejected.length) {
+        const summary = attached.length ? `${attached.length} ${attached.length === 1 ? "image" : "images"} attached: ${attached.join(", ")}.` : "No new images attached.";
+        setUploadError(`${summary} Rejected: ${rejected.join("; ")}`);
+      }
     } finally {
-      setUploading(false);
+      if (session === uploadSessionRef.current) setUploading(false);
     }
   };
 

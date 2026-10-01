@@ -77,6 +77,21 @@ describe("bound visual publication read adapter", () => {
     expect((await user.query(api.publishing.getPostById, { postId })).blogArtifact).toEqual(bound);
   });
 
+  it("records the legacy export's approved hero alt with surrounding whitespace", async () => {
+    const { user, postId } = await ownedUploadFixture();
+    await user.mutation(api.publishing.updateBlogMetadata, { postId, metadata: { coverImageAlt: "  Exact approved legacy alt  " } });
+    await user.action(api.blogHero.prepare, { postId, crop: "centre" });
+    await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    const before = await user.query(api.publishing.getPostById, { postId });
+    const artifact = { repository: "fictional-owner/fictional-repo", prNumber: 987654, branchName: "blog/fictional", mdxPath: "apps/blog/blog/2030-10-07-fictional.mdx", heroPath: "apps/blog/public/images/blog/2030-10-07-fictional/hero.webp", canonicalUrl: "https://fictional.invalid/blog/fictional", editorialFingerprint: blogEditorialFingerprint(before), heroSha256: before.preparedHero.sha256, coverImageAlt: before.coverImageAlt, heroSourceUrl: before.heroImageUrl };
+    expect(artifact.coverImageAlt).toBe("  Exact approved legacy alt  ");
+    const result = { artifact, prUrl: "https://github.com/fictional-owner/fictional-repo/pull/987654", prNumber: 987654, branchName: artifact.branchName, sanitizedResponse: {} };
+    await expect(user.mutation(api.publishing.recordGithubPr, { postId, result: { ...result, artifact: { ...artifact, coverImageAlt: "Different unapproved alt" } } })).rejects.toThrow(/hero binding/i);
+    expect(await user.query(api.publishing.getPostById, { postId })).toEqual(before);
+    expect(await user.mutation(api.publishing.recordGithubPr, { postId, result })).toMatchObject({ recorded: true });
+    expect((await user.query(api.publishing.getPostById, { postId })).blogArtifact).toEqual(artifact);
+  });
+
   it("roundtrips the preparer's exact inline hero identity through current approval, claim and trusted recording while holding changed identity", async () => {
     const t = convexTest(schema, modules), user = t.withIdentity({ subject: "fixture-owner" });
     const fetchMock = vi.fn(() => { throw new Error("Fixture forbids all HTTP"); }); vi.stubGlobal("fetch", fetchMock);

@@ -91,6 +91,9 @@ export function getFigureArticleStructure(content: string): FigureArticleLine[] 
     line.eligible = !list && !/^(?: {4}| *\t| {0,3}>)/u.test(raw);
   }
   const initialHtml = htmlSourceSpans(lines);
+  // Lines and spans are ordered by source offset. Retain the furthest end so
+  // nested spans cannot prematurely release the enclosing HTML region.
+  let initialHtmlCursor = 0; let initialHtmlEnd = -1;
   let mdxComment = false; let unsupportedMdxExpression = false;
   for (const line of lines) {
     if (!line.eligible) continue;
@@ -98,7 +101,10 @@ export function getFigureArticleStructure(content: string): FigureArticleLine[] 
     if (unsupportedMdxExpression) { line.eligible = false; continue; }
     const brace = raw.indexOf("{");
     const position = line.start + Math.max(brace, 0);
-    const enclosedHtml = initialHtml.some(span => span.start <= position && span.end > position);
+    while (initialHtmlCursor < initialHtml.length && initialHtml[initialHtmlCursor].start <= position) {
+      initialHtmlEnd = Math.max(initialHtmlEnd, initialHtml[initialHtmlCursor++].end);
+    }
+    const enclosedHtml = initialHtmlEnd > position;
     if (!mdxComment && enclosedHtml) continue; // JavaScript inside real raw HTML is HTML, not an MDX expression.
     if (/^\s*(?:import|export)\b/u.test(raw)) { unsupportedMdxExpression = true; line.eligible = false; continue; }
     const commentStart = /\{\s*\/\*/u.exec(raw);
@@ -113,8 +119,12 @@ export function getFigureArticleStructure(content: string): FigureArticleLine[] 
     if (brace >= 0) { unsupportedMdxExpression = true; line.eligible = false; }
   }
   const html = htmlSourceSpans(lines);
+  let htmlCursor = 0; let htmlEnd = -1;
   for (const line of lines) {
-    if (html.some(span => span.start < line.end && span.end > line.start)) line.eligible = false;
+    while (htmlCursor < html.length && html[htmlCursor].start < line.end) {
+      htmlEnd = Math.max(htmlEnd, html[htmlCursor++].end);
+    }
+    if (htmlEnd > line.start) line.eligible = false;
     if (/^ {0,3}<\//u.test(line.raw)) line.eligible = false;
   }
   for (let index = 0; index + 1 < lines.length; index++) {

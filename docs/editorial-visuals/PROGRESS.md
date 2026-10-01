@@ -1,7 +1,14 @@
-## Integrated review repair — September 30, 15:30 PDT
+## Current corrective review checkpoint — 2026-10-01 03:23 UTC
 
+PR #131's `71ef9f0` hosted CI failed one positive text-action test because it inherited CI's intentionally unqualified Cortex origin. The one-test correction `61ab3c5` has independent approval and passes the full dummy-environment coverage suite: 1,416 tests and one existing skip. Production code was unchanged in that correction.
 
-## Current resumed repair checkpoint — 2026-10-01 02:34 UTC
+The next frozen delta repairs the reproduced quadratic HTML span scans, blocked detail-drawer PR readiness, upload session/error handling, supported empty-MIME hero uploads, approved legacy hero-alt whitespace and null tracker bodies. Focused author tests pass; the exporter self-test is now included in CI. These changed scopes require independent review and new exact-candidate hosted CI before merge. Historical approvals below cover their recorded candidates only.
+
+The actual served `71ef9f0` composer retained its saved selected edit and two accepted fictional figures after reload. Its site reader loaded the exact MDX, WebP and two SVG assets at desktop and mobile widths. A fresh private production backup passed CRC verification; the production dry run deleted no indexes. These are engineering checks, not provider qualification or new human aesthetic approval.
+
+No API key, paid call, provider reservation, merge, deployment, real article/LinkedIn publication or schedule has occurred. Each separate provider allowance remains $5 with $0 spent and $0 reserved. Production visual admission stays disabled; backend-first ordering and live verification remain release gates.
+
+## Earlier resumed repair checkpoint — 2026-10-01 02:34 UTC
 
 The isolated author branch includes committed repairs for the confirmed native publication binding, evidence extraction, provider/budget, composer identity and offline fixture defects. PR #131 still points to the previous 6a5f748 candidate until integration and push. Implementation and release qualification remain distinct.
 
@@ -13,6 +20,7 @@ The tracker publisher preserves human prose/checklist bytes and updates only its
 
 No key, paid provider call, reservation, merge, deployment, real article/LinkedIn publication or schedule was created during these repairs. DigitalOcean and direct OpenAI each retain their separate cumulative $5 allowance at $0 actual / $0 reserved. Provider qualification and new human aesthetic approval remain incomplete; the existing action-time key confirmation remains pending.
 
+## Integrated review repair — September 30, 15:30 PDT
 
 The independent backend/text-pixel review approved exact `3e69417` with 391 passing tests, one existing skip, both production typechecks and all 581 frozen file hashes verified. The separate export/UI/reader review requested two fail-closed replay repairs: distinct complete compare filenames and a current branch/PR head bound to the verified artifact. Public regression tests reproduced both failures; the repaired helper now rejects them without an additional remote write. The publication-route test double also invokes main’s before-write callback and resets per-test mutation state. Ninety-four affected tests, configured typecheck and scoped lint pass. Fresh independent repair review and exact-candidate hosted CI are required.
 

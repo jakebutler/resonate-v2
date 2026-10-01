@@ -27,7 +27,8 @@ def existing(title):
 
 
 def issue_body(url):
-    return json.loads(gh("issue", "view", url, "--repo", REPO, "--json", "body"))["body"]
+    body = json.loads(gh("issue", "view", url, "--repo", REPO, "--json", "body")).get("body")
+    return "" if body is None else body
 
 
 def with_generated_links(body, links):
