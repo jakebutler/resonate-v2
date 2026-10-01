@@ -50,14 +50,15 @@ def publish(title, body, filename, links, output):
     found = existing(title)
     if found:
         current = issue_body(found)
-        updated = with_generated_links(current, links)
-        if updated != current:
+        updated = with_generated_links(current, links or "")
+        # None validates the owned block without replacing it before all children resolve.
+        if links is not None and updated != current:
             body_path = output / filename
             body_path.write_text(updated, encoding="utf-8")
             gh("issue", "edit", found, "--body-file", str(body_path))
         return found
     body_path = output / filename
-    body_path.write_text(with_generated_links(body, links), encoding="utf-8")
+    body_path.write_text(with_generated_links(body, links or ""), encoding="utf-8")
     try:
         url = gh("issue", "create", "--repo", REPO, "--title", title, "--body-file", str(body_path), "--label", "enhancement")
     except (RuntimeError, subprocess.TimeoutExpired):
@@ -93,7 +94,7 @@ def main(argv=None):
         raise RuntimeError("Existing enhancement label unavailable")
     parent_body = parent_path.read_text(encoding="utf-8")
     parent_title = parent_body.splitlines()[0].removeprefix("# ")
-    parent_url = publish(parent_title, parent_body, "parent-published.md", "", output)
+    parent_url = publish(parent_title, parent_body, "parent-published.md", None, output)
     mapping = {"parent": parent_url, "tickets": {}}
     mapping_path = output / "issue-map.json"
     mapping_path.write_text(json.dumps(mapping, indent=2) + "\n", encoding="utf-8")

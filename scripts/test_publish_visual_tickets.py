@@ -14,6 +14,48 @@ spec.loader.exec_module(publisher)
 
 
 class PublisherIssueBodyTests(unittest.TestCase):
+    def test_main_child_failure_preserves_existing_parent_links_and_manual_body(self):
+        parent_url = "https://github.com/jakebutler/resonate-v2/issues/23"
+        original = (
+            "# Parent\n\nHuman-edited plan.\n- [x] V01 is complete\n\n"
+            f"{publisher.LINKS_START}\n## Child issues\n\n"
+            "- [V01](https://github.com/jakebutler/resonate-v2/issues/24)\n"
+            f"{publisher.LINKS_END}\n"
+        )
+        saved_body = original
+
+        def run(command, **kwargs):
+            nonlocal saved_body
+            operation = command[1:3]
+            if operation == ["label", "list"]:
+                payload = [{"name": "enhancement"}]
+            elif operation == ["issue", "list"]:
+                title = command[command.index("--search") + 1]
+                if title != "Parent":
+                    raise RuntimeError("child search unavailable")
+                payload = [{"title": "Parent", "url": parent_url}]
+            elif operation == ["issue", "view"]:
+                payload = {"body": saved_body}
+            elif operation == ["issue", "edit"]:
+                saved_body = Path(command[command.index("--body-file") + 1]).read_text()
+                payload = {}
+            else:
+                self.fail(f"unexpected gh command: {command}")
+            return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            (source / "tickets").mkdir()
+            (source / "tickets/PARENT.md").write_text("# Parent\nPrepared plan.")
+            (source / "tickets/V01.md").write_text("# V01\nPrepared acceptance.")
+            (source / "tickets/index.json").write_text(json.dumps([
+                {"id": "V01", "title": "V01: Example", "body_file": "V01.md", "blocked_by": []}
+            ]))
+            with patch.object(publisher.subprocess, "run", side_effect=run):
+                with self.assertRaisesRegex(RuntimeError, "child search unavailable"):
+                    publisher.main(["--source", directory])
+        self.assertEqual(saved_body, original)
+
     def test_invalid_source_stops_before_any_gh_command(self):
         with patch.object(publisher.subprocess, "run") as run, tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(RuntimeError, "source is incomplete"):
