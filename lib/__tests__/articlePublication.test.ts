@@ -137,6 +137,32 @@ describe("separate publication facts", () => {
     productionFlag: false, transient: false, creator: "vercel[bot]",
     statusCreator: "vercel[bot]", statusEnvironment: "Production",
   };
+  it.each([false, true])("qualifies the exact legacy undated hero directory (inline hero %s)", async inline => {
+    const heroSourceUrl = "https://example.org/reviewed-legacy-hero.webp";
+    const heroPath = "corvo-labs-enhanced/public/images/blog/fixture/hero.webp";
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#15616d" } }).webp().toBuffer();
+    const heroSha256 = createHash("sha256").update(heroBytes).digest("hex");
+    const content = input.content + (inline ? `\n\n![Exact alt](${heroSourceUrl})` : "");
+    const rendered = content.replace(heroSourceUrl, "/images/blog/fixture/hero.webp");
+    githubFixture({ ...vercel, heroPath, heroBytes, mdxContent: `---\ntitle: "Reviewed article"\nstatus: "published"\ncoverImage: "/images/blog/fixture/hero.webp"\n---\n\n${rendered}` });
+    const available = vi.fn(async () => ({ availability: "verified" as const, expectedHash: "expected", observedHash: "observed" }));
+    const result = await readArticlePublication({ ...input, content, heroSha256, artifact: { ...artifact, heroPath, heroSha256, heroSourceUrl } }, available);
+    expect(result.evidence).toMatchObject({ availability: "verified", deploymentContainsArticle: true });
+    expect(available).toHaveBeenCalledWith(expect.objectContaining({ content: rendered }));
+  });
+  it.each(["directory", "bytes"])("holds a legacy hero with changed %s", async failure => {
+    const heroPath = "corvo-labs-enhanced/public/images/blog/fixture/hero.webp";
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#15616d" } }).webp().toBuffer();
+    const heroSha256 = createHash("sha256").update(heroBytes).digest("hex");
+    githubFixture({ ...vercel, heroPath, heroBytes: failure === "bytes" ? Buffer.from("changed bytes") : heroBytes,
+      mdxContent: `---\ntitle: "Reviewed article"\nstatus: "published"\ncoverImage: "/images/blog/fixture/hero.webp"\n---\n\n${input.content}` });
+    const available = vi.fn();
+    const result = await readArticlePublication({ ...input, heroSha256, artifact: { ...artifact, heroSha256,
+      heroSourceUrl: "https://example.org/reviewed-legacy-hero.webp", heroPath: failure === "directory" ? heroPath.replace("fixture/", "other/") : heroPath } }, available);
+    expect(result.evidence.availability).not.toBe("verified");
+    expect(result.evidence.reason).toMatch(/hero/i);
+    expect(available).not.toHaveBeenCalled();
+  });
   it.each([{}, { sha: "later", ancestor: true }])(
     "accepts Vercel's non-transient Production receipt with its matching successful status (%j)",
     async options => {

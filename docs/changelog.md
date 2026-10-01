@@ -5398,4 +5398,6 @@ Addressed the 18 initial comments on PR #133 before merge: confirmed cancellatio
 
 Vercel Production receipts with a false GitHub production flag now require non-transient vercel[bot] deployment and matching status identity. Latest unrecognized Production receipts remain held; exact merge ancestry, source/hero hashes and rendered copy checks are preserved. DNS-pinned HTTPS supports scalar and all-address Node lookup callbacks without a second DNS resolution. Shared library changes now trigger production Convex deployment in CI.
 
-Validation: 52 focused tests, full unit suite with coverage, lint, typecheck, Next.js build and native Convex dry-run passed. Release approval and live provider qualification are separate from these checks.
+Validation: 56 focused tests, full unit suite with coverage, lint, typecheck, Next.js build and native Convex dry-run passed. Release approval and live provider qualification are separate from these checks.
+
+Legacy hero compatibility: accept only the exact dated or undated directory derived from the bound article slug; preserve source, hash and inline placement checks. All fifteen live articles passed the complete candidate read-only verifier against website Production `8030650`.

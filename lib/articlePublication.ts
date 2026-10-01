@@ -37,8 +37,13 @@ export function articleBodyForArtifact(content: string, artifact: Pick<BlogArtif
   const appRoot = process.env.BLOG_APP_ROOT || "corvo-labs-enhanced";
   let body = content;
   if (artifact.heroSourceUrl !== undefined) {
+    const heroPaths = [
+      `${appRoot}/public/images/blog/${slug}/hero.webp`,
+      // Existing reviewed articles used the same slug without the date prefix.
+      `${appRoot}/public/images/blog/${slug.slice(11)}/hero.webp`,
+    ];
     if (!artifact.heroSourceUrl || artifact.heroSourceUrl.length > 4096 || /[\r\n\0]/u.test(artifact.heroSourceUrl) ||
-      artifact.heroPath !== `${appRoot}/public/images/blog/${slug}/hero.webp` || !/^[a-f0-9]{64}$/u.test(artifact.heroSha256 ?? "")) throw new Error("Bound hero identity or path is unverified.");
+      !heroPaths.includes(artifact.heroPath ?? "") || !/^[a-f0-9]{64}$/u.test(artifact.heroSha256 ?? "")) throw new Error("Bound hero identity or path is unverified.");
     const source = artifact.heroSourceUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     // Match the preparer's exact approved image identity, never other external URLs.
     body = body.replace(new RegExp(`(!\\[[^\\]]*]\\()${source}(\\))`, "g"), (_match, before: string, after: string) => `${before}${artifact.heroPath!.slice(`${appRoot}/public`.length)}${after}`);
