@@ -61,10 +61,12 @@ export const getAvailability = query({
       const routes = await ctx.db.query("v2VisualImageRoutes").withIndex("by_provider_and_model", q => q.eq("provider", provider).eq("model", model)).order("desc").take(20);
       const seen = new Set<string>();
       for (const route of routes) if (route.enabled && route.qualification !== "qualification-probe" && route.expiresAt > Date.now() && route.size === "1536x1024") {
-        const key = JSON.stringify([provider, route.model, route.apiModelId, route.quality, route.inputFidelity ?? null, route.size, route.outputFormat]);
+        const generation = route.operations.includes("generate") && generationInputs <= route.maxInputImages && (!generationInputs || route.referenceInputs);
+        const edit = route.operations.includes("edit") && route.referenceInputs && editInputs <= route.maxInputImages;
+        const key = JSON.stringify([provider, route.model, route.apiModelId, route.quality, route.inputFidelity ?? null, route.size, route.outputFormat, generation, edit]);
         if (seen.has(key)) continue;
         seen.add(key);
-        imageRoutes.push({ provider, model: route.model, apiModelId: route.apiModelId, quality: route.quality, inputFidelity: route.inputFidelity ?? null, size: route.size, outputFormat: route.outputFormat, generation: route.operations.includes("generate") && generationInputs <= route.maxInputImages && (!generationInputs || route.referenceInputs), edit: route.operations.includes("edit") && route.referenceInputs && editInputs <= route.maxInputImages });
+        imageRoutes.push({ provider, model: route.model, apiModelId: route.apiModelId, quality: route.quality, inputFidelity: route.inputFidelity ?? null, size: route.size, outputFormat: route.outputFormat, generation, edit });
       }
     }
     return { imageRoutes, reason: imageRoutes.length ? null : "no-qualified-route-and-cost-bound" };

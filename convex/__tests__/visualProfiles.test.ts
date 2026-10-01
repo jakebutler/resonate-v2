@@ -1,6 +1,7 @@
 // @vitest-environment node
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import schema from "../schema";
 import { api } from "../_generated/api";
@@ -375,7 +376,7 @@ describe("persistent visual profiles", () => {
     await t.run(async ctx => {
       for (const [userId, role] of [[VIEWER.subject, "viewer"], [EDITOR.subject, "editor"]] as const) await ctx.db.insert("v2BrandMemberships", { userId, brandId: "corvo", role, createdAt: 1, updatedAt: 1 });
     });
-    const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64"));
+    const png = Uint8Array.from(await sharp({ create: { width: 1, height: 1, channels: 4, background: "#123456" } }).png().toBuffer());
     const { referenceId } = await t.withIdentity(OWNER).action(profileApi.uploadReference, { brandId: "corvo", fileName: "reference.png", contentType: "image/png", bytes: png.buffer });
     await expect(t.withIdentity(VIEWER).query(profileApi.getReference, { referenceId }).then(reference => Boolean(reference.url))).rejects.toThrow(/access denied/);
     const reference = await t.withIdentity(EDITOR).query(profileApi.getReference, { referenceId });
@@ -388,7 +389,7 @@ describe("persistent visual profiles", () => {
     await t.run(async ctx => {
       for (const [userId, role] of [[VIEWER.subject, "viewer"], [EDITOR.subject, "editor"]] as const) await ctx.db.insert("v2BrandMemberships", { userId, brandId: "corvo", role, createdAt: 1, updatedAt: 1 });
     });
-    const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64"));
+    const png = Uint8Array.from(await sharp({ create: { width: 1, height: 1, channels: 4, background: "#123456" } }).png().toBuffer());
     const { referenceId } = await owner.action(profileApi.uploadReference, { brandId: "corvo", fileName: "reference.png", contentType: "image/png", bytes: png.buffer });
     const saved = await owner.mutation(profileApi.saveRevision, { brandId: "corvo", expectedRevisionId: null, guidance, referenceBindings: [{ referenceId, role: "identity" }], defaultRoute: null });
     const ownedPost = await owner.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Owner fixture", content: "Saved owner article." });
@@ -433,7 +434,7 @@ describe("persistent visual profiles", () => {
   it("stores supplied image bytes with a server hash and cannot resolve another brand's reference or raw storage ID", async () => {
     const t = await harness();
     const user = t.withIdentity(OWNER);
-    const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64"));
+    const png = Uint8Array.from(await sharp({ create: { width: 1, height: 1, channels: 4, background: "#123456" } }).png().toBuffer());
     const uploaded = await user.action(profileApi.uploadReference, {
       brandId: "corvo", fileName: "reference.png", contentType: "image/png", bytes: png.buffer,
     });
@@ -450,6 +451,13 @@ describe("persistent visual profiles", () => {
       brandId: "corvo", fileName: "again.png", contentType: "image/png", bytes: png.buffer,
     });
     expect(same.referenceId).toBe(uploaded.referenceId);
+  });
+
+  it("rejects a truncated reference natively before any storage or registration", async () => {
+    const t = await harness();
+    await expect(t.withIdentity(OWNER).action(profileApi.uploadReference, { brandId: "corvo", fileName: "broken.jpg", contentType: "image/jpeg", bytes: Uint8Array.from([0xff, 0xd8, 0xff]).buffer })).rejects.toThrow();
+    expect(await t.run(ctx => ctx.db.query("v2VisualReferences").collect())).toEqual([]);
+    expect(await t.run(ctx => ctx.db.system.query("_storage").collect())).toEqual([]);
   });
 
   it("preserves past guidance and treats duplicate saves as the same revision, with route changes reserved for owners", async () => {
@@ -479,7 +487,7 @@ describe("persistent visual profiles", () => {
 
   it("refuses to label substituted bytes as a historically approved seed image", async () => {
     const t = await harness();
-    const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64"));
+    const png = Uint8Array.from(await sharp({ create: { width: 1, height: 1, channels: 4, background: "#123456" } }).png().toBuffer());
     await expect(t.withIdentity(OWNER).action(profileApi.uploadSeedAsset, {
       brandId: "corvo", assetKey: "article-07", bytes: png.buffer,
     })).rejects.toThrow(/approved seed hash/);

@@ -141,8 +141,10 @@ export const acknowledgeCostOverrun = mutation({
     micros(args.expectedOverrunMicros);
     const budget = await ctx.db.query("v2VisualBudgets").withIndex("by_brand", q => q.eq("brandId", args.brandId)).unique();
     if (!budget || !(budget.unacknowledgedOverrunMicros || budget.unacknowledgedLateChargeMicros) || (budget.unacknowledgedOverrunMicros ?? 0) + (budget.unacknowledgedLateChargeMicros ?? 0) !== args.expectedOverrunMicros) throw new Error("Overrun changed; review the current amount");
-    await ctx.db.patch(budget._id, { unacknowledgedOverrunMicros: 0, unacknowledgedLateChargeMicros: 0, updatedBy: userId, updatedAt: Date.now() });
-    await audit(ctx, { userId, brandId: args.brandId, action: "visual-cost-overrun-acknowledged", summary: "Brand owner reviewed the recorded excess charge and resumed admissions", metadata: { acknowledgedOverrunMicros: args.expectedOverrunMicros } });
+    const costAcknowledgementEpoch = (budget.costAcknowledgementEpoch ?? 0) + 1;
+    if (!Number.isSafeInteger(costAcknowledgementEpoch)) throw new Error("Cost acknowledgement epoch is invalid");
+    await ctx.db.patch(budget._id, { unacknowledgedOverrunMicros: 0, unacknowledgedLateChargeMicros: 0, costAcknowledgementEpoch, updatedBy: userId, updatedAt: Date.now() });
+    await audit(ctx, { userId, brandId: args.brandId, action: "visual-cost-overrun-acknowledged", summary: "Brand owner reviewed the recorded excess charge and resumed admissions", metadata: { acknowledgedOverrunMicros: args.expectedOverrunMicros, costAcknowledgementEpoch } });
     return null;
   },
 });
@@ -368,14 +370,14 @@ async function settleCharge(ctx: MutationCtx, attempt: Doc<"v2VisualAttempts">, 
   const month = await ctx.db.query("v2VisualBudgetMonths").withIndex("by_brand_and_month", q => q.eq("brandId", attempt.brandId).eq("month", attempt.reservationMonth!)).unique();
   if (!month || month.reservedMicros < attempt.reservedMicros) throw new Error("Reservation ledger is inconsistent");
   const costOverrunMicros = Math.max(0, usage.actualMicros - attempt.reservedMicros);
+  const budget = await ctx.db.query("v2VisualBudgets").withIndex("by_brand", q => q.eq("brandId", attempt.brandId)).unique();
+  if (!budget) throw new Error("Reservation budget is missing");
   await ctx.db.patch(month._id, { reservedMicros: month.reservedMicros - attempt.reservedMicros, spentMicros: month.spentMicros + usage.actualMicros, ...(costOverrunMicros ? { overrunMicros: (month.overrunMicros ?? 0) + costOverrunMicros } : {}), updatedAt: Date.now() });
   if (costOverrunMicros) {
-    const budget = await ctx.db.query("v2VisualBudgets").withIndex("by_brand", q => q.eq("brandId", attempt.brandId)).unique();
-    if (!budget) throw new Error("Reservation budget is missing");
     await ctx.db.patch(budget._id, { unacknowledgedOverrunMicros: (budget.unacknowledgedOverrunMicros ?? 0) + costOverrunMicros, updatedAt: Date.now() });
   }
   await settleProviderAllowance(ctx, attempt, usage.actualMicros);
-  await ctx.db.patch(attempt._id, { status, ...(costOverrunMicros ? { costOverrunMicros } : {}), ...(usage.usageKind === "reported" ? { reportedActualMicros: usage.actualMicros } : { estimatedActualMicros: usage.actualMicros }), usageReceipt: usage.usageReceipt, completionSignature, updatedAt: Date.now() });
+  await ctx.db.patch(attempt._id, { status, ...(costOverrunMicros ? { costOverrunMicros } : {}), effectiveCostOverrunMicros: costOverrunMicros, costOverrunEpoch: budget.costAcknowledgementEpoch ?? 0, ...(usage.usageKind === "reported" ? { reportedActualMicros: usage.actualMicros } : { estimatedActualMicros: usage.actualMicros }), usageReceipt: usage.usageReceipt, completionSignature, updatedAt: Date.now() });
 }
 
 async function completionAttempt(ctx: MutationCtx, attemptId: Id<"v2VisualAttempts">, claimKey: string, signature: string) {
@@ -401,18 +403,24 @@ async function settleLateReceipt(ctx: MutationCtx, attempt: Doc<"v2VisualAttempt
   const attested = attempt.reportedActualMicros ?? attempt.estimatedActualMicros;
   if (attested === undefined || !attempt.reservationMonth || attempt.reservedMicros === undefined) throw new Error("Owner reconciliation ledger is incomplete");
   const delta = usage.actualMicros - attested;
-  const additionalOverrun = Math.max(0, usage.actualMicros - attempt.reservedMicros - (attempt.costOverrunMicros ?? 0));
+  const priorOverrun = attempt.effectiveCostOverrunMicros ?? attempt.costOverrunMicros ?? 0;
+  const effectiveCostOverrunMicros = Math.max(0, usage.actualMicros - attempt.reservedMicros);
+  const overrunDelta = effectiveCostOverrunMicros - priorOverrun;
+  const additionalOverrun = Math.max(0, overrunDelta);
   const month = await ctx.db.query("v2VisualBudgetMonths").withIndex("by_brand_and_month", q => q.eq("brandId", attempt.brandId).eq("month", attempt.reservationMonth!)).unique();
   const budget = await ctx.db.query("v2VisualBudgets").withIndex("by_brand", q => q.eq("brandId", attempt.brandId)).unique();
   if (!month || !budget || month.spentMicros + delta < 0) throw new Error("Owner reconciliation ledger is inconsistent");
-  await ctx.db.patch(month._id, { spentMicros: month.spentMicros + delta, ...(additionalOverrun ? { overrunMicros: (month.overrunMicros ?? 0) + additionalOverrun } : {}), updatedAt: Date.now() });
-  if (delta > 0) await ctx.db.patch(budget._id, { unacknowledgedOverrunMicros: (budget.unacknowledgedOverrunMicros ?? 0) + additionalOverrun, unacknowledgedLateChargeMicros: (budget.unacknowledgedLateChargeMicros ?? 0) + Math.max(0, delta - additionalOverrun), updatedAt: Date.now() });
+  // Legacy rows without contribution epochs cannot safely refund a shared pending counter.
+  const pendingOverrunDelta = overrunDelta < 0 ? (attempt.costOverrunEpoch !== undefined && attempt.costOverrunEpoch === (budget.costAcknowledgementEpoch ?? 0) ? overrunDelta : 0) : additionalOverrun;
+  if ((month.overrunMicros ?? 0) + overrunDelta < 0 || (budget.unacknowledgedOverrunMicros ?? 0) + pendingOverrunDelta < 0) throw new Error("Late overrun contribution ledger is inconsistent");
+  await ctx.db.patch(month._id, { spentMicros: month.spentMicros + delta, overrunMicros: (month.overrunMicros ?? 0) + overrunDelta, updatedAt: Date.now() });
+  await ctx.db.patch(budget._id, { unacknowledgedOverrunMicros: (budget.unacknowledgedOverrunMicros ?? 0) + pendingOverrunDelta, unacknowledgedLateChargeMicros: (budget.unacknowledgedLateChargeMicros ?? 0) + Math.max(0, delta - additionalOverrun), updatedAt: Date.now() });
   if (attempt.providerAllowanceReserved) {
     const ledger = await providerAllowance(ctx, attempt.quotedProvider!);
     if (!ledger || ledger.spentMicros + delta < 0) throw new Error("Late provider allowance ledger is inconsistent");
     await ctx.db.patch(ledger._id, { spentMicros: ledger.spentMicros + delta, updatedAt: Date.now() });
   }
-  const late = { lateCompletionSignature: signature, lateUsageReceipt: usage.usageReceipt, lateActualMicros: usage.actualMicros, lateUsageKind: usage.usageKind, lateUsageDeltaMicros: delta, lateCostOverrunMicros: additionalOverrun, ...(outputStorageId ? { lateOutputStorageId: outputStorageId } : {}), error: "Late trusted receipt reconciled after owner attestation; no selectable output created", updatedAt: Date.now() };
+  const late = { lateCompletionSignature: signature, lateUsageReceipt: usage.usageReceipt, lateActualMicros: usage.actualMicros, lateUsageKind: usage.usageKind, lateUsageDeltaMicros: delta, lateCostOverrunMicros: additionalOverrun, effectiveCostOverrunMicros, ...(outputStorageId ? { lateOutputStorageId: outputStorageId } : {}), error: "Late trusted receipt reconciled after owner attestation; no selectable output created", updatedAt: Date.now() };
   assertSerializedBound({ ...attempt, ...late }, 750_000, "Serialized late reconciliation");
   await ctx.db.patch(attempt._id, late);
   await audit(ctx, { userId: attempt.userId, brandId: attempt.brandId, postId: attempt.postId, action: "visual-late-usage-reconciled", summary: "Late trusted receipt adjusted existing owner-attested usage without dispatch or selection", metadata: { attemptId: attempt._id, attestedMicros: attested, lateActualMicros: usage.actualMicros, deltaMicros: delta, additionalOverrunMicros: additionalOverrun, selectableOutput: false } });

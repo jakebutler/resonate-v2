@@ -904,6 +904,75 @@ describe("saved editorial visual workflow", () => {
     expect((await reserve(t, { attemptId: next, maximumMicros: 10, provider: "offline-test", model: "fixture", quoteProvenance: "fixture" })).admitted).toBe(true);
   });
 
+  it("refunds only the late-reconciled attempt's overrun contribution", async () => {
+    const f = await setup(); await configureProfile(f.user);
+    await f.user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1000 });
+    const attemptId = await f.user.mutation(api.visualWorkflow.requestPlan, { postId: f.postId, operationKey: "late-refund" });
+    const claimed = await claim(f.t, attemptId, 50);
+    await f.t.mutation(api.visualWorkflow.markUncertain, { attemptId, claimKey: claimed.claimKey, reason: "SPECULATIVE interrupted request" });
+    const uncertain = await f.t.run(ctx => ctx.db.get(attemptId));
+    await f.user.mutation(api.visualWorkflow.reconcileUncertain, { attemptId, expectedUpdatedAt: uncertain!.updatedAt, actualMicros: 80, usageKind: "estimated", usageReceipt: "SPECULATIVE owner estimate", reason: "Review existing request" });
+    const late = { attemptId, claimKey: claimed.claimKey, reason: "SPECULATIVE late usage", actualMicros: 10, usageKind: "reported", usageReceipt: "SPECULATIVE trusted late receipt" };
+    await f.t.mutation(api.visualWorkflow.failAttempt, late);
+    await f.t.mutation(api.visualWorkflow.failAttempt, late);
+    const current = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(current.month).toMatchObject({ spentMicros: 10, overrunMicros: 0 });
+    expect(current.budget.unacknowledgedOverrunMicros).toBe(0);
+    expect(current.attempts[0]).toMatchObject({ costOverrunMicros: 30, lateActualMicros: 10, effectiveCostOverrunMicros: 0 });
+    const next = await f.user.mutation(api.visualWorkflow.requestPlan, { postId: f.postId, operationKey: "after-refund" });
+    expect((await reserve(f.t, { attemptId: next, maximumMicros: 50, provider: "offline-test", model: "fixture", quoteProvenance: "fixture" })).admitted).toBe(true);
+  });
+
+  it.each([false, true])("preserves another attempt's pending contribution after a refund (prior acknowledgement=%s)", async acknowledged => {
+    const f = await setup(); await configureProfile(f.user);
+    await f.user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1000 });
+    const otherPostId = await f.t.run(async ctx => {
+      const { _id, _creationTime, ...post } = (await ctx.db.get(f.postId))!; void _id; void _creationTime;
+      return ctx.db.insert("v2Posts", { ...post, title: "Second independently reserved article" });
+    });
+    const first = await f.user.mutation(api.visualWorkflow.requestPlan, { postId: f.postId, operationKey: "refund-first" });
+    const firstClaim = await claim(f.t, first, 50);
+    const second = await f.user.mutation(api.visualWorkflow.requestPlan, { postId: otherPostId, operationKey: "refund-second" });
+    let secondClaim = acknowledged ? null : await claim(f.t, second, 50);
+    async function estimate(id: string, key: string, actualMicros: number) {
+      await f.t.mutation(api.visualWorkflow.markUncertain, { attemptId: id, claimKey: key, reason: "SPECULATIVE interrupted request" });
+      const uncertain = await f.t.run(ctx => ctx.db.get(ctx.db.normalizeId("v2VisualAttempts", id)!));
+      await f.user.mutation(api.visualWorkflow.reconcileUncertain, { attemptId: id, expectedUpdatedAt: uncertain!.updatedAt, actualMicros, usageKind: "estimated", usageReceipt: "SPECULATIVE owner estimate", reason: "Review existing request" });
+    }
+    await estimate(first, firstClaim.claimKey, 80);
+    if (acknowledged) {
+      await f.user.mutation(api.visualWorkflow.acknowledgeCostOverrun, { brandId: "corvo", expectedOverrunMicros: 30 });
+      secondClaim = await claim(f.t, second, 50);
+    }
+    await estimate(second, secondClaim!.claimKey, 70);
+    const auditsBefore = await f.t.run(ctx => ctx.db.query("v2AuditEvents").collect());
+    await f.t.mutation(api.visualWorkflow.failAttempt, { attemptId: first, claimKey: firstClaim.claimKey, reason: "SPECULATIVE late usage", actualMicros: 10, usageKind: "reported", usageReceipt: "SPECULATIVE trusted refund" });
+    const current = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(current.month).toMatchObject({ spentMicros: 80, overrunMicros: 20, reservedMicros: 0 });
+    expect(current.budget).toMatchObject({ unacknowledgedOverrunMicros: 20, ...(acknowledged ? { costAcknowledgementEpoch: 1 } : {}) });
+    const auditsAfter = await f.t.run(ctx => ctx.db.query("v2AuditEvents").collect());
+    for (const audit of auditsBefore) expect(auditsAfter).toContainEqual(audit);
+    const next = await f.user.mutation(api.visualWorkflow.requestPlan, { postId: f.postId, operationKey: "remaining-contribution" });
+    expect(await reserve(f.t, { attemptId: next, maximumMicros: 10, provider: "offline-test", model: "fixture", quoteProvenance: "fixture" })).toMatchObject({ admitted: false, reason: "cost-overrun-owner-review-required" });
+  });
+
+  it("retains unknown legacy pending contribution attribution until explicit owner review", async () => {
+    const f = await setup(); await configureProfile(f.user);
+    await f.user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1000 });
+    const attemptId = await f.user.mutation(api.visualWorkflow.requestPlan, { postId: f.postId, operationKey: "legacy-refund" });
+    const claimed = await claim(f.t, attemptId, 50);
+    await f.t.mutation(api.visualWorkflow.markUncertain, { attemptId, claimKey: claimed.claimKey, reason: "SPECULATIVE interruption" });
+    const uncertain = await f.t.run(ctx => ctx.db.get(attemptId));
+    await f.user.mutation(api.visualWorkflow.reconcileUncertain, { attemptId, expectedUpdatedAt: uncertain!.updatedAt, actualMicros: 80, usageKind: "estimated", usageReceipt: "SPECULATIVE estimate", reason: "Review request" });
+    await f.t.run(ctx => ctx.db.patch(attemptId, { costOverrunEpoch: undefined, effectiveCostOverrunMicros: undefined }));
+    await f.t.mutation(api.visualWorkflow.failAttempt, { attemptId, claimKey: claimed.claimKey, actualMicros: 10, usageKind: "reported", usageReceipt: "SPECULATIVE late refund", reason: "Trusted late usage" });
+    const current = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(current.month).toMatchObject({ spentMicros: 10, overrunMicros: 0 });
+    expect(current.budget.unacknowledgedOverrunMicros).toBe(30);
+    await f.user.mutation(api.visualWorkflow.acknowledgeCostOverrun, { brandId: "corvo", expectedOverrunMicros: 30 });
+    expect((await f.user.query(api.visualWorkflow.get, { postId: f.postId })).budget.unacknowledgedOverrunMicros).toBe(0);
+  });
+
   it("durably defers oversized reflection context while retaining valid hero approval and full lineage", async () => {
     const { t, user, postId } = await selectedPlan();
     await user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 100_000 });

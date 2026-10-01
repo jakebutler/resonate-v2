@@ -42,7 +42,7 @@ export const imageRouteFields = {
 export const visualWorkflowTables = {
   v2VisualProviderAllowances: defineTable({ provider: v.string(), reservedMicros: v.number(), spentMicros: v.number(), updatedAt: v.number() }).index("by_provider", ["provider"]),
   v2VisualImageRoutes: defineTable({ ...imageRouteFields, enabled: v.boolean(), createdAt: v.number() }).index("by_provider_and_model", ["provider", "model"]),
-  v2VisualBudgets: defineTable({ brandId: brandIdValidator, limitMicros: v.number(), unacknowledgedOverrunMicros: v.optional(v.number()), unacknowledgedLateChargeMicros: v.optional(v.number()), updatedBy: v.string(), updatedAt: v.number() }).index("by_brand", ["brandId"]),
+  v2VisualBudgets: defineTable({ brandId: brandIdValidator, limitMicros: v.number(), unacknowledgedOverrunMicros: v.optional(v.number()), unacknowledgedLateChargeMicros: v.optional(v.number()), costAcknowledgementEpoch: v.optional(v.number()), updatedBy: v.string(), updatedAt: v.number() }).index("by_brand", ["brandId"]),
   v2VisualBudgetMonths: defineTable({ brandId: brandIdValidator, month: v.string(), reservedMicros: v.number(), spentMicros: v.number(), overrunMicros: v.optional(v.number()), updatedAt: v.number() }).index("by_brand_and_month", ["brandId", "month"]),
   v2VisualDispatchQuotes: defineTable({ attemptId: v.id("v2VisualAttempts"), inputSignature: v.string(), stage: visualStageValidator, provider: v.string(), model: v.string(), maximumMicros: v.number(), qualification: v.union(v.literal("offline-fixture"), v.literal("offline-contract"), v.literal("qualification-probe"), v.literal("live-receipt")), boundVerified: v.boolean(), capabilityReceiptIds: v.array(v.string()), requestSha256: v.optional(v.string()), imageRouteId: v.optional(v.id("v2VisualImageRoutes")), textRouteId: v.optional(v.id("v2VisualTextRoutes")), provenance: v.string(), createdAt: v.number() }).index("by_attempt", ["attemptId"]),
   v2VisualAttempts: defineTable({
@@ -54,6 +54,7 @@ export const visualWorkflowTables = {
     quoteId: v.optional(v.id("v2VisualDispatchQuotes")), quotedProvider: v.optional(v.string()), quotedModel: v.optional(v.string()), quoteProvenance: v.optional(v.string()),
     claimKey: v.optional(v.string()), dispatchedAt: v.optional(v.number()),
     costOverrunMicros: v.optional(v.number()), reportedActualMicros: v.optional(v.number()), estimatedActualMicros: v.optional(v.number()),
+    effectiveCostOverrunMicros: v.optional(v.number()), costOverrunEpoch: v.optional(v.number()),
     runningRecoverySignature: v.optional(v.string()), runningRecoveredBy: v.optional(v.string()),
     lateUsageReceipt: v.optional(v.string()), lateCompletionSignature: v.optional(v.string()), lateActualMicros: v.optional(v.number()), lateUsageKind: v.optional(v.union(v.literal("reported"), v.literal("estimated"))), lateUsageDeltaMicros: v.optional(v.number()), lateCostOverrunMicros: v.optional(v.number()), lateOutputStorageId: v.optional(v.id("_storage")),
     pendingOutputStorageId: v.optional(v.id("_storage")), ownerReconciledBy: v.optional(v.string()), ownerReconciliationSignature: v.optional(v.string()), usageReceipt: v.optional(v.string()), error: v.optional(v.string()), completionSignature: v.optional(v.string()),

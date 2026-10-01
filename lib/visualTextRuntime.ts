@@ -92,7 +92,15 @@ export async function prepareTextRequest(attempt: { _id: string; stage: TextStag
 }
 
 /** Dedicated text/vision bindings only. The image-only OpenAI key never authorizes chat. */
+export function visualTextOriginAllowed(provider: TextRoute["provider"]): boolean {
+  if (provider !== "cortex" || !process.env.CORTEX_BASE_URL) return true;
+  try {
+    const configured = new URL(process.env.CORTEX_BASE_URL);
+    return configured.origin === "https://cortex.corvolabs.com" && configured.pathname === "/" && !configured.username && !configured.password && !configured.search && !configured.hash;
+  } catch { return false; }
+}
 export function visualTextCredential(provider: TextRoute["provider"]): string | null {
+  if (!visualTextOriginAllowed(provider)) return null;
   return (provider === "openai" ? process.env.OPENAI_TEXT_API_KEY : process.env.CORTEX_API_KEY)?.trim() || null;
 }
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
@@ -130,6 +138,7 @@ export function parseReflectionOutput(value: unknown): ReflectionOutput {
 export type TextDispatchResult = { status: "uncertain"; reason: string; receipt?: string } | { status: "received"; output: unknown; actualMicros: number; receipt: string };
 /** One bounded HTTP call. Never retries, redirects credentials, falls back, or persists raw provider errors. */
 export async function dispatchTextRequest(request: PreparedTextRequest, claim: { claimKey: string; requestSha256?: string; maximumMicros: number; provider: string; model: string }, key: string, verifyImage?: (bytes: Uint8Array) => Promise<{ sha256: string; contentType: string; width: number; height: number; bytes: number }>): Promise<TextDispatchResult> {
+  if (!visualTextOriginAllowed(request.route.provider)) return { status: "uncertain", reason: "text-origin-unqualified" };
   if (!key || !claim.claimKey || claim.requestSha256 !== request.requestSha256 || claim.maximumMicros !== request.route.maximumMicros || claim.provider !== request.route.provider || claim.model !== request.route.model || await preparedHash(request) !== request.requestSha256) return { status: "uncertain", reason: "trusted-text-claim-required" };
   if (request.stage === "reflection") {
     try {
@@ -144,7 +153,8 @@ export async function dispatchTextRequest(request: PreparedTextRequest, claim: {
   try {
     const origin = request.route.provider === "openai" ? "https://api.openai.com" : "https://cortex.corvolabs.com";
     const response = await fetch(`${origin}/v1/chat/completions`, { method: "POST", redirect: "error", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(request.body), signal: controller.signal });
-    if (!response.body || Number(response.headers.get("content-length") ?? 0) > 256_000) throw new Error("Invalid bounded text response");
+    if (Number(response.headers.get("content-length") ?? 0) > 256_000) { controller.abort(); await response.body?.cancel(); throw new Error("Oversized text response"); }
+    if (!response.body) throw new Error("Missing text response body");
     const reader = response.body.getReader(), chunks: Uint8Array[] = []; let total = 0;
     for (;;) { const next = await reader.read(); if (next.done) break; total += next.value.byteLength; if (total > 256_000) { await reader.cancel(); throw new Error("Oversized text response"); } chunks.push(next.value); }
     const bytes = new Uint8Array(total); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }

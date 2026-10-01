@@ -18,6 +18,6 @@ export const textRouteFields = {
 };
 
 export const visualTextTables = {
-  v2VisualTextRoutes: defineTable({ ...textRouteFields, enabled: v.boolean(), maximumMicros: v.number(), createdAt: v.number() }).index("by_provider", ["provider"]),
+  v2VisualTextRoutes: defineTable({ ...textRouteFields, enabled: v.boolean(), maximumMicros: v.number(), createdAt: v.number() }).index("by_provider", ["provider"]).index("by_provider_and_enabled_and_expires_at", ["provider", "enabled", "expiresAt"]),
 };
 export const textRouteDocValidator = v.object({ _id: v.id("v2VisualTextRoutes"), _creationTime: v.number(), ...visualTextTables.v2VisualTextRoutes.validator.fields });

@@ -280,7 +280,8 @@ export const uploadReference = action({
     if (!args.fileName.trim() || args.fileName.length > 160 || /[\\/\u0000]/u.test(args.fileName)) {
       throw new Error("Visual reference needs a safe file name");
     }
-    const sha256 = await hashVisualBytes(args.bytes);
+    const verified = await ctx.runAction(internal.visualProviderActions.verifyReferenceUpload, { bytes: args.bytes, contentType: args.contentType });
+    const sha256 = verified.sha256;
     const storageId = await ctx.storage.store(new Blob([args.bytes], { type: args.contentType }));
     // Retain bytes if the mutation result is uncertain; deleting could break a committed reference.
     const saved = await ctx.runMutation(internal.visualProfiles.recordReferenceUpload, {

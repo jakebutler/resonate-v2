@@ -118,6 +118,19 @@ async function successResponse(width = 1536, height = 1024) {
   return new Response(JSON.stringify({ model: "gpt-image-2-2026-04-21", data: [{ b64_json: bytes.toString("base64"), revised_prompt: "Fictional raven repairs a gear" }], usage: { input_tokens_details: { text_tokens: 10, image_tokens: 20 }, output_tokens: 30 } }), { status: 200, headers: { "x-request-id": "req_fictional" } });
 }
 describe("actual server image execution (SPECULATIVE offline contract doubles)", () => {
+  it("cancels an oversized declared provider response while retaining the uncertain hold", async () => {
+    const f = await queued(); await reviewedTestRoute(f.t);
+    const cancelled = vi.fn();
+    const stream = new ReadableStream({ cancel: cancelled });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(stream, { status: 200, headers: { "content-length": "999999999" } })));
+    expect(await f.user.action(api.visualProviderActions.executeImageAttempt, { attemptId: f.attemptId })).toMatchObject({ status: "uncertain" });
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const state = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(state.attempts.find((a: { _id: string }) => a._id === f.attemptId).status).toBe("uncertain");
+    expect(state.month.reservedMicros).toBeGreaterThan(0);
+  });
+
   it("rejects public scheduler flags and refuses a trusted scheduler for image stages", async () => {
     const { t, user, attemptId } = await queued(); const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
     await expect(user.action(api.visualProviderActions.executeImageAttempt, { attemptId, trustedReflectionScheduler: true, userId: "author" })).rejects.toThrow();
@@ -188,6 +201,39 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
     await t.mutation(api.visualProviderConfig.registerReviewedImageRoute, { ...fields, quality: "low" });
     await t.mutation(api.visualProviderConfig.registerReviewedImageRoute, { ...fields, quality: "high" });
     expect((await user.query(api.visualProviderConfig.getAvailability, { postId })).imageRoutes.map((r: { quality: string }) => r.quality).sort()).toEqual(["high", "low", "medium"]);
+  });
+
+  it("keeps qualified edit capability when a newer same-settings route only generates", async () => {
+    const { t, user, postId } = await queued();
+    const edit = await reviewedTestRoute(t);
+    await t.run(ctx => ctx.db.patch(edit, { operations: ["edit"] }));
+    const generation = await reviewedTestRoute(t);
+    await t.run(ctx => ctx.db.patch(generation, { operations: ["generate"] }));
+    const available = (await user.query(api.visualProviderConfig.getAvailability, { postId })).imageRoutes;
+    expect(available.some((route: { edit: boolean }) => route.edit)).toBe(true);
+    expect(available.some((route: { generation: boolean }) => route.generation)).toBe(true);
+  });
+
+  it("returns a controlled block for a legacy corrupt reference before quote, hold or HTTP", async () => {
+    const f = await selectedPlan(true);
+    await f.user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1_000_000 });
+    await reviewedTestRoute(f.t);
+    await f.t.run(async ctx => {
+      const bytes = Uint8Array.from([0xff, 0xd8, 0xff]);
+      const storageId = await ctx.storage.store(new Blob([bytes], { type: "image/jpeg" }));
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      await ctx.db.patch(f.referenceId!, { storageId, sha256, byteLength: bytes.length, contentType: "image/jpeg" });
+      const plan = (await ctx.db.get(f.planId))!;
+      await ctx.db.patch(plan._id, { input: { ...plan.input, references: plan.input.references.map(reference => ({ ...reference, storageId, sha256 })) } });
+    });
+    const attemptId = await f.user.mutation(api.visualWorkflow.requestGeneration, { postId: f.postId, operationKey: "legacy-corrupt", providerOverride: "openai" });
+    vi.stubGlobal("fetch", vi.fn());
+    expect(await f.user.action(api.visualProviderActions.executeImageAttempt, { attemptId })).toMatchObject({ status: "blocked", reason: "reference-image-unavailable-or-invalid" });
+    const state = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(state.month).toMatchObject({ reservedMicros: 0, spentMicros: 8 });
+    expect(state.attempts.find((a: { _id: string }) => a._id === attemptId)).toMatchObject({ status: "queued" });
+    expect(await f.t.run(ctx => ctx.db.query("v2VisualDispatchQuotes").withIndex("by_attempt", q => q.eq("attemptId", attemptId)).collect())).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("sends actual ordered identity references for generation, then selected parent first followed by the same reference", async () => {

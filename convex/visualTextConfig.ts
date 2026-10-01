@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, query, type QueryCtx, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { textRouteFields, textRouteDocValidator } from "./visualTextTables";
-import { prepareTextRequest, textMaximumMicros, visualTextCredential } from "../lib/visualTextRuntime";
+import { prepareTextRequest, textMaximumMicros, visualTextCredential, visualTextOriginAllowed } from "../lib/visualTextRuntime";
 import { verifiedReflectionContext } from "./visualWorkflow";
 import { requireUserId, requireBrandAccess } from "./campaignAccess";
 import { publicationTransitionRequired } from "../lib/publicationReview";
@@ -21,6 +21,8 @@ export const registerReviewedTextRoute = internalMutation({
       if (!vision.capabilityReceiptIds.length || vision.capabilityReceiptIds.length > 16 || [...vision.capabilityReceiptIds, vision.tokenBoundReceiptId, vision.priceReceiptId].some(id => !/^[a-zA-Z0-9._:-]{1,160}$/.test(id))) throw new Error("Separate vision capability and image-token bound evidence required");
     }
     if (!args.capabilityReceiptIds.length || args.capabilityReceiptIds.length > 16 || [...args.capabilityReceiptIds, args.tokenBoundReceiptId, args.priceReceiptId].some(id => !/^[a-zA-Z0-9._:-]{1,160}$/.test(id)) || !args.reviewedBy.trim() || args.reviewedBy.length > 200 || !args.provenance.trim() || args.provenance.length > 1000) throw new Error("Trusted capability, UTF-8 token upper bound and price evidence required");
+    const active = await ctx.db.query("v2VisualTextRoutes").withIndex("by_provider_and_enabled_and_expires_at", q => q.eq("provider", args.provider).eq("enabled", true).gt("expiresAt", Date.now())).take(20);
+    if (active.length >= 20) throw new Error("Active text route limit reached; disable or expire reviewed routes before registering another");
     return ctx.db.insert("v2VisualTextRoutes", { ...args, maximumMicros: textMaximumMicros(args), enabled: true, createdAt: Date.now() });
   },
 });
@@ -28,9 +30,9 @@ export const registerReviewedTextRoute = internalMutation({
 async function routesForStage(ctx: QueryCtx | MutationCtx, stage: "planning" | "reflection") {
   const routes: Doc<"v2VisualTextRoutes">[] = [];
   for (const provider of ["openai", "cortex"] as const) {
-    const rows = await ctx.db.query("v2VisualTextRoutes").withIndex("by_provider", q => q.eq("provider", provider)).order("desc").take(21);
-    if (rows.length > 20) throw new Error("Text route history exceeds bounded lookup; archive inactive routes");
-    routes.push(...rows.filter(route => route.enabled && route.expiresAt > Date.now() && route.stages.includes(stage) && (stage !== "reflection" || !!route.vision)));
+    if (!visualTextOriginAllowed(provider)) continue;
+    const rows = await ctx.db.query("v2VisualTextRoutes").withIndex("by_provider_and_enabled_and_expires_at", q => q.eq("provider", provider).eq("enabled", true).gt("expiresAt", Date.now())).order("desc").take(20);
+    routes.push(...rows.sort((a, b) => b._creationTime - a._creationTime).filter(route => route.enabled && route.expiresAt > Date.now() && route.stages.includes(stage) && (stage !== "reflection" || !!route.vision)));
   }
   return routes;
 }
@@ -40,6 +42,7 @@ export const getReviewedTextRoutes = internalQuery({
 });
 
 async function preparedForAttempt(ctx: QueryCtx | MutationCtx, attempt: Doc<"v2VisualAttempts">, route: Doc<"v2VisualTextRoutes">) {
+  if (!visualTextOriginAllowed(route.provider)) throw new Error("Text origin is not reviewed");
   if (!route.enabled || route.expiresAt <= Date.now() || !["planning", "reflection"].includes(attempt.stage) || !route.stages.includes(attempt.stage as "planning" | "reflection") || route.maximumMicros !== textMaximumMicros(route)) throw new Error("Text route does not bind stored attempt");
   const reflection = attempt.stage === "reflection" ? await verifiedReflectionContext(ctx, attempt) : null;
   if (attempt.stage === "reflection" && (!reflection || !route.vision)) throw new Error("Current approved image and reviewed vision route required");

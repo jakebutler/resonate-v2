@@ -71,6 +71,33 @@ describe("authenticated text executor", () => {
   beforeEach(() => { vi.useFakeTimers(); credentials.key = "fictional-text-key"; credentials.cortexKey = null; vi.stubEnv("EDITORIAL_VISUALS_ENABLED", "1"); vi.stubGlobal("fetch", vi.fn()); });
   afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
+  it("cancels an oversized declared text response and preserves its uncertain hold", async () => {
+    const f = await setup();
+    await f.t.mutation(api.visualTextConfig.registerReviewedTextRoute, route);
+    const cancelled = vi.fn();
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(new ReadableStream({ cancel: cancelled }), { headers: { "content-length": "999999999" } }));
+    expect(await f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.attemptId })).toMatchObject({ status: "uncertain" });
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const state = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(state.month.reservedMicros).toBeGreaterThan(0);
+    expect(state.attempts[0]).toMatchObject({ status: "uncertain" });
+  });
+
+  it("blocks a configured Cortex origin mismatch before quote, reservation and HTTP", async () => {
+    const f = await setup();
+    credentials.key = null; credentials.cortexKey = "fictional-cortex-key";
+    await f.t.mutation(api.visualTextConfig.registerReviewedTextRoute, { ...route, provider: "cortex" });
+    vi.stubEnv("CORTEX_BASE_URL", "https://unreviewed.invalid");
+    vi.mocked(fetch).mockResolvedValueOnce(response({ scenes }));
+    expect(await f.user.query(api.visualTextConfig.getAvailability, { postId: f.postId })).toMatchObject({ planning: false });
+    expect(await f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.attemptId })).toMatchObject({ status: "blocked" });
+    const state = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(state.month).toBeNull();
+    expect(await f.t.run(ctx => ctx.db.query("v2VisualDispatchQuotes").collect())).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
 
   it("sends the actual approved final pixels and exact ordered inputs through the public reflection action", async () => {
     const f = await approvedReflection();
@@ -190,6 +217,35 @@ describe("authenticated text executor", () => {
     expect(outcomes.map(o => o.status).sort()).toEqual(["blocked", "completed"]);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect((await f.user.query(api.visualWorkflow.get, { postId: f.postId })).month).toMatchObject({ spentMicros: 400, reservedMicros: 0 });
+  });
+
+  it("keeps valid current text routes callable beyond twenty expired registrations", async () => {
+    const f = await setup();
+    for (let i = 0; i < 20; i++) await f.t.mutation(api.visualTextConfig.registerReviewedTextRoute, { ...route, model: `fictional-expired-${i}` });
+    await f.t.run(async ctx => { for (const row of await ctx.db.query("v2VisualTextRoutes").collect()) await ctx.db.patch(row._id, { expiresAt: Date.now() - 1 }); });
+    await f.t.mutation(api.visualTextConfig.registerReviewedTextRoute, route);
+    expect(await f.user.query(api.visualTextConfig.getAvailability, { postId: f.postId })).toMatchObject({ planning: true });
+    vi.mocked(fetch).mockResolvedValueOnce(response({ scenes }));
+    expect(await f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.attemptId })).toMatchObject({ status: "completed" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an excess active route at trusted ingestion without breaking admitted route availability", async () => {
+    const f = await setup();
+    for (let i = 0; i < 20; i++) await f.t.mutation(api.visualTextConfig.registerReviewedTextRoute, { ...route, model: `fictional-active-${i}` });
+    await expect(f.t.mutation(api.visualTextConfig.registerReviewedTextRoute, route)).rejects.toThrow("Active text route limit reached");
+    expect(await f.user.query(api.visualTextConfig.getAvailability, { postId: f.postId })).toMatchObject({ planning: true });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("preserves newest reviewed route selection when active expiry dates differ", async () => {
+    const f = await setup();
+    await f.t.mutation(api.visualTextConfig.registerReviewedTextRoute, { ...route, model: "fictional-older-text-model" });
+    await f.t.mutation(api.visualTextConfig.registerReviewedTextRoute, { ...route, expiresAt: Date.now() + 60_000 });
+    vi.mocked(fetch).mockResolvedValueOnce(response({ scenes }));
+    expect(await f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.attemptId })).toMatchObject({ status: "completed" });
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).model).toBe(route.model);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("keeps planning queued without reserving or HTTP when no trusted route exists", async () => {

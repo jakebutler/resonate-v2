@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./campaignAccess";
 import { assertEditorialStorageAccess } from "./visualStorageAccess";
@@ -120,9 +120,10 @@ export const remove = mutation({
 });
 
 export const generateUploadUrl = mutation({
+  args: {}, returns: v.string(),
   handler: async (ctx) => {
     await requireUserId(ctx);
-    return await ctx.storage.generateUploadUrl();
+    throw new ConvexError("Reload the updated composer before uploading an image");
   },
 });
 

@@ -2,7 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireUserId } from "./campaignAccess";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -11,6 +11,16 @@ import { dispatchVisualImageRequest, verifyVisualOutput, visualProviderCredentia
 
 type Result = { status: "completed" | "blocked" | "uncertain"; versionId: Id<"v2VisualVersions"> | null; reason: string | null };
 const blocked = (reason: string): Result => ({ status: "blocked", versionId: null, reason });
+
+/** Native, bounded decode before the authorized reference upload can store or register bytes. */
+export const verifyReferenceUpload = internalAction({
+  args: { bytes: v.bytes(), contentType: v.string() },
+  returns: v.object({ sha256: v.string(), contentType: v.string(), width: v.number(), height: v.number(), bytes: v.number() }),
+  handler: async (_ctx, args) => {
+    if (args.bytes.byteLength > 5 * 1024 * 1024 || !["image/png", "image/jpeg", "image/webp"].includes(args.contentType)) throw new Error("Invalid reference byte/type bound");
+    return verifyVisualOutput(new Uint8Array(args.bytes), args.contentType);
+  },
+});
 
 export const executeImageAttempt = action({
   args: { attemptId: v.id("v2VisualAttempts") },
@@ -34,7 +44,9 @@ export const executeImageAttempt = action({
       return { image: { storageId, id, role, sha256, mimeType: blob.type as VisualImageInput["mimeType"], bytes }, verified };
     }
     const references: VisualImageInput[] = [];
-    for (const reference of attempt.input.references) references.push((await retainedImage(reference.storageId, reference.referenceId, reference.role, reference.sha256)).image);
+    try {
+      for (const reference of attempt.input.references) references.push((await retainedImage(reference.storageId, reference.referenceId, reference.role, reference.sha256)).image);
+    } catch { return blocked("reference-image-unavailable-or-invalid"); }
     let retainedParent: Awaited<ReturnType<typeof retainedImage>> | null = null;
     if (parent) {
       try { retainedParent = await retainedImage(parent.storageId, parent._id, "edit-parent", parent.sha256); }

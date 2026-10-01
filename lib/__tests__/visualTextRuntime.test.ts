@@ -62,6 +62,19 @@ describe("bounded text runtime", () => {
     expect(visualTextCredential("openai")).toBe("SPECULATIVE-text-only");
   });
 
+  it("rechecks the fixed Cortex origin immediately before HTTP and never expands its credential destination", async () => {
+    const cortex = { ...route, provider: "cortex" as const };
+    const prepared = await prepareTextRequest(attempt, cortex);
+    vi.stubEnv("CORTEX_API_KEY", "SPECULATIVE-cortex-key");
+    vi.stubEnv("CORTEX_BASE_URL", "https://unreviewed.invalid");
+    vi.stubGlobal("fetch", vi.fn());
+    expect(visualTextCredential("cortex")).toBeNull();
+    expect(await dispatchTextRequest(prepared, { claimKey: "claim", requestSha256: prepared.requestSha256, maximumMicros: cortex.maximumMicros, provider: cortex.provider, model: cortex.model }, "fictional-key")).toEqual({ status: "uncertain", reason: "text-origin-unqualified" });
+    expect(fetch).not.toHaveBeenCalled();
+    vi.stubEnv("CORTEX_BASE_URL", "https://cortex.corvolabs.com/");
+    expect(visualTextCredential("cortex")).toBe("SPECULATIVE-cortex-key");
+  });
+
   it("requires explicit reflection scope and refuses extra fields", () => {
     const output = { candidatePrompt: "Preserve the original action.", lessons: [{ title: "Action", instruction: "Maintain the claw touching the gear.", role: "image_generator", sceneTags: [], modelSpecific: false, postSpecific: true }], profileChangeProposals: [] };
     expect(parseReflectionOutput(output)).toEqual(output);
