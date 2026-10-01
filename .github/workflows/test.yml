@@ -29,6 +29,15 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Offline image qualification packet checks
+        run: python3 scripts/visual-provider-qualification-packet.test.py
+
+      - name: Offline visual fixture guards
+        run: |
+          node scripts/visual-fixture-issuer.mjs --self-test
+          node scripts/visual-fixture-rehearsal.mjs --self-test
+          node scripts/visual-linked-fixture-rehearsal.mjs --self-test
+
       - name: Run Vitest with coverage
         run: npm run test:ci
         env:

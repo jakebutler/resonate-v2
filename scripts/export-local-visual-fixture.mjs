@@ -275,7 +275,36 @@ export async function prepareFixtureFiles(snapshot, heroBytes) {
     "These arrows describe an invented rehearsal workflow.",
     "These dates and events are invented test data.",
   ]);
-  if (/[<>{}`]/.test(additions) || /https?:\/\/|javascript:|data:|resonate-figure:\/\//i.test(additions) || additions.split("\n").some(line => line.trim() && !/^\s*\|.*\|\s*$/.test(line) && !/\bfictional\b/i.test(line) && !knownInventedRehearsalLines.has(line.trim()))) reject("FICTIONAL_CONTENT_REJECTED");
+  if (/[<>{}`]/.test(additions) || /https?:\/\/|javascript:|data:|resonate-figure:\/\//i.test(additions)) reject("FICTIONAL_CONTENT_REJECTED");
+  const tableHeaders = new Set(["label|value|unit|population|denominator", "date|value|unit|population|denominator", "from|to|relation", "order|from|to|message", "date|event"].flatMap(header => [header, `${header}|citation`]));
+  const knownFixtureRows = new Set([
+    "Fixture draft|Fixture review|sends an invented draft|Local offline fixture workflow",
+    "Fixture review|Fixture archive|retains an invented receipt|Local offline fixture workflow",
+    "2026-09-28|Invented fixture draft|Local offline fixture chronology",
+    "2026-09-30|Invented fixture review|Local offline fixture chronology",
+  ]);
+  let table = null;
+  const finishTable = () => { if (table && (table.needsSeparator || !table.rows)) reject("FICTIONAL_CONTENT_REJECTED"); table = null; };
+  for (const raw of additions.split("\n")) {
+    const line = raw.trim();
+    if (!line) { finishTable(); continue; }
+    if (line.startsWith("|") && line.endsWith("|")) {
+      const cells = line.slice(1, -1).split("|").map(cell => cell.trim());
+      if (!table) {
+        if (!tableHeaders.has(cells.join("|").toLowerCase())) reject("FICTIONAL_CONTENT_REJECTED");
+        table = { columns: cells.length, needsSeparator: true, rows: 0 }; continue;
+      }
+      if (cells.length !== table.columns) reject("FICTIONAL_CONTENT_REJECTED");
+      if (table.needsSeparator) {
+        if (!cells.every(cell => /^:?-{3,}:?$/.test(cell))) reject("FICTIONAL_CONTENT_REJECTED");
+        table.needsSeparator = false; continue;
+      }
+      if (!cells.some(cell => /\bfictional\b/i.test(cell)) && !knownFixtureRows.has(cells.join("|"))) reject("FICTIONAL_CONTENT_REJECTED");
+      table.rows++; continue;
+    }
+    if (table || !/\bfictional\b/i.test(line) && !knownInventedRehearsalLines.has(line)) reject("FICTIONAL_CONTENT_REJECTED");
+  }
+  finishTable();
   const prepared = await core.prepareBlogPublication({ postId: snapshot.post._id, title: FIXTURE_TITLE, content: snapshot.post.content, linkedinFirstComment: snapshot.post.linkedinFirstComment, scheduledDate: READER_DATE, status: "published", slug: READER_SLUG, author: snapshot.post.blogAuthor, tags: snapshot.post.blogTags, category: snapshot.post.blogCategory, featured: false,
     excerpt: snapshot.post.blogExcerpt, images,
   }, { allowFixture: true });
@@ -326,7 +355,7 @@ export async function readerSelfTest() {
   const inventedPost = { ...complete.post, content: inventedContent };
   inventedPost.contentFingerprint = core.blogEditorialFingerprint(inventedPost);
   assert.equal((await prepareFixtureFiles({ ...complete, post: inventedPost, visuals: { ...complete.visuals, articleSignature: core.articleSignature(inventedPost) } }, heroBytes)).files.length, 2);
-  for (const addition of ["Unmarked ordinary claims are not rehearsal data.", "Fictional https://remote.example/image", "```fictional\nexecutable\n```", "Invented but unrecognized prose."]) {
+  for (const addition of ["Unmarked ordinary claims are not rehearsal data.", "Fictional https://remote.example/image", "```fictional\nexecutable\n```", "Invented but unrecognized prose.", "| company | revenue |\n| --- | --- |\n| Real company | $100 million |", "| from | to | relation |\n| --- | --- | --- |\n| Real company | Real market | dominates industry |"] ) {
     const rejectedPost = { ...complete.post, content: `${READER_CONTENT_BASELINE}\n\n${addition}` };
     rejectedPost.contentFingerprint = core.blogEditorialFingerprint(rejectedPost);
     await assert.rejects(() => prepareFixtureFiles({ ...complete, post: rejectedPost, visuals: { ...complete.visuals, articleSignature: core.articleSignature(rejectedPost) } }, heroBytes), /FICTIONAL_CONTENT_REJECTED/);

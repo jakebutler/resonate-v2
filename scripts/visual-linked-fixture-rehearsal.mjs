@@ -47,7 +47,7 @@ function assertBrief(snapshot, researchBriefId) {
   if (!validId(source._id) || source.researchBriefId !== researchBriefId || source.userId !== FIXTURE_SUBJECT || source.brandId !== "corvo" || source.sourceId !== SOURCE_ID || source.url !== SOURCE_URL || source.status !== "accepted" || source.raw?.excerpt !== LINKED_FIXTURE_TABLE) fail("LINKED_FIXTURE_SOURCE_REJECTED");
 }
 function assertSnapshot(snapshot, researchBriefId, claimMapId) {
-  if (!snapshot || typeof snapshot.content !== "string" || Buffer.byteLength(snapshot.content) > 65536 || !Array.isArray(snapshot.records) || snapshot.records.length !== 2 || !Array.isArray(snapshot.reasons) || snapshot.reasons.length) fail("LINKED_FIXTURE_SNAPSHOT_REJECTED");
+  if (!snapshot || typeof snapshot.content !== "string" || !snapshot.content.includes(LINKED_FIXTURE_TABLE) || Buffer.byteLength(snapshot.content) > 65536 || !Array.isArray(snapshot.records) || snapshot.records.length !== 2 || !Array.isArray(snapshot.reasons) || snapshot.reasons.length) fail("LINKED_FIXTURE_SNAPSHOT_REJECTED");
   const provenanceMatch = snapshot.content.match(/^Stored linked research snapshot; review statuses are preserved\. No new research or approval is inferred\.\n\nProvenance:\n```json\n([^]*?)\n```/);
   if (!provenanceMatch) fail("LINKED_FIXTURE_PROVENANCE_REJECTED");
   const provenance = JSON.parse(provenanceMatch[1]);
@@ -204,6 +204,8 @@ export async function linkedFixtureSelfTest() {
   assert.equal(ready.postId, post._id); assert.equal(records.length, 6);
   assert.deepEqual(dispatchNames, ["research:saveResearchBrief", "research:saveClaimMap", "publishing:createPostWithIntent"]);
   await runLinkedInit(context); assert.equal(dispatchNames.length, 3);
+  await assert.rejects(() => runLinkedInit({ ...context, query: async (name, args) => name === "visualLinkedEvidence:getSnapshot" ? { ...snapshot, content: snapshot.content.replace(LINKED_FIXTURE_TABLE, "") } : context.query(name, args) }), /LINKED_FIXTURE_SNAPSHOT_REJECTED/);
+  assert.equal(dispatchNames.length, 3);
   await assert.rejects(() => runLinkedInit({ ...context, query: async (name, args) => name === "visualLinkedEvidence:getSnapshot" ? { ...snapshot, records: snapshot.records.map(record => ({ ...record, status: "unreviewed" })) } : context.query(name, args) }));
   assert.equal(dispatchNames.length, 3);
   console.log(JSON.stringify({ stage: "self-test", status: "offline-guards-passed" }));

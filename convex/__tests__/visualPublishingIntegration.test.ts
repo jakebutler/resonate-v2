@@ -117,7 +117,7 @@ describe("final post approval with editorial visuals", () => {
     await prepareOwnedBlogFixture(t, user, postId);
     await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
     const sent = await user.query(api.publishing.getPostForPublication, { postId });
-    await user.mutation(api.publishing.reschedule, { postId, scheduledDate: "2026-10-02", scheduledTime: "12:30", timezone: "America/Los_Angeles" });
+    await user.mutation(api.publishing.reschedule, { postId, scheduledDate: "2026-10-02", scheduledTime: "09:30", timezone: "UTC" });
     const current = await user.query(api.publishing.getPostForPublication, { postId });
     expect(current.post.approvalState).toBe("approved");
     expect(current.reviewSignature).toBe(sent.reviewSignature);
