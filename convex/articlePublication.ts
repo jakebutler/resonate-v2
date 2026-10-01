@@ -27,8 +27,16 @@ export const refresh = action({
         recorded: false,
         reason: "Open or adopt the bound article PR first.",
       };
+    const artifact = post.blogArtifact;
+    if (artifact?.editorialFingerprint !== undefined && artifact.editorialFingerprint !== blogEditorialFingerprint(post)) {
+      return { recorded: false, reason: "The exported editorial version changed; review before verifying publication." };
+    }
+    if (artifact?.heroSha256 !== undefined && !/^[a-f0-9]{64}$/u.test(artifact.heroSha256)) {
+      return { recorded: false, reason: "The bound hero hash is unverified; review the prepared publication artifact." };
+    }
+    const boundVisualHero = artifact?.editorialFingerprint !== undefined && artifact.heroSha256 !== undefined && artifact.coverImageAlt !== undefined;
     if (
-      post.heroImageStorageId &&
+      !boundVisualHero && post.heroImageStorageId &&
       (!post.preparedHero ||
         post.preparedHero.sourceStorageId !== post.heroImageStorageId)
     )
@@ -49,8 +57,8 @@ export const refresh = action({
       author: post.blogAuthor,
       category: post.blogCategory,
       tags: post.blogTags,
-      coverImageAlt: post.coverImageAlt,
-      heroSha256:
+      coverImageAlt: boundVisualHero ? artifact!.coverImageAlt : post.coverImageAlt,
+      heroSha256: boundVisualHero ? artifact!.heroSha256 :
         post.preparedHero?.sourceStorageId === post.heroImageStorageId
           ? post.preparedHero?.sha256
           : undefined,

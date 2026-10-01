@@ -1,0 +1,94 @@
+{
+  "format_version": 1,
+  "status": "prepared_unqualified_not_dispatched",
+  "authorization": "Jake 2026-09-30: cheaper functional validation before Image 2 quality",
+  "base_packet": "qualification-packet.json",
+  "base_packet_sha256": "0ca9169d7692311026c51e68a8c5d2533025a2b93ed0ea36132f58e63bf1eae9",
+  "paid_calls_made": 0,
+  "provider": "openai",
+  "canonical_model": "gpt-image-1",
+  "api_model_id": "gpt-image-1",
+  "cumulative_cap_usd": 5,
+  "cap_shared_with_later_image2_calls": true,
+  "reference_inputs": [
+    {
+      "order": 1,
+      "role": "identity",
+      "source_file_name": "raven-character-sheet.png",
+      "sha256": "0900adbe822813085b585b6415dd958e994046ec47122ca248e6ee525b4db316",
+      "bytes": 2178138,
+      "width": 1448,
+      "height": 1086,
+      "mime_type": "image/png",
+      "approval_provenance": "approved_by_Jake_in_conversation_and_source_record"
+    },
+    {
+      "order": 2,
+      "role": "style",
+      "source_file_name": "article-04-hero.png",
+      "sha256": "a909d8401db8a4bfc69ecead8dde3a9aafcc93a554b66b0b9bc69ee67fade2ce",
+      "bytes": 2013581,
+      "width": 1672,
+      "height": 941,
+      "mime_type": "image/png",
+      "approval_provenance": "selected_by_Jake_in_source_record"
+    }
+  ],
+  "generation_prompt_source": "base_packet.generation.prompt",
+  "generation_settings": {
+    "n": 1,
+    "quality": "low",
+    "input_fidelity": "low",
+    "size": "1536x1024",
+    "output_format": "png",
+    "background": "opaque",
+    "stream": false
+  },
+  "edit": {
+    "selected_parent": "Exact returned GPT Image 1 parent first; unavailable until generation reconciles",
+    "reference_order": [
+      "generated-parent",
+      "raven-identity",
+      "paper-style"
+    ],
+    "feedback_source": "base_packet.edit.feedback",
+    "preserve_model_quality_input_fidelity": true
+  },
+  "standard_rates_usd_per_million": {
+    "text_input": 5,
+    "image_input": 10,
+    "image_output": 40
+  },
+  "estimated_output_usd_each": 0.016,
+  "maximum_charge_usd": 0.25,
+  "remaining_live_gate": "Independent executor review, exact CI, secure scoped key access; verify exact request guards before reservation",
+  "publication_qualified": false,
+  "human_approved_new_output": false,
+  "selection_reason": "The named GPT Image 1 low-fidelity input formula covers the exact reference and parent inputs; Mini-specific input charging remains unpublished in the checked sources.",
+  "documented_image_input_tokens": {
+    "generation": 646,
+    "edit_with_1536x1024_parent": 969,
+    "rule": "65 + 129 per512px tile, shortestside512; two tiles per exact input"
+  },
+  "sequence_planned_maximum_usd": 0.5,
+  "quote_guards": {
+    "prompt_utf8_bytes_max": 9045,
+    "ordered_reference_dimensions": [
+      [
+        1448,
+        1086
+      ],
+      [
+        1672,
+        941
+      ]
+    ],
+    "selected_parent_dimensions": [
+      1536,
+      1024
+    ],
+    "source": "gpt-image-1-functional-bound.md",
+    "assumptions": "Explicit byte-tokenizer/envelope headroom; independently reviewed engineering maximum, not provider-enforced ceiling",
+    "requires_exact_attempt_and_request_sha256": true
+  }
+}

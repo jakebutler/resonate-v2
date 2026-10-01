@@ -13,6 +13,9 @@ import {
   verifyArticleAvailability,
   expectedArticleText,
 } from "../articleAvailability";
+import { createHash } from "node:crypto";
+import sharp from "sharp";
+import { prepareBlogPublication } from "../github";
 const artifact = {
   repository: "jakebutler/corvo-labs-dot-com",
   prNumber: 7,
@@ -40,6 +43,11 @@ function githubFixture(
     ancestor?: boolean;
     changedBlob?: boolean;
     sourceContent?: string;
+    figurePath?: string;
+    figureBytes?: string;
+    mdxContent?: string;
+    heroPath?: string;
+    heroBytes?: Buffer;
   } = {},
 ) {
   vi.stubEnv("GITHUB_TOKEN", "sanitized-fixture-token");
@@ -83,6 +91,10 @@ function githubFixture(
         status: options.ancestor ? "ahead" : "diverged",
         merge_base_commit: { sha: options.ancestor ? "merge" : "other" },
       };
+    else if (options.heroPath && url.includes(`/contents/${options.heroPath}?`))
+      data = { sha: "hero-blob", encoding: "base64", size: options.heroBytes!.byteLength, content: options.heroBytes!.toString("base64") };
+    else if (options.figurePath && url.includes(`/contents/${options.figurePath}?`))
+      data = { sha: "figure-blob", encoding: "base64", size: Buffer.byteLength(options.figureBytes ?? ""), content: Buffer.from(options.figureBytes ?? "").toString("base64") };
     else if (url.includes("/contents/"))
       data = {
         sha:
@@ -92,7 +104,7 @@ function githubFixture(
         encoding: "base64",
         size: 100,
         content: Buffer.from(
-          `---\ntitle: "Reviewed article"\nstatus: "published"\n---\n\n${options.sourceContent ?? input.content}`,
+          options.mdxContent ?? `---\ntitle: "Reviewed article"\nstatus: "published"\n---\n\n${options.sourceContent ?? input.content}`,
         ).toString("base64"),
       };
     else throw new Error(`Unexpected mocked read ${url}`);
@@ -104,6 +116,70 @@ function githubFixture(
   return { calls, fetch };
 }
 describe("separate publication facts", () => {
+  it("rejects a present empty hero hash before reading GitHub or canonical availability", async () => {
+    const { fetch } = githubFixture();
+    const available = vi.fn(async () => ({ availability: "verified" as const }));
+    const result = await readArticlePublication({ ...input, artifact: { ...artifact, heroSha256: "" } }, available);
+    expect(result.evidence.availability).toBe("unverified");
+    expect(result.evidence.reason).toMatch(/hero.*hash|hero.*unverified/i);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(available).not.toHaveBeenCalled();
+  });
+  it("qualifies an unchanged public preparer artifact containing its approved hero later in the body", async () => {
+    const heroSourceUrl = "https://example.org/exact-approved-hero.webp";
+    const unrelatedUrl = "https://example.org/unrelated-image.webp";
+    const content = Array.from({ length: 6 }, (_, index) => `Exact paragraph ${index + 1}.`).join("\n\n") + `\n\n![Exact approved alt](${heroSourceUrl})\n\n![Unrelated image](${unrelatedUrl})\n\nExact ending.`;
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#15616d" } }).webp().toBuffer();
+    const prepared = await prepareBlogPublication({ title: input.title, content, scheduledDate: "2030-10-07", status: "published", slug: "fixture", tags: ["fixture"], coverImageAlt: "Exact approved alt", images: [{ sourceUrl: heroSourceUrl, isCover: true }], preparedHero: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex") } });
+    const heroPath = prepared.files.find(file => file.path.endsWith("/hero.webp"))!.path;
+    const mdxContent = Buffer.from(prepared.fileContent, "base64").toString();
+    githubFixture({ mdxContent, heroPath, heroBytes });
+    const available = vi.fn(async () => ({ availability: "verified" as const, expectedHash: "expected", observedHash: "observed" }));
+    const result = await readArticlePublication({ ...input, content, artifact: { ...artifact, heroPath, heroSha256: prepared.heroSha256, coverImageAlt: prepared.coverImageAlt, heroSourceUrl: prepared.heroSourceUrl } }, available);
+    expect(result.evidence.availability).toBe("verified");
+    expect(available).toHaveBeenCalledWith(expect.objectContaining({ content: mdxContent.split("\n---\n")[1].replace(/^\n/, "") }));
+    expect(mdxContent).toContain(`![Unrelated image](${unrelatedUrl})`);
+  });
+  it.each(["source-identity", "article-copy", "artifact-identity", "asset-path"])("withholds a prepared hero publication after malicious %s drift", async failure => {
+    const heroSourceUrl = "https://example.org/exact-approved-hero.webp";
+    const content = Array.from({ length: 6 }, (_, index) => `Exact paragraph ${index + 1}.`).join("\n\n") + `\n\n![Exact approved alt](${heroSourceUrl})\n\nExact ending.`;
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#15616d" } }).webp().toBuffer();
+    const prepared = await prepareBlogPublication({ title: input.title, content, scheduledDate: "2030-10-07", status: "published", slug: "fixture", tags: ["fixture"], coverImageAlt: "Exact approved alt", images: [{ sourceUrl: heroSourceUrl, isCover: true }], preparedHero: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex") } });
+    const heroPath = prepared.files.find(file => file.path.endsWith("/hero.webp"))!.path;
+    githubFixture({ mdxContent: Buffer.from(prepared.fileContent, "base64").toString(), heroPath, heroBytes });
+    const available = vi.fn();
+    const result = await readArticlePublication({ ...input,
+      content: failure === "source-identity" ? content.replace(heroSourceUrl, "https://example.org/changed-image.webp") : failure === "article-copy" ? `${content}\nChanged claim.` : content,
+      artifact: { ...artifact, heroPath: failure === "asset-path" ? heroPath.replace("fixture/", "other/") : heroPath, heroSha256: prepared.heroSha256, coverImageAlt: prepared.coverImageAlt,
+        heroSourceUrl: failure === "artifact-identity" ? "https://example.org/changed-image.webp" : prepared.heroSourceUrl },
+    }, available);
+    expect(result.evidence.availability).not.toBe("verified");
+    expect(result.evidence.reason).toBeTruthy();
+    expect(available).not.toHaveBeenCalled();
+  });
+  it("verifies the exact bound figure token projection and deployed SVG bytes without changing approved prose", async () => {
+    const figurePath = "corvo-labs-enhanced/public/images/blog/2030-10-07-fixture/figure-figure1.svg";
+    const figureBytes = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
+    const content = 'Reviewed claim: 42%.\n\n![Reviewed figure](resonate-figure://figure1)\n\nExact caption and source.';
+    const sourceContent = content.replace("](resonate-figure://figure1)", "](/images/blog/2030-10-07-fixture/figure-figure1.svg)");
+    githubFixture({ sourceContent, figurePath, figureBytes });
+    const available = vi.fn(async () => ({ availability: "verified" as const, expectedHash: "expected", observedHash: "observed" }));
+    const result = await readArticlePublication({ ...input, content, artifact: { ...artifact, figureAssets: [{ sourceUrl: "resonate-figure://figure1", path: figurePath, sha256: createHash("sha256").update(figureBytes).digest("hex") }] } }, available);
+    expect(result.evidence.availability).toBe("verified");
+    expect(available).toHaveBeenCalledWith(expect.objectContaining({ content: sourceContent }));
+  });
+  it.each(["changed-svg", "wrong-path", "duplicate-token", "changed-copy", "missing-manifest"])("holds figure publication with %s before canonical availability can qualify", async failure => {
+    const path = "corvo-labs-enhanced/public/images/blog/2030-10-07-fixture/figure-figure1.svg";
+    const bytes = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
+    const content = 'Reviewed claim: 42%.\n\n![Reviewed figure](resonate-figure://figure1)\n\nExact caption.';
+    const projected = content.replace("](resonate-figure://figure1)", "](/images/blog/2030-10-07-fixture/figure-figure1.svg)");
+    githubFixture({ sourceContent: failure === "changed-copy" ? `${projected}\nUnapproved prose.` : projected, figurePath: path, figureBytes: failure === "changed-svg" ? `${bytes}changed` : bytes });
+    const available = vi.fn();
+    const result = await readArticlePublication({ ...input, content: failure === "duplicate-token" ? `${content}\n![Again](resonate-figure://figure1)` : content, artifact: { ...artifact, figureAssets: failure === "missing-manifest" ? undefined : [{ sourceUrl: "resonate-figure://figure1", path: failure === "wrong-path" ? path.replace("fixture/", "other/") : path, sha256: createHash("sha256").update(bytes).digest("hex") }] } }, available);
+    expect(result.evidence.availability).not.toBe("verified");
+    expect(result.evidence.reason).toBeTruthy();
+    expect(available).not.toHaveBeenCalled();
+  });
   it.each([
     { merged: false },
     { deployment: "pending" },

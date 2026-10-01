@@ -1,9 +1,14 @@
 import {companionLinkValidator,publicationEvidenceValidator} from "./articleValidators";
 import {queueObservationValidator} from "./queueValidators";
 import { destinationValidator, deliveryStatusValidator } from "./bufferValidators";
-import { preparedHeroValidator } from "./blogValidators";
+import { blogArtifactValidator, preparedHeroValidator } from "./blogValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { visualWorkflowTables } from "./visualWorkflowTables";
+import { visualProfileTables } from "./visualProfileTables";
+import { visualFigureTables } from "./visualFigureTables";
+import { visualStorageTables } from "./visualStorageTables";
+import { visualTextTables } from "./visualTextTables";
 
 const v2BrandId = v.union(
   v.literal("personal"),
@@ -175,6 +180,11 @@ const ideaFlavor = v.union(
 );
 
 export default defineSchema({
+  ...visualWorkflowTables,
+  ...visualProfileTables,
+  ...visualFigureTables,
+  ...visualStorageTables,
+  ...visualTextTables,
   articlePublications:defineTable({userId:v.string(),postId:v.id("v2Posts"),key:v.string(),evidence:publicationEvidenceValidator}).index("by_post_and_time",["postId","evidence.checkedAt"]).index("by_post_and_key",["postId","key"]),
   preparedImportPackages:defineTable({userId:v.string(),brandId:v2BrandId,packageKey:v.string(),title:v.string(),seriesId:v.optional(v.id("postSeries")),reviewBytes:v.optional(v.number()),createdAt:v.number()}).index("by_user_and_key",["userId","packageKey"]),
   preparedImportReviews:defineTable({userId:v.string(),brandId:v2BrandId,packageId:v.id("preparedImportPackages"),packageKey:v.string(),entryKey:v.string(),sourceHash:v.string(),items:v.any(),hero:v.any(),heroSourceHash:v.string(),attachedHeroStorageId:v.optional(v.id("_storage")),actions:v.array(v.string()),reason:v.optional(v.string()),checkedAt:v.number()}).index("by_user_entry_hash",["userId","packageKey","entryKey","sourceHash"]).index("by_user_package",["userId","packageKey"]),
@@ -258,10 +268,7 @@ export default defineSchema({
     preparedHero: v.optional(preparedHeroValidator),
     heroImageUrl: v.optional(v.string()),
     heroImageStorageId: v.optional(v.id("_storage")),
-    blogArtifact: v.optional(v.object({
-      repository: v.string(), prNumber: v.number(), branchName: v.string(),
-      mdxPath: v.string(), heroPath: v.optional(v.string()), canonicalUrl: v.string(),
-    })),
+    blogArtifact: v.optional(blogArtifactValidator),
     blogSyncPending: v.optional(v.string()),
     blogExportClaimKey: v.optional(v.string()),
     blogPrNumber: v.optional(v.number()),
@@ -291,7 +298,9 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_brand", ["brandId"])
+    .index("by_user_and_heroImageStorageId", ["userId", "heroImageStorageId"])
     .index("by_brand_and_status", ["brandId", "status"])
+    .index("by_brand_and_blogSlug", ["brandId", "blogSlug"])
     .index("by_channel", ["channelId"])
     .index("by_scheduled_date", ["scheduledDate"])
     .index("by_user_and_campaign", ["userId", "sourceCampaignId"])
@@ -316,6 +325,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_post", ["postId"])
+    .index("by_post_and_approval_state", ["postId", "approvalState"])
     .index("by_post_and_updated_at", ["postId", "updatedAt"])
     .index("by_user", ["userId"])
     .index("by_brand", ["brandId"])

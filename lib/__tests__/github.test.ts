@@ -223,34 +223,40 @@ describe("patchFrontmatterSchedule", () => {
 import sharp from "sharp";
 import { createHash } from "node:crypto";
 
-function githubFixture(options: {fail?: string; ambiguous?: string; wrongHead?: boolean; advancedMain?: boolean; rename?: boolean} = {}) {
+function githubFixture(options: {fail?: string; ambiguous?: string; wrongHead?: boolean; advancedMain?: boolean; rename?: boolean; duplicateCompare?: boolean; raceAfterCompare?: boolean} = {}) {
   const files = new Map<string, string>();
   const blobs = new Map<string, string>();
   let tree: {path: string; sha: string}[] = [];
-  let head = "base"; let branch = false; let prCreated = false;
+  let head = "base"; let branch = false; let prCreated = false; let branchRef = "";
   let sequence = 0;
   const calls: {path: string; method: string; body: unknown}[] = [];
   let failed = false;
   const mock = vi.fn(async (input: unknown, init?: RequestInit) => {
     const url = new URL(String(input)); const path = url.pathname.replace("/repos/test-owner/test-repo", "");
     const method = init?.method ?? "GET";
-    const body = init?.body ? JSON.parse(init.body as string) as {content: string; tree: {path:string;sha:string}[]} : undefined;
+    const body = init?.body ? JSON.parse(init.body as string) as {ref?: string; content: string; tree: {path:string;sha:string}[]} : undefined;
     calls.push({path, method, body});
     const response = (value: unknown, status=200) => new Response(JSON.stringify(value), {status});
     if (options.fail === path && !failed) { failed = true; return response({}, 503); }
     if (!path) return response({default_branch:"main"});
     if (path === "/git/ref/heads/main") return response({object:{sha:options.advancedMain && prCreated ? "new-base" : "base"}});
     if (path.startsWith("/git/ref/heads/")) return branch ? response({object:{sha: options.wrongHead ? "manual" : head}}) : response({},404);
-    if (path === "/git/refs") {branch = true; return response({});}
+    if (path === "/git/refs") {branch = true; branchRef = body!.ref!.replace(/^refs\/heads\//, ""); return response({});}
     if (path.startsWith("/contents/")) return files.has(path.slice(10)) ? response({sha:"blob-sha", encoding:"base64", content:files.get(path.slice(10))}) : response({},404);
-    if (path.startsWith("/compare/")) return response({status:options.advancedMain && prCreated ? "diverged" : "ahead",ahead_by:1,merge_base_commit:{sha:"base"},total_commits:1,files:[...files.keys()].map(filename=>({filename,status:options.rename && prCreated ? "renamed" : "added",...(options.rename ? {previous_filename:"unrelated.txt"} : {})}))});
+    if (path.startsWith("/compare/")) {
+      const changed = [...files.keys()].map(filename=>({filename,status:options.rename && prCreated ? "renamed" : "added",...(options.rename ? {previous_filename:"unrelated.txt"} : {})}));
+      if (options.duplicateCompare && prCreated) changed[changed.length - 1] = changed[0];
+      const result = {status:options.advancedMain && prCreated ? "diverged" : "ahead",ahead_by:1,merge_base_commit:{sha:"base"},total_commits:1,files:changed};
+      if (options.raceAfterCompare && prCreated) { head = "changed-with-unrelated-commit"; files.set("unrelated.txt", "dW5yZWxhdGVk"); }
+      return response(result);
+    }
     if (path.startsWith("/git/commits/") && method === "GET") return response({tree:{sha:"base-tree"}});
     if (path === "/git/blobs") {const sha = `blob-${++sequence}`; blobs.set(sha,body!.content); return response({sha});}
     if (path === "/git/trees") {tree=body!.tree;return response({sha:"tree"});}
     if (path === "/git/commits") return response({sha:"commit"});
     if (path.startsWith("/git/refs/heads/")) {head="commit";for (const f of tree) files.set(f.path,blobs.get(f.sha)!); if (options.ambiguous === "ref" && !failed) {failed=true;throw new Error("timeout");} return response({});}
-    if (path === "/pulls" && method === "GET") return response(prCreated ? [{html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open"}] : []);
-    if (path === "/pulls" && method === "POST") {prCreated=true; if(options.ambiguous === "pr" && !failed){failed=true;throw new Error("timeout");}return response({html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open"});}
+    if (path === "/pulls" && method === "GET") return response(prCreated ? [{html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open",head:{sha:head,ref:branchRef,repo:{full_name:"test-owner/test-repo"}},base:{ref:"main",repo:{full_name:"test-owner/test-repo"}}}] : []);
+    if (path === "/pulls" && method === "POST") {prCreated=true; if(options.ambiguous === "pr" && !failed){failed=true;throw new Error("timeout");}return response({html_url:"https://github.com/test-owner/test-repo/pull/1",number:1,state:"open",head:{sha:head,ref:branchRef,repo:{full_name:"test-owner/test-repo"}},base:{ref:"main",repo:{full_name:"test-owner/test-repo"}}});}
     throw new Error(`Unexpected mock request: ${method} ${path}`);
   });
   vi.stubGlobal("fetch",mock);
@@ -262,6 +268,35 @@ async function exportInput() {
 }
 describe("complete atomic blog exports", () => {
   afterEach(() => vi.unstubAllGlobals());
+  it("refuses a foreign existing generated-visual asset directory before creating its branch", async () => {
+    const fixture = githubFixture();
+    const input = await exportInput();
+    fixture.files.set("corvo-labs-enhanced/public/images/blog/2026-10-07-prepared-article", "foreign-directory");
+    const generated = { ...input, coverImageAlt: "Reviewed hero", preparedHero: undefined, images: [{ sourceUrl: HERO_URL, alt: "Reviewed hero", isCover: true, export: { ...input.preparedHero, fileName: "hero.webp", contentType: "image/webp" as const, hero: { provider: "openai", model: "approved-model", quoteProvenance: "verified-bounded-receipt", qualification: "live-receipt" as const, approvedBy: "reviewer", approvedAt: 1 } } }] };
+    await expect(createBlogPostPR(generated)).rejects.toThrow("Publication asset directory already exists");
+    expect(fixture.calls.every(call => call.method === "GET")).toBe(true);
+  });
+  it("preserves exact approved author, category and excerpt in the merged prepared export", async () => {
+    const fixture = githubFixture();
+    const input = { ...await exportInput(), author: "  Approved Author  ", category: "  strategy  ", excerpt: "  Exact approved excerpt.  " };
+    const result = await createBlogPostPR(input);
+    const mdx = Buffer.from(fixture.files.get(result.sanitizedResponse.artifact!.mdxPath)!, "base64").toString();
+    expect(mdx).toContain(`author: ${JSON.stringify(input.author)}`);
+    expect(mdx).toContain(`category: ${JSON.stringify(input.category)}`);
+    expect(mdx).toContain(`description: ${JSON.stringify(input.excerpt)}`);
+  });
+  it("rejects a cover-alt override that differs from the generated hero approval", async () => {
+    const input = await exportInput();
+    const fixture = githubFixture();
+    await expect(createBlogPostPR({ ...input, preparedHero: undefined, coverImageAlt: "Changed, unreviewed alt", images: [{ sourceUrl: HERO_URL, alt: "Exact approved visual alt", isCover: true, export: { ...input.preparedHero, fileName: "hero.webp", contentType: "image/webp", hero: { provider: "openai", model: "approved-model", quoteProvenance: "verified-bounded-receipt", qualification: "live-receipt", approvedBy: "reviewer", approvedAt: 1 } } }] })).rejects.toThrow("Cover alternative text differs");
+    expect(fixture.mock).not.toHaveBeenCalled();
+  });
+  it.each(["qualification-probe", "offline-fixture"] as const)("rejects %s even when a matching prepared upload receipt is also supplied", async qualification => {
+    const input = await exportInput();
+    const fixture = githubFixture();
+    await expect(createBlogPostPR({ ...input, coverImageAlt: "Reviewed hero", images: [{ sourceUrl: HERO_URL, alt: "Reviewed hero", isCover: true, export: { ...input.preparedHero, fileName: "hero.webp", contentType: "image/webp", hero: { provider: "openai", model: "approved-model", quoteProvenance: "verified-bounded-receipt", qualification, approvedBy: "reviewer", approvedAt: 1 } } }] })).rejects.toThrow("cannot be published");
+    expect(fixture.mock).not.toHaveBeenCalled();
+  });
   it("commits exactly the article and local WebP together and replays without writes", async () => {
     const fixture=githubFixture(); const input=await exportInput(); const result=await createBlogPostPR(input);
     expect(fixture.files.size).toBe(2);
@@ -275,6 +310,13 @@ describe("complete atomic blog exports", () => {
     const writes=fixture.calls.filter(c=>c.method!=="GET").length;
     expect((await createBlogPostPR(input)).prUrl).toBe(result.prUrl);
     expect(fixture.calls.filter(c=>c.method!=="GET")).toHaveLength(writes);
+  });
+  it.each(["duplicateCompare", "raceAfterCompare"] as const)("withholds recovered export on %s without additional writes", async option => {
+    const fixture = githubFixture({ [option]: true }); const input = await exportInput();
+    await createBlogPostPR(input);
+    const writes = fixture.calls.filter(call => call.method !== "GET").length;
+    await expect(createBlogPostPR(input)).rejects.toThrow(/Needs Review/);
+    expect(fixture.calls.filter(call => call.method !== "GET")).toHaveLength(writes);
   });
   it.each(["/git/blobs","/git/trees","/git/commits","/git/refs/heads/resonate%2Fblog-post-2026-10-07-prepared-article-PLACEHOLDER","/pulls"])("recovers a definitive failure at %s without partial PRs", async failure => {
     const input=await exportInput(); const fixture=githubFixture({fail:failure.replace("PLACEHOLDER",createHash("sha256").update(input.exportIdentity).digest("hex").slice(0,12))});
@@ -384,5 +426,95 @@ describe("bound schedule synchronization", () => {
   });
   it("rejects wrong repositories without reading or writing", async () => {
     const {fixture}=setup();expect(await updatePrFrontmatter({...params,artifact:{...artifact,repository:"other/repo"}})).toEqual({ok:false,reason:"identity-mismatch"});expect(fixture.mock).not.toHaveBeenCalled();
+  });
+});
+
+describe("offline publication package", () => {
+  it("requires an unchanged source-note paragraph before exporting a reviewed figure", async () => {
+    const { prepareBlogPublication } = await import("../github");
+    const { planFigureCandidates, figureSignatures, buildFigureMarkdownBlock } = await import("../visualFigures");
+    const article = { id: "fixture-article", name: "Fictional fixture", format: "markdown" as const, purpose: "article" as const, content: "## Fictional relationship\n\n| from | to | relation |\n|---|---|---|\n| Editor | Draft | revises |" };
+    const spec = planFigureCandidates(article, []).candidates[0], signature = await figureSignatures(spec);
+    const content = article.content.replace("## Fictional relationship", `## Fictional relationship\n\n${buildFigureMarkdownBlock("fixture", spec)} UNREVIEWED SOURCE NOTE`);
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2e5b60" } }).webp().toBuffer();
+    await expect(prepareBlogPublication({ postId: "fixture-post", title: "LOCAL FIXTURE", content, scheduledDate: "2026-09-30", status: "draft", tags: ["fixture"], slug: "local-fixture", images: [
+      { sourceUrl: "fixture://hero", alt: "Fictional teal test pattern", isCover: true, export: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp", hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt", approvedBy: "test-reviewer", approvedAt: 1 } } },
+      { sourceUrl: "resonate-figure://fixture", alt: spec.presentation.alt, export: { bytes: new TextEncoder().encode(signature.svg), sha256: signature.svgSha256, fileName: "figure-fixture.svg", contentType: "image/svg+xml", figure: { spec, ...signature, postId: "fixture-post", postContentSha256: createHash("sha256").update(content).digest("hex"), postContentFingerprint: `LOCAL FIXTURE\n${content}`, acceptedBy: "fixture-author", acceptedAt: 1, evidenceSources: [{ sourceId: article.id, sha256: createHash("sha256").update(article.content).digest("hex"), revision: 1, purpose: "article", currentSourceId: null, currentSha256: createHash("sha256").update(content).digest("hex"), currentRevision: null }] } } },
+    ] })).rejects.toThrow(/placement|source-note/);
+  });
+  it.each(["Fixture editor", "Reader ] one", "Reader $& one", "Reader $' one"])("includes a deterministic figure with label %s and rewrites its exact placement", async (label) => {
+    const { prepareBlogPublication } = await import("../github");
+    const { planFigureCandidates, figureSignatures, assertFigureInsertionAnchor, buildFigureMarkdownBlock } = await import("../visualFigures");
+    const article = { id: "fixture-article", name: "Fictional fixture", format: "markdown" as const, purpose: "article" as const, content: `## Fictional relationship\n\n| from | to | relation |\n|---|---|---|\n| ${label} | Fixture draft | revises |` };
+    const spec = planFigureCandidates(article, []).candidates[0];
+    const signature = await figureSignatures(spec);
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2e5b60" } }).webp().toBuffer();
+    const anchorEnd = assertFigureInsertionAnchor(article.content, spec.insertionAnchor);
+    const content = `${article.content.slice(0, anchorEnd)}\n\n${buildFigureMarkdownBlock("fixture", spec)}${article.content.slice(anchorEnd)}`;
+    const prepared = await prepareBlogPublication({ postId: "fixture-post", title: "LOCAL FIXTURE", content, scheduledDate: "2026-09-30", status: "draft", tags: ["fixture"], slug: "local-fixture", images: [
+      { sourceUrl: "fixture://hero", alt: "Fictional teal test pattern", isCover: true, export: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp", hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt", approvedBy: "test-reviewer", approvedAt: 1 } } },
+      { sourceUrl: "resonate-figure://fixture", alt: spec.presentation.alt, export: { bytes: new TextEncoder().encode(signature.svg), sha256: signature.svgSha256, fileName: "figure-fixture.svg", contentType: "image/svg+xml", figure: { spec, ...signature, postId: "fixture-post", postContentSha256: createHash("sha256").update(content).digest("hex"), postContentFingerprint: `LOCAL FIXTURE\n${content}`, acceptedBy: "fixture-author", acceptedAt: 1, evidenceSources: [{ sourceId: article.id, sha256: createHash("sha256").update(article.content).digest("hex"), revision: 1, purpose: "article", currentSourceId: null, currentSha256: createHash("sha256").update(content).digest("hex"), currentRevision: null }] } } },
+    ] });
+    expect(prepared.files).toHaveLength(3);
+    expect(Buffer.from(prepared.files.find(file => file.path.endsWith(".svg"))!.content, "base64").toString()).toBe(signature.svg);
+    const mdx = Buffer.from(prepared.files.find(file => file.path.endsWith(".mdx"))!.content, "base64").toString();
+    expect(mdx).toContain("/images/blog/2026-09-30-local-fixture/figure-fixture.svg");
+    expect(mdx).toContain(spec.presentation.caption);
+    expect(mdx).toContain(spec.presentation.sourceNote);
+    expect(mdx).toContain(buildFigureMarkdownBlock("fixture", spec).replace("](resonate-figure://fixture)", "](/images/blog/2026-09-30-local-fixture/figure-fixture.svg)"));
+    expect(mdx).not.toContain("resonate-figure://");
+    expect(prepared.figureAssets).toEqual([{ sourceUrl: "resonate-figure://fixture", path: "corvo-labs-enhanced/public/images/blog/2026-09-30-local-fixture/figure-fixture.svg", sha256: signature.svgSha256 }]);
+    const fixture = githubFixture();
+    const params = { postId: "fixture-post", title: "LOCAL FIXTURE", content, scheduledDate: "2026-09-30", status: "draft", tags: ["fixture"], slug: "local-fixture", exportIdentity: "fixture-post", editorialFingerprint: "trusted-editorial-version", images: [
+      { sourceUrl: "fixture://hero", alt: "Fictional teal test pattern", isCover: true, export: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp" as const, hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt" as const, approvedBy: "test-reviewer", approvedAt: 1 } } },
+      { sourceUrl: "resonate-figure://fixture", alt: spec.presentation.alt, export: { bytes: new TextEncoder().encode(signature.svg), sha256: signature.svgSha256, fileName: "figure-fixture.svg", contentType: "image/svg+xml" as const, figure: { spec, ...signature, postId: "fixture-post", postContentSha256: createHash("sha256").update(content).digest("hex"), postContentFingerprint: `LOCAL FIXTURE\n${content}`, acceptedBy: "fixture-author", acceptedAt: 1, evidenceSources: [{ sourceId: article.id, sha256: createHash("sha256").update(article.content).digest("hex"), revision: 1, purpose: "article" as const, currentSourceId: null, currentSha256: createHash("sha256").update(content).digest("hex"), currentRevision: null }] } } },
+    ] };
+    const result = await createBlogPostPR(params);
+    expect(result.sanitizedResponse.artifact).toMatchObject({ editorialFingerprint: "trusted-editorial-version", heroSha256: params.images[0].export.sha256, coverImageAlt: params.images[0].alt, heroSourceUrl: params.images[0].sourceUrl, figureAssets: prepared.figureAssets });
+    expect(fixture.files.size).toBe(3);
+    const writes = fixture.calls.filter(call => call.method !== "GET").length;
+    expect((await createBlogPostPR(params)).prUrl).toBe(result.prUrl);
+    expect(fixture.calls.filter(call => call.method !== "GET")).toHaveLength(writes);
+  });
+  it("rejects a figure's unchanged SVG when the publication article differs from its approval snapshot", async () => {
+    const { prepareBlogPublication } = await import("../github");
+    const { planFigureCandidates, figureSignatures } = await import("../visualFigures");
+    const spec = planFigureCandidates({ id: "fixture", name: "Fixture", format: "markdown", purpose: "article", content: "## Fixture\n\n| from | to | relation |\n|---|---|---|\n| Editor | Draft | revises |" }, []).candidates[0];
+    const signature = await figureSignatures(spec);
+    const bytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2e5b60" } }).webp().toBuffer();
+    await expect(prepareBlogPublication({ postId: "fixture-post", title: "LOCAL FIXTURE", content: "Changed article\n\n![Fixture](resonate-figure://fixture)", scheduledDate: "2026-09-30", status: "draft", slug: "local-fixture", images: [
+      { sourceUrl: "fixture://hero", alt: "Fixture", isCover: true, export: { bytes, sha256: createHash("sha256").update(bytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp", hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt", approvedBy: "test-reviewer", approvedAt: 1 } } },
+      { sourceUrl: "resonate-figure://fixture", alt: spec.presentation.alt, export: { bytes: new TextEncoder().encode(signature.svg), sha256: signature.svgSha256, fileName: "figure-fixture.svg", contentType: "image/svg+xml", figure: { spec, ...signature, postId: "fixture-post", postContentSha256: "a".repeat(64), postContentFingerprint: "Old article", acceptedBy: "fixture-author", acceptedAt: 1, evidenceSources: [] } } },
+    ] })).rejects.toThrow("reviewed article snapshot");
+  });
+  it("rejects offline engineering approval on the production publication path", async () => {
+    const { prepareBlogPublication } = await import("../github");
+    const bytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2E5B60" } }).webp().toBuffer();
+    const params = { title: "LOCAL FIXTURE", content: "A fictional fixture.", scheduledDate: "2026-09-30", status: "draft", tags: ["fixture"], slug: "local-fixture", images: [{ sourceUrl: "fixture://hero", alt: "Fictional test pattern", isCover: true, export: { bytes, sha256: createHash("sha256").update(bytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp" as const, hero: { provider: "offline-fixture", model: "offline-fixture", quoteProvenance: "LOCAL OFFLINE FIXTURE", qualification: "offline-fixture" as const, approvedBy: "visual-rehearsal-only", approvedAt: 1 } } }] };
+    await expect(prepareBlogPublication(params)).rejects.toThrow("Offline engineering visuals cannot be published");
+  });
+
+  it("rejects even correctly hashed SVG bytes without a deterministic figure manifest", async () => {
+    const { prepareBlogPublication } = await import("../github");
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2e5b60" } }).webp().toBuffer();
+    const svgBytes = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+    await expect(prepareBlogPublication({ title: "LOCAL FIXTURE", content: "![Fixture](resonate-figure://fixture)", scheduledDate: "2026-09-30", status: "draft", tags: ["fixture"], slug: "local-fixture", images: [
+      { sourceUrl: "fixture://hero", alt: "Fictional teal test pattern", isCover: true, export: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp", hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt", approvedBy: "test-reviewer", approvedAt: 1 } } },
+      { sourceUrl: "resonate-figure://fixture", alt: "Fixture", export: { bytes: svgBytes, sha256: createHash("sha256").update(svgBytes).digest("hex"), fileName: "figure-fixture.svg", contentType: "image/svg+xml" } },
+    ] })).rejects.toThrow("verified deterministic figure manifest");
+  });
+  it("prepares the actual reader files from approved bytes without any remote write", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const { prepareBlogPublication } = await import("../github");
+    const bytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2e5b60" } }).webp().toBuffer();
+    const prepared = await prepareBlogPublication({ title: "LOCAL FIXTURE", content: "A fictional fixture.", scheduledDate: "2026-09-30", status: "draft", tags: ["fixture"], slug: "local-fixture", images: [{ sourceUrl: "fixture://hero", alt: "Fictional teal test pattern", isCover: true, export: { bytes, sha256: createHash("sha256").update(bytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp", hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt", approvedBy: "test-reviewer", approvedAt: 1 } } }] });
+    expect(prepared.files).toHaveLength(2);
+    const image = prepared.files.find(file => file.path.endsWith("hero.webp"))!;
+    expect(Array.from(Buffer.from(image.content, "base64"))).toEqual(Array.from(bytes));
+    const mdx = Buffer.from(prepared.files.find(file => file.path.endsWith(".mdx"))!.content, "base64").toString();
+    expect(mdx).toContain('coverImage: "/images/blog/2026-09-30-local-fixture/hero.webp"');
+    expect(mdx).toContain('coverImageAlt: "Fictional teal test pattern"');
+    expect(fetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

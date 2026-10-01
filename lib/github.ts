@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import sharp from "sharp";
+import { assertFigureCurrentArticle, assertFigureMarkdownBlockPlacement, buildFigureMarkdownBlock, figureSignatures, type FigureSpec } from "./visualFigures";
+import { fingerprintPostContent } from "./domain";
+
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
 const REPO_OWNER = process.env.BLOG_REPO_OWNER || "jakebutler";
 const REPO_NAME = process.env.BLOG_REPO_NAME || "corvo-labs-dot-com";
@@ -15,12 +19,28 @@ export function blogDestination(post: { title: string; blogSlug?: string; schedu
     filePath: `${CONTENT_PATH}/${post.scheduledDate ?? "DATE-REQUIRED"}-${slug}.mdx` };
 }
 
-export type BlogArtifact = { repository: string; prNumber: number; branchName: string; mdxPath: string; heroPath?: string; canonicalUrl: string };
+export type BlogArtifact = {
+  repository: string; prNumber: number; branchName: string; mdxPath: string; heroPath?: string; canonicalUrl: string;
+  heroSha256?: string; coverImageAlt?: string; heroSourceUrl?: string;
+  editorialFingerprint?: string;
+  figureAssets?: Array<{ sourceUrl: string; path: string; sha256: string }>;
+};
 
 export interface PublishImageAsset {
   sourceUrl: string;
   alt?: string;
   isCover?: boolean;
+  /** Exact, approved server-owned bytes. Never constructed from a client URL. */
+  export?: {
+    bytes: Uint8Array;
+    sha256: string;
+    fileName: string;
+    contentType: "image/webp" | "image/svg+xml";
+    hero?: { provider: string; model: string; quoteProvenance: string; qualification: "offline-fixture" | "offline-contract" | "qualification-probe" | "live-receipt"; approvedBy: string; approvedAt: number };
+    figure?: { spec: FigureSpec; rendererVersion: string; dataSignature: string; presentationSignature: string;
+      postId: string; postContentSha256: string; postContentFingerprint: string; acceptedBy: string; acceptedAt: number;
+      evidenceSources: Array<{ sourceId: string; sha256: string; revision: number; purpose: "article" | "claim-trace" | "data"; currentSourceId: string | null; currentSha256: string; currentRevision: number | null }> };
+  };
 }
 
 export class BlogPostContractError extends Error {
@@ -45,7 +65,7 @@ function slugify(title: string): string {
 }
 
 function escapeYamlString(value: string): string {
-  return JSON.stringify(value).slice(1, -1);
+  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/"/g, '\\"');
 }
 
 function escapeRegExp(value: string): string {
@@ -138,7 +158,7 @@ export function normalizeMdxBody(params: NormalizeBodyParams): string {
     (match, origAlt: string, rawUrl: string) => {
       const url = rawUrl.trim().replace(/^<|>$/g, "");
       const asset = imagesBySourceUrl.get(url);
-      if (!asset?.alt?.trim()) return match;
+      if (!asset?.alt?.trim() || asset.export?.figure) return match;
       return `![${asset.alt.trim()}](${url})`;
     }
   );
@@ -296,9 +316,10 @@ interface BuildFrontmatterParams {
   category: string;
   featured: boolean;
   status: string;
+  localAssets?: boolean;
 }
 
-export function buildFrontmatter(params: BuildFrontmatterParams): string {
+function buildFrontmatter(params: BuildFrontmatterParams): string {
   const lines = [
     `---`,
     `title: "${escapeYamlString(params.title)}"`,
@@ -332,9 +353,11 @@ export function buildFrontmatter(params: BuildFrontmatterParams): string {
   return lines.join("\n") + "\n";
 }
 
-export async function createBlogPostPR(params: {
+export interface BlogPublicationParams {
+  postId?: string;
   title: string;
   content: string;
+  linkedinFirstComment?: string;
   scheduledDate: string;
   scheduledTime?: string;
   timezone?: string;
@@ -349,10 +372,188 @@ export async function createBlogPostPR(params: {
   featured?: boolean;
   coverImageAlt?: string;
   images?: PublishImageAsset[];
-  preparedHero?: {bytes: Buffer; sha256: string};
+  preparedHero?: { bytes: Buffer; sha256: string };
   exportIdentity?: string;
   beforeRemoteWrite?: () => Promise<void>;
-}): Promise<{
+  editorialFingerprint?: string;
+}
+
+/** Build reviewable reader files without credentials or external effects. */
+export async function prepareBlogPublication(params: BlogPublicationParams, options: { allowFixture?: boolean } = {}) {
+  // Validate up front so we never create a remote branch that can't be
+  // completed — callers must supply at least one image so we have a hero
+  // for the frontmatter and card thumbnail.
+  const suppliedImages = params.images ?? [];
+  const suppliedHero = suppliedImages.find((asset) => asset.isCover) ?? suppliedImages[0];
+  if (!suppliedHero) {
+    throw new Error(
+      "Publishing requires at least one image so the PR can set heroImage in frontmatter."
+    );
+  }
+  // The upstream prepared upload and generated visual path share the same
+  // decoder/hash/atomic export boundary. A second receipt cannot override it.
+  if (params.preparedHero && suppliedHero.export &&
+    (params.preparedHero.sha256 !== suppliedHero.export.sha256 || !Buffer.from(params.preparedHero.bytes).equals(Buffer.from(suppliedHero.export.bytes)))) {
+    throw new BlogPostContractError(["Prepared hero and visual approval bytes differ."]);
+  }
+  const preparedUpload = !!params.preparedHero && !suppliedHero.export;
+  if (!preparedUpload && params.coverImageAlt !== undefined && params.coverImageAlt !== suppliedHero.alt) throw new BlogPostContractError(["Cover alternative text differs from the generated hero approval."]);
+  const images: PublishImageAsset[] = suppliedImages.map(asset => asset === suppliedHero && preparedUpload ? {
+    ...asset, alt: params.coverImageAlt ?? asset.alt ?? `Cover image for ${params.title}`,
+    export: { bytes: params.preparedHero!.bytes, sha256: params.preparedHero!.sha256, fileName: "hero.webp", contentType: "image/webp" },
+  } : asset);
+  const hero = images[suppliedImages.indexOf(suppliedHero)];
+
+  const date = params.scheduledDate || new Date().toISOString().split("T")[0];
+  const scheduledTime = params.scheduledTime?.trim() || undefined;
+  const timezone = params.timezone?.trim() || undefined;
+  const scheduleTrigger = params.scheduleTrigger ?? "pr-body";
+  const slugBase = params.slug?.trim() || slugify(params.title);
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slugBase) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BlogPostContractError(["Unsafe article slug or date"]);
+  if (!["draft", "published"].includes(params.status)) throw new BlogPostContractError(["Choose draft or published publication intent"]);
+  const slug = `${date}-${slugBase}`;
+  const fileName = `${slug}.mdx`;
+  const filePath = `${CONTENT_PATH}/${fileName}`;
+  const identity = params.exportIdentity ? `-${createHash("sha256").update(params.exportIdentity).digest("hex").slice(0, 12)}` : "";
+  const branchName = `resonate/blog-post-${slug}${identity}`;
+
+  const localAssets = images.some(asset => asset.export);
+  if (localAssets && (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slugBase) || !/^\d{4}-\d{2}-\d{2}$/.test(date))) {
+    throw new BlogPostContractError(["Exported visuals require a URL-safe slug and an ISO calendar date."]);
+  }
+  const files: Array<{ path: string; content: string }> = [];
+  const localUrls = new Map<string, string>();
+  if (!localAssets) throw new BlogPostContractError(["A verified prepared hero is required"]);
+  if (localAssets) {
+    if (!hero.export || hero.export.fileName !== "hero.webp") throw new BlogPostContractError(["The approved hero export is missing."]);
+    const names = new Set<string>();
+    const sources = new Set<string>();
+    if (images.filter(asset => asset !== hero).length > 3) throw new BlogPostContractError(["A publication supports at most three informational figures."]);
+    for (const asset of images) {
+      const exported = asset.export;
+      if (!exported) throw new BlogPostContractError(["Every selected visual requires its approved exported bytes."]);
+      if (!asset.alt?.trim() || !/^(hero\.webp|figure-[a-z0-9-]+\.svg)$/.test(exported.fileName) || names.has(exported.fileName)) {
+        throw new BlogPostContractError(["Visual export filenames and alternative text must be complete and unique."]);
+      }
+      names.add(exported.fileName);
+      if (sources.has(asset.sourceUrl)) throw new BlogPostContractError(["Visual source locations must be unique."]);
+      sources.add(asset.sourceUrl);
+      if (createHash("sha256").update(exported.bytes).digest("hex") !== exported.sha256) {
+        throw new BlogPostContractError(["Visual export bytes no longer match their approved hash."]);
+      }
+      if (asset.isCover || asset === hero) {
+        if (!preparedUpload) {
+          const provenance = exported.hero;
+          if (!provenance?.provider?.trim() || !provenance.model?.trim() || !provenance.quoteProvenance?.trim() || !provenance.approvedBy?.trim() || !Number.isFinite(provenance.approvedAt) || provenance.approvedAt <= 0) throw new BlogPostContractError(["Hero publication requires approved provider and actor provenance."]);
+          if (provenance.qualification === "qualification-probe") throw new BlogPostContractError(["Qualification probe images cannot be published."]);
+          if (!options.allowFixture && (provenance.qualification !== "live-receipt" || /^offline-/i.test(provenance.provider) || /^offline-/i.test(provenance.model) || /offline|fixture/i.test(provenance.quoteProvenance) || provenance.approvedBy === "visual-rehearsal-only")) throw new BlogPostContractError(["Offline engineering visuals cannot be published."]);
+        }
+        const metadata = await sharp(exported.bytes, { limitInputPixels: 40_000_000 }).metadata();
+        if (exported.contentType !== "image/webp" || metadata.format !== "webp" || metadata.width !== 1600 || metadata.height !== 900 || (metadata.pages ?? 1) !== 1 || exported.bytes.byteLength >= 150_000) {
+          throw new BlogPostContractError(["Hero export must be one 1600 by 900 WebP below 150 KB."]);
+        }
+      } else {
+        if (exported.contentType !== "image/svg+xml" || !exported.figure) throw new BlogPostContractError(["Figure export requires a verified deterministic figure manifest."]);
+        const manifest = exported.figure;
+        const contentHash = createHash("sha256").update(params.content, "utf8").digest("hex");
+        if (!params.postId || manifest.postId !== params.postId || manifest.postContentSha256 !== contentHash ||
+          manifest.postContentFingerprint !== fingerprintPostContent({ title: params.title, content: params.content, linkedinFirstComment: params.linkedinFirstComment }) ||
+          !manifest.acceptedBy?.trim() || !Number.isFinite(manifest.acceptedAt) || manifest.acceptedAt <= 0 ||
+          !manifest.evidenceSources.length || !manifest.evidenceSources.some(source => source.purpose === "article") ||
+          new Set(manifest.evidenceSources.map(source => source.sourceId)).size !== manifest.evidenceSources.length ||
+          manifest.evidenceSources.some(source => !source.sourceId || !/^[a-f0-9]{64}$/.test(source.sha256) || !Number.isSafeInteger(source.revision) || source.revision < 1 ||
+            (source.purpose === "article" ? source.currentSha256 !== contentHash : source.currentSourceId !== source.sourceId || source.currentSha256 !== source.sha256 || source.currentRevision !== source.revision))) {
+          throw new BlogPostContractError(["Figure publication no longer matches its reviewed article snapshot or evidence provenance."]);
+        }
+        const rendered = await figureSignatures(manifest.spec);
+        if (rendered.rendererVersion !== manifest.rendererVersion || rendered.dataSignature !== manifest.dataSignature ||
+          rendered.presentationSignature !== manifest.presentationSignature || rendered.svgSha256 !== exported.sha256 ||
+          !Buffer.from(exported.bytes).equals(Buffer.from(rendered.svg, "utf8"))) {
+          throw new BlogPostContractError(["Figure export no longer matches its reviewed deterministic rendering."]);
+        }
+        const bindingIds = new Set([...manifest.spec.evidence, ...manifest.spec.claimTraceEvidence].map(span => span.sourceId));
+        if (bindingIds.size !== manifest.evidenceSources.length || manifest.evidenceSources.some(source => !bindingIds.has(source.sourceId)) ||
+          ((manifest.spec.family === "bars" || manifest.spec.family === "lines") && !manifest.evidenceSources.some(source => source.purpose === "claim-trace" && manifest.spec.claimTraceEvidence.some(span => span.sourceId === source.sourceId)))) throw new BlogPostContractError(["Figure evidence manifest does not contain its exact source bindings."]);
+        assertFigureCurrentArticle(manifest.spec, params.content);
+        const candidateId = asset.sourceUrl.replace(/^resonate-figure:\/\//u, "");
+        if (asset.sourceUrl !== `resonate-figure://${candidateId}` || !/^[a-zA-Z0-9]+$/u.test(candidateId) || asset.alt !== manifest.spec.presentation.alt) throw new BlogPostContractError(["Figure placement identity or alternative text is invalid."]);
+        const block = buildFigureMarkdownBlock(candidateId, manifest.spec);
+        try { assertFigureMarkdownBlockPlacement(params.content, manifest.spec.insertionAnchor, block); }
+        catch { throw new BlogPostContractError(["Every approved figure requires its exact reviewed placement, caption and complete source-note paragraph."]); }
+      }
+      const url = `/images/blog/${slug}/${exported.fileName}`;
+      localUrls.set(asset.sourceUrl, url);
+      files.push({ path: `${BLOG_APP_ROOT}/public${url}`, content: Buffer.from(exported.bytes).toString("base64") });
+    }
+  }
+  const heroUrl = localUrls.get(hero.sourceUrl) ?? hero.sourceUrl;
+  let publicationContent = params.content;
+  for (const [original, local] of localUrls) {
+    const figure = images.find(asset => asset.sourceUrl === original)?.export?.figure;
+    if (figure) {
+      const candidateId = original.slice("resonate-figure://".length);
+      const block = buildFigureMarkdownBlock(candidateId, figure.spec);
+      publicationContent = publicationContent.replace(block, () => block.replace(`](${original})`, () => `](${local})`));
+    } else {
+      publicationContent = publicationContent.replace(new RegExp(`(!\\[[^\\]]*]\\()${escapeRegExp(original)}(\\))`, "g"), `$1${local}$2`);
+    }
+  }
+  if (localAssets && publicationContent.includes("resonate-figure://")) throw new BlogPostContractError(["An informational figure is missing its approved publication asset."]);
+
+  // Approved prose remains byte exact. Only bound visual asset locations above
+  // are rewritten; invalid Markdown requires a new explicit editorial edit.
+  const body = publicationContent;
+
+  const heroImageAlt =
+    params.coverImageAlt ||
+    hero.alt ||
+    `Cover image for ${params.title}`;
+
+  const frontmatterInput: BuildFrontmatterParams = {
+    title: params.title,
+    date,
+    scheduledTime,
+    timezone,
+    subtitle: params.subtitle,
+    description: buildDescription(params.content, params.excerpt),
+    author: params.author ?? DEFAULT_AUTHOR,
+    tags: params.tags ?? [],
+    heroImage: heroUrl,
+    heroImageAlt,
+    readTime: estimateReadTime(params.content),
+    category: params.category ?? DEFAULT_CATEGORY,
+    featured: params.featured ?? false,
+    status: params.status,
+    localAssets,
+  };
+
+  // Contract check before we touch GitHub so a single round trip surfaces
+  // every violation to the caller.
+  validateMdxPost({
+    frontmatter: {
+      title: frontmatterInput.title,
+      date: frontmatterInput.date,
+      heroImage: frontmatterInput.heroImage,
+      heroImageAlt: frontmatterInput.heroImageAlt,
+      description: frontmatterInput.description,
+      tags: frontmatterInput.tags,
+    },
+    body,
+    heroImageUrl: heroUrl,
+  });
+
+  const frontmatter = buildFrontmatter(frontmatterInput);
+  const fileContent = Buffer.from(frontmatter + body).toString("base64");
+
+  files.push({ path: filePath, content: fileContent });
+  const figureAssets = images.filter(asset => asset.export?.figure).map(asset => ({
+    sourceUrl: asset.sourceUrl, path: `${BLOG_APP_ROOT}/public${localUrls.get(asset.sourceUrl)!}`, sha256: asset.export!.sha256,
+  }));
+  return { files, filePath, fileContent, branchName, localAssets, date, scheduledTime, timezone, scheduleTrigger,
+    heroSha256: hero.export!.sha256, coverImageAlt: heroImageAlt, heroSourceUrl: hero.sourceUrl, figureAssets };
+}
+
+export async function createBlogPostPR(params: BlogPublicationParams): Promise<{
   prUrl: string;
   branchName: string;
   sanitizedResponse: {
@@ -368,87 +569,15 @@ export async function createBlogPostPR(params: {
     timezone?: string;
   };
 }> {
-  if (!GITHUB_TOKEN) {
-    throw new Error("Missing required environment variable: GITHUB_TOKEN");
-  }
-
-  // Validate up front so we never create a remote branch that can't be
-  // completed — callers must supply at least one image so we have a hero
-  // for the frontmatter and card thumbnail.
-  const images = params.images ?? [];
-  const hero = images.find((asset) => asset.isCover) ?? images[0];
-  if (!hero) {
-    throw new Error(
-      "Publishing requires at least one image so the PR can set heroImage in frontmatter."
-    );
-  }
-
-  const date = params.scheduledDate || new Date().toISOString().split("T")[0];
-  const scheduledTime = params.scheduledTime?.trim() || undefined;
-  const timezone = params.timezone?.trim() || undefined;
-  const scheduleTrigger = params.scheduleTrigger ?? "pr-body";
-  const slugBase = params.slug?.trim() || slugify(params.title);
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slugBase) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BlogPostContractError(["Unsafe article slug or date"]);
-  if (!["draft", "published"].includes(params.status)) throw new BlogPostContractError(["Choose draft or published publication intent"]);
-  const slug = `${date}-${slugBase}`;
-  const fileName = `${slug}.mdx`;
-  const filePath = `${CONTENT_PATH}/${fileName}`;
-  const identity = params.exportIdentity ? `-${createHash("sha256").update(params.exportIdentity).digest("hex").slice(0, 12)}` : "";
-  const branchName = `resonate/blog-post-${slug}${identity}`;
-  const heroPath = `${BLOG_APP_ROOT}/public/images/blog/${slug}/hero.webp`;
-  const publicHeroPath = `/images/blog/${slug}/hero.webp`;
-
-
-  // The approved prose is immutable; surface invalid MDX for an explicit edit.
-  const body = params.content;
-
-  const heroImageAlt =
-    params.coverImageAlt ||
-    hero.alt?.trim() ||
-    `Cover image for ${params.title}`;
-
-  const frontmatterInput: BuildFrontmatterParams = {
-    title: params.title,
-    date,
-    scheduledTime,
-    timezone,
-    subtitle: params.subtitle,
-    description: buildDescription(params.content, params.excerpt),
-    author: params.author ?? DEFAULT_AUTHOR,
-    tags: params.tags ?? [],
-    heroImage: publicHeroPath,
-    heroImageAlt,
-    readTime: estimateReadTime(params.content),
-    category: params.category ?? DEFAULT_CATEGORY,
-    featured: params.featured ?? false,
-    status: params.status,
-  };
-
-  // Contract check before we touch GitHub so a single round trip surfaces
-  // every violation to the caller.
-  validateMdxPost({
-    frontmatter: {
-      title: frontmatterInput.title,
-      date: frontmatterInput.date,
-      heroImage: frontmatterInput.heroImage,
-      heroImageAlt: frontmatterInput.heroImageAlt,
-      description: frontmatterInput.description,
-      tags: frontmatterInput.tags,
-    },
-    body,
-    heroImageUrl: hero.sourceUrl,
-  });
-
-  const frontmatter = buildFrontmatter(frontmatterInput);
-  const mdxBytes = Buffer.from(frontmatter + body);
-  const prepared = params.preparedHero;
-  if (!prepared || prepared.bytes.byteLength >= 150_000 || createHash("sha256").update(prepared.bytes).digest("hex") !== prepared.sha256) throw new BlogPostContractError(["A verified prepared hero is required"]);
-  // Validate actual bytes, independently of the storage receipt.
-  const {default: sharp} = await import("sharp");
-  const metadata = await sharp(prepared.bytes, {limitInputPixels: 40_000_000}).metadata();
-  if (metadata.format !== "webp" || metadata.width !== 1600 || metadata.height !== 900) throw new BlogPostContractError(["Hero must decode as 1600×900 WebP"]);
-  const files = [{path: filePath, bytes: mdxBytes}, {path: heroPath, bytes: prepared.bytes}];
+  if (!GITHUB_TOKEN) throw new Error("Missing required environment variable: GITHUB_TOKEN");
+  const prepared = await prepareBlogPublication(params);
+  const { filePath, branchName, date, scheduledTime, timezone, scheduleTrigger } = prepared;
+  const files = prepared.files.map(file => ({ path: file.path, bytes: Buffer.from(file.content, "base64") }));
+  const heroPath = files.find(file => file.path.endsWith("/hero.webp"))!.path;
+  const slug = filePath.split("/").pop()!.replace(/\.mdx$/, "");
+  const heroProvenance = (params.images?.find(asset => asset.isCover) ?? params.images?.[0])?.export?.hero;
   await params.beforeRemoteWrite?.();
+
   const headers = githubHeaders();
   const base = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
   async function read(path: string) {
@@ -461,6 +590,12 @@ export async function createBlogPostPR(params: {
   const defaultRef = await read(`/git/ref/heads/${encodeURIComponent(defaultBranch)}`);
   let refRes = await fetch(`${base}/git/ref/heads/${encodeURIComponent(branchName)}`, {headers});
   if (refRes.status === 404) {
+    // A new generated publication must not claim a pre-existing asset namespace.
+    // Existing bound export branches are reconciled below for safe replay.
+    const directory = heroPath.slice(0, heroPath.lastIndexOf("/"));
+    const existingAssets = await fetch(`${base}/contents/${directory}?ref=${encodeURIComponent(defaultRef.object.sha)}`, { headers });
+    if (existingAssets.ok) throw new BlogPostContractError(["Publication asset directory already exists; choose an unused article slug before creating a new publication."]);
+    if (existingAssets.status !== 404) throw new Error("Publication asset ownership could not be verified");
     const created = await fetch(`${base}/git/refs`, {method: "POST", headers, body: JSON.stringify({ref: `refs/heads/${branchName}`, sha: defaultRef.object.sha})});
     if (!created.ok) throw new Error("Branch creation not confirmed; reconcile this export before retry.");
     refRes = await fetch(`${base}/git/ref/heads/${encodeURIComponent(branchName)}`, {headers});
@@ -477,17 +612,20 @@ export async function createBlogPostPR(params: {
     if (remote.encoding !== "base64" || !remote.content || !Buffer.from(remote.content.replace(/\s/g, ""), "base64").equals(file.bytes)) throw new Error("Remote artifact differs; Needs Review. No overwrite performed.");
     existing++;
   }
+  let verifiedHead = head;
   if (existing === 0 && head === defaultRef.object.sha) {
-    await commitGithubFiles({branchName, expectedHead: head, message: `feat: add article and reviewed hero`, files});
-  } else if (existing !== 2) throw new Error("Incomplete or unrelated export branch; Needs Review");
+    verifiedHead = await commitGithubFiles({branchName, expectedHead: head, message: `feat: add article and reviewed hero`, files});
+  } else if (existing !== files.length) throw new Error("Incomplete or unrelated export branch; Needs Review");
   else {
     const diff = await read(`/compare/${encodeURIComponent(defaultRef.object.sha)}...${encodeURIComponent(head)}`);
     const expected = new Set(files.map(f => f.path));
-    if (!["ahead", "diverged"].includes(diff.status) || !Number.isSafeInteger(diff.ahead_by) || diff.ahead_by < 1 || !Number.isSafeInteger(diff.total_commits) || diff.total_commits < 1 || diff.total_commits > 250 || !Array.isArray(diff.files) || diff.files.length !== 2 || diff.files.some((f: {filename: string; status: string}) => !expected.has(f.filename) || !["added", "modified"].includes(f.status)))
+    if (!["ahead", "diverged"].includes(diff.status) || !Number.isSafeInteger(diff.ahead_by) || diff.ahead_by < 1 || !Number.isSafeInteger(diff.total_commits) || diff.total_commits < 1 || diff.total_commits > 250 || !Array.isArray(diff.files) || diff.files.length !== files.length || new Set(diff.files.map((file: {filename: string}) => file.filename)).size !== expected.size || diff.files.some((f: {filename: string; status: string}) => !expected.has(f.filename) || !["added", "modified"].includes(f.status)))
       throw new Error("Incomplete or unrelated export branch diff; Needs Review");
   }
   const existingPrs = await read(`/pulls?state=all&head=${encodeURIComponent(`${REPO_OWNER}:${branchName}`)}&base=${encodeURIComponent(defaultBranch)}`);
   if (!Array.isArray(existingPrs) || existingPrs.length > 1 || existingPrs.some(pr => pr.state !== "open")) throw new Error("Export PR history requires review");
+  const currentRef = await read(`/git/ref/heads/${encodeURIComponent(branchName)}`);
+  if (currentRef.object?.sha !== verifiedHead) throw new Error("Export branch changed after verification; Needs Review");
   let pr = existingPrs[0];
   if (!pr) {
     const res = await fetch(`${base}/pulls`, {method: "POST", headers, body: JSON.stringify({
@@ -496,17 +634,24 @@ export async function createBlogPostPR(params: {
         `Publication intent: ${params.status}. Published content becomes visible on merge, including future-dated articles.`,
         `<!-- resonate-schedule -->\nResonate schedule: ${date} ${scheduledTime ?? ""} ${timezone ?? ""}.\n<!-- /resonate-schedule -->`,
         "Article and reviewed hero are committed together. Resonate does not auto-merge.",
-      ].join("\n"),
+        heroProvenance ? `Hero approval: ${heroProvenance.approvedBy}; provider/model: ${heroProvenance.provider}/${heroProvenance.model}; qualification: ${heroProvenance.qualification}; quote provenance: ${heroProvenance.quoteProvenance}; bytes SHA-256: ${prepared.heroSha256}.` : null,
+        prepared.figureAssets.length ? `Figure approvals: ${params.images?.filter(asset => asset.export?.figure).map(asset => `${asset.export!.figure!.acceptedBy} (${asset.sourceUrl}; SHA-256 ${asset.export!.sha256})`).join(", ")}.` : null,
+        "A human reviewer must assess visual aesthetics and the complete reader preview before merging this publication PR.",
+      ].filter(Boolean).join("\n"),
     })});
     if (!res.ok) throw new Error("PR creation not confirmed; reconcile this export before retry");
     pr = await res.json();
   }
   if (!pr.html_url || !pr.number) throw new Error("Incomplete GitHub PR receipt; Needs Review");
+  if (pr.head?.sha !== verifiedHead || pr.head?.ref !== branchName || pr.head?.repo?.full_name !== `${REPO_OWNER}/${REPO_NAME}` || pr.base?.repo?.full_name !== `${REPO_OWNER}/${REPO_NAME}`) throw new Error("Export PR identity changed after verification; Needs Review");
   return {prUrl: pr.html_url, branchName, sanitizedResponse: {
     repo: `${REPO_OWNER}/${REPO_NAME}`, prUrl: pr.html_url, branchName, number: pr.number, state: pr.state,
     scheduleTrigger, scheduledDate: date, scheduledTime, timezone,
     artifact: {repository: `${REPO_OWNER}/${REPO_NAME}`, prNumber: pr.number, branchName,
-      mdxPath: filePath, heroPath, canonicalUrl: `${process.env.BLOG_SITE_ORIGIN || "https://corvolabs.com"}/blog/${slug}`},
+      mdxPath: filePath, heroPath, heroSha256: prepared.heroSha256, coverImageAlt: prepared.coverImageAlt, heroSourceUrl: prepared.heroSourceUrl,
+      ...(params.editorialFingerprint ? { editorialFingerprint: params.editorialFingerprint } : {}),
+      ...(prepared.figureAssets.length ? { figureAssets: prepared.figureAssets } : {}),
+      canonicalUrl: `${process.env.BLOG_SITE_ORIGIN || "https://corvolabs.com"}/blog/${slug}`},
   }};
 }
 

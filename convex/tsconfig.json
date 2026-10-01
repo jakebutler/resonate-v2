@@ -6,14 +6,16 @@
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "paths": { "@/*": ["../*"] },
     "target": "ESNext",
     "lib": ["ES2021", "dom"],
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "isolatedModules": true,
-    "noEmit": true,
-    "paths": { "@/*": ["../*"] }
+    "noEmit": true
   },
   "include": ["./**/*"],
-  "exclude": ["./_generated", "./__tests__"]
+  "exclude": ["./_generated", "./**/__tests__/**", "./**/*.test.ts", "./**/*.test.tsx"]
 }

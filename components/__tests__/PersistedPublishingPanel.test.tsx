@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { PersistedPublishingPanel } from "@/components/PersistedPublishingPanel";
+import { approvalArticleSignature, publicationMetadataSignature } from "@/lib/publicationReview";
 
 vi.mock("@/components/BufferDestinationPanel",()=>({BufferDestinationPanel:()=>null}));
 vi.mock("@/components/ArticleDependencyPanel",()=>({ArticleDependencyPanel:()=>null}));
@@ -18,12 +19,25 @@ vi.mock("convex/react", () => ({
 vi.mock("@/components/SocialConnectionsPanel", () => ({
   SocialConnectionsPanel: () => <div data-testid="social-connections-panel">Connections</div>,
 }));
+vi.mock("@/components/EditorialVisualPanel", () => ({
+  EditorialVisualPanel: ({ postId, savedContentChanged }: { postId: string; savedContentChanged: boolean }) =>
+    <section aria-label="Editorial visuals">Saved post {postId} · {savedContentChanged ? "Save article changes first" : "Article is saved"}</section>,
+}));
+vi.mock("@/components/EditorialFigurePanel", () => ({
+  EditorialFigurePanel: ({ savedContentChanged }: { savedContentChanged: boolean }) =>
+    <section aria-label="Informational figures">{savedContentChanged ? "Save article changes first" : "Evidence figures"}</section>,
+}));
+vi.mock("@/components/LinkedFigureEvidencePanel", () => ({
+  LinkedFigureEvidencePanel: ({ savedContentChanged }: { savedContentChanged: boolean }) =>
+    <section aria-label="Linked research for figures">{savedContentChanged ? "Save article changes first" : "Linked evidence"}</section>,
+}));
 
 vi.mock("@/convex/_generated/api", () => ({
   api: {
     articlePublication:{refresh:"articlePublication:refresh"},
     series: {list:"series:list"},
     publishing: {
+      getApprovalReview: "publishing:getApprovalReview",
       listBrands: "publishing:listBrands",
       getPostById: "publishing:getPostById",
       listCalendarItems: "publishing:listCalendarItems",
@@ -47,6 +61,7 @@ vi.mock("@/convex/_generated/api", () => ({
       cancelOrUnpublish: "bufferLive:cancelOrUnpublish",
     },
     v2Storage: {
+      uploadImage: "v2Storage:uploadImage",
       generateUploadUrl: "v2Storage:generateUploadUrl",
       getFileUrl: "v2Storage:getFileUrl",
     },
@@ -258,8 +273,164 @@ const blogItemWithPr = {
 };
 
 describe("PersistedPublishingPanel", () => {
+  it("disables detail Open PR with the current non-visual export review reason", () => {
+    const current = { ...blogItem, post: { ...blogItem.post, contentFingerprint: "current-article" } };
+    const query = vi.mocked(useQuery).getMockImplementation()!;
+    vi.mocked(useQuery).mockImplementation((reference, args) => {
+      if (reference === "publishing:listCalendarItems") return [current];
+      if (reference === "publishing:getApprovalReview" && args !== "skip") return {
+        articleSignature: approvalArticleSignature(current.post),
+        metadataSignature: publicationMetadataSignature(current.post),
+        hasVisuals: false, publicationQualified: true, visualSignature: null,
+        blockedReason: "Prepare the current native hero export before publication.",
+      };
+      return query(reference, args);
+    });
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const button = within(detail).getByRole("button", { name: "Open PR" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "Prepare the current native hero export before publication.");
+    expect(within(detail).getByText("Prepare the current native hero export before publication.")).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(["loading", "stale article", "stale metadata"])("fails closed detail Open PR while its non-visual review is %s", (state) => {
+    const current = { ...blogItem, post: { ...blogItem.post, contentFingerprint: "current-article" } };
+    const query = vi.mocked(useQuery).getMockImplementation()!;
+    vi.mocked(useQuery).mockImplementation((reference, args) => {
+      if (reference === "publishing:listCalendarItems") return [current];
+      if (reference === "publishing:getApprovalReview" && args !== "skip") return state === "loading" ? undefined : {
+        articleSignature: state === "stale article" ? "old-article" : approvalArticleSignature(current.post),
+        metadataSignature: state === "stale metadata" ? "old-metadata" : publicationMetadataSignature(current.post),
+        hasVisuals: false, publicationQualified: true, visualSignature: null, blockedReason: null,
+      };
+      return query(reference, args);
+    });
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const button = within(screen.getByLabelText("Publishing item detail")).getByRole("button", { name: "Open PR" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "Wait for the target's current saved article and visual review.");
+    fireEvent.click(button);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([["hero.PNG", "image/png"], ["hero.jpg", "image/jpeg"], ["hero.jpeg", "image/jpeg"], ["hero.webp", "image/webp"]])("uploads a supported %s hero with missing OS MIME using its explicit extension", async (name, contentType) => {
+    const upload = vi.fn().mockResolvedValue({ storageId: "new-supported-hero" });
+    const action = vi.mocked(useAction).getMockImplementation()!;
+    vi.mocked(useAction).mockImplementation(reference => reference === "v2Storage:uploadImage" ? upload : action(reference));
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const file = new File(["fixture bytes validated by upload action"], name);
+    const bytes = new Uint8Array([1]).buffer;
+    Object.defineProperty(file, "arrayBuffer", { value: async () => bytes });
+    fireEvent.change(within(detail).getByLabelText("Upload hero image"), { target: { files: [file] } });
+    await waitFor(() => expect(upload).toHaveBeenCalledWith({ brandId: "corvo", fileName: name, contentType, bytes }));
+    expect(within(detail).queryByRole("alert")).not.toBeInTheDocument();
+    expect(updateBlogMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a hero whose nonempty MIME conflicts with its explicit raster extension", async () => {
+    const upload = vi.fn().mockResolvedValue({ storageId: "conflicting-hero" });
+    const action = vi.mocked(useAction).getMockImplementation()!;
+    vi.mocked(useAction).mockImplementation(reference => reference === "v2Storage:uploadImage" ? upload : action(reference));
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const file = new File(["fixture"], "hero.png", { type: "image/jpeg" });
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new Uint8Array([1]).buffer });
+    fireEvent.change(within(detail).getByLabelText("Upload hero image"), { target: { files: [file] } });
+    expect(await within(detail).findByRole("alert")).toHaveTextContent("Choose a PNG, JPEG or WebP image.");
+    expect(upload).not.toHaveBeenCalled();
+    expect(within(detail).getByLabelText("Hero image URL")).toHaveValue(blogItem.post.heroImageUrl);
+  });
+
+  it.each([["hero.svg", ""], ["hero.avif", ""], ["hero.png.svg", ""], ["hero.png", "image/svg+xml"], ["hero.jpg", "application/octet-stream"]])("rejects unsupported hero %s with declared MIME %s without invoking upload", async (name, type) => {
+    const upload = vi.fn();
+    const action = vi.mocked(useAction).getMockImplementation()!;
+    vi.mocked(useAction).mockImplementation(reference => reference === "v2Storage:uploadImage" ? upload : action(reference));
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const file = new File(["unsupported"], name, { type });
+    fireEvent.change(within(detail).getByLabelText("Upload hero image"), { target: { files: [file] } });
+    expect(await within(detail).findByRole("alert")).toHaveTextContent("Choose a PNG, JPEG or WebP image.");
+    expect(upload).not.toHaveBeenCalled();
+    expect(within(detail).getByLabelText("Hero image URL")).toHaveValue(blogItem.post.heroImageUrl);
+    expect(updateBlogMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it("advertises supported hero rasters and visibly preserves the saved hero after a rejected upload", async () => {
+    const upload = vi.fn().mockRejectedValue(new Error("Image exceeds 5 MiB"));
+    const action = vi.mocked(useAction).getMockImplementation()!;
+    vi.mocked(useAction).mockImplementation(reference => reference === "v2Storage:uploadImage" ? upload : action(reference));
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const picker = within(detail).getByLabelText("Upload hero image");
+    expect(picker).toHaveAttribute("accept", "image/png,image/jpeg,image/webp");
+    const file = new File(["image"], "hero.png", { type: "image/png" });
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new Uint8Array([1]).buffer });
+    fireEvent.change(picker, { target: { files: [file] } });
+    expect(await within(detail).findByRole("alert")).toHaveTextContent("Image exceeds 5 MiB");
+    expect(within(detail).getByLabelText("Hero image URL")).toHaveValue(blogItem.post.heroImageUrl);
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(updateBlogMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it("uses an agenda target's own review instead of the selected composer's unqualified visual route", async () => {
+    const unqualified = { ...blogItem, post: { ...blogItem.post, _id: "unqualified-selected", title: "Unqualified selected visual", contentFingerprint: "visual-current" }, intent: { ...blogItem.intent, _id: "unqualified-intent" } };
+    const items = [unqualified, blogItem];
+    vi.mocked(useQuery).mockImplementation((reference, args) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return items;
+      if (reference === "publishing:getApprovalReview" && args !== "skip") {
+        const post = items.find(item => item.post._id === (args as { postId: string }).postId)!.post;
+        const hasVisuals = post._id === "unqualified-selected";
+        return { articleSignature: approvalArticleSignature(post), metadataSignature: publicationMetadataSignature(post), hasVisuals, visualSignature: hasVisuals ? "unqualified-review" : null, publicationQualified: !hasVisuals, blockedReason: null };
+      }
+      return undefined;
+    });
+    vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({ prUrl: "https://github.com/fictional/repo/pull/2", branchName: "blog/manual-target", recorded: true }) } as Response);
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Unqualified selected visual" }));
+    const agenda = screen.getByRole("heading", { name: "Approved Corvo Blog PR item" }).closest("article")!;
+    expect(within(agenda).getByRole("button", { name: "Open PR" })).toBeEnabled();
+    fireEvent.click(within(agenda).getByRole("button", { name: "Open PR" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/publish", expect.objectContaining({ body: JSON.stringify({ postId: "post_4" }) })));
+    expect(screen.getByLabelText("Publishing item detail")).toHaveTextContent("Unqualified selected visual");
+    expect(within(screen.getByLabelText("Publishing item detail")).getByRole("button", { name: "Open PR" })).toBeDisabled();
+  });
+
+  it("opens the agenda target's approved visual hero while a different manual-hero post is selected", async () => {
+    const visualItem = { ...blogItem, post: { ...blogItem.post, _id: "visual-target", title: "Visual agenda target", contentFingerprint: "visual-current", heroImageUrl: undefined, heroImageStorageId: undefined, preparedHero: undefined, coverImageAlt: undefined }, intent: { ...blogItem.intent, _id: "visual-intent" } };
+    const items = [blogItem, visualItem];
+    vi.mocked(useQuery).mockImplementation((reference, args) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return items;
+      if (reference === "publishing:getApprovalReview" && args !== "skip") {
+        const post = items.find(item => item.post._id === (args as { postId: string }).postId)!.post;
+        return { articleSignature: approvalArticleSignature(post), metadataSignature: publicationMetadataSignature(post), hasVisuals: post._id === "visual-target", visualSignature: "exact-visual-review", publicationQualified: true, blockedReason: null };
+      }
+      return undefined;
+    });
+    vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({ prUrl: "https://github.com/fictional/repo/pull/1", branchName: "blog/visual-target", recorded: true }) } as Response);
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const agenda = screen.getByRole("heading", { name: "Visual agenda target" }).closest("article")!;
+    expect(within(agenda).getByRole("button", { name: "Open PR" })).toBeEnabled();
+    fireEvent.click(within(agenda).getByRole("button", { name: "Open PR" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/publish", expect.objectContaining({ body: JSON.stringify({ postId: "visual-target" }) })));
+    expect(screen.getByLabelText("Publishing item detail")).toHaveTextContent("Approved Corvo Blog PR item");
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED", "1");
     bufferLiveEnabledMock = false;
     vi.stubGlobal("fetch", vi.fn());
     vi.mocked(useQuery).mockImplementation((reference, args) => {
@@ -293,9 +464,12 @@ describe("PersistedPublishingPanel", () => {
     });
     vi.mocked(useAction).mockImplementation((reference) => {
       switch (reference) {
+        case "v2Storage:uploadImage":
+          return vi.fn().mockResolvedValue({ storageId: "fixture-storage" });
         case "articlePublication:refresh":return checkArticlePublicationMock;
         case "blogHero:prepare":
           return vi.fn().mockResolvedValue(null);
+
         case "bufferLive:submit":
           return submitBufferLiveMock;
         case "bufferLive:cancelOrUnpublish":
@@ -339,6 +513,20 @@ describe("PersistedPublishingPanel", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps new visual panels and review queries disabled until explicit rollout", () => {
+    vi.stubEnv("NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED", "0");
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    expect(within(detail).queryByRole("region", { name: "Editorial visuals" })).not.toBeInTheDocument();
+    expect(within(detail).queryByRole("region", { name: "Informational figures" })).not.toBeInTheDocument();
+    expect(within(detail).queryByRole("region", { name: "Linked research for figures" })).not.toBeInTheDocument();
+    const reviewCalls = vi.mocked(useQuery).mock.calls.filter(([reference]) => reference === "publishing:getApprovalReview");
+    expect(reviewCalls.length).toBeGreaterThan(0);
+    expect(reviewCalls.every(([, args]) => args === "skip")).toBe(true);
   });
 
   it("renders publishing calendar items with approval and submission state", () => {
@@ -623,6 +811,22 @@ describe("PersistedPublishingPanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("retains the inspection link and branch when PR creation succeeds but recording requires review", async () => {
+    const prUrl = "https://github.com/jakebutler/corvo-labs-dot-com/pull/42";
+    const branchName = "resonate/blog-post-retained";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: "The pull request needs review before retrying.",
+      reviewReceipt: { code: "VISUAL_PR_RECORDING_REQUIRES_REVIEW", prUrl, branchName },
+    }), { status: 409 })));
+    render(<PersistedPublishingPanel devMode />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    fireEvent.click(within(screen.getByLabelText("Publishing item detail")).getByRole("button", { name: "Open PR" }));
+    expect(await screen.findByRole("link", { name: "Inspect created pull request" })).toHaveAttribute("href", prUrl);
+    expect(screen.getByRole("status")).toHaveTextContent(branchName);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(recordGithubPrMock).not.toHaveBeenCalled();
+  });
+
   it("disables Open PR and shows loading while the PR request is in flight", async () => {
     let resolveFetch: ((value: Response) => void) | undefined;
     const fetchPromise = new Promise<Response>((resolve) => {
@@ -835,6 +1039,7 @@ describe("PersistedPublishingPanel", () => {
 
     await waitFor(()=>expect(checkArticlePublicationMock).toHaveBeenCalledWith({postId:"post_5"}));
     expect(recordBlogPrStatusMock).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled();
+
   });
 
   it("saves content edits through the single composer and clears approval", async () => {
@@ -862,6 +1067,20 @@ describe("PersistedPublishingPanel", () => {
     expect(
       await screen.findByText("Saved composer changes and cleared approval for re-review.")
     ).toBeInTheDocument();
+  });
+
+  it("locks article inputs while its save is in flight", async () => {
+    let finish!: () => void;
+    updateContentMock.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect Approved Reddit validation item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Content"), { target: { value: "Submitted article snapshot." } });
+    fireEvent.click(within(detail).getByRole("button", { name: "Save Composer Changes" }));
+    expect(within(detail).getByLabelText("Title")).toBeDisabled();
+    expect(within(detail).getByLabelText("Content")).toBeDisabled();
+    finish();
+    await waitFor(() => expect(within(detail).getByLabelText("Content")).not.toBeDisabled());
   });
 
   it("saves date-only composer edits without clearing approval", async () => {
@@ -919,6 +1138,84 @@ describe("PersistedPublishingPanel", () => {
       )
     );
     expect(fetch).not.toHaveBeenCalled();
+  });
+  it("keeps visuals inside the saved blog composer and blocks unsaved article input", () => {
+    render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    const visuals = within(detail).getByRole("region", { name: "Editorial visuals" });
+    expect(visuals).toHaveTextContent("Saved post post_4 · Article is saved");
+    fireEvent.change(within(detail).getByLabelText("Content"), { target: { value: "Unsaved new story" } });
+    expect(visuals).toHaveTextContent("Save article changes first");
+  });
+
+  it("shows a newly persisted figure placement in an otherwise clean open composer", () => {
+    let current = blogItem;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [current];
+      return undefined;
+    });
+    const view = render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    current = { ...blogItem, post: { ...blogItem.post, content: `${blogItem.post.content}\n\nReviewed figure placement.` } };
+    view.rerender(<PersistedPublishingPanel />);
+    const detail = screen.getByLabelText("Publishing item detail");
+    expect(within(detail).getByLabelText("Content")).toHaveValue(current.post.content);
+    expect(within(detail).getByRole("region", { name: "Editorial visuals" })).toHaveTextContent("Article is saved");
+  });
+
+  it("recognizes the persisted acknowledgement of its own article edit without a false conflict", () => {
+    let current = blogItem;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [current];
+      return undefined;
+    });
+    const view = render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Content"), { target: { value: "Saved author edit." } });
+    current = { ...blogItem, post: { ...blogItem.post, content: "Saved author edit." } };
+    view.rerender(<PersistedPublishingPanel />);
+    expect(within(detail).queryByRole("button", { name: "Reload saved article" })).not.toBeInTheDocument();
+    expect(within(detail).getByRole("region", { name: "Editorial visuals" })).toHaveTextContent("Article is saved");
+  });
+
+  it("recognizes its trimmed title acknowledgement without a false conflict", () => {
+    let current = blogItem;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [current];
+      return undefined;
+    });
+    const view = render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Title"), { target: { value: "  Saved normalized title  " } });
+    current = { ...blogItem, post: { ...blogItem.post, title: "Saved normalized title" } };
+    view.rerender(<PersistedPublishingPanel />);
+    expect(within(detail).queryByRole("button", { name: "Reload saved article" })).not.toBeInTheDocument();
+    expect(within(detail).getByLabelText("Title")).toHaveValue("Saved normalized title");
+  });
+
+  it("preserves unsaved text and requires an explicit reload after the saved article changes", () => {
+    let current = blogItem;
+    vi.mocked(useQuery).mockImplementation((reference) => {
+      if (reference === "publishing:listBrands") return [{ brandId: "corvo", name: "Corvo Labs" }];
+      if (reference === "publishing:listCalendarItems") return [current];
+      return undefined;
+    });
+    const view = render(<PersistedPublishingPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Details Approved Corvo Blog PR item" }));
+    const detail = screen.getByLabelText("Publishing item detail");
+    fireEvent.change(within(detail).getByLabelText("Content"), { target: { value: "Unsaved author edit." } });
+    current = { ...blogItem, post: { ...blogItem.post, content: `${blogItem.post.content}\n\nReviewed figure placement.` } };
+    view.rerender(<PersistedPublishingPanel />);
+    expect(within(detail).getByLabelText("Content")).toHaveValue("Unsaved author edit.");
+    expect(within(detail).getByRole("button", { name: "Save Composer Changes" })).toBeDisabled();
+    fireEvent.click(within(detail).getByRole("button", { name: "Reload saved article" }));
+    expect(within(detail).getByLabelText("Content")).toHaveValue(current.post.content);
   });
 
   it("reschedules blog posts with an open PR through Convex without client GitHub calls", async () => {

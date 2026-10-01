@@ -1,6 +1,6 @@
 # Changelog
 
-Append-only session log for repository-level updates. Each documentation refresh should add one new entry at the bottom.
+Append-only session log for repository-level updates. Each documentation refresh should add one new entry at the bottom. Historical entries retain their original author-session timestamps when integrated from parallel branches; their append position does not establish release chronology.
 
 ## 03/16/2026 00:42:14 PDT
 
@@ -4693,11 +4693,510 @@ Append-only session log for repository-level updates. Each documentation refresh
 
 - codex/epic-97-reviewed-queue
 
-## 09/30/2026 14:09:31 PDT
+## 09/30/2026 08:18:02 PDT
 
 ### Summary
 
 - Updated repository documentation and handoff records.
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- A	app/api/blog-pr-status/__tests__/route.test.ts
+- M	app/api/blog-pr-status/route.ts
+- M	app/api/publish/__tests__/route.test.ts
+- M	app/api/publish/route.ts
+- A	convex.json
+- A	convex/README.md
+- M	convex/__tests__/helpers/mockMutationCtx.ts
+- A	convex/__tests__/visualExports.test.ts
+- A	convex/__tests__/visualFigures.test.ts
+- A	convex/__tests__/visualLinkedEvidence.test.ts
+- A	convex/__tests__/visualProfiles.test.ts
+- A	convex/__tests__/visualPublication.test.ts
+- A	convex/__tests__/visualPublishingIntegration.test.ts
+- A	convex/__tests__/visualWorkflow.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/campaignAccess.ts
+- M	convex/posts.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- A	convex/tsconfig.json
+- M	convex/v2Storage.ts
+- A	convex/visualExports.ts
+- A	convex/visualFigureTables.ts
+- A	convex/visualFigures.ts
+- A	convex/visualLinkedEvidence.ts
+- A	convex/visualProfileTables.ts
+- A	convex/visualProfiles.ts
+- A	convex/visualPublication.ts
+- A	convex/visualStorageAccess.ts
+- A	convex/visualStorageTables.ts
+- A	convex/visualWorkflow.ts
+- A	convex/visualWorkflowTables.ts
+- M	lib/__tests__/github.test.ts
+- A	lib/__tests__/localFixtureAuth.test.ts
+- A	lib/__tests__/visualExport.test.ts
+- A	lib/__tests__/visualFigures.test.ts
+- A	lib/__tests__/visualProfile.test.ts
+- A	lib/__tests__/visualProviders.test.ts
+- A	lib/__tests__/visualWorkflow.test.ts
+- M	lib/github.ts
+- A	lib/localFixtureAuth.ts
+- A	lib/publicationReview.ts
+- A	lib/visualExport.ts
+- A	lib/visualFigures.ts
+- A	lib/visualProfile.ts
+- A	lib/visualProviders.ts
+- A	lib/visualSeed/README.md
+- A	lib/visualSeed/final-direction-prompts.json
+- A	lib/visualSeed/index.ts
+- A	lib/visualSeed/manifest.json
+- A	lib/visualSeed/prompting-lessons.json
+- A	lib/visualSeed/source-document.json
+- A	lib/visualWorkflow.ts
+- M	package-lock.json
+- M	package.json
+
+### Working Tree Snapshot
+
+- A  app/api/blog-pr-status/__tests__/route.test.ts
+- M  app/api/blog-pr-status/route.ts
+- M  app/api/publish/__tests__/route.test.ts
+- M  app/api/publish/route.ts
+-  M components/BlogPostEditor/BlogPostEditor.tsx
+-  M components/BlogPostEditor/__tests__/BlogPostEditor.test.tsx
+-  M components/ConvexClientProvider.tsx
+-  M components/FullScreenEditor/FullScreenEditor.tsx
+-  M components/FullScreenEditor/__tests__/FullScreenEditor.test.tsx
+-  M components/PersistedPublishingPanel.tsx
+-  M components/__tests__/ConvexClientProvider.test.tsx
+-  M components/__tests__/PersistedPublishingPanel.test.tsx
+- A  convex.json
+- A  convex/README.md
+- M  convex/__tests__/helpers/mockMutationCtx.ts
+- A  convex/__tests__/visualExports.test.ts
+- A  convex/__tests__/visualFigures.test.ts
+- A  convex/__tests__/visualLinkedEvidence.test.ts
+- A  convex/__tests__/visualProfiles.test.ts
+- A  convex/__tests__/visualPublication.test.ts
+- A  convex/__tests__/visualPublishingIntegration.test.ts
+- A  convex/__tests__/visualWorkflow.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/campaignAccess.ts
+- M  convex/posts.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- A  convex/tsconfig.json
+- M  convex/v2Storage.ts
+- A  convex/visualExports.ts
+- A  convex/visualFigureTables.ts
+- A  convex/visualFigures.ts
+- A  convex/visualLinkedEvidence.ts
+- A  convex/visualProfileTables.ts
+- A  convex/visualProfiles.ts
+- A  convex/visualPublication.ts
+- A  convex/visualStorageAccess.ts
+- A  convex/visualStorageTables.ts
+- A  convex/visualWorkflow.ts
+- A  convex/visualWorkflowTables.ts
+-  M eslint.config.mjs
+- M  lib/__tests__/github.test.ts
+- A  lib/__tests__/localFixtureAuth.test.ts
+- A  lib/__tests__/visualExport.test.ts
+- A  lib/__tests__/visualFigures.test.ts
+- A  lib/__tests__/visualProfile.test.ts
+- A  lib/__tests__/visualProviders.test.ts
+- A  lib/__tests__/visualWorkflow.test.ts
+- M  lib/github.ts
+- A  lib/localFixtureAuth.ts
+- A  lib/publicationReview.ts
+- A  lib/visualExport.ts
+- A  lib/visualFigures.ts
+- A  lib/visualProfile.ts
+- A  lib/visualProviders.ts
+- A  lib/visualSeed/README.md
+- A  lib/visualSeed/final-direction-prompts.json
+- A  lib/visualSeed/index.ts
+- A  lib/visualSeed/manifest.json
+- A  lib/visualSeed/prompting-lessons.json
+- A  lib/visualSeed/source-document.json
+- A  lib/visualWorkflow.ts
+- M  package-lock.json
+- M  package.json
+- ?? components/EditorialFigurePanel.tsx
+- ?? components/EditorialVisualPanel.tsx
+- ?? components/LinkedFigureEvidencePanel.tsx
+- ?? components/__tests__/EditorialFigurePanel.test.tsx
+- ?? components/__tests__/EditorialVisualPanel.test.tsx
+- ?? components/__tests__/LinkedFigureEvidencePanel.test.tsx
+- ?? docs/editorial-visuals/
+- ?? scripts/export-local-visual-fixture.mjs
+- ?? scripts/import-visual-seed.mjs
+- ?? scripts/publish-visual-tickets.py
+- ?? scripts/visual-fixture-issuer.mjs
+- ?? scripts/visual-fixture-rehearsal.mjs
+- ?? scripts/visual-linked-fixture-rehearsal.mjs
+- ?? scripts/visual-provider-qualification-packet.py
+- ?? scripts/visual-provider-qualification-packet.test.py
+
+### Branch
+
+- feat/editorial-visual-generation
+
+## 09/30/2026 08:22:03 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+- Touched auth or environment wiring.
+
+### Staged Changes
+
+- M	components/BlogPostEditor/BlogPostEditor.tsx
+- M	components/BlogPostEditor/__tests__/BlogPostEditor.test.tsx
+- M	components/ConvexClientProvider.tsx
+- A	components/EditorialFigurePanel.tsx
+- A	components/EditorialVisualPanel.tsx
+- M	components/FullScreenEditor/FullScreenEditor.tsx
+- M	components/FullScreenEditor/__tests__/FullScreenEditor.test.tsx
+- A	components/LinkedFigureEvidencePanel.tsx
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/ConvexClientProvider.test.tsx
+- A	components/__tests__/EditorialFigurePanel.test.tsx
+- A	components/__tests__/EditorialVisualPanel.test.tsx
+- A	components/__tests__/LinkedFigureEvidencePanel.test.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	eslint.config.mjs
+
+### Working Tree Snapshot
+
+- M  components/BlogPostEditor/BlogPostEditor.tsx
+- M  components/BlogPostEditor/__tests__/BlogPostEditor.test.tsx
+- M  components/ConvexClientProvider.tsx
+- A  components/EditorialFigurePanel.tsx
+- A  components/EditorialVisualPanel.tsx
+- M  components/FullScreenEditor/FullScreenEditor.tsx
+- M  components/FullScreenEditor/__tests__/FullScreenEditor.test.tsx
+- A  components/LinkedFigureEvidencePanel.tsx
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/ConvexClientProvider.test.tsx
+- A  components/__tests__/EditorialFigurePanel.test.tsx
+- A  components/__tests__/EditorialVisualPanel.test.tsx
+- A  components/__tests__/LinkedFigureEvidencePanel.test.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  eslint.config.mjs
+- ?? docs/editorial-visuals/
+- ?? scripts/export-local-visual-fixture.mjs
+- ?? scripts/import-visual-seed.mjs
+- ?? scripts/publish-visual-tickets.py
+- ?? scripts/visual-fixture-issuer.mjs
+- ?? scripts/visual-fixture-rehearsal.mjs
+- ?? scripts/visual-linked-fixture-rehearsal.mjs
+- ?? scripts/visual-provider-qualification-packet.py
+- ?? scripts/visual-provider-qualification-packet.test.py
+
+### Branch
+
+- feat/editorial-visual-generation
+
+## 09/30/2026 08:29:27 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	docs/editorial-visuals/PROGRESS.md
+- A	docs/editorial-visuals/figures.md
+- A	docs/editorial-visuals/fixture-rehearsal.md
+- A	docs/editorial-visuals/issues.json
+- A	docs/editorial-visuals/linked-evidence.md
+- A	docs/editorial-visuals/linked-fixture-rehearsal.md
+- A	docs/editorial-visuals/profile-contract.md
+- A	docs/editorial-visuals/providers/contracts.md
+- A	docs/editorial-visuals/providers/qualification-packet.json
+- A	docs/editorial-visuals/providers/review-dispositions.md
+- A	docs/editorial-visuals/providers/tdd-receipts.md
+- A	docs/editorial-visuals/publication-action.md
+- A	docs/editorial-visuals/reader-rehearsal.md
+- A	docs/editorial-visuals/release-preflight.md
+- A	docs/editorial-visuals/ui.md
+- A	docs/editorial-visuals/workflow-contract.md
+- A	docs/editorial-visuals/workflow-tdd-receipts.md
+- A	scripts/export-local-visual-fixture.mjs
+- A	scripts/import-visual-seed.mjs
+- A	scripts/publish-visual-tickets.py
+- A	scripts/visual-fixture-issuer.mjs
+- A	scripts/visual-fixture-rehearsal.mjs
+- A	scripts/visual-linked-fixture-rehearsal.mjs
+- A	scripts/visual-provider-qualification-packet.py
+- A	scripts/visual-provider-qualification-packet.test.py
+
+### Working Tree Snapshot
+
+- A  docs/editorial-visuals/PROGRESS.md
+- A  docs/editorial-visuals/figures.md
+- A  docs/editorial-visuals/fixture-rehearsal.md
+- A  docs/editorial-visuals/issues.json
+- A  docs/editorial-visuals/linked-evidence.md
+- A  docs/editorial-visuals/linked-fixture-rehearsal.md
+- A  docs/editorial-visuals/profile-contract.md
+- A  docs/editorial-visuals/providers/contracts.md
+- A  docs/editorial-visuals/providers/qualification-packet.json
+- A  docs/editorial-visuals/providers/review-dispositions.md
+- A  docs/editorial-visuals/providers/tdd-receipts.md
+- A  docs/editorial-visuals/publication-action.md
+- A  docs/editorial-visuals/reader-rehearsal.md
+- A  docs/editorial-visuals/release-preflight.md
+- A  docs/editorial-visuals/ui.md
+- A  docs/editorial-visuals/workflow-contract.md
+- A  docs/editorial-visuals/workflow-tdd-receipts.md
+- A  scripts/export-local-visual-fixture.mjs
+- A  scripts/import-visual-seed.mjs
+- A  scripts/publish-visual-tickets.py
+- A  scripts/visual-fixture-issuer.mjs
+- A  scripts/visual-fixture-rehearsal.mjs
+- A  scripts/visual-linked-fixture-rehearsal.mjs
+- A  scripts/visual-provider-qualification-packet.py
+- A  scripts/visual-provider-qualification-packet.test.py
+
+### Branch
+
+- feat/editorial-visual-generation
+
+## 09/30/2026 09:50:56 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	convex/__tests__/visualFigures.test.ts
+- M	convex/__tests__/visualPublication.test.ts
+- M	convex/__tests__/visualPublishingIntegration.test.ts
+- A	convex/__tests__/visualRollout.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/publishing.ts
+- M	convex/schema.ts
+- M	convex/v2Storage.ts
+- M	convex/visualFigures.ts
+- M	convex/visualLinkedEvidence.ts
+- M	convex/visualProfiles.ts
+- M	convex/visualPublication.ts
+- A	convex/visualRollout.ts
+- M	convex/visualStorageAccess.ts
+- M	convex/visualWorkflow.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- M	docs/editorial-visuals/publication-action.md
+- M	docs/editorial-visuals/release-preflight.md
+- A	docs/editorial-visuals/rollout.md
+- M	lib/publicationReview.ts
+- M	tests/setup.ts
+
+### Working Tree Snapshot
+
+- M  convex/__tests__/visualFigures.test.ts
+- M  convex/__tests__/visualPublication.test.ts
+- M  convex/__tests__/visualPublishingIntegration.test.ts
+- A  convex/__tests__/visualRollout.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/publishing.ts
+- M  convex/schema.ts
+- M  convex/v2Storage.ts
+- M  convex/visualFigures.ts
+- M  convex/visualLinkedEvidence.ts
+- M  convex/visualProfiles.ts
+- M  convex/visualPublication.ts
+- A  convex/visualRollout.ts
+- M  convex/visualStorageAccess.ts
+- M  convex/visualWorkflow.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/publication-action.md
+- M  docs/editorial-visuals/release-preflight.md
+- A  docs/editorial-visuals/rollout.md
+- M  lib/publicationReview.ts
+- M  tests/setup.ts
+
+### Branch
+
+- feat/editorial-visual-generation
+
+## 09/30/2026 10:18:07 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	convex/__tests__/visualPublicationLifecycle.test.ts
+- M	convex/publishing.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- M	docs/editorial-visuals/publication-action.md
+- M	docs/editorial-visuals/release-preflight.md
+- M	docs/editorial-visuals/rollout.md
+
+### Working Tree Snapshot
+
+- A  convex/__tests__/visualPublicationLifecycle.test.ts
+- M  convex/publishing.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/publication-action.md
+- M  docs/editorial-visuals/release-preflight.md
+- M  docs/editorial-visuals/rollout.md
+
+### Branch
+
+- feat/editorial-visual-generation
+
+## 09/30/2026 11:01:38 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	convex/__tests__/visualFigures.test.ts
+- M	convex/__tests__/visualPublicationLifecycle.test.ts
+- M	convex/publishing.ts
+- M	convex/visualFigures.ts
+- M	convex/visualLinkedEvidence.ts
+- M	convex/visualWorkflow.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- M	docs/editorial-visuals/publication-action.md
+- M	docs/editorial-visuals/release-preflight.md
+- M	docs/editorial-visuals/rollout.md
+- M	lib/publicationReview.ts
+
+### Working Tree Snapshot
+
+- M  convex/__tests__/visualFigures.test.ts
+- M  convex/__tests__/visualPublicationLifecycle.test.ts
+- M  convex/publishing.ts
+- M  convex/visualFigures.ts
+- M  convex/visualLinkedEvidence.ts
+- M  convex/visualWorkflow.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/publication-action.md
+- M  docs/editorial-visuals/release-preflight.md
+- M  docs/editorial-visuals/rollout.md
+- M  lib/publicationReview.ts
+
+### Branch
+
+- feat/editorial-visual-generation
+
+## 09/30/2026 12:32:03 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	components/EditorialVisualPanel.tsx
+- M	components/__tests__/EditorialVisualPanel.test.tsx
+- A	convex/__tests__/visualProviderActions.test.ts
+- M	convex/__tests__/visualPublication.test.ts
+- A	convex/__tests__/visualTextActions.test.ts
+- M	convex/_generated/api.d.ts
+- M	convex/schema.ts
+- A	convex/visualProviderActions.ts
+- A	convex/visualProviderConfig.ts
+- M	convex/visualPublication.ts
+- A	convex/visualTextActions.ts
+- A	convex/visualTextConfig.ts
+- A	convex/visualTextTables.ts
+- M	convex/visualWorkflow.ts
+- M	convex/visualWorkflowTables.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- M	docs/editorial-visuals/providers/contracts.md
+- A	docs/editorial-visuals/providers/functional-first-packet.json
+- A	docs/editorial-visuals/providers/gpt-image-1-functional-bound.md
+- A	lib/__tests__/visualProviderRuntime.test.ts
+- M	lib/__tests__/visualProviders.test.ts
+- A	lib/__tests__/visualTextRuntime.test.ts
+- M	lib/github.ts
+- A	lib/visualProviderRuntime.ts
+- M	lib/visualProviders.ts
+- A	lib/visualTextRuntime.ts
+
+### Working Tree Snapshot
+
+- M  components/EditorialVisualPanel.tsx
+- M  components/__tests__/EditorialVisualPanel.test.tsx
+- A  convex/__tests__/visualProviderActions.test.ts
+- M  convex/__tests__/visualPublication.test.ts
+- A  convex/__tests__/visualTextActions.test.ts
+- M  convex/_generated/api.d.ts
+- M  convex/schema.ts
+- A  convex/visualProviderActions.ts
+- A  convex/visualProviderConfig.ts
+- M  convex/visualPublication.ts
+- A  convex/visualTextActions.ts
+- A  convex/visualTextConfig.ts
+- A  convex/visualTextTables.ts
+- M  convex/visualWorkflow.ts
+- M  convex/visualWorkflowTables.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/providers/contracts.md
+- A  docs/editorial-visuals/providers/functional-first-packet.json
+- A  docs/editorial-visuals/providers/gpt-image-1-functional-bound.md
+- A  lib/__tests__/visualProviderRuntime.test.ts
+- M  lib/__tests__/visualProviders.test.ts
+- A  lib/__tests__/visualTextRuntime.test.ts
+- M  lib/github.ts
+- A  lib/visualProviderRuntime.ts
+- M  lib/visualProviders.ts
+- A  lib/visualTextRuntime.ts
+
+### Branch
+
+- feat/editorial-visual-generation
+
+## 09/30/2026 14:42:29 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	components/PersistedPublishingPanel.tsx
+- M	components/__tests__/PersistedPublishingPanel.test.tsx
+- M	convex/__tests__/articlePublicationVisual.test.ts
+- M	convex/__tests__/visualProviderActions.test.ts
+- M	convex/blogValidators.ts
+- M	convex/visualProviderActions.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- M	docs/editorial-visuals/providers/functional-first-packet.json
+- M	lib/__tests__/articlePublication.test.ts
+- M	lib/__tests__/github.test.ts
+- M	lib/articlePublication.ts
+- M	lib/github.ts
+
+### Working Tree Snapshot
+
+- M  components/PersistedPublishingPanel.tsx
+- M  components/__tests__/PersistedPublishingPanel.test.tsx
+- M  convex/__tests__/articlePublicationVisual.test.ts
+- M  convex/__tests__/visualProviderActions.test.ts
+- M  convex/blogValidators.ts
+- M  convex/visualProviderActions.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- M  docs/editorial-visuals/providers/functional-first-packet.json
+- M  lib/__tests__/articlePublication.test.ts
+- M  lib/__tests__/github.test.ts
+- M  lib/articlePublication.ts
+- M  lib/github.ts
+
+### Branch
+
+- feat/editorial-visual-generation
 - Touched the main dashboard surfaces.
 
 ### Staged Changes
@@ -4823,3 +5322,74 @@ Addressed the 18 initial comments on PR #133 before merge: confirmed cancellatio
 ### Branch
 
 - codex/epic-97-review-followups
+
+## 09/30/2026 15:09:55 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	convex/__tests__/articlePublicationVisual.test.ts
+- M	convex/__tests__/visualTextActions.test.ts
+- M	convex/visualTextActions.ts
+- M	convex/visualTextConfig.ts
+- M	convex/visualTextTables.ts
+- M	convex/visualWorkflow.ts
+- M	docs/editorial-visuals/PROGRESS.md
+- A	docs/editorial-visuals/pixel-reflection.md
+- M	docs/editorial-visuals/reader-rehearsal.md
+- M	lib/__tests__/visualTextRuntime.test.ts
+- M	lib/visualTextRuntime.ts
+- M	scripts/export-local-visual-fixture.mjs
+
+### Working Tree Snapshot
+
+- M  convex/__tests__/articlePublicationVisual.test.ts
+- M  convex/__tests__/visualTextActions.test.ts
+- M  convex/visualTextActions.ts
+- M  convex/visualTextConfig.ts
+- M  convex/visualTextTables.ts
+- M  convex/visualWorkflow.ts
+- M  docs/editorial-visuals/PROGRESS.md
+- A  docs/editorial-visuals/pixel-reflection.md
+- M  docs/editorial-visuals/reader-rehearsal.md
+- M  lib/__tests__/visualTextRuntime.test.ts
+- M  lib/visualTextRuntime.ts
+- M  scripts/export-local-visual-fixture.mjs
+
+### Branch
+
+- codex/approved-image-reflection
+
+## 09/30/2026 15:31:11 PDT
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	docs/editorial-visuals/PROGRESS.md
+- M	lib/__tests__/github.test.ts
+- M	lib/github.ts
+
+### Working Tree Snapshot
+
+- M  docs/editorial-visuals/PROGRESS.md
+- M  lib/__tests__/github.test.ts
+- M  lib/github.ts
+
+### Branch
+
+- codex/approved-image-reflection
+
+
+## 2026-10-01 02:34 UTC — Editorial visual repair checkpoint
+
+- Bind native publication records to current approval and prepared hero bytes; reject malformed retained hashes before verification. Preserve exact complete figure source-note paragraphs.
+- Use HTML5 source locations with conservative unsupported-declaration holds; retain Unicode scene distinctions and exact linked CSV provenance. Bind composer review state to its target post and current source head.
+- Reconcile per-attempt budget overruns across acknowledgement epochs, stop oversized streams, validate native reference bytes and hold ambiguous legacy text-route history before dispatch.
+- Preserve human tracker edits, constrain fictional reader tables and run offline image tooling guards in CI. Replace one corrupt rollout test fixture with a real PNG without weakening native validation.
+- Backend and UI scoped reviews are approved; final publication/figure review, exact final CI and served qualification remain pending. Provider spending, merge, deployment and real content publication remain zero.

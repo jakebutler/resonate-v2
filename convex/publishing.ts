@@ -11,7 +11,7 @@ import { ownedSeries } from "./series";
 import { blogArtifactValidator, preparedHeroValidator } from "./blogValidators";
 import { blogEditorialFingerprint, missingBlogEditorialFields } from "../lib/blogContract";
 import { previewSeedIdeas, previewSeedPosts } from "./previewSeedData";
-import { v } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import {
@@ -30,6 +30,15 @@ import {
 import { providerSubmissionIneligibilityReason } from "@/lib/approvalGate";
 import { sanitizeProviderResponse } from "@/lib/sanitize";
 import { formatYmdFromOffset } from "@/lib/formatYmd";
+import { buildPublicationVisuals, onArticleChange } from "./visualWorkflow";
+import schema from "./schema";
+import { publicationVisualsValidator } from "./visualWorkflowTables";
+import { assertEditorialStorageAccess } from "./visualStorageAccess";
+import { buildPublicationFigures, onFigureArticleChange, publicationFigureValidator } from "./visualFigures";
+import { hashVisualBytes } from "../lib/visualProfile";
+import { stableInputSignature } from "../lib/visualWorkflow";
+import { approvalArticleSignature, publicationMetadataSignature, resolvePublicationSchedule, publicationTransitionRequired } from "../lib/publicationReview";
+import { assertCurrentLinkedEvidence } from "./visualLinkedEvidence";
 
 type BrandId = "personal" | "corvo" | "lower-db" | "freshproof";
 type ChannelId =
@@ -237,6 +246,8 @@ async function ensureWorkspaceChannel(
   const now = Date.now();
   await ensureBrandRecord(ctx, brandId, now);
   await ensureBrandMembership(ctx, userId, brandId, now);
+  const membership = await requireBrandAccess(ctx, userId, brandId);
+  if (membership.role !== "owner" && membership.role !== "editor") throw new Error("Publishing requires an owner or editor");
   return await ensureBrandChannel(ctx, brandId, channelId, now);
 }
 
@@ -247,15 +258,17 @@ function contentFingerprint(title: string, content: string, linkedinFirstComment
 async function getOwnedPost(
   ctx: QueryCtx | MutationCtx,
   userId: string,
-  postId: Id<"v2Posts">
+  postId: Id<"v2Posts">,
+  requireWrite = false
 ) {
   const post = await ctx.db.get(postId);
   if (!post || post.userId !== userId) throw new Error("Post not found");
-  await requireBrandAccess(ctx, userId, post.brandId);
+  const membership = await requireBrandAccess(ctx, userId, post.brandId);
+  if (requireWrite && membership.role !== "owner" && membership.role !== "editor") throw new Error("Publishing requires an owner or editor");
   return post;
 }
 
-async function latestIntent(
+export async function latestIntent(
   ctx: QueryCtx | MutationCtx,
   postId: Id<"v2Posts">
 ) {
@@ -263,7 +276,6 @@ async function latestIntent(
     .withIndex("by_post_and_updated_at", q => q.eq("postId", postId))
     .order("desc").first();
 }
-export { latestIntent };
 
 async function accessibleBrandIds(ctx: QueryCtx | MutationCtx, userId: string) {
   const memberships = await ctx.db
@@ -720,6 +732,100 @@ export const getPostById = query({
   },
 });
 
+const exactApprovalArticle = approvalArticleSignature;
+function assertVisualPrTarget(prUrl: string, prNumber?: number) {
+  const url = new URL(prUrl);
+  const owner = process.env.BLOG_REPO_OWNER || "jakebutler";
+  const repository = process.env.BLOG_REPO_NAME || "corvo-labs-dot-com";
+  const number = url.pathname.match(/\/pull\/([1-9]\d*)$/u)?.[1];
+  if (url.origin !== "https://github.com" || url.username || url.password || url.search || url.hash || !number || url.pathname !== `/${owner}/${repository}/pull/${number}` || (prNumber !== undefined && Number(number) !== prNumber)) throw new Error("Recorded visual PR target is invalid");
+}
+async function hasVisualPublication(ctx: QueryCtx | MutationCtx, postId: Id<"v2Posts">) {
+  return Boolean(await ctx.db.query("v2VisualStates").withIndex("by_post", q => q.eq("postId", postId)).first()) ||
+    Boolean(await ctx.db.query("v2FigureStates").withIndex("by_post_status", q => q.eq("postId", postId).eq("status", "accepted")).first()) ||
+    Boolean(await ctx.db.query("v2FigureStates").withIndex("by_post_status", q => q.eq("postId", postId).eq("status", "needs-review")).first());
+}
+async function assertVisualAssetSlug(ctx: QueryCtx | MutationCtx, post: Doc<"v2Posts">, proposedSlug = post.blogSlug) {
+  if (!proposedSlug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(proposedSlug)) throw new Error("Choose an explicit canonical article slug before final visual approval");
+  const posts = await ctx.db.query("v2Posts").withIndex("by_brand_and_blogSlug", q => q.eq("brandId", post.brandId).eq("blogSlug", proposedSlug)).take(2);
+  if (posts.some(other => other._id !== post._id)) throw new Error("Visual article slug is already used by another post; choose an unused slug");
+}
+async function currentVisualApprovalSignature(ctx: QueryCtx | MutationCtx, post: Doc<"v2Posts">) {
+  const visuals = await buildPublicationVisuals(ctx, post);
+  const figures = await buildPublicationFigures(ctx, post);
+  await assertCurrentLinkedEvidence(ctx, post, figures.flatMap(figure => figure.evidenceSources.map(source => source.sourceId)));
+  if (figures.length && !visuals?.hero) throw new Error("Approve a prepared hero before approving informational figures");
+  const hero = visuals?.hero;
+  if (hero) await assertVisualAssetSlug(ctx, post);
+  const proof = { metadata: publicationMetadataSignature(post), editorial: blogEditorialFingerprint(post), hero: hero ? { versionId: hero.versionId, storageId: hero.storageId, sha256: hero.sha256, metadata: hero.metadata, alt: hero.alt, approvedBy: hero.approvedBy, approvedAt: hero.approvedAt } : null,
+    figures: figures.map(figure => ({ candidateId: figure.candidateId, dataSignature: figure.dataSignature, presentationSignature: figure.presentationSignature, rendererVersion: figure.rendererVersion, acceptedBy: figure.acceptedBy, acceptedAt: figure.acceptedAt, evidenceSources: figure.evidenceSources })) };
+  return hashVisualBytes(new TextEncoder().encode(stableInputSignature(proof)).buffer);
+}
+function assertNewPublicationLifecycle(post: Doc<"v2Posts">) {
+  if (publicationTransitionRequired({ ...post, blogExportClaimKey: undefined })) {
+    throw new Error("This publication lifecycle requires a separate publishing transition");
+  }
+}
+async function missingPublicationEditorialFields(ctx: QueryCtx | MutationCtx, post: Doc<"v2Posts">) {
+  const visuals = await buildPublicationVisuals(ctx, post);
+  if (!visuals?.hero) return missingBlogEditorialFields(post);
+  // The approved visual export owns its separately reviewed hero bytes and manual alt.
+  return missingBlogEditorialFields({ ...post, coverImageAlt: visuals.hero.alt }).filter(field => field !== "hero image" && field !== "reviewed prepared hero");
+}
+async function assertReviewedApproval(ctx: MutationCtx, post: Doc<"v2Posts">, expectedArticleSignature?: string, expectedVisualSignature?: string) {
+  if (expectedArticleSignature !== undefined && expectedArticleSignature !== exactApprovalArticle(post)) throw new Error("Reviewed article changed; reload before final approval");
+  if (post.channelId !== "corvo-blog") return;
+  const hasVisuals = await hasVisualPublication(ctx, post._id);
+  if (hasVisuals) assertNewPublicationLifecycle(post);
+  const signature = await currentVisualApprovalSignature(ctx, post);
+  if (hasVisuals) {
+    if (!expectedArticleSignature || !expectedVisualSignature) throw new Error("Review the current article and visual snapshot before final approval");
+    if (expectedVisualSignature !== signature) throw new Error("Reviewed visuals changed; reload before final approval");
+  }
+}
+
+export const getApprovalReview = query({
+  args: { postId: v.id("v2Posts") },
+  returns: v.object({ articleSignature: v.string(), metadataSignature: v.string(), hasVisuals: v.boolean(), publicationQualified: v.boolean(), visualSignature: v.union(v.string(), v.null()), blockedReason: v.union(v.string(), v.null()) }),
+  handler: async (ctx, args) => {
+    const post = await getOwnedPost(ctx, await requireUserId(ctx), args.postId);
+    const articleSignature = exactApprovalArticle(post);
+    const hasVisuals = await hasVisualPublication(ctx, post._id);
+    const metadataSignature = publicationMetadataSignature(post);
+    try { if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile before approval."); if (hasVisuals) assertNewPublicationLifecycle(post); const visuals = await buildPublicationVisuals(ctx, post); return { articleSignature, metadataSignature, hasVisuals, publicationQualified: !hasVisuals || visuals?.hero.qualification === "live-receipt", visualSignature: await currentVisualApprovalSignature(ctx, post), blockedReason: null }; }
+    catch (error) { return { articleSignature, metadataSignature, hasVisuals, publicationQualified: false, visualSignature: null, blockedReason: error instanceof Error ? error.message : "Visual review is incomplete" }; }
+  },
+});
+
+/** One database snapshot binds the approved article to its current visual assets. */
+export const getPostForPublication = query({
+  args: { postId: v.string() }, returns: v.object({
+    post: v.object({ _id: v.id("v2Posts"), _creationTime: v.number(), ...schema.tables.v2Posts.validator.fields }),
+    visuals: publicationVisualsValidator,
+    figures: v.array(publicationFigureValidator),
+    intent: v.object({ _id: v.id("v2PublishingIntents"), _creationTime: v.number(), ...schema.tables.v2PublishingIntents.validator.fields }),
+    reviewSignature: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const postId = ctx.db.normalizeId("v2Posts", args.postId);
+    if (!postId) throw new Error("Post not found");
+    const post = await getOwnedPost(ctx, userId, postId, true);
+    if (post.channelId !== "corvo-blog") throw new Error("Only blog posts can create publication packages");
+    assertNewPublicationLifecycle(post);
+    if (post.approvalState !== "approved") throw new ConvexError({ code: "BLOG_PUBLICATION_APPROVAL_REQUIRED", message: "Post is not approved for publishing" });
+    const missing = await missingPublicationEditorialFields(ctx, post);
+    if (missing.length) throw new ConvexError({ code: "BLOG_PUBLICATION_METADATA_REQUIRED", message: `Review blog metadata before publishing: ${missing.join(", ")}` });
+    const intent = await latestIntent(ctx, post._id);
+    if (!intent || intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post)) throw new Error("Publishing intent approval is stale");
+    if (post.variantReviewStatus === "pending" || post.variantReviewStatus === "rejected") throw new Error("Post lifecycle does not permit a new publication");
+    const visuals = await buildPublicationVisuals(ctx, post);
+    const figures = await buildPublicationFigures(ctx, post);
+    if (figures.length && !visuals?.hero) throw new Error("Approve a prepared hero before publishing informational figures");
+    return { post, visuals, figures, intent, reviewSignature: await currentVisualApprovalSignature(ctx, post) };
+  },
+});
+
 export async function createCanonicalPost(
   ctx: MutationCtx,
   userId: string,
@@ -824,7 +930,7 @@ export const deletePost = mutation({
   args: { postId: v.id("v2Posts") },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
     if (await ctx.db.query("seriesPostLinks").withIndex("by_post", q => q.eq("postId", post._id)).first()) throw new Error("Detach the post from its series before deleting it.");
     if(post.prUrl||post.blogArtifact||post.blogExportClaimKey)throw new Error("Publication receipts and pending exports must be retained; this post cannot be deleted.");
     const receipt=await ctx.db.query("v2PublishAttempts").withIndex("by_post",q=>q.eq("postId",post._id)).take(101);
@@ -886,14 +992,15 @@ export const deletePost = mutation({
   },
 });
 
-export async function applyEditorialApproval(ctx: MutationCtx, userId: string, post: Doc<"v2Posts">, approvalState: Doc<"v2Posts">["approvalState"]) {
+export async function applyEditorialApproval(ctx: MutationCtx, userId: string, post: Doc<"v2Posts">, approvalState: Doc<"v2Posts">["approvalState"], review?: { expectedArticleSignature?: string; expectedVisualSignature?: string }) {
     const role = await requireBrandAccess(ctx,userId,post.brandId);
     if(post.userId!==userId || role.role === "viewer") throw new Error("Editor access required");
     if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
+    if (approvalState === "approved") await assertReviewedApproval(ctx, post, review?.expectedArticleSignature, review?.expectedVisualSignature);
     const intent = await latestIntent(ctx, post._id);
     if (!intent) throw new Error("Publishing intent not found");
     if (approvalState === "approved" && post.channelId === "corvo-blog") {
-      const missing = missingBlogEditorialFields(post);
+      const missing = await missingPublicationEditorialFields(ctx, post);
       if (missing.length) throw new Error(`Review blog metadata before approval: ${missing.join(", ")}`);
     }
     const fingerprint = post.channelId === "corvo-blog"
@@ -929,8 +1036,15 @@ export async function applyEditorialApproval(ctx: MutationCtx, userId: string, p
 }
 
 export const setApproval = mutation({
-  args:{postId:v.id("v2Posts"),approvalState:approvalValidator},returns:v.any(),
-  handler:async(ctx,args)=>{const userId=await requireUserId(ctx);const post=await getOwnedPost(ctx,userId,args.postId);await applyEditorialApproval(ctx,userId,post,args.approvalState);}
+  args: {
+    postId: v.id("v2Posts"), approvalState: approvalValidator,
+    expectedArticleSignature: v.optional(v.string()), expectedVisualSignature: v.optional(v.string()),
+  }, returns: v.any(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const post = await getOwnedPost(ctx, userId, args.postId);
+    await applyEditorialApproval(ctx, userId, post, args.approvalState, args);
+  }
 });
 
 export const reschedule = mutation({
@@ -943,7 +1057,7 @@ export const reschedule = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
     if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     if (post.channelId === "linkedin") {
       const hold = await providerScheduleHold(ctx, post._id);
@@ -1125,11 +1239,15 @@ export const updateContent = mutation({
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     linkedinFirstComment: v.optional(v.string()),
+    expectedArticleSignature: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
+    if (args.expectedArticleSignature !== undefined && args.expectedArticleSignature !== JSON.stringify({ title: post.title, content: post.content, linkedinFirstComment: post.linkedinFirstComment ?? "" })) {
+      throw new Error("Article changed since this composer was loaded. Reload the saved article before saving.");
+    }
     if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
@@ -1140,6 +1258,10 @@ export const updateContent = mutation({
     }
     const linkedinFirstComment = args.linkedinFirstComment?.trim() ?? post.linkedinFirstComment;
     const now = Date.now();
+    if (post.channelId === "corvo-blog") {
+      await onArticleChange(ctx, post, { title, content });
+      await onFigureArticleChange(ctx, post, content);
+    }
 
     await ctx.db.patch(args.postId, {
       title,
@@ -1171,7 +1293,7 @@ export const updatePlatformSettings = mutation({
   args: { postId: v.id("v2Posts"), platformSettings: platformSettingsValidator },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
     if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
@@ -1190,7 +1312,7 @@ export const submitMockProvider = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
     const channel = await ctx.db
@@ -1349,7 +1471,7 @@ export const recordProviderIntent = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
     const now = Date.now();
@@ -1396,22 +1518,49 @@ export const recordProviderIntent = mutation({
   },
 });
 
-export const recordGithubPr = mutation({
-  args: {
-    postId: v.id("v2Posts"),
-    result: githubPrRecordValidator,
-  },
-  returns: v.any(),
-  handler: async (ctx, args) => {
+const publicationScheduleValidator = v.object({ scheduledDate: v.string(), scheduledTime: v.optional(v.string()), timezone: v.string() });
+async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Posts">; result: Infer<typeof githubPrRecordValidator>; expectedArticleSignature?: string; expectedVisualSignature?: string; expectedIntentId?: Id<"v2PublishingIntents">; expectedSchedule?: Infer<typeof publicationScheduleValidator> }, trusted = false) {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
     if (post.channelId !== "corvo-blog") {
       throw new Error("GitHub PR recording is only available for Corvo Blog posts.");
     }
+    if (!trusted && await hasVisualPublication(ctx, post._id)) throw new Error("Visual PR state requires server verification");
+    if (!trusted && (post.approvalState !== "approved" || post.contentFingerprint !== blogEditorialFingerprint(post))) throw new Error("Publication approval must match the current prepared editorial version");
+    if (trusted) {
+      assertNewPublicationLifecycle(post);
+      assertVisualPrTarget(args.result.prUrl, args.result.prNumber);
+      await assertReviewedApproval(ctx, post, args.expectedArticleSignature, args.expectedVisualSignature);
+      if (post.approvalState !== "approved" || post.variantReviewStatus === "pending" || post.variantReviewStatus === "rejected") throw new Error("Publication approval changed before PR recording");
+    }
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
+    if (!trusted && (intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post))) throw new Error("Publication intent approval is stale");
+    if (!trusted && args.result.artifact) {
+      const artifact = args.result.artifact;
+      if (artifact.figureAssets?.length) throw new Error("Visual PR assets require server verification");
+      const suppliesHeroBinding = [artifact.heroSha256, artifact.coverImageAlt, artifact.heroSourceUrl, artifact.editorialFingerprint].some(value => value !== undefined);
+      if (suppliesHeroBinding && (!post.preparedHero || post.preparedHero.sourceStorageId !== post.heroImageStorageId ||
+        !/^[a-f0-9]{64}$/u.test(artifact.heroSha256 ?? "") || artifact.heroSha256 !== post.preparedHero.sha256 ||
+        artifact.coverImageAlt?.trim() !== post.coverImageAlt?.trim() || artifact.heroSourceUrl !== post.heroImageUrl ||
+        (artifact.editorialFingerprint !== undefined && artifact.editorialFingerprint !== blogEditorialFingerprint(post)))) {
+        throw new Error("Recorded hero binding must match the current approved prepared hero");
+      }
+    }
+    if (trusted && (intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post))) throw new Error("Publication intent changed before PR recording");
+    if (trusted) {
+      const expected = args.expectedSchedule;
+      const current = resolvePublicationSchedule(post, intent, expected?.scheduledDate ?? "");
+      if (!expected || intent._id !== args.expectedIntentId || current.scheduledDate !== expected.scheduledDate ||
+        current.scheduledTime !== expected.scheduledTime || current.timezone !== expected.timezone) {
+        throw new Error("Publication schedule changed before PR recording");
+      }
+    }
 
-    if (post.blogExportClaimKey && post.blogExportClaimKey !== args.result.exportClaimKey) throw new Error("Export claim mismatch");
+    if ((trusted && !post.blogExportClaimKey) || (post.blogExportClaimKey && post.blogExportClaimKey !== args.result.exportClaimKey)) throw new Error("Export claim mismatch");
+    if (trusted && (!args.result.artifact || args.result.artifact.editorialFingerprint !== blogEditorialFingerprint(post) ||
+      args.result.artifact.branchName !== args.result.branchName || args.result.artifact.prNumber !== args.result.prNumber ||
+      args.result.artifact.repository !== `${process.env.BLOG_REPO_OWNER || "jakebutler"}/${process.env.BLOG_REPO_NAME || "corvo-labs-dot-com"}`)) throw new Error("Trusted publication artifact differs from the claimed editorial version");
     if (post.prUrl === args.result.prUrl) return;
     const now = Date.now();
     const sanitizedResponse = sanitizeProviderResponse(
@@ -1438,9 +1587,9 @@ export const recordGithubPr = mutation({
         channelId: post.channelId,
         title: post.title,
         content: post.content,
-        scheduledDate: intent.scheduledDate,
-        scheduledTime: intent.scheduledTime,
-        timezone: intent.timezone,
+        scheduledDate: trusted ? args.expectedSchedule!.scheduledDate : intent.scheduledDate,
+        scheduledTime: trusted ? args.expectedSchedule!.scheduledTime : intent.scheduledTime,
+        timezone: trusted ? args.expectedSchedule!.timezone : intent.timezone,
       },
       sanitizedResponse,
       createdAt: now,
@@ -1497,7 +1646,19 @@ export const recordGithubPr = mutation({
       metadata: { attemptId, prUrl: args.result.prUrl },
     });
 
-    return { recorded: true, attemptId };
+    return { recorded: true as const, attemptId };
+}
+export const recordGithubPr = mutation({
+  args: { postId: v.id("v2Posts"), result: githubPrRecordValidator },
+  handler: (ctx, args) => recordGithubPrHandler(ctx, args),
+});
+export const recordVisualPublicationPr = internalMutation({
+  args: { postId: v.id("v2Posts"), result: githubPrRecordValidator, expectedArticleSignature: v.string(), expectedVisualSignature: v.string(), expectedIntentId: v.id("v2PublishingIntents"), expectedSchedule: publicationScheduleValidator },
+  returns: v.object({ recorded: v.literal(true), attemptId: v.id("v2PublishAttempts") }),
+  handler: async (ctx, args) => {
+    const result = await recordGithubPrHandler(ctx, args, true);
+    if (!result) throw new Error("Trusted publication receipt requires reconciliation");
+    return result;
   },
 });
 
@@ -1609,13 +1770,16 @@ export const acceptVariantPost = mutation({
     scheduledDate: v.optional(v.string()),
     scheduledTime: v.optional(v.string()),
     timezone: v.optional(v.string()),
+    expectedArticleSignature: v.optional(v.string()),
+    expectedVisualSignature: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
     if (post.variantReviewStatus !== "pending") {
       throw new Error("Only pending variants can be accepted.");
     }
+    await assertReviewedApproval(ctx, post, args.expectedArticleSignature, args.expectedVisualSignature);
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
 
@@ -1628,6 +1792,7 @@ export const acceptVariantPost = mutation({
     await ctx.db.patch(args.postId, {
       variantReviewStatus: "accepted",
       approvalState: "approved",
+      contentFingerprint: fingerprintPostContent(post),
       status: nextStatus,
       scheduledDate,
       scheduledTime,
@@ -1636,6 +1801,7 @@ export const acceptVariantPost = mutation({
     });
     await ctx.db.patch(intent._id, {
       approvalState: "approved",
+      contentFingerprint: fingerprintPostContent(post),
       scheduledDate,
       scheduledTime,
       timezone,
@@ -1659,7 +1825,7 @@ export const rejectVariantPost = mutation({
   args: { postId: v.id("v2Posts") },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
     if (post.variantReviewStatus !== "pending") {
       throw new Error("Only pending variants can be rejected.");
     }
@@ -1695,11 +1861,13 @@ export const updateBlogMetadata = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
+    if (args.metadata.heroImageStorageId && args.metadata.heroImageStorageId !== post.heroImageStorageId) await assertEditorialStorageAccess(ctx, userId, args.metadata.heroImageStorageId);
     if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     if (post.channelId !== "corvo-blog") {
       throw new Error("Blog metadata is only available for Corvo Blog posts.");
     }
+    if (args.metadata.blogSlug !== undefined && await hasVisualPublication(ctx, post._id)) await assertVisualAssetSlug(ctx, post, args.metadata.blogSlug);
     const intent = await latestIntent(ctx, args.postId);
     const metadata = {...args.metadata, ...(args.metadata.heroImageUrl && !args.metadata.heroImageStorageId ? {heroImageStorageId: undefined, preparedHero: undefined} : {})};
     if (args.metadata.heroImageStorageId !== undefined && args.metadata.heroImageStorageId !== post.heroImageStorageId) Object.assign(metadata, {preparedHero: undefined});
@@ -1738,23 +1906,16 @@ export const updateBlogMetadata = mutation({
   },
 });
 
-export const recordBlogPrStatus = mutation({
-  args: {
-    postId: v.id("v2Posts"),
-    prStatus: v.union(
-      v.literal("open"),
-      v.literal("merged"),
-      v.literal("closed"),
-      v.literal("draft")
-    ),
-    prNumber: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
+const visualPrStatusValidator = v.union(v.literal("open"), v.literal("merged"), v.literal("closed"), v.literal("draft"));
+async function recordBlogPrStatusHandler(ctx: MutationCtx, args: { postId: Id<"v2Posts">; prStatus: Infer<typeof visualPrStatusValidator>; prNumber?: number; expectedPrUrl?: string }, trusted = false) {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
     if (post.channelId !== "corvo-blog") {
       throw new Error("PR status is only available for Corvo Blog posts.");
     }
+    if (!trusted && await hasVisualPublication(ctx, post._id)) throw new Error("Visual PR state requires server verification");
+    if (trusted && (!post.prUrl || post.prUrl !== args.expectedPrUrl)) throw new Error("Recorded PR changed before server status recording");
+    if (trusted) assertVisualPrTarget(post.prUrl!, args.prNumber);
     const now = Date.now();
     const patch: Partial<Doc<"v2Posts">> = {
       blogPrStatus: args.prStatus,
@@ -1767,7 +1928,27 @@ export const recordBlogPrStatus = mutation({
     // Legacy display-only PR receipt. Merge cannot verify Production or availability.
 
     await ctx.db.patch(args.postId, patch);
-    return { updated: true, prStatus: args.prStatus };
+    return { updated: true as const, prStatus: args.prStatus };
+}
+export const recordBlogPrStatus = mutation({
+  args: { postId: v.id("v2Posts"), prStatus: visualPrStatusValidator, prNumber: v.optional(v.number()) },
+  handler: (ctx, args) => recordBlogPrStatusHandler(ctx, args),
+});
+export const recordVisualPublicationPrStatus = internalMutation({
+  args: { postId: v.id("v2Posts"), prStatus: visualPrStatusValidator, prNumber: v.optional(v.number()), expectedPrUrl: v.string() },
+  returns: v.object({ updated: v.literal(true), prStatus: visualPrStatusValidator }),
+  handler: (ctx, args) => recordBlogPrStatusHandler(ctx, args, true),
+});
+export const getVisualPublicationPr = query({
+  args: { postId: v.string() },
+  returns: v.object({ _id: v.id("v2Posts"), _creationTime: v.number(), ...schema.tables.v2Posts.validator.fields }),
+  handler: async (ctx, args) => {
+    const postId = ctx.db.normalizeId("v2Posts", args.postId);
+    if (!postId) throw new Error("Post not found");
+    const post = await getOwnedPost(ctx, await requireUserId(ctx), postId, true);
+    if (post.channelId !== "corvo-blog" || !post.prUrl || !await hasVisualPublication(ctx, postId)) throw new Error("Recorded visual publication PR not found");
+    assertVisualPrTarget(post.prUrl, post.blogPrNumber);
+    return post;
   },
 });
 
@@ -2692,7 +2873,7 @@ export const getHeroPreparationContext = internalQuery({
 export const recordPreparedHero = internalMutation({
   args: {postId: v.id("v2Posts"), userId: v.string(), hero: preparedHeroValidator}, returns: v.null(),
   handler: async (ctx, args) => {
-    const post = await getOwnedPost(ctx, args.userId, args.postId);
+    const post = await getOwnedPost(ctx, args.userId, args.postId, true);
     if (post.blogExportClaimKey) throw new Error("Blog export is pending; reconcile it before editing this version.");
     if (post.heroImageStorageId !== args.hero.sourceStorageId) throw new Error("The source image changed during preparation; review the new image.");
     if (post.preparedHero?.sourceStorageId === args.hero.sourceStorageId && post.preparedHero.sha256 === args.hero.sha256 && post.preparedHero.crop === args.hero.crop) {
@@ -2709,11 +2890,21 @@ export const recordPreparedHero = internalMutation({
 });
 
 export const claimBlogExport = mutation({
-  args: {postId: v.id("v2Posts"), fingerprint: v.string(), schedule: v.string(), key: v.string()},
+  args: { postId: v.id("v2Posts"), fingerprint: v.string(), schedule: v.string(), key: v.string(),
+    expectedVisualSignature: v.optional(v.string()), expectedIntentId: v.optional(v.id("v2PublishingIntents")), expectedSchedule: v.optional(publicationScheduleValidator) },
   returns: v.string(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const post = await getOwnedPost(ctx, userId, args.postId);
+    const post = await getOwnedPost(ctx, userId, args.postId, true);
+    if (await hasVisualPublication(ctx, post._id)) {
+      assertNewPublicationLifecycle(post);
+      const intent = await latestIntent(ctx, post._id);
+      const expected = args.expectedSchedule;
+      const current = resolvePublicationSchedule(post, intent ?? {}, expected?.scheduledDate ?? "");
+      if (!args.expectedVisualSignature || args.expectedVisualSignature !== await currentVisualApprovalSignature(ctx, post)) throw new Error("Reviewed visuals changed before export claim");
+      if (!intent || intent._id !== args.expectedIntentId || intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post) || !expected ||
+        current.scheduledDate !== expected.scheduledDate || current.scheduledTime !== expected.scheduledTime || current.timezone !== expected.timezone) throw new Error("Publication intent or schedule changed before export claim");
+    }
     if (post.channelId !== "corvo-blog" || post.approvalState !== "approved" || post.contentFingerprint !== args.fingerprint || blogEditorialFingerprint(post) !== args.fingerprint || JSON.stringify([post.scheduledDate, post.scheduledTime, post.timezone]) !== args.schedule) throw new Error("Saved approved export or schedule changed; review again.");
     if (post.blogSyncPending || post.prUrl || (post.blogExportClaimKey && post.blogExportClaimKey !== args.key)) throw new Error("Existing article export requires reconciliation.");
     if (!post.blogExportClaimKey) {

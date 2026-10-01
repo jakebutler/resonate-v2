@@ -27,6 +27,34 @@ const configuredRepo = () =>
 const contentPath = () =>
   process.env.BLOG_CONTENT_PATH ||
   `${process.env.BLOG_APP_ROOT || "corvo-labs-enhanced"}/content/blog`;
+
+/** Only approved image locations change between saved Markdown and its reader artifact. */
+export function articleBodyForArtifact(content: string, artifact: Pick<BlogArtifact, "mdxPath" | "figureAssets" | "heroPath" | "heroSha256" | "heroSourceUrl">): string {
+  const figures = artifact.figureAssets ?? [];
+  if (figures.length > 3 || new Set(figures.map(figure => figure.sourceUrl)).size !== figures.length || new Set(figures.map(figure => figure.path)).size !== figures.length) throw new Error("Bound figure artifact identities are invalid.");
+  const slug = artifact.mdxPath.split("/").pop()?.replace(/\.mdx$/, "");
+  if (!slug || !/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error("Bound figure article path is invalid.");
+  const appRoot = process.env.BLOG_APP_ROOT || "corvo-labs-enhanced";
+  let body = content;
+  if (artifact.heroSourceUrl !== undefined) {
+    if (!artifact.heroSourceUrl || artifact.heroSourceUrl.length > 4096 || /[\r\n\0]/u.test(artifact.heroSourceUrl) ||
+      artifact.heroPath !== `${appRoot}/public/images/blog/${slug}/hero.webp` || !/^[a-f0-9]{64}$/u.test(artifact.heroSha256 ?? "")) throw new Error("Bound hero identity or path is unverified.");
+    const source = artifact.heroSourceUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Match the preparer's exact approved image identity, never other external URLs.
+    body = body.replace(new RegExp(`(!\\[[^\\]]*]\\()${source}(\\))`, "g"), (_match, before: string, after: string) => `${before}${artifact.heroPath!.slice(`${appRoot}/public`.length)}${after}`);
+  }
+  for (const figure of figures) {
+    const id = figure.sourceUrl.match(/^resonate-figure:\/\/([a-zA-Z0-9]+)$/u)?.[1];
+    const expectedPath = `${appRoot}/public/images/blog/${slug}/figure-${id}.svg`;
+    if (!id || figure.path !== expectedPath || !/^[a-f0-9]{64}$/u.test(figure.sha256)) throw new Error("Bound figure path or hash is unverified.");
+    const matches = [...body.matchAll(/!\[(?:\\.|[^\]\\\r\n])*\]\((resonate-figure:\/\/[a-zA-Z0-9]+)\)/gu)].filter(match => match[1] === figure.sourceUrl);
+    if (matches.length !== 1 || body.split(figure.sourceUrl).length !== 2) throw new Error("Bound figure placement is missing or ambiguous.");
+    const image = matches[0][0];
+    body = body.replace(image, () => image.replace(`](${figure.sourceUrl})`, () => `](${figure.path.slice(`${appRoot}/public`.length)})`));
+  }
+  if (body.includes("resonate-figure://")) throw new Error("Article contains an unbound figure token.");
+  return body;
+}
 export async function readArticlePublication(
   input: ArticleCheckInput,
   checkAvailability = verifyArticleAvailability,
@@ -41,6 +69,9 @@ export async function readArticlePublication(
   };
   let artifact = input.artifact;
   try {
+    if ([input.heroSha256, artifact?.heroSha256].some(hash => hash !== undefined && !/^[a-f0-9]{64}$/u.test(hash))) {
+      throw new Error("Bound hero hash is unverified.");
+    }
     const repo = configuredRepo();
     const escaped = repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const number = input.prUrl.match(
@@ -116,6 +147,8 @@ export async function readArticlePublication(
         artifact.branchName !== pr.head.ref)
     )
       throw new Error("Article artifact identity changed.");
+    if (artifact?.editorialFingerprint && artifact.editorialFingerprint !== input.editorialVersion) throw new Error("Article approval changed after the bound export.");
+    if (input.coverImageAlt !== undefined && artifact?.coverImageAlt !== undefined && input.coverImageAlt !== artifact.coverImageAlt) throw new Error("Saved hero alternative text differs from the bound approval.");
     const changedFiles: {filename: string; status: string}[] = [];
     let filesComplete = false;
     for (let page = 1; page <= 10; page++) {
@@ -147,6 +180,7 @@ export async function readArticlePublication(
       )
     )
       throw new Error("Article artifact path is outside configured content.");
+    const publicationBody = articleBodyForArtifact(input.content, { mdxPath: path, figureAssets: artifact?.figureAssets, heroSourceUrl: artifact?.heroSourceUrl, heroPath: artifact?.heroPath, heroSha256: artifact?.heroSha256 });
     const ref = evidence.mergeSha || evidence.headSha;
     const source = await read(
       `/contents/${path}?ref=${encodeURIComponent(ref!)}`,
@@ -165,7 +199,7 @@ export async function readArticlePublication(
       !match[1]
         .split("\n")
         .some((line) => line === `title: ${JSON.stringify(input.title)}`) ||
-      match[2].replace(/^\n/, "") !== input.content
+      match[2].replace(/^\n/, "") !== publicationBody
     )
       throw new Error(
         "Bound article title or exact copy differs from the saved version.",
@@ -190,7 +224,7 @@ export async function readArticlePublication(
       ["author", input.author],
       ["category", input.category],
       ["tags", input.tags],
-      ["coverImageAlt", input.coverImageAlt],
+      ["coverImageAlt", input.coverImageAlt ?? artifact?.coverImageAlt],
     ] as const) {
       if (
         expected !== undefined &&
@@ -280,7 +314,9 @@ export async function readArticlePublication(
       if (deployedSource.sha !== source.sha)
         throw new Error("Production contains a different article artifact.");
     }
-    if (input.heroSha256) {
+    if (input.heroSha256 && artifact.heroSha256 && input.heroSha256 !== artifact.heroSha256) throw new Error("Saved hero approval differs from the bound artifact.");
+    const heroSha256 = input.heroSha256 ?? artifact.heroSha256;
+    if (heroSha256) {
       const heroPath = artifact.heroPath;
       if (
         !heroPath ||
@@ -305,11 +341,17 @@ export async function readArticlePublication(
         typeof hero.content !== "string" ||
         createHash("sha256")
           .update(Buffer.from(hero.content, "base64"))
-          .digest("hex") !== input.heroSha256
+          .digest("hex") !== heroSha256
       )
         throw new Error(
           "Production hero differs from the reviewed prepared bytes.",
         );
+    }
+    for (const figure of artifact.figureAssets ?? []) {
+      const deployed = await read(`/contents/${figure.path}?ref=${encodeURIComponent(deployment.sha)}`);
+      if (deployed.encoding !== "base64" || typeof deployed.content !== "string" || !Number.isSafeInteger(deployed.size) || deployed.size > 256000) throw new Error("Production figure bytes are unverified.");
+      const bytes = Buffer.from(deployed.content, "base64");
+      if (bytes.byteLength !== deployed.size || createHash("sha256").update(bytes).digest("hex") !== figure.sha256) throw new Error("Production figure differs from its reviewed deterministic bytes.");
     }
     evidence.deploymentContainsArticle = true;
     evidence.articleBlobSha = source.sha;
@@ -319,7 +361,7 @@ export async function readArticlePublication(
         canonicalUrl: artifact.canonicalUrl,
         mdxPath: path,
         title: input.title,
-        content: input.content,
+        content: publicationBody,
       }),
     );
     evidence.checkedAt = Date.now();

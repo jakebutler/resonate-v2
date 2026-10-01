@@ -1,0 +1,161 @@
+{
+  "format_version": 1,
+  "created_on": "2026-09-30",
+  "source_path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/hero-image-prompts.md",
+  "source_sha256": "266302230466c497c55c2022eee036a9e80ee695a463c7d2cab139a12f604e64",
+  "historical_provider": "ChatGPT web interface, per Jake",
+  "historical_model_id": null,
+  "visually_inspected_articles": [
+    2,
+    6,
+    8
+  ],
+  "approved_heroes": [
+    {
+      "article": 1,
+      "title": "The digest was cited and still wrong",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-01-hero.png",
+      "sha256": "fee714c6ced52dfdf46e9615cfccaa46edfffcb31c1d59d92d2fa41eb020e66d",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 2,
+      "title": "Search APIs are not an editorial strategy",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-02-hero.png",
+      "sha256": "39e24b146757765c8b9dbdfe89647f3f53707fd16a615cda28a86c2eb0ece93e",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": true,
+      "post_exception": null
+    },
+    {
+      "article": 3,
+      "title": "We stopped drafting first",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-03-hero.png",
+      "sha256": "8953a03c7b68791eb397f5b72c0b5b079e4e428b2fa6412f86bd17442398f65d",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 4,
+      "title": "Two timed human reviews of a weekly digest, and what they checked",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-04-hero.png",
+      "sha256": "a909d8401db8a4bfc69ecead8dde3a9aafcc93a554b66b0b9bc69ee67fade2ce",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 5,
+      "title": "The final artifact was an editorial standard",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-05-hero.png",
+      "sha256": "054c3f78022d00e19afca47abe43e6f492f4423048d7657ffcadd2017844f2c3",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 6,
+      "title": "The digest that won our blind review was built on sources covering 17% of our gold list",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-06-hero.png",
+      "sha256": "dcb0666f7bc20801e7f620a183fa2e722fba7dd94f0156979dba64532e1def6d",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": true,
+      "post_exception": null
+    },
+    {
+      "article": 7,
+      "title": "What Corvo Labs learned building an AI editorial workflow",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-07-hero.png",
+      "sha256": "a019b1858adc3158567768929edb65303cc1640929ecbfc73aa2e62e068cb52c",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": "photographic_hand"
+    },
+    {
+      "article": 8,
+      "title": "The eval pipeline is a product",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-08-image.png",
+      "sha256": "6f570528dbe05fc9f14c24ab2c214656f3cde1b9653c5bc8bed8082138a7df19",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": true,
+      "post_exception": null
+    },
+    {
+      "article": 9,
+      "title": "When the gate was wrong",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-09-image.png",
+      "sha256": "c15110a66275fdf5fdbea51a1d02145794f175d0f9405ba1487f2a9c059f5d70",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 10,
+      "title": "The judge loved it. The human did not.",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-10-image.png",
+      "sha256": "d4ea98d74d032598cc8ee27a014a21ae2075216df5a660aa291b440876e30ddf",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 11,
+      "title": "Approved didn't mean supported",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-11-image.png",
+      "sha256": "f458068495e429a10564422ea6bb7f84eb3fb27032ee7f8a02589822389d266d",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 12,
+      "title": "The safer answer was not one model call",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-12-image.png",
+      "sha256": "fd33f60fa0532a8b9ab8300fa4ff315ce401d401bd339221332d7d3df1c3acc7",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 13,
+      "title": "Production samples changed the story",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-13-image.png",
+      "sha256": "f03873ccd5f5db7e9b9f5e6e2597572938da55b78ea45018d7eb903f8ed1b5cc",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 14,
+      "title": "The 80 labels behind our release boundary",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-14-image.png",
+      "sha256": "3a0d14e76e50c0a9207b9de5ab50955ad9a8261366b23e149fbe65979cd69071",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    },
+    {
+      "article": 15,
+      "title": "Nothing was promoted to bounded automation, and that was the result",
+      "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/article-15-image.png",
+      "sha256": "0eed38967e254a49e20e494a2730dd6fba42cd906733ff3954966f45a1102f1f",
+      "approval_provenance": "selected_by_Jake_in_source_record",
+      "visually_inspected_for_this_seed": false,
+      "post_exception": null
+    }
+  ],
+  "mascot_reference": {
+    "path": "/Users/jacobbutler/Documents/corvo-content-drafts/images/raven-character-sheet.png",
+    "sha256": "0900adbe822813085b585b6415dd958e994046ec47122ca248e6ee525b4db316",
+    "approval_provenance": "approved_by_Jake_in_conversation_and_source_record"
+  },
+  "limitations": [
+    "No new images generated or edited.",
+    "Approved images do not validate a reconstructed one-shot prompt.",
+    "Final-direction descriptions are not verified submitted requests.",
+    "No historical model-specific lesson performance is established."
+  ]
+}

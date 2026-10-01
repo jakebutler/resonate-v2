@@ -28,13 +28,15 @@ export async function requireBrandAccess(
   userId: string,
   brandId: BrandId
 ) {
-  const membership = await ctx.db
+  const memberships = await ctx.db
     .query("v2BrandMemberships")
     .withIndex("by_user_and_brand", (q) =>
       q.eq("userId", userId).eq("brandId", brandId)
     )
-    .first();
+    .take(2);
 
+  if (memberships.length > 1) throw new Error("Ambiguous brand membership");
+  const membership = memberships[0];
   if (!membership) throw new Error("Brand access denied");
   return membership;
 }

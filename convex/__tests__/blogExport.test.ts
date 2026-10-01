@@ -1,17 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { convexTest } from "convex-test";
 import schema from "../schema";
-import { api, internal } from "../_generated/api";
+import sharp from "sharp";
+import { api } from "../_generated/api";
 import { blogEditorialFingerprint } from "../../lib/blogContract";
 const modules=import.meta.glob("../**/*.ts");
 async function setup() {
   const t=convexTest(schema,modules);const user=t.withIdentity({subject:"editor"});
   await user.mutation(api.publishing.seedMvpWorkspace,{});
   const {postId,intentId}=await user.mutation(api.publishing.createPostWithIntent,{brandId:"corvo",channelId:"corvo-blog",title:"Article",content:"Exact copy.",scheduledDate:"2026-10-07",scheduledTime:"09:00",timezone:"America/Los_Angeles"});
-  const source=await t.run(ctx=>ctx.storage.store(new Blob(["original"])));
-  const derivative=await t.run(ctx=>ctx.storage.store(new Blob(["derivative"])));
+  const bytes = await sharp({ create: { width: 1536, height: 1024, channels: 3, background: "#345678" } }).png().toBuffer();
+  const { storageId: source } = await user.action(api.v2Storage.uploadImage, { brandId: "corvo", bytes: Uint8Array.from(bytes).buffer, contentType: "image/png", fileName: "SPECULATIVE-blog-source.png" });
   await user.mutation(api.publishing.updateBlogMetadata,{postId,metadata:{blogPublicationIntent:"published",coverImageAlt:"  Manual alt.  ",blogExcerpt:"Reviewed excerpt",blogAuthor:"Editor",blogCategory:"strategy",blogTags:["test"],blogSlug:"article",heroImageStorageId:source}});
-  await t.mutation(internal.publishing.recordPreparedHero,{postId,userId:"editor",hero:{sourceStorageId:source,storageId:derivative,width:1600,height:900,mimeType:"image/webp",byteLength:100,sha256:"fixture",crop:"centre"}});
+  await user.action(api.blogHero.prepare, { postId, crop: "centre" });
   return {t,user,postId,intentId};
 }
 describe("saved blog editorial approval", () => {

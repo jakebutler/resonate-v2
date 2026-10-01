@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery, useQueries } from "convex/react";
+import { useAction, useMutation, useQuery, useQueries } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import {
@@ -156,7 +156,7 @@ export function FullScreenEditor({ postId, initialDate }: FullScreenEditorProps)
   );
   const createPost = useMutation(api.posts.create);
   const updatePost = useMutation(api.posts.update);
-  const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
+  const uploadImage = useAction(api.v2Storage.uploadImage);
 
   // Local state
   const [title, setTitle] = useState("");
@@ -224,7 +224,7 @@ export function FullScreenEditor({ postId, initialDate }: FullScreenEditorProps)
           fileId,
           {
             query: api.posts.getFileUrl,
-            args: { fileId },
+            args: { fileId, ...(currentPostIdRef.current ? { postId: currentPostIdRef.current as Id<"posts"> } : {}) },
           },
         ])
       ),
@@ -560,20 +560,9 @@ export function FullScreenEditor({ postId, initialDate }: FullScreenEditorProps)
 
       for (const file of Array.from(files)) {
         try {
+          if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG or WebP image.");
           const optimizedFile = await optimizeImage(file);
-          const uploadUrl = await generateUploadUrl();
-          const uploadRes = await fetch(uploadUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": optimizedFile.type || file.type || "application/octet-stream",
-            },
-            body: optimizedFile,
-          });
-          if (!uploadRes.ok) {
-            throw new Error("Image upload failed.");
-          }
-
-          const { storageId } = await uploadRes.json();
+          const { storageId } = await uploadImage({ fileName: file.name, contentType: optimizedFile.type || file.type, bytes: await optimizedFile.arrayBuffer() });
           const previewUrl = URL.createObjectURL(optimizedFile);
           const altText = deriveAltText(file.name);
           const storageFileId = storageId as Id<"_storage">;
@@ -599,7 +588,7 @@ export function FullScreenEditor({ postId, initialDate }: FullScreenEditorProps)
         }
       }
     },
-    [generateUploadUrl, htmlContent, scheduleAutoSave, title]
+    [uploadImage, htmlContent, scheduleAutoSave, title]
   );
 
   const handleImageInputChange = async (
@@ -833,7 +822,7 @@ export function FullScreenEditor({ postId, initialDate }: FullScreenEditorProps)
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg,image/webp"
             className="hidden"
             aria-label="Upload image"
             onChange={handleImageInputChange}

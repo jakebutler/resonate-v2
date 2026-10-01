@@ -1,6 +1,7 @@
 import { convexTest } from "convex-test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, internal } from "../_generated/api";
+import sharp from "sharp";
+import { api } from "../_generated/api";
 import schema from "../schema";
 
 const modules = import.meta.glob("../**/*.ts");
@@ -118,10 +119,10 @@ async function setupGatedDraftSet(t: ReturnType<typeof convexTest>) {
 async function reviewBlogExport(t: ReturnType<typeof convexTest>, asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>, postId: string) {
   const post = await t.run(ctx => ctx.db.get(postId as never));
   if (!post || !("channelId" in post) || post.channelId !== "corvo-blog") return;
-  const source = await t.run(ctx => ctx.storage.store(new Blob(["fixture source"])));
-  const output = await t.run(ctx => ctx.storage.store(new Blob(["fixture output"])));
+  const bytes = await sharp({ create: { width: 1536, height: 1024, channels: 3, background: "#345678" } }).png().toBuffer();
+  const { storageId: source } = await asUser.action(api.v2Storage.uploadImage, { brandId: "corvo", bytes: Uint8Array.from(bytes).buffer, contentType: "image/png", fileName: "SPECULATIVE-campaign-source.png" });
   await asUser.mutation(api.publishing.updateBlogMetadata, {postId: postId as never, metadata: {blogPublicationIntent:"draft", coverImageAlt:"Reviewed campaign hero", blogExcerpt:"Reviewed excerpt",blogAuthor:"Editor",blogCategory:"strategy",blogTags:["test"],heroImageStorageId:source}});
-  await t.mutation(internal.publishing.recordPreparedHero, {postId: postId as never,userId:JAKE.subject,hero:{sourceStorageId:source,storageId:output,width:1600,height:900,mimeType:"image/webp",byteLength:100,sha256:"fixture",crop:"centre"}});
+  await asUser.action(api.blogHero.prepare, { postId: postId as never, crop: "centre" });
 }
 
 describe("materialize + approval queue", () => {

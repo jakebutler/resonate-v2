@@ -1,18 +1,31 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
+import { localFixtureTokenUrl } from "@/lib/localFixtureAuth";
+
+const FixtureTokenUrl = createContext<string | undefined>(undefined);
 
 function useE2EBypassAuth() {
+  const tokenUrl = useContext(FixtureTokenUrl);
   const fetchAccessToken = useCallback(async () => {
-    // A deliberately unsigned token for intercepted .test WebSockets only.
-    // Real Convex endpoints retain the prior null token under E2E bypass.
-    if (process.env.NEXT_PUBLIC_CONVEX_URL !== "https://convex.test") return null;
-    const now = Math.floor(Date.now() / 1000);
-    return `${btoa('{"alg":"none"}')}.${btoa(JSON.stringify({sub:"fixture-editor",iat:now,exp:now+3600}))}.fixture`;
-  }, []);
+    if (!tokenUrl) {
+      // The unsigned token is used only by intercepted .test WebSockets.
+      if (process.env.NEXT_PUBLIC_CONVEX_URL !== "https://convex.test") return null;
+      const now = Math.floor(Date.now() / 1000);
+      return `${btoa('{"alg":"none"}')}.${btoa(JSON.stringify({sub:"fixture-editor",iat:now,exp:now+3600}))}.fixture`;
+    }
+    try {
+      const response = await fetch(tokenUrl, { cache: "no-store", credentials: "omit", redirect: "error" });
+      if (!response.ok) return null;
+      const body: unknown = await response.json();
+      if (!body || typeof body !== "object" || !("token" in body) || typeof body.token !== "string" || body.token.length > 8192) return null;
+      return body.token;
+    } catch { return null; }
+  }, [tokenUrl]);
+
   return useMemo(
     () => ({
       isLoading: false,
@@ -46,9 +59,14 @@ export function ConvexClientProvider({
     // Keep an auth-capable provider so `useConvexAuth` works under E2E bypass
     // (plain ConvexProvider throws during prerender of research/calendar).
     return (
-      <ConvexProviderWithAuth client={clientRef.current} useAuth={useE2EBypassAuth}>
-        {children}
-      </ConvexProviderWithAuth>
+      <FixtureTokenUrl.Provider value={localFixtureTokenUrl({
+        runtime: process.env.NODE_ENV, bypass: bypassAuth, convexUrl: url,
+        tokenUrl: process.env.NEXT_PUBLIC_VISUAL_FIXTURE_TOKEN_URL, vercel: Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.VERCEL),
+      })}>
+        <ConvexProviderWithAuth client={clientRef.current} useAuth={useE2EBypassAuth}>
+          {children}
+        </ConvexProviderWithAuth>
+      </FixtureTokenUrl.Provider>
     );
   }
 
