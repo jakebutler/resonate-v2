@@ -33,7 +33,7 @@ export async function dispatchVisualImageRequest(request: PreparedVisualProvider
     const origin = request.route.provider === "openai" ? "https://api.openai.com" : "https://inference.do-ai.run";
     const response = await fetch(`${origin}${request.request.path}`, { method: "POST", headers, body, signal: controller.signal, redirect: "error" });
     const requestId = response.headers.get("x-request-id");
-    const safeRequestId = requestId && /^req_[A-Za-z0-9_-]{1,100}$/.test(requestId) && !/(?:^|[_-])(?:sk[_-]|do[por]_v1_)/i.test(requestId) ? requestId : undefined;
+    const safeRequestId = requestId && /^req_[A-Za-z0-9_-]{1,100}$/.test(requestId) && !requestId.includes(key) && !/(?:sk[_-]|do[por]_v1_|gh[pousr]_|github_pat_)/i.test(requestId) ? requestId : undefined;
     receivedResponse = { status: response.status, ...(safeRequestId ? { requestId: safeRequestId } : {}) };
     const contentLength = response.headers.get("content-length");
     if (contentLength && Number(contentLength) > MAX_RESPONSE_BYTES) { controller.abort(); await response.body?.cancel(); throw new Error("Oversized response"); }

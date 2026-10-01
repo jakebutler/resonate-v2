@@ -42,7 +42,7 @@ describe("server image transport", () => {
     expect(JSON.stringify(result)).not.toContain("sk-fictional-secret");
   });
 
-  it.each(["Bearer sk-fictional-secret", "req_sk-fictional-secret", "req_dop_v1_fictional", `req_${"a".repeat(101)}`])("omits an unsafe server request ID %s from the retained HTTP failure", async (requestId) => {
+  it.each(["Bearer sk-fictional-secret", "req_sk-fictional-secret", "req_dop_v1_fictional", "req_echosk-fictional-secret", "req_echodop_v1_fictional", "req_echoghp_fictional", `req_${"a".repeat(101)}`])("omits an unsafe server request ID %s from the retained HTTP failure", async (requestId) => {
     const { request, claim } = await envelope();
     const fetchMock = vi.fn().mockResolvedValue(new Response("SPECULATIVE invalid JSON", { status: 504, headers: { "x-request-id": requestId } }));
     vi.stubGlobal("fetch", fetchMock);
@@ -50,6 +50,18 @@ describe("server image transport", () => {
     expect(result).toMatchObject({ status: "uncertain", receipt: { httpStatus: 504 } });
     expect(result.status === "uncertain" && result.receipt?.requestId).toBeUndefined();
     expect(JSON.stringify(result)).not.toContain(requestId);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([{ key: "sk-fictional-secret", interrupted: false }, { key: "opaqueFakeCredential", interrupted: false }, { key: "opaqueFakeCredential", interrupted: true }])("omits an echoed supplied credential from HTTP metadata when interrupted=$interrupted", async ({ key, interrupted }) => {
+    const { request, claim } = await envelope();
+    const body = interrupted ? new ReadableStream<Uint8Array>({ start(controller) { controller.error(new Error("SPECULATIVE body read failed")); } }) : "SPECULATIVE invalid JSON";
+    const fetchMock = vi.fn().mockResolvedValue(new Response(body, { status: 504, headers: { "x-request-id": `req_echo${key}` } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await dispatchVisualImageRequest(request, claim, key);
+    expect(result).toMatchObject({ status: "uncertain", receipt: { httpStatus: 504 } });
+    expect(result.status === "uncertain" && result.receipt?.requestId).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain(key);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
