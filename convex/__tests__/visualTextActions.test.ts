@@ -299,6 +299,21 @@ describe("authenticated text executor", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("persists canonical exact anchors after quoted native output and never redispatches the completed attempt", async () => {
+    const f = await setup();
+    await f.t.mutation(api.visualTextConfig.registerReviewedTextRoute, route);
+    const quoted = scenes.map(scene => ({ ...scene, articleAnchor: '"' + scene.articleAnchor + '"' }));
+    vi.mocked(fetch).mockResolvedValueOnce(response({ scenes: quoted }));
+    const result = await f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.attemptId });
+    expect(result).toMatchObject({ status: "completed", planId: expect.any(String), reason: null });
+    const state = await f.user.query(api.visualWorkflow.get, { postId: f.postId });
+    expect(state.plans[0]).toMatchObject({ status: "complete", scenes, reasons: [] });
+    expect(state.plans[0].scenes.every((scene: { articleAnchor: string }) => article.content.includes(scene.articleAnchor))).toBe(true);
+    expect(state.month).toMatchObject({ spentMicros: 200, reservedMicros: 0 });
+    expect(await f.user.action(api.visualTextActions.executeTextAttempt, { attemptId: f.attemptId })).toMatchObject({ status: "blocked", reason: "attempt-not-queued" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("executes a saved planning attempt through quote, reservation, claim and completion using one mocked HTTP response", async () => {
     const { t, user, postId, attemptId } = await setup();
     await t.mutation(api.visualTextConfig.registerReviewedTextRoute, route);
