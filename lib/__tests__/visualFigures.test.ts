@@ -1,10 +1,30 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { parseFragment } from "parse5";
 import { planFigureCandidates, assertFigureEvidence, renderFigureSvg, figureSignatures, parseFigureSource, assertFigureCurrentArticle, buildFigureMarkdownBlock, assertFigureInsertionAnchor, assertFigureMarkdownBlockPlacement, getFigureArticleStructure } from "../visualFigures";
 
 const citedNumeric = (content: string) => content.split("\n").map(line => line.trim().startsWith("|") ? line + (line.includes("| value |") ? " citation |" : /^\|[-:| ]+\|$/u.test(line) ? "---|" : " Evaluation report, Table 2 |") : line).join("\n");
 
 describe("evidence-bound figures", () => {
+  it("exports self-contained sans-serif typography for every figure family", () => {
+    const tables = [
+      citedNumeric("| label | value | unit | population | denominator |\n|---|---|---|---|---|\n| Alpha | 12 | cases | Fixture | 80 |\n| Beta | 20 | cases | Fixture | 80 |"),
+      citedNumeric("| date | value | unit | population | denominator |\n|---|---|---|---|---|\n| 2026-01-01 | 12 | cases | Fixture | 80 |\n| 2026-02-01 | 20 | cases | Fixture | 80 |"),
+      "| from | to | relation |\n|---|---|---|\n| Draft | Review | sends feedback |",
+      "| order | from | to | message |\n|---|---|---|---|\n| 1 | Reader | Editor | Feedback |",
+      "| date | event |\n|---|---|\n| 2026-01-01 | Draft |\n| 2026-02-01 | Review |",
+    ];
+    for (const table of tables) {
+      const article = { id: "article", name: "Article", format: "markdown" as const, purpose: "article" as const, content: `## Evidence\n\n${table}` };
+      const trace = { ...article, id: "trace", purpose: "claim-trace" as const };
+      const spec = planFigureCandidates(article, [trace]).candidates[0];
+      const svg = renderFigureSvg(spec);
+      const root = parseFragment(svg).childNodes[0];
+      expect("tagName" in root && root.tagName, spec.family).toBe("svg");
+      expect("attrs" in root && root.attrs.find(attribute => attribute.name === "font-family")?.value, spec.family).toBe("Inter, system-ui, sans-serif");
+      expect(svg, spec.family).not.toMatch(/@font-face|<style|<link|url\(/iu);
+    }
+  });
   it("maps a bounded article with thousands of HTML breaks without exhaustive per-line searches", () => {
     const breakCount = 24000;
     const table = "| from | to | relation |\n|---|---|---|\n| Reader 🚦 | Editor | visible feedback |";
@@ -296,7 +316,7 @@ describe("evidence-bound figures", () => {
     const svg = renderFigureSvg(spec);
     expect(svg).toBe(renderFigureSvg(spec));
     expect(svg).toContain("Reader &lt; reviewer");
-    expect(svg).not.toMatch(/<script|foreignObject|onload=|<image|https?:\/\/(?!www\.w3\.org\/2000\/svg)|font-family|<style/iu);
+    expect(svg).not.toMatch(/<script|foreignObject|onload=|<image|https?:\/\/(?!www\.w3\.org\/2000\/svg)|@font-face|<style/iu);
     expect(await figureSignatures(spec)).toEqual(await figureSignatures(spec));
     expect(() => assertFigureEvidence(spec, [{ ...article, content: "Unrelated copy\n\n" + article.content }])).not.toThrow();
     expect(() => assertFigureEvidence(spec, [{ ...article, content: article.content.replace('sends "feedback"', "causes approval") }])).toThrow(/evidence changed/);
