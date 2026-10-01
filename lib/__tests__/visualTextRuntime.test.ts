@@ -10,6 +10,22 @@ const attempt = { _id: "fictional-attempt", stage: "planning" as const, input: {
 describe("bounded text runtime", () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
+  it("specifies the complete planning JSON shape in messages when response_format is ignored", async () => {
+    const prepared = await prepareTextRequest(attempt, { ...route, provider: "cortex" });
+    const wireBody = JSON.parse(JSON.stringify(prepared.body));
+    delete wireBody.response_format; // Legacy provider adapters may omit this field.
+    const instruction = wireBody.messages.find((message: { role: string }) => message.role === "system").content;
+    expect(instruction).toMatch(/return only a JSON object/i);
+    expect(instruction).toMatch(/"scenes"\s*:\s*\[/);
+    expect(instruction).toMatch(/exactly three/i);
+    for (const field of ["title", "subject", "metaphor", "action", "reveal", "articleConnection", "articleAnchor"]) {
+      expect(instruction).toContain(`"${field}"`);
+    }
+    expect(instruction).toMatch(/no additional (?:keys|fields)/i);
+    expect(instruction).toMatch(/no Markdown/i);
+    expect(instruction).toMatch(/no (?:surrounding )?prose/i);
+  });
+
   it("omits an echoed supplied credential from a Cortex HTTP failure receipt", async () => {
     const cortex = { ...route, provider: "cortex" as const };
     const prepared = await prepareTextRequest(attempt, cortex);
