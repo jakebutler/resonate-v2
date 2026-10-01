@@ -267,7 +267,7 @@ export function planFigureCandidates(article: FigureSource, sources: FigureSourc
   return { candidates, reasons: reasons.length ? reasons : candidates.length ? [] : ["No supported explicit table in the article"] };
 }
 
-export const FIGURE_RENDERER_VERSION = "resonate-svg-v3";
+export const FIGURE_RENDERER_VERSION = "resonate-svg-v4";
 function assertSpecShape(spec: FigureSpec): void {
   if (spec.version !== 1 || !requiredColumns[spec.family]) throw new Error("Unsupported figure specification version or family");
   const table = { columns: spec.columns, rows: spec.rows, evidence: spec.evidence, anchor: spec.insertionAnchor };
@@ -342,7 +342,7 @@ export function renderFigureSvg(spec: FigureSpec): string {
   assertSpecShape(spec);
   const { background, ink, accent } = spec.presentation; const width = 720;
   const height = Math.min(950, Math.max(400, 160 + spec.rows.length * (spec.family === "sequence" ? 54 : 60)));
-  const parts = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="figure-title figure-description">`,
+  const parts = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="figure-title figure-description" font-family="Inter, system-ui, sans-serif">`,
     `<title id="figure-title">${escapeXml(spec.presentation.title)}</title>`, `<desc id="figure-description">${escapeXml(spec.presentation.alt)}</desc>`,
     `<rect x="0" y="0" width="720" height="${height}" fill="${background}"/>`];
   const text = (x: number, y: number, value: string, size = 24, anchor = "start") => parts.push(`<text x="${number(x)}" y="${number(y)}" fill="${ink}" font-size="${number(size)}" text-anchor="${anchor}"><title>${escapeXml(value)}</title>${escapeXml(shortLabel(value))}</text>`);
