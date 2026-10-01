@@ -33,6 +33,15 @@ describe("publication status authority", () => {
     expect(action).not.toHaveBeenCalled();
     expect(fetchStatus).not.toHaveBeenCalled();
   });
+  it("reports a refresh transport failure separately from an ownership denial", async () => {
+    action.mockRejectedValueOnce(new Error("PRIVATE PROVIDER DETAILS"));
+    const response = await POST(request({ postId: "owned-post", prUrl: "https://github.com/jakebutler/corvo-labs-dot-com/pull/3" }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Publication status is temporarily unavailable. Inspect the retained state before trying again." });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(fetchStatus).not.toHaveBeenCalled();
+  });
 
   it("rejects a non-object body instead of throwing before validation", async () => {
     expect((await POST(request(null))).status).toBe(400);

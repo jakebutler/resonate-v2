@@ -11,7 +11,7 @@ import { ownedSeries } from "./series";
 import { blogArtifactValidator, preparedHeroValidator } from "./blogValidators";
 import { blogEditorialFingerprint, missingBlogEditorialFields } from "../lib/blogContract";
 import { previewSeedIdeas, previewSeedPosts } from "./previewSeedData";
-import { v, type Infer } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import {
@@ -813,9 +813,9 @@ export const getPostForPublication = query({
     const post = await getOwnedPost(ctx, userId, postId, true);
     if (post.channelId !== "corvo-blog") throw new Error("Only blog posts can create publication packages");
     assertNewPublicationLifecycle(post);
-    if (post.approvalState !== "approved") throw new Error("Post is not approved for publishing");
+    if (post.approvalState !== "approved") throw new ConvexError({ code: "BLOG_PUBLICATION_APPROVAL_REQUIRED", message: "Post is not approved for publishing" });
     const missing = await missingPublicationEditorialFields(ctx, post);
-    if (missing.length) throw new Error(`Review blog metadata before publishing: ${missing.join(", ")}`);
+    if (missing.length) throw new ConvexError({ code: "BLOG_PUBLICATION_METADATA_REQUIRED", message: `Review blog metadata before publishing: ${missing.join(", ")}` });
     const intent = await latestIntent(ctx, post._id);
     if (!intent || intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post)) throw new Error("Publishing intent approval is stale");
     if (post.variantReviewStatus === "pending" || post.variantReviewStatus === "rejected") throw new Error("Post lifecycle does not permit a new publication");
@@ -1526,6 +1526,7 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
       throw new Error("GitHub PR recording is only available for Corvo Blog posts.");
     }
     if (!trusted && await hasVisualPublication(ctx, post._id)) throw new Error("Visual PR state requires server verification");
+    if (!trusted && (post.approvalState !== "approved" || post.contentFingerprint !== blogEditorialFingerprint(post))) throw new Error("Publication approval must match the current prepared editorial version");
     if (trusted) {
       assertNewPublicationLifecycle(post);
       assertVisualPrTarget(args.result.prUrl, args.result.prNumber);
@@ -1534,6 +1535,18 @@ async function recordGithubPrHandler(ctx: MutationCtx, args: { postId: Id<"v2Pos
     }
     const intent = await latestIntent(ctx, args.postId);
     if (!intent) throw new Error("Publishing intent not found");
+    if (!trusted && (intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post))) throw new Error("Publication intent approval is stale");
+    if (!trusted && args.result.artifact) {
+      const artifact = args.result.artifact;
+      if (artifact.figureAssets?.length) throw new Error("Visual PR assets require server verification");
+      const suppliesHeroBinding = [artifact.heroSha256, artifact.coverImageAlt, artifact.heroSourceUrl, artifact.editorialFingerprint].some(value => value !== undefined);
+      if (suppliesHeroBinding && (!post.preparedHero || post.preparedHero.sourceStorageId !== post.heroImageStorageId ||
+        !/^[a-f0-9]{64}$/u.test(artifact.heroSha256 ?? "") || artifact.heroSha256 !== post.preparedHero.sha256 ||
+        artifact.coverImageAlt !== post.coverImageAlt?.trim() || artifact.heroSourceUrl !== post.heroImageUrl ||
+        (artifact.editorialFingerprint !== undefined && artifact.editorialFingerprint !== blogEditorialFingerprint(post)))) {
+        throw new Error("Recorded hero binding must match the current approved prepared hero");
+      }
+    }
     if (trusted && (intent.approvalState !== "approved" || intent.contentFingerprint !== blogEditorialFingerprint(post))) throw new Error("Publication intent changed before PR recording");
     if (trusted) {
       const expected = args.expectedSchedule;

@@ -78,6 +78,8 @@ function makeRequest(body: object): NextRequest {
 }
 
 import { blogEditorialFingerprint } from "@/lib/blogContract";
+import { ConvexError } from "convex/values";
+import { getFunctionName } from "convex/server";
 const saved = {
   _id: "post_approved", channelId: "corvo-blog", title: "Server Title", content: "Server Content",
   approvalState: "approved", scheduledDate: "2026-06-01", scheduledTime: "10:00", timezone: "America/New_York",
@@ -102,7 +104,9 @@ describe("POST /api/publish saved export contract", () => {
     mockConvexAction.mockResolvedValue({ prUrl: "https://github.com/test/test/pull/1", branchName: "server-branch", sanitizedResponse: {}, recorded: true });
     const response = await POST(makeRequest({ postId: "post_approved" }));
     expect(response.status).toBe(200);
-    expect(mockConvexAction).toHaveBeenCalledWith(expect.anything(), { postId: "post_approved" });
+    expect(mockConvexAction).toHaveBeenCalledTimes(1);
+    expect(getFunctionName(mockConvexAction.mock.calls[0][0])).toBe("visualPublication:createPr");
+    expect(mockConvexAction.mock.calls[0][1]).toEqual({ postId: "post_approved" });
     expect(createBlogPostPR).not.toHaveBeenCalled();
     expect(mockConvexMutation).not.toHaveBeenCalled();
     expect(await response.json()).toMatchObject({ recorded: true, branchName: "server-branch" });
@@ -119,6 +123,31 @@ describe("POST /api/publish saved export contract", () => {
   it("requires authentication", async () => {
     vi.mocked(auth).mockResolvedValueOnce({userId: null} as unknown as Awaited<ReturnType<typeof auth>>);
     expect((await POST(makeRequest({postId: "post_approved"}))).status).toBe(401);
+    expect(createBlogPostPR).not.toHaveBeenCalled();
+  });
+  it("returns an approval hold when the server snapshot rejects an unapproved post", async () => {
+    mockConvexQuery.mockRejectedValueOnce(new ConvexError({ code: "BLOG_PUBLICATION_APPROVAL_REQUIRED" }));
+    const response = await POST(makeRequest({ postId: "post_unapproved" }));
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "Save and approve the current blog export version before opening a PR." });
+    expect(mockConvexAction).not.toHaveBeenCalled();
+    expect(mockConvexMutation).not.toHaveBeenCalled();
+    expect(createBlogPostPR).not.toHaveBeenCalled();
+  });
+  it("returns a metadata review hold without exposing server error details", async () => {
+    mockConvexQuery.mockRejectedValueOnce(new ConvexError({ code: "BLOG_PUBLICATION_METADATA_REQUIRED", privateDetails: "PRIVATE PROVIDER DETAILS" }));
+    const response = await POST(makeRequest({ postId: "post_incomplete" }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Review and save the required blog metadata and prepared hero before opening a PR." });
+    expect(mockConvexAction).not.toHaveBeenCalled();
+    expect(createBlogPostPR).not.toHaveBeenCalled();
+  });
+  it("keeps an unexpected snapshot connection error as a sanitized server failure", async () => {
+    mockConvexQuery.mockRejectedValueOnce(new Error("PRIVATE PROVIDER DETAILS"));
+    const response = await POST(makeRequest({ postId: "post_approved" }));
+    expect(response.status).toBe(500);
+    expect(JSON.stringify(await response.json())).not.toContain("PRIVATE PROVIDER DETAILS");
+    expect(mockConvexAction).not.toHaveBeenCalled();
     expect(createBlogPostPR).not.toHaveBeenCalled();
   });
   it.each(["status", "content", "coverImageAlt", "scheduledDate", "featured"])("rejects a client %s override before provider writes", async key => {

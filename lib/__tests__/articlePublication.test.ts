@@ -116,6 +116,15 @@ function githubFixture(
   return { calls, fetch };
 }
 describe("separate publication facts", () => {
+  it("rejects a present empty hero hash before reading GitHub or canonical availability", async () => {
+    const { fetch } = githubFixture();
+    const available = vi.fn(async () => ({ availability: "verified" as const }));
+    const result = await readArticlePublication({ ...input, artifact: { ...artifact, heroSha256: "" } }, available);
+    expect(result.evidence.availability).toBe("unverified");
+    expect(result.evidence.reason).toMatch(/hero.*hash|hero.*unverified/i);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(available).not.toHaveBeenCalled();
+  });
   it("qualifies an unchanged public preparer artifact containing its approved hero later in the body", async () => {
     const heroSourceUrl = "https://example.org/exact-approved-hero.webp";
     const unrelatedUrl = "https://example.org/unrelated-image.webp";

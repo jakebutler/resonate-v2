@@ -20,6 +20,15 @@ beforeEach(() => {
   vi.stubEnv("BLOG_REPO_NAME", "fictional-repo");
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+async function ownedUploadFixture() {
+  const t = convexTest(schema, modules), user = t.withIdentity({ subject: "fixture-owner" });
+  await user.mutation(api.publishing.seedMvpWorkspace, {});
+  const bytes = await sharp({ create: { width: 100, height: 100, channels: 3, background: "#15616d" } }).png().toBuffer();
+  const { storageId } = await user.action(api.v2Storage.uploadImage, { brandId: "corvo", bytes: Uint8Array.from(bytes).buffer, contentType: "image/png", fileName: "SPECULATIVE-unprepared-owned.png" });
+  const { postId } = await user.mutation(api.publishing.createPostWithIntent, { brandId: "corvo", channelId: "corvo-blog", title: "Fictional unprepared hero", content: "Exact fictional article.", scheduledDate: "2030-10-07", scheduledTime: "09:30", timezone: "UTC" });
+  await user.mutation(api.publishing.updateBlogMetadata, { postId, metadata: { blogExcerpt: "Fictional excerpt", blogAuthor: "Fictional editor", blogCategory: "Fictional", blogTags: ["fictional"], blogSlug: "fictional-unprepared", blogPublicationIntent: "published", coverImageAlt: "Unprepared fictional hero", heroImageStorageId: storageId } });
+  return { t, user, postId };
+}
 async function fixture() {
   const t = convexTest(schema, modules), user = t.withIdentity({ subject: "fixture-owner" });
   const postId = await t.run(async ctx => {
@@ -35,6 +44,39 @@ async function fixture() {
   return { t, user, postId };
 }
 describe("bound visual publication read adapter", () => {
+  it("distinguishes an unapproved owned publication snapshot from a connection failure", async () => {
+    const { user, postId } = await ownedUploadFixture();
+    await expect(user.query(api.publishing.getPostForPublication, { postId })).rejects.toMatchObject({ data: { code: "BLOG_PUBLICATION_APPROVAL_REQUIRED" } });
+  });
+  it("identifies missing publication metadata in an owned approved snapshot", async () => {
+    const { t, user, postId } = await ownedUploadFixture();
+    await t.run(ctx => ctx.db.patch(postId, { approvalState: "approved", blogExcerpt: undefined }));
+    await expect(user.query(api.publishing.getPostForPublication, { postId })).rejects.toMatchObject({ data: { code: "BLOG_PUBLICATION_METADATA_REQUIRED" } });
+  });
+  it("rejects a caller-supplied hero binding for an unapproved, unprepared owned upload", async () => {
+    const { user, postId } = await ownedUploadFixture();
+    const before = await user.query(api.publishing.getPostById, { postId });
+    await expect(user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" })).rejects.toThrow();
+    const artifact = { repository: "fictional-owner/fictional-repo", prNumber: 987654, branchName: "blog/fictional", mdxPath: "apps/blog/blog/2030-10-07-fictional.mdx", heroPath: "apps/blog/public/images/blog/2030-10-07-fictional/hero.webp", canonicalUrl: "https://fictional.invalid/blog/fictional", editorialFingerprint: blogEditorialFingerprint(before), heroSha256: "", coverImageAlt: before.coverImageAlt };
+    await expect(user.mutation(api.publishing.recordGithubPr, { postId, result: { artifact, prUrl: "https://github.com/fictional-owner/fictional-repo/pull/987654", prNumber: 987654, branchName: artifact.branchName, sanitizedResponse: {} } })).rejects.toThrow(/approval|prepared|hero/i);
+    expect(await user.query(api.publishing.getPostById, { postId })).toEqual(before);
+    expect(await user.query(api.publishing.getPostAuditTrail, { postId })).toMatchObject({ attempts: [] });
+  });
+
+  it("binds a legacy PR hero hash to the actual approved prepared bytes", async () => {
+    const { user, postId } = await ownedUploadFixture();
+    await user.action(api.blogHero.prepare, { postId, crop: "centre" });
+    await user.mutation(api.publishing.setApproval, { postId, approvalState: "approved" });
+    const before = await user.query(api.publishing.getPostById, { postId });
+    const artifact = { repository: "fictional-owner/fictional-repo", prNumber: 987654, branchName: "blog/fictional", mdxPath: "apps/blog/blog/2030-10-07-fictional.mdx", heroPath: "apps/blog/public/images/blog/2030-10-07-fictional/hero.webp", canonicalUrl: "https://fictional.invalid/blog/fictional", editorialFingerprint: blogEditorialFingerprint(before), heroSha256: "a".repeat(64), coverImageAlt: before.coverImageAlt };
+    const result = { artifact, prUrl: "https://github.com/fictional-owner/fictional-repo/pull/987654", prNumber: 987654, branchName: artifact.branchName, sanitizedResponse: {} };
+    await expect(user.mutation(api.publishing.recordGithubPr, { postId, result })).rejects.toThrow(/hero|prepared/i);
+    expect(await user.query(api.publishing.getPostById, { postId })).toEqual(before);
+    const bound = { ...artifact, heroSha256: before.preparedHero.sha256, heroSourceUrl: before.heroImageUrl };
+    expect(await user.mutation(api.publishing.recordGithubPr, { postId, result: { ...result, artifact: bound } })).toMatchObject({ recorded: true });
+    expect((await user.query(api.publishing.getPostById, { postId })).blogArtifact).toEqual(bound);
+  });
+
   it("roundtrips the preparer's exact inline hero identity through current approval, claim and trusted recording while holding changed identity", async () => {
     const t = convexTest(schema, modules), user = t.withIdentity({ subject: "fixture-owner" });
     const fetchMock = vi.fn(() => { throw new Error("Fixture forbids all HTTP"); }); vi.stubGlobal("fetch", fetchMock);
@@ -80,6 +122,15 @@ describe("bound visual publication read adapter", () => {
     expect(await f.user.action(api.articlePublication.refresh, { postId: f.postId })).toMatchObject({ recorded: true });
     expect(transport.read).toHaveBeenCalledTimes(1);
     expect(transport.read.mock.calls[0][0]).toMatchObject({ heroSha256: "a".repeat(64), coverImageAlt: "Exact approved visual alt" });
+  });
+  it("holds a retained artifact with an empty hero hash before any publication read or receipt", async () => {
+    const f = await fixture();
+    const post = await f.user.query(api.publishing.getPostById, { postId: f.postId });
+    await f.t.run(ctx => ctx.db.patch(f.postId, { blogArtifact: { ...post.blogArtifact, heroSha256: "" } }));
+    expect(await f.user.action(api.articlePublication.refresh, { postId: f.postId })).toMatchObject({ recorded: false, reason: expect.stringMatching(/hero.*hash|hero.*unverified/i) });
+    expect(transport.read).not.toHaveBeenCalled();
+    expect(await f.t.run(ctx => ctx.db.query("articlePublications").first())).toBeNull();
+    expect((await f.user.query(api.publishing.getPostById, { postId: f.postId })).status).toBe("pr-created");
   });
   it("blocks stale artifact editorial identity before any provider read or publication receipt write", async () => {
     const f = await fixture();

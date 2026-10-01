@@ -430,6 +430,18 @@ describe("bound schedule synchronization", () => {
 });
 
 describe("offline publication package", () => {
+  it("requires an unchanged source-note paragraph before exporting a reviewed figure", async () => {
+    const { prepareBlogPublication } = await import("../github");
+    const { planFigureCandidates, figureSignatures, buildFigureMarkdownBlock } = await import("../visualFigures");
+    const article = { id: "fixture-article", name: "Fictional fixture", format: "markdown" as const, purpose: "article" as const, content: "## Fictional relationship\n\n| from | to | relation |\n|---|---|---|\n| Editor | Draft | revises |" };
+    const spec = planFigureCandidates(article, []).candidates[0], signature = await figureSignatures(spec);
+    const content = article.content.replace("## Fictional relationship", `## Fictional relationship\n\n${buildFigureMarkdownBlock("fixture", spec)} UNREVIEWED SOURCE NOTE`);
+    const heroBytes = await sharp({ create: { width: 1600, height: 900, channels: 3, background: "#2e5b60" } }).webp().toBuffer();
+    await expect(prepareBlogPublication({ postId: "fixture-post", title: "LOCAL FIXTURE", content, scheduledDate: "2026-09-30", status: "draft", tags: ["fixture"], slug: "local-fixture", images: [
+      { sourceUrl: "fixture://hero", alt: "Fictional teal test pattern", isCover: true, export: { bytes: heroBytes, sha256: createHash("sha256").update(heroBytes).digest("hex"), fileName: "hero.webp", contentType: "image/webp", hero: { provider: "test-provider", model: "test-image-model", quoteProvenance: "reported-usage", qualification: "live-receipt", approvedBy: "test-reviewer", approvedAt: 1 } } },
+      { sourceUrl: "resonate-figure://fixture", alt: spec.presentation.alt, export: { bytes: new TextEncoder().encode(signature.svg), sha256: signature.svgSha256, fileName: "figure-fixture.svg", contentType: "image/svg+xml", figure: { spec, ...signature, postId: "fixture-post", postContentSha256: createHash("sha256").update(content).digest("hex"), postContentFingerprint: `LOCAL FIXTURE\n${content}`, acceptedBy: "fixture-author", acceptedAt: 1, evidenceSources: [{ sourceId: article.id, sha256: createHash("sha256").update(article.content).digest("hex"), revision: 1, purpose: "article", currentSourceId: null, currentSha256: createHash("sha256").update(content).digest("hex"), currentRevision: null }] } } },
+    ] })).rejects.toThrow(/placement|source-note/);
+  });
   it.each(["Fixture editor", "Reader ] one", "Reader $& one", "Reader $' one"])("includes a deterministic figure with label %s and rewrites its exact placement", async (label) => {
     const { prepareBlogPublication } = await import("../github");
     const { planFigureCandidates, figureSignatures, assertFigureInsertionAnchor, buildFigureMarkdownBlock } = await import("../visualFigures");

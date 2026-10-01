@@ -31,6 +31,9 @@ export const refresh = action({
     if (artifact?.editorialFingerprint !== undefined && artifact.editorialFingerprint !== blogEditorialFingerprint(post)) {
       return { recorded: false, reason: "The exported editorial version changed; review before verifying publication." };
     }
+    if (artifact?.heroSha256 !== undefined && !/^[a-f0-9]{64}$/u.test(artifact.heroSha256)) {
+      return { recorded: false, reason: "The bound hero hash is unverified; review the prepared publication artifact." };
+    }
     const boundVisualHero = artifact?.editorialFingerprint !== undefined && artifact.heroSha256 !== undefined && artifact.coverImageAlt !== undefined;
     if (
       !boundVisualHero && post.heroImageStorageId &&

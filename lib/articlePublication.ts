@@ -69,6 +69,9 @@ export async function readArticlePublication(
   };
   let artifact = input.artifact;
   try {
+    if ([input.heroSha256, artifact?.heroSha256].some(hash => hash !== undefined && !/^[a-f0-9]{64}$/u.test(hash))) {
+      throw new Error("Bound hero hash is unverified.");
+    }
     const repo = configuredRepo();
     const escaped = repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const number = input.prUrl.match(

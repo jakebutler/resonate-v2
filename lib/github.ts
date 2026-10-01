@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
-import { assertFigureCurrentArticle, assertFigureInsertionAnchor, buildFigureMarkdownBlock, figureSignatures, type FigureSpec } from "./visualFigures";
+import { assertFigureCurrentArticle, assertFigureMarkdownBlockPlacement, buildFigureMarkdownBlock, figureSignatures, type FigureSpec } from "./visualFigures";
 import { fingerprintPostContent } from "./domain";
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
@@ -478,9 +478,8 @@ export async function prepareBlogPublication(params: BlogPublicationParams, opti
         const candidateId = asset.sourceUrl.replace(/^resonate-figure:\/\//u, "");
         if (asset.sourceUrl !== `resonate-figure://${candidateId}` || !/^[a-zA-Z0-9]+$/u.test(candidateId) || asset.alt !== manifest.spec.presentation.alt) throw new BlogPostContractError(["Figure placement identity or alternative text is invalid."]);
         const block = buildFigureMarkdownBlock(candidateId, manifest.spec);
-        const anchorEnd = assertFigureInsertionAnchor(params.content, manifest.spec.insertionAnchor);
-        const suffix = params.content.slice(anchorEnd);
-        if (!suffix.startsWith(`\n\n${block}`) || params.content.split(block).length !== 2) throw new BlogPostContractError(["Every approved figure requires its exact reviewed placement, caption and source note."]);
+        try { assertFigureMarkdownBlockPlacement(params.content, manifest.spec.insertionAnchor, block); }
+        catch { throw new BlogPostContractError(["Every approved figure requires its exact reviewed placement, caption and complete source-note paragraph."]); }
       }
       const url = `/images/blog/${slug}/${exported.fileName}`;
       localUrls.set(asset.sourceUrl, url);

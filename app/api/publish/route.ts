@@ -90,6 +90,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result, recorded: true });
   } catch (err) {
     // Never serialize raw provider responses or credentials.
+    const data = err && typeof err === "object" && "data" in err ? err.data : null;
+    if (data && typeof data === "object" && "code" in data && data.code === "BLOG_PUBLICATION_APPROVAL_REQUIRED") {
+      return NextResponse.json({ error: "Save and approve the current blog export version before opening a PR." }, { status: 403 });
+    }
+    if (data && typeof data === "object" && "code" in data && data.code === "BLOG_PUBLICATION_METADATA_REQUIRED") {
+      return NextResponse.json({ error: "Review and save the required blog metadata and prepared hero before opening a PR." }, { status: 400 });
+    }
     const contract = err instanceof BlogPostContractError;
     return NextResponse.json({ ...(contract ? { issues: err.issues } : {}), error: contract ? err.message : "Blog export failed; review connection and saved metadata." }, { status: contract ? 400 : err instanceof Error && err.message === "Unauthorized" ? 401 : 500 });
   }

@@ -29,10 +29,15 @@ export async function POST(req: NextRequest) {
     const token = await getToken({ template: "convex" });
     if (!convexUrl || !token) return NextResponse.json({ error: "Authenticated publication workspace is required." }, { status: 403 });
     const client = new ConvexHttpClient(convexUrl); client.setAuth(token);
+    let hasVisuals: boolean;
     try {
       const review = await client.query(api.publishing.getApprovalReview, { postId: postId as Id<"v2Posts"> });
-      if (review.hasVisuals) return NextResponse.json(await client.action(api.visualPublication.refreshPr, { postId: postId as Id<"v2Posts"> }));
+      hasVisuals = review.hasVisuals;
     } catch { return NextResponse.json({ error: "Recorded publication state requires review." }, { status: 403 }); }
+    if (hasVisuals) {
+      try { return NextResponse.json(await client.action(api.visualPublication.refreshPr, { postId: postId as Id<"v2Posts"> })); }
+      catch { return NextResponse.json({ error: "Publication status is temporarily unavailable. Inspect the retained state before trying again." }, { status: 503 }); }
+    }
   }
 
   if (!prUrl || typeof prUrl !== "string") {
