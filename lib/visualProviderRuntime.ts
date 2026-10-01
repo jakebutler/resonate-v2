@@ -17,6 +17,7 @@ export async function dispatchVisualImageRequest(request: PreparedVisualProvider
     await hashVisualProviderRequest(request) !== claim.requestSha256 || request.images.some(image => createHash("sha256").update(image.bytes).digest("hex") !== image.sha256)) return { status: "blocked", reason: "prepared-request-provenance-changed" };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120_000);
+  let receivedResponse: { status: number; requestId?: string } | undefined;
   try {
     const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
     let body: string | FormData;
@@ -31,6 +32,9 @@ export async function dispatchVisualImageRequest(request: PreparedVisualProvider
     }
     const origin = request.route.provider === "openai" ? "https://api.openai.com" : "https://inference.do-ai.run";
     const response = await fetch(`${origin}${request.request.path}`, { method: "POST", headers, body, signal: controller.signal, redirect: "error" });
+    const requestId = response.headers.get("x-request-id");
+    const safeRequestId = requestId && /^req_[A-Za-z0-9_-]{1,100}$/.test(requestId) && !/(?:^|[_-])(?:sk[_-]|do[por]_v1_)/i.test(requestId) ? requestId : undefined;
+    receivedResponse = { status: response.status, ...(safeRequestId ? { requestId: safeRequestId } : {}) };
     const contentLength = response.headers.get("content-length");
     if (contentLength && Number(contentLength) > MAX_RESPONSE_BYTES) { controller.abort(); await response.body?.cancel(); throw new Error("Oversized response"); }
     if (!response.body) throw new Error("Missing response body");
@@ -44,8 +48,16 @@ export async function dispatchVisualImageRequest(request: PreparedVisualProvider
       chunks.push(next.value);
     }
     const retained = Buffer.concat(chunks);
-    return await interpretVisualProviderResponse(request, claim, { status: response.status, requestId: response.headers.get("x-request-id") ?? undefined, body: JSON.parse(retained.toString("utf8")) });
+    let parsedBody: unknown = {};
+    try { parsedBody = JSON.parse(retained.toString("utf8")); } catch { /* Retain only safe HTTP metadata when the complete response is not JSON. */ }
+    return await interpretVisualProviderResponse(request, claim, { ...receivedResponse, body: parsedBody });
   } catch {
+    if (receivedResponse) {
+      try {
+        const result = await interpretVisualProviderResponse(request, claim, { ...receivedResponse, body: {} });
+        if (result.status === "uncertain") return { ...result, reason: "provider-transport-uncertain" };
+      } catch { /* An incomplete response remains uncertain even if metadata interpretation fails. */ }
+    }
     return { status: "uncertain", reason: "provider-transport-uncertain", claimId: claim.claimId };
   } finally { clearTimeout(timer); }
 }
