@@ -104,17 +104,17 @@ All commands ran offline in the isolated feature worktree; no paid/image/text pr
 | Bounded profile input validation | 03:09:01 missing validation function | 03:09:41 profile and library tests passed |
 | Accurate absent seed status / brand access | 03:10:05 missing `getSeedStatus` | 03:10:36 ten passed, local source check skipped |
 
-Actual source integration command:
+Actual source integration command (replace the portable placeholder with the local master-image directory):
 
 ```sh
-CORVO_VISUAL_SEED_SOURCE_DIRECTORY=/Users/jacobbutler/Documents/corvo-content-drafts/images npx vitest run convex/__tests__/visualProfiles.test.ts lib/__tests__/visualProfile.test.ts convex/__tests__/visualWorkflow.test.ts
+CORVO_VISUAL_SEED_SOURCE_DIRECTORY=/path/to/corvo-content-drafts/images npx vitest run convex/__tests__/visualProfiles.test.ts lib/__tests__/visualProfile.test.ts convex/__tests__/visualWorkflow.test.ts
 ```
 
 At 03:12:26 this command passed all 22 tests across the three files, including all eleven profile API behaviors. Without the source env, the one actual-master test is intentionally skipped; ordinary tests need no workstation source files.
 
 At 03:20:20 the final profile check passed all eleven API tests plus the library test. The simultaneously edited workflow suite had a new failing test for including pinned profile guidance in its actual prompts; its author was notified. That shared suite is not claimed green by this worker.
 
-`node scripts/import-visual-seed.mjs --source-directory /Users/jacobbutler/Documents/corvo-content-drafts/images` verified 16 unchanged images totaling 35,192,584 bytes in dry-run mode. It performed no imports. `npx tsc --noEmit -p tsconfig.typecheck.json` passed. Scoped ESLint passed without warnings. Full `npx tsc --noEmit` remains failing in existing tests elsewhere; the latest filtered output has no errors in this worker's files.
+`node scripts/import-visual-seed.mjs --source-directory /path/to/corvo-content-drafts/images` verified 16 unchanged images totaling 35,192,584 bytes in dry-run mode. It performed no imports. `npx tsc --noEmit -p tsconfig.typecheck.json` passed. Scoped ESLint passed without warnings. Full `npx tsc --noEmit` remains failing in existing tests elsewhere; the latest filtered output has no errors in this worker's files.
 
 The offline storage harness returns base64 SHA-256 and omits optional MIME metadata, while live Convex documents specify hex SHA-256 and optional MIME metadata. The implementation compares the digest in either encoding and checks MIME when present. Live deployment validation belongs to the coordinator.
 

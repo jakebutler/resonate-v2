@@ -32,7 +32,7 @@ SVGs must be embedded as `img` resources, preserving separate document namespace
 
 ## Public APIs and article insertion
 
-All public APIs require an owned post plus brand access. Writes allow only owner/editor roles. Guessed source/candidate IDs are resolved only after the owning post is authorized; viewer configuration, attachment, planning, and review writes fail closed.
+All public APIs require an owned post plus brand access. Writes allow only owner/editor roles. Foreign and unknown post/source/candidate IDs receive the same ownership-denial response; viewer configuration, attachment, planning, and review writes fail closed.
 
 | API | Result |
 |---|---|

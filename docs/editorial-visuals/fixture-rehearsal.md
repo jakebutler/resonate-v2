@@ -19,6 +19,8 @@ RESONATE_VISUAL_FIXTURE_MODE=local-offline
 RESONATE_VISUAL_FIXTURE_DEPLOYMENT=anonymous-agent
 RESONATE_VISUAL_FIXTURE_CONVEX_URL=http://127.0.0.1:3210
 CONVEX_SITE_URL=http://127.0.0.1:3211
+# Must be absent for the local offline fixture; an explicit 0 pauses fixture actions.
+# Unset EDITORIAL_VISUALS_ENABLED
 ```
 
 Quotes must use fictional actor `visual-rehearsal-only`, provider/model `offline-fixture`, and zero micros. All quotes have `offline-fixture` qualification; there is no live-provider enablement environment branch.
