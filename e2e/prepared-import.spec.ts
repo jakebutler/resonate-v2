@@ -1,16 +1,16 @@
 import { test, expect } from "@playwright/test";
 import sharp from "sharp";
+import { mockSyncFixture, type PreparedImportFixture } from "./test-support/fixtures";
+
 test("prepared upload corrects an error, reviews exact source, commits unapproved drafts and opens canonical links", async ({
   page,
 }) => {
+  const fx = await mockSyncFixture<PreparedImportFixture>(page, "prepared-import");
   const hero = await sharp({
     create: { width: 1600, height: 900, channels: 3, background: "#849f92" },
   })
     .png()
     .toBuffer();
-  const awaitHeroPreview = (await sharp(hero).webp().toBuffer()).toString(
-    "base64",
-  );
   const article = {
     title: "Prepared fixture article",
     contentFile: "article.md",
@@ -42,115 +42,7 @@ test("prepared upload corrects an error, reviews exact source, commits unapprove
     title: "Prepared browser fixture",
     entries: [{ key: "entry-1", article, companions: [companion] }],
   };
-  let reviewed = false;
-  const actions: string[] = [];
-  const review = {
-    _id: "fixture-review",
-    entryKey: "entry-1",
-    sourceHash: "fixture-source-hash",
-    actions: ["create", "create"],
-    hero: {
-      width: 1600,
-      height: 900,
-      mimeType: "image/webp",
-      byteLength: 12000,
-      crop: "centre",
-      sha256: "fixture-hero-hash",
-    },
-    items: [
-      {
-        ...article,
-        content: "Exact prepared prose with 42%.\n",
-        dueAt: "2030-10-07T16:00:00Z",
-      },
-      {
-        ...companion,
-        content: "Exact companion with source link.",
-        dueAt: "2030-10-07T18:00:00Z",
-      },
-    ],
-  };
-  await page.routeWebSocket(/\/api\/.*\/sync/, (socket) => {
-    const qs = new Map<number, { queryId: number; udfPath: string }>();
-    let version = { querySet: 0, identity: 0, ts: "AAAAAAAAAAA=" };
-    let tick = 0;
-    function val(path: string) {
-      if (path === "series:list") return [];
-      if (path === "preparedImports:selectedReviews")
-        return reviewed ? [review] : [];
-      return null;
-    }
-    function send(querySet = version.querySet) {
-      const ts = Buffer.alloc(8);
-      ts.writeBigUInt64LE(BigInt(++tick));
-      const endVersion = { ...version, querySet, ts: ts.toString("base64") };
-      socket.send(
-        JSON.stringify({
-          type: "Transition",
-          startVersion: version,
-          endVersion,
-          modifications: [...qs.values()].map((q) => ({
-            type: "QueryUpdated",
-            queryId: q.queryId,
-            value: val(q.udfPath),
-            journal: null,
-            logLines: [],
-          })),
-        }),
-      );
-      version = endVersion;
-    }
-    socket.onMessage((raw) => {
-      const m = JSON.parse(String(raw));
-      if (m.type === "Authenticate") {
-        const startVersion = version;
-        version = { ...version, identity: version.identity + 1 };
-        socket.send(
-          JSON.stringify({
-            type: "Transition",
-            startVersion,
-            endVersion: version,
-            modifications: [],
-          }),
-        );
-      }
-      if (m.type === "ModifyQuerySet") {
-        for (const q of m.modifications) {
-          if (q.type === "Add") qs.set(q.queryId, q);
-          else qs.delete(q.queryId);
-        }
-        send(m.newVersion);
-      }
-      if (m.type === "Action") {
-        actions.push(m.udfPath);
-        let result: unknown = null;
-        if (m.udfPath === "preparedImportActions:reviewEntry") {
-          reviewed = true;
-          result = {
-            reviewId: "fixture-review",
-            previewBase64: awaitHeroPreview,
-          };
-        }
-        if (m.udfPath === "preparedImportActions:commitEntry")
-          result = {
-            _id: "fixture-receipt",
-            entryKey: "entry-1",
-            seriesId: "fixture-series",
-            postIds: ["fixture-blog", "fixture-social"],
-          };
-        socket.send(
-          JSON.stringify({
-            type: "ActionResponse",
-            requestId: m.requestId,
-            success: true,
-            result,
-            logLines: [],
-          }),
-        );
-        send();
-      }
-    });
-  });
+  const review = fx.review;
   await page.goto("/series");
   const section = page.getByLabel("Prepared package import");
   const upload = [
@@ -181,7 +73,7 @@ test("prepared upload corrects an error, reviews exact source, commits unapprove
     );
   await section.getByRole("button", { name: "Dry-run package" }).click();
   await expect(section.getByRole("status")).toContainText("schedule");
-  expect(actions).toEqual([]);
+  expect(fx.actions).toEqual([]);
   await section
     .getByRole("textbox", { name: "Manifest JSON", exact: true })
     .fill(JSON.stringify(manifest));
@@ -209,7 +101,7 @@ test("prepared upload corrects an error, reviews exact source, commits unapprove
   await expect(section.getByRole("status")).toContainText(
     "Every new post is unapproved",
   );
-  expect(actions).toEqual([
+  expect(fx.actions).toEqual([
     "preparedImportActions:reviewEntry",
     "preparedImportActions:commitEntry",
   ]);
