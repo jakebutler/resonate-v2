@@ -299,16 +299,6 @@ function decodeImage(value: unknown): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-/** No executable transport injection while every reliable quote is unknown. */
-export async function executeVisualProviderRequest(
-  _request: PreparedVisualProviderRequest,
-  _context?: unknown,
-): Promise<VisualProviderResult> {
-  void _request;
-  void _context;
-  return { status: "blocked", reason: "reliable-cost-bound-required" };
-}
-
 /** Pure interpretation only: this function cannot claim, dispatch or qualify a route. */
 export async function interpretVisualProviderResponse(
   request: PreparedVisualProviderRequest,

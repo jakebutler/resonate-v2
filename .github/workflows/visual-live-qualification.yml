@@ -1,0 +1,115 @@
+name: Visual route live qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      visual_live_submission:
+        description: Set to approved to execute the gated live-qualification packet
+        required: true
+        default: blocked
+        type: choice
+        options:
+          - blocked
+          - approved
+      deployment_url:
+        description: Dev Convex deployment URL the packet runs against (required for the live stage; production refused)
+        required: false
+        default: ""
+        type: string
+      reference_dir:
+        description: Directory containing the two approved reference PNGs named by the frozen packet (required for the live stage)
+        required: false
+        default: ""
+        type: string
+      registration_json:
+        description: Optional registration JSON to persist the qualified routes after the packet completes
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  # The contract stage runs unconditionally: it proves the packet chain, the
+  # caps and quote guards, and the gate logic offline on every dispatch,
+  # including dry runs.
+  contract-tests:
+    name: Contract tests and fixture qualification (unconditional)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Gate logic tests
+        run: npx vitest run lib/verification
+
+      - name: Provider contract tests
+        run: npm test -- lib/__tests__/visualProviders.test.ts
+
+      - name: Fixture qualification run (zero cost, CI default)
+        run: node scripts/qualify-visual-routes.mjs --record
+
+      - name: Upload qualification-run records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-qualification-runs
+          path: docs/editorial-visuals/providers/qualification-runs/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The live stage never runs on contract failure. The gate script — not an
+  # `if:` condition — decides execution, so a missing secret or input fails the
+  # job with an explicit "credentials not configured" outcome instead of
+  # skipping silently. Provider keys themselves live on the dev deployment;
+  # when they are missing there, the packet reports ABSENT with the named
+  # credentials and the job fails loudly (exit 2).
+  live-tier:
+    name: Gated live qualification stage
+    needs: contract-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Resolve live gate and execute the functional packet
+        id: visual-live-gate
+        env:
+          VISUAL_LIVE_SUBMISSION: ${{ inputs.visual_live_submission }}
+          VISUAL_QUALIFICATION_OPERATOR_TOKEN: ${{ secrets.VISUAL_QUALIFICATION_OPERATOR_TOKEN }}
+        run: |
+          npx --yes tsx scripts/run-visual-live-qualification.mjs \
+            --deployment-url "${{ inputs.deployment_url }}" \
+            --reference-dir "${{ inputs.reference_dir }}" \
+            --registration-json "${{ inputs.registration_json }}"
+
+      - name: Record gated live-qualification outcome
+        if: always()
+        run: |
+          echo "live qualification finished with gate outcome: ${{ steps.visual-live-gate.outputs.outcome }}"
+          echo "reason: ${{ steps.visual-live-gate.outputs.reason }}"
+
+      - name: Upload live receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-live-receipts
+          path: |
+            docs/verification/receipts/
+            docs/editorial-visuals/providers/qualification-runs/
+          if-no-files-found: ignore
+          retention-days: 30
