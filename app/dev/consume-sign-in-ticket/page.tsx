@@ -23,22 +23,20 @@ export default function ConsumeSignInTicketPage() {
       return;
     }
     let cancelled = false;
-    clerk.client.signIn
-      .create({ strategy: "ticket", ticket })
-      .then((signIn: { status: string; createdSessionId?: string | null }) => {
-        if (cancelled) return;
+    void (async () => {
+      try {
+        const signIn = await clerk.client.signIn.create({ strategy: "ticket", ticket });
         if (signIn.status !== "complete" || !signIn.createdSessionId) {
           throw new Error(`sign-in status=${signIn.status}`);
         }
-        return clerk.setActive({ session: signIn.createdSessionId }).then(() => {
-          window.location.href = "/";
-        });
-      })
-      .catch((error: unknown) => {
+        await clerk.setActive({ session: signIn.createdSessionId });
+        window.location.href = "/";
+      } catch (error) {
         if (!cancelled) {
           document.body.innerText = `Sign-in failed: ${String(error)}`;
         }
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
