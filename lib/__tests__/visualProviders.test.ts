@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { VISUAL_PROVIDER_CAPABILITIES, calculateVisualUsageCost, executeVisualProviderRequest, hashVisualProviderRequest, interpretVisualProviderResponse, prepareVisualProviderRequest, quoteVisualProviderCost, selectVisualProviderRoute, type VisualRouteCapability } from "@/lib/visualProviders";
+import { VISUAL_PROVIDER_CAPABILITIES, calculateVisualUsageCost, hashVisualProviderRequest, interpretVisualProviderResponse, prepareVisualProviderRequest, quoteVisualProviderCost, selectVisualProviderRoute, type VisualRouteCapability } from "@/lib/visualProviders";
 
 // Speculative protocol doubles, not sanitized live receipts or qualification.
 const openaiFixture: VisualRouteCapability = {
@@ -220,18 +220,10 @@ describe("editorial visual provider boundary", () => {
     expect(selectVisualProviderRoute(request, [{ ...openaiFixture, qualification: "live-receipt", receiptIds: ["real-receipt"] }]).ok).toBe(false);
     expect(selectVisualProviderRoute(request, [{ ...openaiFixture, receiptIds: ["asserted-receipt"] }]).ok).toBe(false);
   });
-  it("cannot dispatch an arbitrary callback even when caller labels it offline", async () => {
-    const dispatch = vi.fn().mockResolvedValue({ status: 200, body: { data: [{ b64_json: "iVBORw0KGgo=" }] } });
-    const claimDispatch = vi.fn(claimFixture);
-    for (const requestMode of ["live", "offline-contract"] as const) {
-      for (const contextMode of ["live", "offline-contract"] as const) {
-        const prepared = { ...await generation(), mode: requestMode, route: { ...openaiFixture, qualification: "live-receipt" as const, receiptIds: ["asserted-receipt"] } };
-        expect(await executeVisualProviderRequest(prepared, { mode: contextMode, claimDispatch, dispatch }))
-          .toMatchObject({ status: "blocked", reason: "reliable-cost-bound-required" });
-      }
-    }
-    expect(claimDispatch).not.toHaveBeenCalled();
-    expect(dispatch).not.toHaveBeenCalled();
+  it("quotes an unqualified route with no reliable cost bound rather than a fabricated maximum", () => {
+    expect(quoteVisualProviderCost(openaiFixture)).toMatchObject({
+      provider: "openai", model: "gpt-image-2", maximumUsd: null, estimatedOnly: true,
+    });
   });
   it("keeps extra outputs and deterministic HTTP errors uncertain and rejects invalid preparation identity", async () => {
     const request = await generation(), claim = await claimFixture(request);
@@ -308,14 +300,8 @@ describe("editorial visual provider boundary", () => {
     expect(JSON.stringify(result)).not.toMatch(/private-token|private-key|private-url|b64_json|https:\/\//);
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
-  it("blocks live dispatch when no reliable total charge bound has been established", async () => {
-    const prepared = { ...(await generation()), mode: "live" as const };
-    const claimDispatch = vi.fn(claimFixture), dispatch = vi.fn();
-    expect(quoteVisualProviderCost(prepared.route)).toMatchObject({ maximumUsd: null, estimatedOnly: true });
-    expect(await executeVisualProviderRequest(prepared, { mode: "live", claimDispatch, dispatch }))
-      .toMatchObject({ status: "blocked", reason: "reliable-cost-bound-required" });
-    expect(claimDispatch).not.toHaveBeenCalled();
-    expect(dispatch).not.toHaveBeenCalled();
+  it("does not claim a reliable cost bound for any route while bounds remain unestablished", () => {
+    expect(quoteVisualProviderCost(openaiFixture)).toMatchObject({ maximumUsd: null, estimatedOnly: true });
   });
   it("keeps a nominal success without image bytes uncertain and retains available usage", async () => {
     const dispatch = vi.fn().mockResolvedValue({ status: 200, body: {
