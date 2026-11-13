@@ -1,0 +1,90 @@
+{
+  "featureId": "campaigns",
+  "name": "Multi-post campaigns",
+  "description": "Readiness for the multi-post campaigns feature: the C1 fixture harness, the campaign data layer (create/attach/suggest/approve), the session and shape stages, and the campaign-loop e2e spec on the production build. The C2 campaign-to-series bridge is declared but its suite does not exist yet on this branch — it reports ABSENT and feeds the build list until the bridge PR lands.",
+  "fixtures": [
+    {
+      "name": "campaign-fixture-harness",
+      "module": "convex/__tests__/helpers/campaignFixture.ts",
+      "description": "C1 helper seeding a gate-passed, materialized campaign batch in one call."
+    },
+    {
+      "name": "queue-capacity-fixture",
+      "module": "convex/__tests__/helpers/mockMutationCtx.ts",
+      "description": "Shared convex-test identity/ctx helpers used by the campaign suites."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "campaign-fixture-harness",
+      "name": "C1 fixture harness determinism assertions hold",
+      "runner": "convex-test",
+      "tier": "offline-fixture",
+      "target": "convex/__tests__/campaignVerification.test.ts",
+      "fixtures": ["campaign-fixture-harness"],
+      "prerequisites": [],
+      "dependsOn": [],
+      "description": "The C1 harness suite: one-call seeding of a gate-passed materialized batch, schedule ladder, gate-fingerprint staleness, idempotency of generate/materialize, and audit-event presence."
+    },
+    {
+      "id": "campaign-data-layer",
+      "name": "Campaign data-layer suite passes",
+      "runner": "convex-test",
+      "tier": "offline-fixture",
+      "target": "convex/__tests__/campaigns.test.ts",
+      "fixtures": ["campaign-fixture-harness"],
+      "prerequisites": [],
+      "dependsOn": [],
+      "description": "Core campaign mutations and queries on the in-memory Convex rung, including auth and cross-brand authorization."
+    },
+    {
+      "id": "campaign-session",
+      "name": "Campaign session suite passes",
+      "runner": "convex-test",
+      "tier": "offline-fixture",
+      "target": "convex/__tests__/campaignSession.test.ts",
+      "fixtures": ["campaign-fixture-harness"],
+      "prerequisites": [],
+      "dependsOn": ["campaign-data-layer"],
+      "description": "Campaign working-session stage on the in-memory Convex rung."
+    },
+    {
+      "id": "campaign-shape",
+      "name": "Campaign shape suite passes",
+      "runner": "convex-test",
+      "tier": "offline-fixture",
+      "target": "convex/__tests__/campaignShape.test.ts",
+      "fixtures": ["campaign-fixture-harness"],
+      "prerequisites": [],
+      "dependsOn": ["campaign-session"],
+      "description": "Shape proposal/acceptance stage on the in-memory Convex rung."
+    },
+    {
+      "id": "campaign-loop-e2e",
+      "name": "Campaign-loop e2e boots every campaign surface",
+      "runner": "playwright",
+      "tier": "offline-fixture",
+      "target": "e2e/campaign-loop.spec.ts",
+      "fixtures": [],
+      "prerequisites": [],
+      "dependsOn": [
+        "campaign-fixture-harness",
+        "campaign-data-layer",
+        "campaign-session",
+        "campaign-shape"
+      ],
+      "description": "Playwright rung against the production build: every campaign surface boots, renders its heading, and never crashes (CI runs without a live Convex backend, per the spec's documented assertion)."
+    },
+    {
+      "id": "campaign-series-bridge",
+      "name": "C2 campaign-to-series bridge suite passes",
+      "runner": "convex-test",
+      "tier": "offline-fixture",
+      "target": "convex/__tests__/campaignSeriesBridge.test.ts",
+      "fixtures": ["campaign-fixture-harness"],
+      "prerequisites": [],
+      "dependsOn": ["campaign-fixture-harness"],
+      "description": "The C2 bridge criterion: materialized campaign posts forming a reviewable series, batch approval via seriesReview, and queueRelease preparation for a campaign-driven set. The suite (and the bridge) is a pending build-list item on this branch — expect ABSENT until the bridge PR lands."
+    }
+  ]
+}
