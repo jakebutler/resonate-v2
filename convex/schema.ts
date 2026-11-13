@@ -804,6 +804,9 @@ export default defineSchema({
     title: v.string(),
     status: v.union(v.literal("active"), v.literal("completed")),
     corpusIds: v.array(v.id("corpora")),
+    // Campaign → series bridge (C2): the reviewable series the campaign's
+    // materialized posts join at materialization.
+    seriesId: v.optional(v.id("postSeries")),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

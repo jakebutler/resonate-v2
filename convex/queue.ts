@@ -7,6 +7,7 @@ import {
   requireUserId,
 } from "./campaignAccess";
 import { parseCorpusCitation } from "@/lib/campaignGrounding";
+import { ensureCampaignSeries } from "./campaignSeries";
 import {
   countIncompleteSlots,
   isShapeComplete,
@@ -161,11 +162,18 @@ export const materializeDraftSet = mutation({
       }
     }
 
+    // C2 bridge: materialized posts join a reviewable series automatically so
+    // the campaign queue can drive batch review and queue release. Runs
+    // before the already-materialized early return, so a fully linked
+    // campaign is a no-op and campaigns materialized before the bridge
+    // existed are linked on their next materialize call.
+    const seriesId = await ensureCampaignSeries(ctx, userId, campaign, drafts);
+
     const alreadyScheduled = drafts.filter(
       (draft) => draft.post.status === "scheduled" || draft.post.status === "approved"
     );
     if (alreadyScheduled.length === drafts.length) {
-      return { materialized: false, reason: "already materialized" };
+      return { materialized: false, reason: "already materialized", seriesId };
     }
 
     const now = Date.now();
@@ -240,6 +248,7 @@ export const materializeDraftSet = mutation({
       materialized: true,
       draftCount: drafts.length,
       unreviewedExcerptCount: unreviewedCount,
+      seriesId,
     };
   },
 });
@@ -279,6 +288,7 @@ export const getCampaignQueue = query({
 
     return {
       campaign,
+      seriesId: campaign.seriesId ?? null,
       queue,
       approvedCount,
       totalCount: queue.length,
