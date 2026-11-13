@@ -131,7 +131,7 @@ describe("firecrawl crawl gating", () => {
       "http://localhost:3000/",
       "http://127.0.0.1/",
       "http://192.168.1.10/",
-      "file:///etc/passwd",
+      "ftp://freshproof.example.com/file",
       "not-a-url",
     ]) {
       const result = await firecrawlCrawl(approvedContext(fetchImpl), { url });
