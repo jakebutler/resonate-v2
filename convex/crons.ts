@@ -10,4 +10,13 @@ crons.hourly(
   internal.bufferLive.refreshSubmittedStatuses
 );
 
+// A3: daily answer-engine visibility runs. The batch itself is fail-closed —
+// without the runtime kill switch or gateway credentials it exits with an
+// explicit outcome instead of spending anything.
+crons.daily(
+  "aeo-answer-engine-runs",
+  { hourUTC: 7, minuteUTC: 35 },
+  internal.answerEngine.runAnswerEngineBatch
+);
+
 export default crons;
