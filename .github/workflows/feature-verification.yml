@@ -83,6 +83,13 @@ jobs:
           BLOG_CONTENT_PATH: content/posts
           PIONEER_API_KEY: test_key
           PIONEER_DRAFT_MODEL: test-model
+          # C5: baked into the production build so the editorial visual composer
+          # mounts in the composer and its e2e spec can drive it.
+          NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED: "1"
+          # Current Playwright coverage exercises unauthenticated smoke paths,
+          # so the auth bypass matches the Tests workflow's e2e job.
+          E2E_BYPASS_AUTH: "1"
+          NEXT_PUBLIC_E2E_BYPASS_AUTH: "1"
 
       - name: Seed verification workspace (dev Convex deployment)
         id: seed
@@ -124,6 +131,11 @@ jobs:
           CLERK_JWT_ISSUER_DOMAIN: https://clerk.test
           PIONEER_API_KEY: test_key
           PIONEER_DRAFT_MODEL: test-model
+          # Runtime flags for the Playwright rungs: the bypass keeps covered
+          # flows unauthenticated; the visual flag must match the baked build.
+          E2E_BYPASS_AUTH: "1"
+          NEXT_PUBLIC_E2E_BYPASS_AUTH: "1"
+          NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED: "1"
         run: |
           feature="${{ github.event.inputs.feature }}"
           if [ -n "$feature" ]; then
