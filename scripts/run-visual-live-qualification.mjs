@@ -119,7 +119,7 @@ function main() {
     `## Workflow-dispatch live run — ${startedAt.toISOString()}`,
     "",
     `- Gate: approved — ${decision.reason}`,
-    `- Packet: reviewed gpt-image-1 low/low two-call functional sequence (caps $0.25/call, $0.50 sequence; $5 provider ledger caps).`,
+    `- Packet: reviewed gpt-image-1.5 low/low two-call functional sequence (caps $0.25/call, $0.50 sequence; $5 provider ledger caps).`,
     `- Exit status: ${exitCode}`,
     `- Receipt: ${receiptPath}`,
     ...(exitCode === 0 ? [] : ["- The packet failed; no route is qualified by this run."]),

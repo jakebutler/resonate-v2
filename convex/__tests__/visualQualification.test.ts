@@ -52,7 +52,7 @@ describe("persistQualifiedRoutes", () => {
     expect(result.textRouteId).toBeTruthy();
     await t.run(async ctx => {
       const imageRoute = await ctx.db.get(result.imageRouteId!);
-      expect(imageRoute).toMatchObject({ provider: "openai", model: "gpt-image-1", quality: "low", inputFidelity: "low", maximumMicros: 250_000, enabled: true, capabilityReceiptIds: identity.capabilityReceiptIds });
+      expect(imageRoute).toMatchObject({ provider: "openai", model: "gpt-image-1.5", quality: "low", inputFidelity: "low", maximumMicros: 250_000, enabled: true, capabilityReceiptIds: identity.capabilityReceiptIds });
       const textRouteRow = await ctx.db.get(result.textRouteId!);
       expect(textRouteRow).toMatchObject({ provider: "openai", model: textRoute.model, stages: ["planning"], enabled: true });
     });
@@ -137,7 +137,7 @@ describe("executeImageQualificationPacket", () => {
     const master = await sharp({ create: { width: 1536, height: 1024, channels: 3, background: "#f4d35e" } }).png().toBuffer();
     const b64 = master.toString("base64");
     const fetchMock = vi.fn().mockImplementation(() => new Response(JSON.stringify({
-      model: "gpt-image-1", data: [{ b64_json: b64 }],
+      model: "gpt-image-1.5", data: [{ b64_json: b64 }],
       usage: { input_tokens_details: { text_tokens: 1_200, image_tokens: 646 }, output_tokens: 400 },
     }), { status: 200, headers: { "x-request-id": "req_fictional_probe" } }));
     vi.stubGlobal("fetch", fetchMock);
@@ -145,7 +145,7 @@ describe("executeImageQualificationPacket", () => {
     expect(result.status).toBe("completed");
     expect(result.calls).toHaveLength(2);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(result.calls[0]).toMatchObject({ operation: "generate", httpStatus: 200, requestId: "req_fictional_probe", estimatedCostUsd: (1_200 * 5 + 646 * 10 + 400 * 40) / 1_000_000, width: 1536, height: 1024 });
+    expect(result.calls[0]).toMatchObject({ operation: "generate", httpStatus: 200, requestId: "req_fictional_probe", estimatedCostUsd: (1_200 * 5 + 646 * 8 + 400 * 30) / 1_000_000, width: 1536, height: 1024 });
     expect(result.calls[1]).toMatchObject({ operation: "edit", width: 1536, height: 1024 });
     for (const call of result.calls) {
       expect(call.requestSha256).toMatch(/^[a-f0-9]{64}$/);

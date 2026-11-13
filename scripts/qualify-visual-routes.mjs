@@ -39,7 +39,7 @@ export async function verifyPacketChain({ load = loadPacket } = {}) {
   const baseBytes = readFileSync(join(PROVIDERS_DIR, "qualification-packet.json"));
   assert.equal(createHash("sha256").update(baseBytes).digest("hex"), functional.base_packet_sha256, "functional-first-packet.json no longer anchors the committed base packet");
   assert.equal(functional.provider, "openai");
-  assert.equal(functional.canonical_model, "gpt-image-1");
+  assert.equal(functional.canonical_model, "gpt-image-1.5");
   assert.equal(functional.maximum_charge_usd, 0.25, "per-call functional cap moved from the reviewed $0.25");
   assert.equal(functional.sequence_planned_maximum_usd, 0.5, "two-call sequence cap moved from the reviewed $0.50");
   assert.equal(functional.quote_guards.prompt_utf8_bytes_max, 9045, "prompt quote guard moved from the reviewed 9,045 bytes");

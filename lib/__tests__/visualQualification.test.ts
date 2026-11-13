@@ -35,11 +35,11 @@ const identity = {
 };
 
 describe("image qualification packet", () => {
-  it("prepares the exact reviewed gpt-image-1 low/low functional route", () => {
+  it("prepares the exact reviewed gpt-image-1.5 low/low functional route", () => {
     expect(prepareImageQualificationRoute(identity, 1_000)).toEqual({
       provider: "openai",
-      model: "gpt-image-1",
-      apiModelId: "gpt-image-1",
+      model: "gpt-image-1.5",
+      apiModelId: "gpt-image-1.5",
       operations: ["generate", "edit"],
       referenceInputs: true,
       maxInputImages: 3,
@@ -151,7 +151,7 @@ describe("live qualification gate", () => {
   it("admits the live mode only with approval plus present credentials, carrying the model-availability notice", () => {
     const gate = qualificationGate({ approved: "approved", credentials: { image: true, text: true } });
     expect(gate.mode).toBe("live");
-    if (gate.mode === "live") expect(gate.notice).toMatch(/gpt-image-1 shutdown was scheduled/);
+    if (gate.mode === "live") expect(gate.notice).toMatch(/re-pinned to gpt-image-1.5 approved_by_Jake_in_conversation_2026-11-13/);
   });
 });
 

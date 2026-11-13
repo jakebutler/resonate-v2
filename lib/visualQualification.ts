@@ -22,13 +22,15 @@ export const QUALIFICATION_MAX_PROMPT_BYTES = 9_045;
 export const QUALIFICATION_MAX_INPUT_BYTES = 4 * 1024 * 1024;
 
 /**
- * gpt-image-1 shutdown was scheduled for 2026-10-23 per the functional bound doc.
- * The reviewed packet still targets gpt-image-1, so this is surfaced, never silently
+ * gpt-image-1 shutdown was scheduled for 2026-10-23 and the model is no longer
+ * served (confirmed via /v1/models on 2026-11-13). Jake approved re-pinning the
+ * reviewed packet to gpt-image-1.5 in conversation on 2026-11-13; the pin is
+ * never silently changed without that approval trail.
  * enforced: operators must verify model availability before a live dispatch and must
  * not fall back to another model under this quote.
  */
 export const IMAGE_ROUTE_MODEL_AVAILABILITY_NOTICE =
-  "gpt-image-1 shutdown was scheduled for 2026-10-23 (gpt-image-1-functional-bound.md); verify model availability before dispatch and never silently fall back under this quote.";
+  "Original pin gpt-image-1 is no longer served (shutdown was scheduled 2026-10-23); re-pinned to gpt-image-1.5 approved_by_Jake_in_conversation_2026-11-13 — model pins require explicit review.";
 
 /** Frozen approved reference inputs, mirrored from functional-first-packet.json (lib test enforces the mirror stays in sync). */
 export const IMAGE_PACKET_REFERENCES = [
@@ -79,8 +81,8 @@ export type QualificationRouteIdentity = {
 
 export type PreparedImageQualificationRoute = {
   provider: "openai";
-  model: "gpt-image-1";
-  apiModelId: "gpt-image-1";
+  model: "gpt-image-1.5";
+  apiModelId: "gpt-image-1.5";
   operations: ["generate", "edit"];
   referenceInputs: true;
   maxInputImages: 3;
@@ -158,8 +160,8 @@ export function prepareImageQualificationRoute(
   const capability = VISUAL_PROVIDER_CAPABILITIES.find(
     (route) =>
       route.provider === "openai" &&
-      route.model === "gpt-image-1" &&
-      route.apiModelId === "gpt-image-1",
+      route.model === "gpt-image-1.5" &&
+      route.apiModelId === "gpt-image-1.5",
   );
   if (!capability)
     throw new Error(
@@ -167,8 +169,8 @@ export function prepareImageQualificationRoute(
     );
   return {
     provider: "openai",
-    model: "gpt-image-1",
-    apiModelId: "gpt-image-1",
+    model: "gpt-image-1.5",
+    apiModelId: "gpt-image-1.5",
     operations: ["generate", "edit"],
     referenceInputs: true,
     // Generation binds 2 references; the edit binds the generated parent plus both references.
