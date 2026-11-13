@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, 'release/feature-verification-20261113-200812']
   workflow_dispatch:
 
 jobs:
