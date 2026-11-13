@@ -32,17 +32,37 @@ export const IMAGE_ROUTE_MODEL_AVAILABILITY_NOTICE =
 
 /** Frozen approved reference inputs, mirrored from functional-first-packet.json (lib test enforces the mirror stays in sync). */
 export const IMAGE_PACKET_REFERENCES = [
-  { order: 1, role: "identity", sourceFileName: "raven-character-sheet.png", sha256: "0900adbe822813085b585b6415dd958e994046ec47122ca248e6ee525b4db316", bytes: 2_178_138, width: 1_448, height: 1_086 },
-  { order: 2, role: "style", sourceFileName: "article-04-hero.png", sha256: "a909d8401db8a4bfc69ecead8dde3a9aafcc93a554b66b0b9bc69ee67fade2ce", bytes: 2_013_581, width: 1_672, height: 941 },
+  {
+    order: 1,
+    role: "identity",
+    sourceFileName: "raven-character-sheet.png",
+    sha256: "0900adbe822813085b585b6415dd958e994046ec47122ca248e6ee525b4db316",
+    bytes: 2_178_138,
+    width: 1_448,
+    height: 1_086,
+  },
+  {
+    order: 2,
+    role: "style",
+    sourceFileName: "article-04.png",
+    sha256: "fca4cce79b178b5b586d5e39d48653ea1c0c267575887e855730df0dd13525eb",
+    bytes: 1_866_944,
+    width: 1_600,
+    height: 900,
+  },
 ] as const;
 
 export const LIVE_SUBMISSION_APPROVED_VALUE = "approved";
-export const QUALIFICATION_OPERATOR_TOKEN_ENV = "VISUAL_QUALIFICATION_OPERATOR_TOKEN";
+export const QUALIFICATION_OPERATOR_TOKEN_ENV =
+  "VISUAL_QUALIFICATION_OPERATOR_TOKEN";
 export const LIVE_SUBMISSION_APPROVAL_ENV = "VISUAL_QUALIFICATION_APPROVED";
 
 export const IMAGE_CREDENTIAL_ENV = "OPENAI_API_KEY";
 /** The text credential is satisfied by either reviewed text runtime key. */
-export const TEXT_CREDENTIAL_ENVS = ["OPENAI_TEXT_API_KEY", "CORTEX_API_KEY"] as const;
+export const TEXT_CREDENTIAL_ENVS = [
+  "OPENAI_TEXT_API_KEY",
+  "CORTEX_API_KEY",
+] as const;
 
 export const LIVE_ABSENT_PREREQUISITE =
   "Jake mints the scoped provider keys and provisions them as Convex environment variables via Obvious secrets; the deployment also needs VISUAL_QUALIFICATION_OPERATOR_TOKEN and VISUAL_QUALIFICATION_APPROVED=approved before a live packet can be admitted.";
@@ -100,19 +120,51 @@ export type PreparedTextQualificationRoute = TextQualificationBounds & {
   expiresAt: number;
 };
 
-function assertReceiptEvidence(identity: QualificationRouteIdentity, now: number): void {
-  if (!identity.capabilityReceiptIds.length || identity.capabilityReceiptIds.length > 16) throw new Error("Qualification route requires the recorded capability receipt ids (1-16)");
-  if ([...identity.capabilityReceiptIds, identity.boundReceiptId].some(id => !receiptIdPattern.test(id))) throw new Error("Capability/bound receipt ids must match [a-zA-Z0-9._:-]{1,160}");
-  if (!identity.reviewedBy.trim() || identity.reviewedBy.length > 200) throw new Error("Reviewed-by identity is required (1-200 chars)");
-  if (!identity.provenance.trim() || identity.provenance.length > 1000) throw new Error("Qualification provenance is required (1-1000 chars) and must cite the recorded receipts");
-  if (!Number.isSafeInteger(identity.expiresAt) || identity.expiresAt <= now) throw new Error("Qualification route expiry must be in the future");
+function assertReceiptEvidence(
+  identity: QualificationRouteIdentity,
+  now: number,
+): void {
+  if (
+    !identity.capabilityReceiptIds.length ||
+    identity.capabilityReceiptIds.length > 16
+  )
+    throw new Error(
+      "Qualification route requires the recorded capability receipt ids (1-16)",
+    );
+  if (
+    [...identity.capabilityReceiptIds, identity.boundReceiptId].some(
+      (id) => !receiptIdPattern.test(id),
+    )
+  )
+    throw new Error(
+      "Capability/bound receipt ids must match [a-zA-Z0-9._:-]{1,160}",
+    );
+  if (!identity.reviewedBy.trim() || identity.reviewedBy.length > 200)
+    throw new Error("Reviewed-by identity is required (1-200 chars)");
+  if (!identity.provenance.trim() || identity.provenance.length > 1000)
+    throw new Error(
+      "Qualification provenance is required (1-1000 chars) and must cite the recorded receipts",
+    );
+  if (!Number.isSafeInteger(identity.expiresAt) || identity.expiresAt <= now)
+    throw new Error("Qualification route expiry must be in the future");
 }
 
 /** Builds the exact registerReviewedImageRoute args for the reviewed functional packet. Throws with a named error on missing evidence. */
-export function prepareImageQualificationRoute(identity: QualificationRouteIdentity, now = Date.now()): PreparedImageQualificationRoute {
+export function prepareImageQualificationRoute(
+  identity: QualificationRouteIdentity,
+  now = Date.now(),
+): PreparedImageQualificationRoute {
   assertReceiptEvidence(identity, now);
-  const capability = VISUAL_PROVIDER_CAPABILITIES.find(route => route.provider === "openai" && route.model === "gpt-image-1" && route.apiModelId === "gpt-image-1");
-  if (!capability) throw new Error("The functional packet model is missing from the documented provider capability matrix");
+  const capability = VISUAL_PROVIDER_CAPABILITIES.find(
+    (route) =>
+      route.provider === "openai" &&
+      route.model === "gpt-image-1" &&
+      route.apiModelId === "gpt-image-1",
+  );
+  if (!capability)
+    throw new Error(
+      "The functional packet model is missing from the documented provider capability matrix",
+    );
   return {
     provider: "openai",
     model: "gpt-image-1",
@@ -137,14 +189,50 @@ export function prepareImageQualificationRoute(identity: QualificationRouteIdent
 }
 
 /** Validates the operator-measured text bounds and builds the exact registerReviewedTextRoute args for a planning route. */
-export function prepareTextQualificationRoute(request: TextQualificationBounds & QualificationRouteIdentity, now = Date.now()): PreparedTextQualificationRoute {
+export function prepareTextQualificationRoute(
+  request: TextQualificationBounds & QualificationRouteIdentity,
+  now = Date.now(),
+): PreparedTextQualificationRoute {
   assertReceiptEvidence(request, now);
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$/.test(request.model)) throw new Error("Text model id must match [a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}");
-  const bounds = [request.maxInputBytes, request.maxInputTokens, request.maxMessageOverheadTokens, request.contextWindowTokens, request.maxOutputTokens, request.inputPriceMicrosPerMillion, request.outputPriceMicrosPerMillion];
-  if (bounds.some(amount => !Number.isSafeInteger(amount) || amount <= 0)) throw new Error("Text qualification requires positive integer measured bounds/prices");
-  if (request.maxInputBytes > 220_000 || request.maxInputTokens > 1_000_000 || request.maxOutputTokens > 20_000) throw new Error("Measured text bounds exceed the reviewed tokenizer envelope");
-  if (request.maxInputTokens < request.maxInputBytes + request.maxMessageOverheadTokens) throw new Error("Measured token bound must cover the UTF-8 byte bound plus message overhead");
-  if (request.contextWindowTokens < request.maxInputTokens + request.maxOutputTokens) throw new Error("Measured context window must cover input plus output token bounds");
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$/.test(request.model))
+    throw new Error(
+      "Text model id must match [a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}",
+    );
+  const bounds = [
+    request.maxInputBytes,
+    request.maxInputTokens,
+    request.maxMessageOverheadTokens,
+    request.contextWindowTokens,
+    request.maxOutputTokens,
+    request.inputPriceMicrosPerMillion,
+    request.outputPriceMicrosPerMillion,
+  ];
+  if (bounds.some((amount) => !Number.isSafeInteger(amount) || amount <= 0))
+    throw new Error(
+      "Text qualification requires positive integer measured bounds/prices",
+    );
+  if (
+    request.maxInputBytes > 220_000 ||
+    request.maxInputTokens > 1_000_000 ||
+    request.maxOutputTokens > 20_000
+  )
+    throw new Error(
+      "Measured text bounds exceed the reviewed tokenizer envelope",
+    );
+  if (
+    request.maxInputTokens <
+    request.maxInputBytes + request.maxMessageOverheadTokens
+  )
+    throw new Error(
+      "Measured token bound must cover the UTF-8 byte bound plus message overhead",
+    );
+  if (
+    request.contextWindowTokens <
+    request.maxInputTokens + request.maxOutputTokens
+  )
+    throw new Error(
+      "Measured context window must cover input plus output token bounds",
+    );
   return {
     provider: "openai",
     model: request.model,
@@ -166,16 +254,37 @@ export function prepareTextQualificationRoute(request: TextQualificationBounds &
 }
 
 /** The exact two-call reservation ladder for the functional packet: $0.25 per call, $0.50 for the sequence. */
-export function assertQualificationPacketCaps(perAttemptMicros: readonly number[]): void {
-  if (perAttemptMicros.length !== 2) throw new Error("The functional qualification packet is exactly two calls (generation then edit)");
-  if (perAttemptMicros.some(micros => micros !== QUALIFICATION_PER_ATTEMPT_CAP_MICROS)) throw new Error("Each qualification call reserves exactly the reviewed $0.25 maximum");
-  if (perAttemptMicros.reduce((sum, micros) => sum + micros, 0) > QUALIFICATION_SEQUENCE_CAP_MICROS) throw new Error("The qualification sequence reserves at most the reviewed $0.50 maximum");
+export function assertQualificationPacketCaps(
+  perAttemptMicros: readonly number[],
+): void {
+  if (perAttemptMicros.length !== 2)
+    throw new Error(
+      "The functional qualification packet is exactly two calls (generation then edit)",
+    );
+  if (
+    perAttemptMicros.some(
+      (micros) => micros !== QUALIFICATION_PER_ATTEMPT_CAP_MICROS,
+    )
+  )
+    throw new Error(
+      "Each qualification call reserves exactly the reviewed $0.25 maximum",
+    );
+  if (
+    perAttemptMicros.reduce((sum, micros) => sum + micros, 0) >
+    QUALIFICATION_SEQUENCE_CAP_MICROS
+  )
+    throw new Error(
+      "The qualification sequence reserves at most the reviewed $0.50 maximum",
+    );
 }
 
 /** Total prompt bytes per call must stay inside the packet's reviewed 9,045-byte quote guard. */
 export function assertQualificationPromptBytes(prompt: string): void {
   const bytes = new TextEncoder().encode(prompt).length;
-  if (bytes > QUALIFICATION_MAX_PROMPT_BYTES) throw new Error(`Qualification prompt is ${bytes} UTF-8 bytes; the reviewed quote guard allows at most ${QUALIFICATION_MAX_PROMPT_BYTES}`);
+  if (bytes > QUALIFICATION_MAX_PROMPT_BYTES)
+    throw new Error(
+      `Qualification prompt is ${bytes} UTF-8 bytes; the reviewed quote guard allows at most ${QUALIFICATION_MAX_PROMPT_BYTES}`,
+    );
 }
 
 export type QualificationGateInput = {
@@ -193,11 +302,19 @@ export type QualificationGate =
  * a blocked live attempt reports ABSENT with the prerequisite named, and only
  * written approval plus present credentials admit the live packet.
  */
-export function qualificationGate(input: QualificationGateInput): QualificationGate {
-  if (input.approved !== LIVE_SUBMISSION_APPROVED_VALUE) return { mode: "offline-fixture" };
+export function qualificationGate(
+  input: QualificationGateInput,
+): QualificationGate {
+  if (input.approved !== LIVE_SUBMISSION_APPROVED_VALUE)
+    return { mode: "offline-fixture" };
   const missing: string[] = [];
   if (!input.credentials.image) missing.push(IMAGE_CREDENTIAL_ENV);
   if (!input.credentials.text) missing.push(TEXT_CREDENTIAL_ENVS.join(" or "));
-  if (missing.length) return { mode: "absent", missing, prerequisite: LIVE_ABSENT_PREREQUISITE };
-  return { mode: "live", credentials: [IMAGE_CREDENTIAL_ENV, ...TEXT_CREDENTIAL_ENVS], notice: IMAGE_ROUTE_MODEL_AVAILABILITY_NOTICE };
+  if (missing.length)
+    return { mode: "absent", missing, prerequisite: LIVE_ABSENT_PREREQUISITE };
+  return {
+    mode: "live",
+    credentials: [IMAGE_CREDENTIAL_ENV, ...TEXT_CREDENTIAL_ENVS],
+    notice: IMAGE_ROUTE_MODEL_AVAILABILITY_NOTICE,
+  };
 }
