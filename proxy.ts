@@ -4,6 +4,10 @@ import { NextResponse } from "next/server";
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
+  // Demo-walkthrough helper: consumes a single-use, minutes-lived Clerk
+  // sign-in token minted out-of-band by an operator with the dev-instance
+  // secret key. Public so Clerk JS can boot and consume the ticket.
+  "/dev/consume-sign-in-ticket",
   "/api/ops/validate-workflow",
   // The route enforces its own stronger ops-secret (timing-safe) check;
   // middleware-level Clerk auth would make the bearer-auth CLI unreachable.
