@@ -1,0 +1,86 @@
+name: Feature verification live tier
+
+on:
+  workflow_dispatch:
+    inputs:
+      live_submission:
+        description: Set to approved to execute the gated live-provider stage
+        required: true
+        default: blocked
+        type: choice
+        options:
+          - blocked
+          - approved
+
+jobs:
+  # The contract-test stage runs unconditionally: it proves the gate logic and
+  # provider contracts offline on every dispatch, including dry runs.
+  contract-tests:
+    name: Contract tests (unconditional)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Gate logic and receipt tests
+        run: npx vitest run lib/verification
+
+      - name: Provider adapter contract tests
+        run: npm test -- lib/__tests__/v2ProviderAdapters.test.ts
+
+  # The live stage never runs on contract-test failure. The gate script — not
+  # an `if:` condition — decides execution, so a missing secret fails the job
+  # with an explicit "credentials not configured" outcome instead of skipping
+  # silently.
+  live-tier:
+    name: Gated live stage
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Resolve live gate and execute gated live stage
+        id: live-gate
+        env:
+          BUFFER_LIVE_SUBMISSION: ${{ inputs.live_submission }}
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+        run: |
+          npx --yes tsx scripts/verify-live-gate.mjs \
+            --provider=buffer \
+            --feature=live-validation \
+            --credentials=BUFFER_API_KEY \
+            --approval-env=BUFFER_LIVE_SUBMISSION \
+            --budget-usd=5 \
+            -- npx --yes tsx scripts/buffer-live-validation.mjs
+
+      - name: Record gated-live-tier workflow outcome
+        if: always()
+        run: |
+          echo "live tier run finished with gate outcome: ${{ steps.live-gate.outputs.outcome }}"
+          echo "reason: ${{ steps.live-gate.outputs.reason }}"
+
+      - name: Upload live receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-receipts
+          path: docs/verification/receipts/
+          if-no-files-found: ignore
+          retention-days: 30
