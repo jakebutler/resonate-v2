@@ -169,6 +169,9 @@ jobs:
       BLOG_CONTENT_PATH: content/posts
       E2E_BYPASS_AUTH: "1"
       NEXT_PUBLIC_E2E_BYPASS_AUTH: "1"
+      # C5: baked into the production build so the editorial visual composer
+      # mounts in the composer and its e2e spec can drive it.
+      NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED: "1"
 
     steps:
       - uses: actions/checkout@v5

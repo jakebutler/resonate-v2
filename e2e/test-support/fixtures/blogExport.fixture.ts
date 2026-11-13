@@ -95,6 +95,31 @@ registerSyncFixture<BlogExportFixture>("blog-export", async (page) => {
     handlers: {
       value: (path) => {
         switch (path) {
+          case "publishing:getApprovalReview":
+            // With the visual UI enabled the composer gates approval and PR
+            // opening on a saved review matching the post; mirror the real
+            // query's signature shape (lib/publicationReview.ts) so a
+            // visuals-enabled build keeps this composer flow exercisable.
+            return {
+              articleSignature: JSON.stringify({
+                title: post.title,
+                content: post.content,
+                linkedinFirstComment: post.linkedinFirstComment ?? "",
+              }),
+              metadataSignature: JSON.stringify({
+                excerpt: post.blogExcerpt ?? "",
+                author: post.blogAuthor ?? "",
+                category: post.blogCategory ?? "",
+                tags: post.blogTags ?? [],
+                slug: post.blogSlug ?? "",
+                heroUrl: post.heroImageUrl ?? "",
+                heroStorageId: post.heroImageStorageId ?? "",
+              }),
+              hasVisuals: false,
+              publicationQualified: false,
+              visualSignature: null,
+              blockedReason: null,
+            };
           case "publishing:listBrands":
             return [{ brandId: "corvo", name: "Corvo Labs" }];
           case "publishing:getPostById":
