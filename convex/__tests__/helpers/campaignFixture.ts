@@ -1,5 +1,7 @@
 import { api } from "../../_generated/api";
+import type { Id } from "../../_generated/dataModel";
 import type { convexTest } from "convex-test";
+import type { BrandId } from "../../campaignAccess";
 // The deploy bundler compiles every non-*.test.ts file under convex/, and
 // externalPackages only exempts node-runtime bundles — a direct sharp import
 // in this helper broke `npx convex deploy` (found provisioning the dev
@@ -37,7 +39,7 @@ type AsUser = ReturnType<TestHarness["withIdentity"]>;
 
 export type CampaignFixtureOptions = {
   /** Default "corvo". */
-  brandId?: string;
+  brandId?: BrandId;
   /** Owner identity; default FIXTURE_USER. */
   user?: FixtureIdentity;
   /** Shape preset; default "standard" (pillar + hook + 2 satellites + recap). */
@@ -144,12 +146,16 @@ export async function campaignFixture(
       { name: "fixture-corpus.md", kind: "md", excerpts: fixtureExcerpts() },
     ],
   });
-  const corpusId = corpus.corpusId as never;
+  const corpusId = corpus.corpusId as Id<"corpora">;
 
-  const { campaignId } = await asUser.mutation(api.campaigns.createCampaign, {
-    brandId,
-    title,
-  });
+  const { campaignId: campaignIdRaw } = await asUser.mutation(
+    api.campaigns.createCampaign,
+    {
+      brandId,
+      title,
+    },
+  );
+  const campaignId = campaignIdRaw as Id<"campaigns">;
   await asUser.mutation(api.campaigns.attachCorpus, { campaignId, corpusId });
 
   // Mock-grounded suggestions (D-21): a server-issued token per generation.
@@ -179,10 +185,14 @@ export async function campaignFixture(
     });
   }
 
-  const { shapeId } = await asUser.mutation(api.shapes.proposeShape, {
-    campaignId,
-    preset,
-  });
+  const { shapeId: shapeIdRaw } = await asUser.mutation(
+    api.shapes.proposeShape,
+    {
+      campaignId,
+      preset,
+    },
+  );
+  const shapeId = shapeIdRaw as Id<"campaignShapes">;
   await asUser.mutation(api.shapes.acceptShape, { shapeId });
 
   const generateAck = await asUser.mutation(
