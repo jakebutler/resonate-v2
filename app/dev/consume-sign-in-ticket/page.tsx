@@ -8,11 +8,11 @@
  * page only consumes them.
  */
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 
-export default function ConsumeSignInTicketPage() {
+function ConsumeSignInTicketForm() {
   const clerk = useClerk();
   const params = useSearchParams();
 
@@ -43,4 +43,12 @@ export default function ConsumeSignInTicketPage() {
   }, [clerk, params]);
 
   return <p>Signing in…</p>;
+}
+
+export default function ConsumeSignInTicketPage() {
+  return (
+    <Suspense fallback={<p>Loading…</p>}>
+      <ConsumeSignInTicketForm />
+    </Suspense>
+  );
 }
