@@ -216,3 +216,12 @@ Sanitized result:
 Conclusion: Buffer live schedule → refresh → cancel works for Corvo Labs LinkedIn when the submission gate is explicitly approved.
 
 Note: `resonate-v2` Vercel production currently has a placeholder `BUFFER_API_KEY` (length 2). Copy the production-scope key into the v2 Vercel project before relying on deployed live submission.
+
+## Firecrawl (AEO/SEO site data) — pending first live validation
+
+The Firecrawl vendor adapter (`lib/providerAdapters.ts`, `firecrawlProviderAdapter`) is implemented behind the standard provider-adapter contract:
+
+- Credential: `FIRECRAWL_API_KEY`, read from server secret scope only (Vercel/local env). Not yet provisioned — Jake creates the Firecrawl account and provisions the key via Obvious secrets when the AEO/SEO surface is ready.
+- Read-only `validateConnection` calls the zero-cost `GET /v1/team/credit-usage` endpoint; it is wired into the Connections panel alongside Buffer and Zernio.
+- `firecrawlCrawl` / `firecrawlSearch` run only when `liveProviderValidationApproved` is true at runtime (`LIVE_PROVIDER_VALIDATION_APPROVED=approved|true|1`), enforce per-run ceilings (`FIRECRAWL_MAX_CRAWL_PAGES`, default 50; `FIRECRAWL_MAX_SEARCH_RESULTS`, default 10), refuse non-public hosts, fetch and honor `robots.txt` before dispatching a crawl, and return sanitized snapshots only (whitelisted fields, markdown truncated to 20,000 characters, no raw HTML).
+- First live validation will be recorded here in the same sanitized format as the sections above, once `FIRECRAWL_API_KEY` exists and the crawl/search gate is explicitly approved.

@@ -1590,10 +1590,555 @@ export const zernioProviderAdapter: ProviderAdapter = {
   },
 };
 
+// ---- Firecrawl (AEO/SEO site-data vendor) ----
+//
+// Firecrawl is a read-only data vendor (site crawl + search) behind the same
+// contract as the social providers: server-scope credential, explicit runtime
+// live-validation approval, per-run cost ceilings, and sanitized results only.
+// Nothing here dispatches at import time; every network call happens inside a
+// gated function invoked with a ProviderAdapterContext.
+
+const FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v1";
+const FIRECRAWL_USER_AGENT_GROUP = "resonate-v2";
+// Snapshot bound: crawl pages are stored truncated so one huge page cannot
+// inflate a stored snapshot.
+export const FIRECRAWL_SNAPSHOT_MAX_CHARS = 20_000;
+
+const DEFAULT_FIRECRAWL_MAX_CRAWL_PAGES = 50;
+const DEFAULT_FIRECRAWL_MAX_SEARCH_RESULTS = 10;
+
+export type FirecrawlRunLimits = {
+  maxCrawlPages: number;
+  maxSearchResults: number;
+};
+
+function positiveIntFromEnv(raw: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt((raw ?? "").trim(), 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function firecrawlRunLimits(context: Pick<ProviderAdapterContext, "env">): FirecrawlRunLimits {
+  return {
+    maxCrawlPages: positiveIntFromEnv(
+      context.env.FIRECRAWL_MAX_CRAWL_PAGES,
+      DEFAULT_FIRECRAWL_MAX_CRAWL_PAGES
+    ),
+    maxSearchResults: positiveIntFromEnv(
+      context.env.FIRECRAWL_MAX_SEARCH_RESULTS,
+      DEFAULT_FIRECRAWL_MAX_SEARCH_RESULTS
+    ),
+  };
+}
+
+export type SanitizedFirecrawlPage = {
+  sourceUrl: string;
+  title?: string;
+  description?: string;
+  markdown?: string;
+  statusCode?: number;
+};
+
+export type SanitizedFirecrawlSearchResult = {
+  url: string;
+  title?: string;
+  description?: string;
+};
+
+export type FirecrawlRunResult = {
+  ok: boolean;
+  reason?: string;
+  sanitizedResponse: Record<string, unknown>;
+  pages?: SanitizedFirecrawlPage[];
+  results?: SanitizedFirecrawlSearchResult[];
+};
+
+export function isPrivateSiteHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (
+    host === "localhost" ||
+    host === "::1" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) {
+    return true;
+  }
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const octets = ipv4.slice(1).map(Number);
+    if (octets.some((value) => value > 255)) return true;
+    const [a, b] = octets;
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;
+  }
+  return false;
+}
+
+function parsePublicHttpUrl(rawUrl: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (isPrivateSiteHostname(url.hostname)) return null;
+  return url;
+}
+
+function truncateSnapshot(text: string | undefined): string | undefined {
+  if (typeof text !== "string") return undefined;
+  return text.length > FIRECRAWL_SNAPSHOT_MAX_CHARS
+    ? `${text.slice(0, FIRECRAWL_SNAPSHOT_MAX_CHARS)}...`
+    : text;
+}
+
+export function sanitizeFirecrawlPage(page: Record<string, unknown>): SanitizedFirecrawlPage {
+  const metadata =
+    page.metadata && typeof page.metadata === "object" && !Array.isArray(page.metadata)
+      ? (page.metadata as Record<string, unknown>)
+      : {};
+  const sourceUrl = page.sourceUrl ?? page.url ?? metadata.sourceURL;
+  const statusCode = metadata.statusCode;
+  return {
+    sourceUrl: typeof sourceUrl === "string" ? sourceUrl : "",
+    title: typeof page.title === "string" ? page.title : undefined,
+    description: typeof page.description === "string" ? page.description : undefined,
+    // Only whitelisted fields survive into a stored snapshot; raw HTML and any
+    // secret-bearing keys the provider echoes back are dropped entirely.
+    markdown: truncateSnapshot(typeof page.markdown === "string" ? page.markdown : undefined),
+    statusCode: typeof statusCode === "number" ? statusCode : undefined,
+  };
+}
+
+export function sanitizeFirecrawlSearchResult(
+  result: Record<string, unknown>
+): SanitizedFirecrawlSearchResult {
+  return {
+    url: typeof result.url === "string" ? result.url : "",
+    title: typeof result.title === "string" ? result.title : undefined,
+    description: typeof result.description === "string" ? result.description : undefined,
+  };
+}
+
+// Minimal RFC 9309-style robots check: use the group for our specific agent,
+// falling back to the `*` group. Longest matching rule wins; ties allow.
+export function robotsAllowsRequest(input: {
+  robotsStatus: number;
+  robotsBody: string;
+  pathname: string;
+  userAgent?: string;
+}): { allowed: boolean; reason?: string } {
+  if (input.robotsStatus === 404) return { allowed: true };
+  if (input.robotsStatus !== 200) {
+    return {
+      allowed: false,
+      reason: `robots.txt could not be fetched (HTTP ${input.robotsStatus}); refusing to crawl.`,
+    };
+  }
+
+  type RobotRule = { type: "allow" | "disallow"; pattern: string };
+  const groups = new Map<string, RobotRule[]>();
+  let currentRules: RobotRule[] | null = null;
+  for (const rawLine of input.robotsBody.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const separator = line.indexOf(":");
+    if (separator <= 0) continue;
+    const field = line.slice(0, separator).trim().toLowerCase();
+    const value = line.slice(separator + 1).trim();
+    if (field === "user-agent") {
+      currentRules = groups.get(value.toLowerCase()) ?? null;
+      if (!currentRules) {
+        currentRules = [];
+        groups.set(value.toLowerCase(), currentRules);
+      }
+      continue;
+    }
+    if (!currentRules || (field !== "allow" && field !== "disallow")) continue;
+    if (!value) continue;
+    currentRules.push({ type: field, pattern: value });
+  }
+
+  const userAgent = (input.userAgent ?? FIRECRAWL_USER_AGENT_GROUP).toLowerCase();
+  const specificGroup = groups.get(userAgent);
+  const activeGroup =
+    specificGroup && specificGroup.length ? specificGroup : (groups.get("*") ?? []);
+  if (!activeGroup.length) return { allowed: true };
+
+  function matchLength(pattern: string): number {
+    const anchoredEnd = pattern.endsWith("$");
+    const body = anchoredEnd ? pattern.slice(0, -1) : pattern;
+    const source = body.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+
+    const match = new RegExp(source).exec(input.pathname);
+    if (!match) return -1;
+    if (anchoredEnd && match.index + match[0].length !== input.pathname.length) return -1;
+    return match[0].length;
+  }
+
+  let best: { type: "allow" | "disallow"; length: number } | null = null;
+  for (const rule of activeGroup) {
+    const length = matchLength(rule.pattern);
+    if (length < 0) continue;
+    if (!best || length > best.length || (length === best.length && rule.type === "allow")) {
+      best = { type: rule.type, length };
+    }
+  }
+  if (!best) return { allowed: true };
+  return best.type === "allow"
+    ? { allowed: true }
+    : { allowed: false, reason: `robots.txt disallows crawling ${input.pathname}.` };
+}
+
+async function fetchRobotsForOrigin(
+  target: URL,
+  context: ProviderAdapterContext
+): Promise<{ allowed: boolean; reason?: string }> {
+  const fetchImpl = fetchForContext(context);
+  try {
+    const robotsResponse = await fetchImpl(`${target.origin}/robots.txt`, {
+      headers: { "User-Agent": FIRECRAWL_USER_AGENT_GROUP },
+      signal: AbortSignal.timeout(15000),
+    });
+    const robotsBody = await robotsResponse.text().catch(() => "");
+    return robotsAllowsRequest({
+      robotsStatus: robotsResponse.status,
+      robotsBody,
+      pathname: target.pathname,
+    });
+  } catch (error) {
+    return {
+      allowed: false,
+      reason: `robots.txt fetch failed (${error instanceof Error ? error.message : "unknown"}); refusing to crawl.`,
+    };
+  }
+}
+
+function firecrawlRefusal(
+  action: "crawl" | "search",
+  reason: string
+): FirecrawlRunResult {
+  return {
+    ok: false,
+    reason,
+    sanitizedResponse: { providerId: "firecrawl", action, refused: true },
+  };
+}
+
+function firecrawlGate(
+  context: ProviderAdapterContext
+): { ok: true } | { ok: false; refusal: FirecrawlRunResult } {
+  const missingCredential = validateCredential("firecrawl", "FIRECRAWL_API_KEY", context);
+  if (missingCredential) {
+    return { ok: false, refusal: firecrawlRefusal("crawl", missingCredential.reason ?? "Missing credential.") };
+  }
+  const approvalBlock = validateLiveApproval("firecrawl", context);
+  if (approvalBlock) {
+    return {
+      ok: false,
+      refusal: firecrawlRefusal("crawl", approvalBlock.reason ?? "Live provider calls require explicit approval."),
+    };
+  }
+  return { ok: true };
+}
+
+export type FirecrawlCrawlRequest = {
+  url: string;
+  limit?: number;
+  /** Poll interval for crawl completion; tests pass 0. */
+  pollDelayMs?: number;
+  maxPolls?: number;
+};
+
+export async function firecrawlCrawl(
+  context: ProviderAdapterContext,
+  request: FirecrawlCrawlRequest
+): Promise<FirecrawlRunResult> {
+  const gate = firecrawlGate(context);
+  if (!gate.ok) return { ...gate.refusal, sanitizedResponse: { ...gate.refusal.sanitizedResponse, action: "crawl" } };
+
+  const target = parsePublicHttpUrl(request.url);
+  if (!target) {
+    return firecrawlRefusal("crawl", "Crawl target must be a public http(s) URL.");
+  }
+
+  const limits = firecrawlRunLimits(context);
+  const limit = request.limit ?? limits.maxCrawlPages;
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    return firecrawlRefusal("crawl", "Crawl limit must be a positive integer.");
+  }
+  // Per-run cost ceiling: refuse before any dispatch instead of silently
+  // crawling more pages than the reviewed ceiling allows.
+  if (limit > limits.maxCrawlPages) {
+    return firecrawlRefusal(
+      "crawl",
+      `Crawl limit ${limit} exceeds the per-run ceiling of ${limits.maxCrawlPages} pages; raise FIRECRAWL_MAX_CRAWL_PAGES to crawl more.`
+    );
+  }
+
+  const robots = await fetchRobotsForOrigin(target, context);
+  if (!robots.allowed) return firecrawlRefusal("crawl", robots.reason ?? "robots.txt disallows this crawl.");
+
+  const fetchImpl = fetchForContext(context);
+  const apiKey = credential(context, "FIRECRAWL_API_KEY");
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+
+  const startResponse = await fetchImpl(`${FIRECRAWL_BASE_URL}/crawl`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      url: target.toString(),
+      limit,
+      scrapeOptions: { formats: ["markdown"] },
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const startData = (await startResponse.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!startResponse.ok || startData.success === false) {
+    return {
+      ok: false,
+      reason: "Firecrawl crawl start failed.",
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId: "firecrawl",
+        action: "crawl",
+        status: startResponse.status,
+        error: startData.error,
+      }),
+    };
+  }
+  const crawlId = typeof startData.id === "string" ? startData.id : "";
+  if (!crawlId) {
+    return firecrawlRefusal("crawl", "Firecrawl crawl start returned no job id.");
+  }
+
+  const maxPolls = request.maxPolls ?? 30;
+  const pages: SanitizedFirecrawlPage[] = [];
+  let pollPath: string | null = `/crawl/${encodeURIComponent(crawlId)}`;
+  let completed = false;
+  for (let poll = 0; poll < maxPolls && pollPath; poll++) {
+    if (request.pollDelayMs) {
+      await new Promise((resolve) => setTimeout(resolve, request.pollDelayMs));
+    }
+    const pollResponse = await fetchImpl(`${FIRECRAWL_BASE_URL}${pollPath}`, {
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    const pollData = (await pollResponse.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!pollResponse.ok || pollData.success === false) {
+      return {
+        ok: false,
+        reason: "Firecrawl crawl status poll failed.",
+        sanitizedResponse: sanitizeProviderPayload({
+          providerId: "firecrawl",
+          action: "crawl",
+          status: pollResponse.status,
+          error: pollData.error,
+        }),
+      };
+    }
+    const crawlData = Array.isArray(pollData.data) ? (pollData.data as Array<Record<string, unknown>>) : [];
+    pages.push(...crawlData.map(sanitizeFirecrawlPage));
+    if (pollData.status === "failed" || pollData.status === "cancelled") {
+      return {
+        ok: false,
+        reason: `Firecrawl crawl ended with status ${String(pollData.status)}.`,
+        sanitizedResponse: sanitizeProviderPayload({
+          providerId: "firecrawl",
+          action: "crawl",
+          crawlStatus: pollData.status,
+          pageCollectCount: pages.length,
+        }),
+        pages,
+      };
+    }
+    if (pollData.status === "completed" && typeof pollData.next !== "string") {
+      completed = true;
+      break;
+    }
+    // While the job is still scraping, keep polling the same job endpoint;
+    // `next` chains additional result pages when present.
+    pollPath = typeof pollData.next === "string"
+      ? `/crawl/${encodeURIComponent(crawlId)}?next=${encodeURIComponent(pollData.next)}`
+      : `/crawl/${encodeURIComponent(crawlId)}`;
+  }
+  if (!completed) {
+    return {
+      ok: false,
+      reason: `Firecrawl crawl did not complete within ${maxPolls} status polls; retry with a smaller limit.`,
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId: "firecrawl",
+        action: "crawl",
+        crawlStatus: "incomplete",
+        pageCollectCount: pages.length,
+      }),
+      pages,
+    };
+  }
+
+  return {
+    ok: true,
+    sanitizedResponse: sanitizeProviderPayload({
+      providerId: "firecrawl",
+      action: "crawl",
+      url: target.toString(),
+      limit,
+      pageCount: pages.length,
+    }),
+    pages,
+  };
+}
+
+export type FirecrawlSearchRequest = {
+  query: string;
+  limit?: number;
+};
+
+export async function firecrawlSearch(
+  context: ProviderAdapterContext,
+  request: FirecrawlSearchRequest
+): Promise<FirecrawlRunResult> {
+  const gate = firecrawlGate(context);
+  if (!gate.ok) return { ...gate.refusal, sanitizedResponse: { ...gate.refusal.sanitizedResponse, action: "search" } };
+
+  const query = request.query.trim();
+  if (!query) {
+    return firecrawlRefusal("search", "Search query is required.");
+  }
+
+  const limits = firecrawlRunLimits(context);
+  const limit = request.limit ?? limits.maxSearchResults;
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    return firecrawlRefusal("search", "Search limit must be a positive integer.");
+  }
+  if (limit > limits.maxSearchResults) {
+    return firecrawlRefusal(
+      "search",
+      `Search limit ${limit} exceeds the per-run ceiling of ${limits.maxSearchResults} results; raise FIRECRAWL_MAX_SEARCH_RESULTS to search more.`
+    );
+  }
+
+  const fetchImpl = fetchForContext(context);
+  const response = await fetchImpl(`${FIRECRAWL_BASE_URL}/search`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${credential(context, "FIRECRAWL_API_KEY")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, limit }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok || data.success === false) {
+    return {
+      ok: false,
+      reason: "Firecrawl search failed.",
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId: "firecrawl",
+        action: "search",
+        status: response.status,
+        error: data.error,
+      }),
+    };
+  }
+  const rawData = Array.isArray(data.data) ? (data.data as Array<Record<string, unknown>>) : [];
+  const results = rawData.map(sanitizeFirecrawlSearchResult);
+  return {
+    ok: true,
+    sanitizedResponse: sanitizeProviderPayload({
+      providerId: "firecrawl",
+      action: "search",
+      query,
+      limit,
+      resultCount: results.length,
+    }),
+    results,
+  };
+}
+
+async function validateFirecrawlConnection(
+  context: ProviderAdapterContext
+): Promise<ProviderValidationResult> {
+  const providerId = "firecrawl" as const;
+  const missingCredential = validateCredential(providerId, "FIRECRAWL_API_KEY", context);
+  if (missingCredential) return missingCredential;
+  const approvalBlock = validateLiveApproval(providerId, context);
+  if (approvalBlock) return approvalBlock;
+
+  // Read-only, zero-cost reachability check against the credit-usage endpoint;
+  // no crawl or search runs during validation.
+  const fetchImpl = fetchForContext(context);
+  const response = await fetchImpl(`${FIRECRAWL_BASE_URL}/team/credit-usage`, {
+    headers: { Authorization: `Bearer ${credential(context, "FIRECRAWL_API_KEY")}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) {
+    return {
+      ok: false,
+      providerId,
+      reason: "Firecrawl API validation failed.",
+      sanitizedResponse: sanitizeProviderPayload({
+        providerId,
+        status: response.status,
+        error: data.error,
+      }),
+    };
+  }
+  const usage =
+    data.data && typeof data.data === "object" && !Array.isArray(data.data)
+      ? (data.data as Record<string, unknown>)
+      : {};
+  const remainingCredits = typeof usage.remaining_credits === "number" ? usage.remaining_credits : undefined;
+  return {
+    ok: true,
+    providerId,
+    accountLabel:
+      typeof remainingCredits === "number"
+        ? `Firecrawl API reachable; ${remainingCredits} credits remaining`
+        : "Firecrawl API reachable",
+    sanitizedResponse: {
+      providerId,
+      credential: "[server-secret-present]",
+      remainingCredits,
+    },
+  };
+}
+
+export const firecrawlProviderAdapter: ProviderAdapter = {
+  providerId: "firecrawl",
+  requiredEnvVar: "FIRECRAWL_API_KEY",
+  validateConnection: validateFirecrawlConnection,
+  async submit() {
+    return unavailable(
+      "firecrawl",
+      "Firecrawl is a read-only data vendor; it does not submit posts."
+    );
+  },
+  async recordCancelOrUnpublishIntent() {
+    return unavailable(
+      "firecrawl",
+      "Firecrawl is a read-only data vendor; there is nothing to cancel or unpublish."
+    );
+  },
+  async refreshStatus() {
+    return unavailable(
+      "firecrawl",
+      "Firecrawl is a read-only data vendor; there are no posts to refresh."
+    );
+  },
+};
+
 export function adapterForProvider(providerId: ProviderId): ProviderAdapter {
   if (providerId === "mock") return mockProviderAdapter;
   if (providerId === "buffer") return bufferProviderAdapter;
   if (providerId === "zernio") return zernioProviderAdapter;
+  if (providerId === "firecrawl") return firecrawlProviderAdapter;
   return {
     providerId,
     requiredEnvVar: null,

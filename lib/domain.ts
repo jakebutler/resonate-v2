@@ -17,7 +17,7 @@ export type IdeaStatus = "inbox" | "reviewing" | "ready" | "used" | "archived";
 
 export type PlatformId = ChannelId;
 
-export type ProviderId = "mock" | "buffer" | "zernio" | "github-pr" | "postiz-oauth";
+export type ProviderId = "mock" | "buffer" | "zernio" | "github-pr" | "postiz-oauth" | "firecrawl";
 
 export type ApprovalState = "unapproved" | "approved" | "changes-requested";
 
