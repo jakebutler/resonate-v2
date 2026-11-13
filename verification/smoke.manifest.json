@@ -1,0 +1,49 @@
+{
+  "featureId": "smoke",
+  "name": "Verification workflow smoke",
+  "description": "Self-referential smoke feature proving the manifest + runner loop end to end: the criteria run cheap, fully offline checks on the ladder itself. A committed dated report from this manifest lives under docs/verification/smoke/.",
+  "fixtures": [
+    {
+      "name": "manifest-schema-tests",
+      "module": "lib/__tests__/verificationManifest.test.ts",
+      "description": "The schema's own suite, used as a cheap vitest-ladder criterion."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "manifest-schema-validates",
+      "name": "Manifest schema suite passes",
+      "runner": "vitest",
+      "tier": "offline-fixture",
+      "target": "lib/__tests__/verificationManifest.test.ts",
+      "fixtures": ["manifest-schema-tests"],
+      "prerequisites": [],
+      "dependsOn": [],
+      "description": "Runs the V1 schema suite on the vitest rung of the existing ladder."
+    },
+    {
+      "id": "runner-core-contract",
+      "name": "Runner core contract",
+      "runner": "contract",
+      "tier": "offline-contract",
+      "target": "node --version",
+      "command": "node --version",
+      "fixtures": [],
+      "prerequisites": [],
+      "dependsOn": ["manifest-schema-validates"],
+      "description": "Cheap contract rung proving a command criterion executes and records its evidence."
+    },
+    {
+      "id": "composer-live-receipt",
+      "name": "Live image-provider receipt (illustrative gated criterion)",
+      "runner": "contract",
+      "tier": "live-receipt",
+      "target": "echo live packet placeholder",
+      "command": "echo live packet placeholder",
+      "fixtures": [],
+      "prerequisites": ["OPENAI_API_KEY"],
+      "dependsOn": [],
+      "description": "Demonstrates ABSENT-when-unkeyed behavior: reports an explicit ABSENT naming the missing prerequisite instead of failing or silently skipping."
+    }
+  ]
+}
