@@ -46,6 +46,20 @@ describe("StrategyPlanPanel", () => {
     expect(screen.getByLabelText("Plan review state: Awaiting review")).toBeInTheDocument();
   });
 
+  it("renders supplied gap titles instead of raw ids", () => {
+    render(
+      <StrategyPlanPanel
+        plan={{ status: "ready", data: plan }}
+        gapTitles={{ g_high: "Win the compliance answer", g_med: "Add FAQ schema" }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        /Win the compliance answer, Add FAQ schema/,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("accepts a plan on demand", () => {
     const onAccept = vi.fn();
     render(<StrategyPlanPanel plan={{ status: "ready", data: plan }} onAccept={onAccept} />);

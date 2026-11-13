@@ -40,10 +40,13 @@ function BriefValue({ value }: { value: string | string[] }) {
  */
 export function StrategyPlanPanel({
   plan,
+  gapTitles,
   onAccept,
   onRequestChanges,
 }: {
   plan: Loadable<StrategyPlan | null>;
+  /** Gap id → human title from the same intel run; ids render when absent. */
+  gapTitles?: Record<string, string>;
   onAccept?: (planId: string) => void;
   onRequestChanges?: (planId: string, note: string) => void;
 }) {
@@ -84,7 +87,9 @@ export function StrategyPlanPanel({
                 <p className={cn("text-sm", tokens.textMuted)}>
                   Prioritizes {loaded.priorityIds.length} gap
                   {loaded.priorityIds.length === 1 ? "" : "s"}:{" "}
-                  {loaded.priorityIds.join(", ")}
+                  {loaded.priorityIds
+                    .map((id) => gapTitles?.[id] ?? id)
+                    .join(", ")}
                 </p>
               ) : null}
               {loaded.reviewState === "unreviewed" ||
