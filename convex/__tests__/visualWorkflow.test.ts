@@ -1336,3 +1336,26 @@ describe("saved editorial visual workflow", () => {
     await expect(user.mutation(api.visualWorkflow.approveHero, { postId, versionId: edited.versionId, alt: "A raven focuses on the broken gear.", expectedArticleSignature: articleSignature(article), expectedExportMetadataSignature: stableInputSignature(fixtureExportMetadata), expectedExportHash: first.hash })).resolves.toBeNull();
   });
 });
+
+describe("provisioning budget-row requirement", () => {
+  it("refuses reservation while the brand has no budget row and admits once setMonthlyBudget seeds one", async () => {
+    const { t, user, postId } = await setup();
+    await configureProfile(user);
+    const attemptId = await user.mutation(api.visualWorkflow.requestPlan, { postId, operationKey: "provisioning-budget" });
+    const quote = { attemptId, maximumMicros: 10, provider: "offline-test", model: "fixture", quoteProvenance: "test trusted boundary" };
+    // Unprovisioned environment: no v2VisualBudgets row for the brand.
+    expect(await t.run(async ctx => ctx.db.query("v2VisualBudgets").withIndex("by_brand", q => q.eq("brandId", "corvo")).unique())).toBeNull();
+    expect(await reserve(t, quote)).toEqual({ admitted: false, reason: "monthly-budget-exhausted" });
+    const paused = await t.run(async ctx => ctx.db.get(ctx.db.normalizeId("v2VisualAttempts", attemptId)!));
+    expect(paused?.pauseReason).toBe("monthly-budget-exhausted");
+    expect(paused?.status).toBe("queued");
+    expect(paused?.reservedMicros).toBeUndefined();
+    // What the provisioning script does: seed the budget row via setMonthlyBudget.
+    await user.mutation(api.visualWorkflow.setMonthlyBudget, { brandId: "corvo", limitMicros: 1_000 });
+    expect(await reserve(t, quote)).toEqual({ admitted: true, reason: null });
+    const reserved = await t.run(async ctx => ctx.db.get(ctx.db.normalizeId("v2VisualAttempts", attemptId)!));
+    expect(reserved?.reservedMicros).toBe(10);
+    expect(reserved?.pauseReason).toBeUndefined();
+  });
+});
+
