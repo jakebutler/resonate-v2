@@ -15,7 +15,8 @@
     "test": "vitest",
     "test:ci": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "seed:verification": "node scripts/seed-verification.mjs"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.3",
