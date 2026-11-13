@@ -104,7 +104,9 @@ registerSyncFixture<BlogExportFixture>("blog-export", async (page) => {
               articleSignature: JSON.stringify({
                 title: post.title,
                 content: post.content,
-                linkedinFirstComment: post.linkedinFirstComment ?? "",
+                // The fixture post carries no linkedinFirstComment and no
+                // mutation adds one; approvalArticleSignature reads it as "".
+                linkedinFirstComment: "",
               }),
               metadataSignature: JSON.stringify({
                 excerpt: post.blogExcerpt ?? "",
