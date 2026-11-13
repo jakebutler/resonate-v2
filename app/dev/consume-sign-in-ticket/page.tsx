@@ -9,7 +9,8 @@
  */
 
 import { useEffect } from "react";
-import { useClerk, useSearchParams } from "@clerk/nextjs";
+import { useSearchParams } from "next/navigation";
+import { useClerk } from "@clerk/nextjs";
 
 export default function ConsumeSignInTicketPage() {
   const clerk = useClerk();
