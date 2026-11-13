@@ -54,7 +54,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   console.log(`[e2e-auth] Minted Clerk sign-in token ${minted.id || "(no id)"} for ${clerkConfig.userId}`);
 
   const baseURL =
-    config.projects?.[0]?.use?.baseURL ?? config.use?.baseURL ?? "http://127.0.0.1:3000";
+    config.projects?.[0]?.use?.baseURL ?? "http://127.0.0.1:3000";
 
   const browser = await chromium.launch();
   try {
