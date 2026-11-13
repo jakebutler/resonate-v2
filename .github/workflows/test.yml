@@ -150,7 +150,9 @@ jobs:
 
   e2e:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    # Playwright 1.58.2 cannot install Chromium deps on the ubuntu-26.04 image
+    # that ubuntu-latest now resolves to; pin the 24.04 runner.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     env:
