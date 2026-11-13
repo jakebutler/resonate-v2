@@ -17,6 +17,9 @@ function ConsumeSignInTicketForm() {
   const params = useSearchParams();
 
   useEffect(() => {
+    // clerk.client is populated only once the ClerkProvider has loaded the
+    // client; the context re-renders with loaded=true when it is ready.
+    if (!clerk.loaded) return;
     const ticket = params.get("ticket");
     if (!ticket) {
       window.location.href = "/sign-in";
@@ -40,7 +43,7 @@ function ConsumeSignInTicketForm() {
     return () => {
       cancelled = true;
     };
-  }, [clerk, params]);
+  }, [clerk, clerk.loaded, params]);
 
   return <p>Signing in…</p>;
 }
