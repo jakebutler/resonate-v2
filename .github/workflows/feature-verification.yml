@@ -136,3 +136,15 @@ jobs:
             done
             exit "$failed"
           fi
+
+      - name: Upload verification reports
+        # The dated per-feature reports under docs/verification/<featureId>/
+        # are the durable, comparable verdict record (V2) — published as the
+        # run's artifact on every outcome, including failures.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-reports
+          path: docs/verification/
+          retention-days: 30
+
