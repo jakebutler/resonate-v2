@@ -150,7 +150,9 @@ jobs:
 
   e2e:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest now resolves to 26.04, which the pinned Playwright
+    # does not support for chromium browser downloads.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     env:
