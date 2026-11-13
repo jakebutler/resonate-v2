@@ -170,10 +170,10 @@ function makeVersion(n: number, parent: string | null, feedback: string | null):
 
 registerSyncFixture<EditorialVisualsFixture>("editorial-visuals", (page) => {
   const calls: string[] = [];
-  let attempts: Attempt[] = [];
-  let plans: { _id: string; status: string; scenes: Scene[]; reasons: string[] }[] = [];
-  let versions: Version[] = [];
-  let state: WorkflowState = {
+  const attempts: Attempt[] = [];
+  const plans: { _id: string; status: string; scenes: Scene[]; reasons: string[] }[] = [];
+  const versions: Version[] = [];
+  const state: WorkflowState = {
     selectedPlanId: null,
     selectedSceneIndex: null,
     selectedVersionId: null,
