@@ -32,7 +32,8 @@ const v2ProviderId = v.union(
   v.literal("buffer"),
   v.literal("zernio"),
   v.literal("github-pr"),
-  v.literal("postiz-oauth")
+  v.literal("postiz-oauth"),
+  v.literal("firecrawl")
 );
 
 const v2ApprovalState = v.union(

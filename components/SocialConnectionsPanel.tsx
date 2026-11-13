@@ -8,6 +8,7 @@ type ValidationDiagnostics = {
   approvalFlagConfigured: boolean;
   bufferKeyConfigured: boolean;
   zernioKeyConfigured: boolean;
+  firecrawlKeyConfigured: boolean;
 };
 
 type PlatformValidation = {
@@ -54,6 +55,9 @@ function diagnosticHints(
   if (platform.providerId === "zernio" && !diag.zernioKeyConfigured) {
     hints.push("ZERNIO_API_KEY is not configured in server env.");
   }
+  if (platform.providerId === "firecrawl" && !diag.firecrawlKeyConfigured) {
+    hints.push("FIRECRAWL_API_KEY is not configured in server env.");
+  }
 
   return hints;
 }
@@ -93,8 +97,8 @@ export function SocialConnectionsPanel() {
             Social connections
           </div>
           <p className="mt-1 text-sm text-gray-600">
-            Read-only checks against your configured Buffer (LinkedIn) and Zernio (Reddit)
-            credentials. No posts are scheduled from this panel.
+            Read-only checks against your configured Buffer (LinkedIn), Zernio (Reddit),
+            and Firecrawl (site-data) credentials. No posts are scheduled from this panel.
           </p>
         </div>
         <button
@@ -172,6 +176,14 @@ export function SocialConnectionsPanel() {
                         <dt>Zernio key</dt>
                         <dd>
                           {(data?.diagnostics ?? platform.diagnostics)?.zernioKeyConfigured
+                            ? "configured"
+                            : "missing"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Firecrawl key</dt>
+                        <dd>
+                          {(data?.diagnostics ?? platform.diagnostics)?.firecrawlKeyConfigured
                             ? "configured"
                             : "missing"}
                         </dd>
