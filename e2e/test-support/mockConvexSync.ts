@@ -1,18 +1,31 @@
 import type { Page } from "@playwright/test";
+
 type Args = Record<string, unknown>;
-type Handlers = {
+
+/**
+ * Handlers a spec (or a named fixture module) supplies to fake the Convex
+ * sync channel. `value` answers every subscribed query; `mutation` and
+ * `action` answer client mutations/actions with their return value sent
+ * verbatim as the response result; `onQuery` observes each newly
+ * subscribed query.
+ */
+export type SyncHandlers = {
   value: (path: string, args: Args) => unknown;
   onQuery?: (path: string, args: Args) => void;
   mutation?: (path: string, args: Args) => unknown;
+  action?: (path: string, args: Args) => unknown;
 };
+
+export type SyncVersion = { querySet: number; identity: number; ts: string };
+
 // Local sync transport only: fixtures never reach a Convex deployment.
-export async function mockConvexSync(page: Page, handlers: Handlers) {
+export async function mockConvexSync(page: Page, handlers: SyncHandlers) {
   await page.routeWebSocket(/\/api\/.*\/sync/, (socket) => {
     const queries = new Map<
       number,
       { queryId: number; udfPath: string; args: Args[] }
     >();
-    let version = { querySet: 0, identity: 0, ts: "AAAAAAAAAAA=" };
+    let version: SyncVersion = { querySet: 0, identity: 0, ts: "AAAAAAAAAAA=" };
     let tick = 0;
     function send(querySet = version.querySet) {
       const ts = Buffer.alloc(8);
@@ -68,6 +81,23 @@ export async function mockConvexSync(page: Page, handlers: Handlers) {
             success: true,
             result,
             ts: version.ts,
+            logLines: [],
+          }),
+        );
+        send();
+      }
+      if (m.type === "Action") {
+        if (!handlers.action)
+          throw new Error(`Unexpected fixture action: ${m.udfPath}`);
+        const result = handlers.action(m.udfPath, m.args[0] ?? {});
+        // Action responses carry no ts field — matches the inline mocks this
+        // harness replaced (e.g. queue-release, prepared-import).
+        socket.send(
+          JSON.stringify({
+            type: "ActionResponse",
+            requestId: m.requestId,
+            success: true,
+            result,
             logLines: [],
           }),
         );

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { mockConvexSync } from "./test-support/mockConvexSync";
+import { mockSyncFixture, type SeriesUrlFiltersFixture } from "./test-support/fixtures";
+
 for (const scenario of [
   {
     url: "/queue?brandId=corvo&seriesId=owned-lower-db",
@@ -32,44 +33,10 @@ for (const scenario of [
   test(`owned series URL resolves safely: ${scenario.url}`, async ({
     page,
   }) => {
-    const calls: { path: string; args: Record<string, unknown> }[] = [];
-    function value(path: string) {
-      if (path === "publishing:listBrands")
-        return [
-          { brandId: "corvo", name: "Corvo Labs" },
-          { brandId: "lower-db", name: "Lower DB" },
-        ];
-      if (path === "series:list")
-        return [
-          {
-            _id: "owned-lower-db",
-            brandId: "lower-db",
-            title: "Lower DB series",
-          },
-          { _id: "other", brandId: "corvo", title: "Other series" },
-        ];
-      if (path === "publishing:listCalendarItems") return [];
-      if (path === "publishing:bufferLiveSubmissionEnabled")
-        return { enabled: false };
-      if (path === "queuePlanning:plan")
-        return {
-          projection: {
-            unknown: "Destination is unverified; refresh Connections.",
-            availableForBacklog: null,
-          },
-          destination: null,
-          snapshot: null,
-          constraint: null,
-          reservations: [],
-          candidates: [],
-          partial: false,
-        };
-      return null;
-    }
-    await mockConvexSync(page, {
-      value,
-      onQuery: (path, args) => calls.push({ path, args }),
-    });
+    const fx = await mockSyncFixture<SeriesUrlFiltersFixture>(
+      page,
+      "series-url-filters",
+    );
     await page.goto(scenario.url);
 
     if (scenario.blockedCalendar) {
@@ -78,16 +45,16 @@ for (const scenario of [
           "This series is unavailable. Choose an accessible series or All series to view the calendar.",
         ),
       ).toBeVisible();
-      expect(calls.filter((c) => c.path === scenario.path)).toHaveLength(0);
+      expect(fx.calls.filter((c) => c.path === scenario.path)).toHaveLength(0);
     } else {
       await expect
-        .poll(() => calls.filter((c) => c.path === scenario.path).length)
+        .poll(() => fx.calls.filter((c) => c.path === scenario.path).length)
         .toBeGreaterThan(0);
-      for (const call of calls.filter((c) => c.path === scenario.path))
+      for (const call of fx.calls.filter((c) => c.path === scenario.path))
         expect(call.args).toMatchObject(scenario.args);
       if (scenario.invalidSeries) {
         expect(
-          calls
+          fx.calls
             .filter((c) => c.path === scenario.path)
             .every((c) => !c.args.seriesId),
         ).toBe(true);
@@ -111,12 +78,12 @@ for (const scenario of [
         .getByRole("combobox", { name: "Calendar series filter" })
         .selectOption("");
       await expect
-        .poll(() => calls.filter((c) => c.path === scenario.path).length)
+        .poll(() => fx.calls.filter((c) => c.path === scenario.path).length)
         .toBeGreaterThan(0);
-      for (const call of calls.filter((c) => c.path === scenario.path))
+      for (const call of fx.calls.filter((c) => c.path === scenario.path))
         expect(call.args).toMatchObject(scenario.args);
       expect(
-        calls
+        fx.calls
           .filter((c) => c.path === scenario.path)
           .every((c) => !c.args.seriesId),
       ).toBe(true);
