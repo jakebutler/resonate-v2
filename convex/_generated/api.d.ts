@@ -9,6 +9,8 @@
  */
 
 import type * as __tests___helpers_mockMutationCtx from "../__tests__/helpers/mockMutationCtx.js";
+import type * as aeoIntel from "../aeoIntel.js";
+import type * as aeoTables from "../aeoTables.js";
 import type * as articleDependencies from "../articleDependencies.js";
 import type * as articlePublication from "../articlePublication.js";
 import type * as articleValidators from "../articleValidators.js";
@@ -74,6 +76,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "__tests__/helpers/mockMutationCtx": typeof __tests___helpers_mockMutationCtx;
+  aeoIntel: typeof aeoIntel;
+  aeoTables: typeof aeoTables;
   articleDependencies: typeof articleDependencies;
   articlePublication: typeof articlePublication;
   articleValidators: typeof articleValidators;
