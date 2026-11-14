@@ -8,7 +8,8 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { audit, requireUserId } from "./campaignAccess";
 import { ownedSeries, seriesPost } from "./series";
-import { latestIntent, applyEditorialApproval } from "./publishing";
+import { latestIntent, applyEditorialApproval, currentVisualApprovalSignature } from "./publishing";
+import { approvalArticleSignature } from "../lib/publicationReview";
 import { readDestination } from "./bufferDestinations";
 import { destinationHold } from "../lib/bufferContracts";
 import {
@@ -27,6 +28,28 @@ import {
 } from "./articleDependencies";
 import { queueCapacity } from "./queuePlanning";
 type Ctx = QueryCtx | MutationCtx;
+
+/**
+ * Signatures binding a packet row to the exact article and visual snapshots the
+ * composer reviewed, mirroring the single-post approval model (getApprovalReview
+ * → setApproval). Stored at prepare time so approve can prove nothing changed
+ * between review and batch approval; assertReviewedApproval fails closed when a
+ * required signature is missing.
+ */
+async function reviewSignatures(ctx: Ctx, post: Doc<"v2Posts">) {
+  const signatures: { articleSignature?: string; visualSignature?: string } = {
+    articleSignature: approvalArticleSignature(post),
+  };
+  if (post.channelId === "corvo-blog") {
+    try {
+      signatures.visualSignature = await currentVisualApprovalSignature(ctx, post);
+    } catch {
+      // Incomplete visual snapshot: approve must fail closed on the missing signature.
+    }
+  }
+  return signatures;
+}
+
 export function editorialVersion(post: Doc<"v2Posts">) {
   return post.channelId === "corvo-blog"
     ? blogEditorialFingerprint(post)
@@ -257,6 +280,7 @@ export const prepare = mutation({
     for (const id of selection.postIds) {
       const post = await membership(ctx, userId, series, id);
       const row = await reviewRow(ctx, post, capacity);
+      const signatures = await reviewSignatures(ctx, post);
       const size = new TextEncoder().encode(JSON.stringify(row)).length;
       if (size > 300000)
         throw new Error(
@@ -265,7 +289,7 @@ export const prepare = mutation({
       bytes += size;
       if (bytes > 6000000)
         throw new Error("Review packet exceeds 6 MB; select fewer posts.");
-      rows.push({ postId: id, ...row });
+      rows.push({ postId: id, ...row, ...signatures });
     }
     const packetId = await ctx.db.insert("seriesReviewPackets", {
       userId,
@@ -410,7 +434,10 @@ export const approve = mutation({
       return { approved: true, alreadyApproved: true };
     const now = Date.now();
     for (let i = 0; i < posts.length; i++) {
-      await applyEditorialApproval(ctx, userId, posts[i], "approved");
+      await applyEditorialApproval(ctx, userId, posts[i], "approved", {
+        expectedArticleSignature: rows[i].articleSignature,
+        expectedVisualSignature: rows[i].visualSignature,
+      });
       await ctx.db.patch(rows[i]._id, { approvedAt: now, actor: userId });
     }
     await ctx.db.patch(packet._id, {

@@ -751,7 +751,8 @@ async function assertVisualAssetSlug(ctx: QueryCtx | MutationCtx, post: Doc<"v2P
   const posts = await ctx.db.query("v2Posts").withIndex("by_brand_and_blogSlug", q => q.eq("brandId", post.brandId).eq("blogSlug", proposedSlug)).take(2);
   if (posts.some(other => other._id !== post._id)) throw new Error("Visual article slug is already used by another post; choose an unused slug");
 }
-async function currentVisualApprovalSignature(ctx: QueryCtx | MutationCtx, post: Doc<"v2Posts">) {
+/** Exact article + visual snapshot signatures the composer reviewed; shared with series batch approval. */
+export async function currentVisualApprovalSignature(ctx: QueryCtx | MutationCtx, post: Doc<"v2Posts">) {
   const visuals = await buildPublicationVisuals(ctx, post);
   const figures = await buildPublicationFigures(ctx, post);
   await assertCurrentLinkedEvidence(ctx, post, figures.flatMap(figure => figure.evidenceSources.map(source => source.sourceId)));
