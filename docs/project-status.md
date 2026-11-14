@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 11/14/2026 08:13:19 UTC
+Last updated: 11/14/2026 13:22:04 UTC
 
 ## State
 
@@ -16,25 +16,24 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 06e7938 docs(verification): record AEO live-proof runs, review-queue walk, and spend
+- 6a01212 docs(verify): consolidated live-proof report — campaigns, images, smoke
 
 ## Recent Commits
 
-- 06e7938 docs(verification): record AEO live-proof runs, review-queue walk, and spend
-- 46725d7 docs(verification): scaffold AEO live-proof report (aeo-proof worker)
-- b5ea7d3 fix(test): bridge SubtleCrypto digest realm mismatch in the vitest environment (#167)
-- af6e9ee Release: AEO/SEO intelligence surface (#142)
-- 75957b5 Release: feature-verification workflow (#141)
+- 6a01212 docs(verify): consolidated live-proof report — campaigns, images, smoke
+- ae1819a chore(verify): interim evidence checkpoint with cause diagnostics
+- 4c025a2 docs(verify): interim evidence checkpoint (final7 campaigns pass)
+- b3c33ce docs(verify): interim dated evidence checkpoint
+- 842db98 docs(verify): date the main-bundle live evidence for campaigns, images, smoke
 
 ## Local Working Tree
 
--  M convex/_generated/api.d.ts
--  M convex/_generated/server.d.ts
--  M convex/_generated/server.js
-- M  docs/verification/reports/evidence/aeo-live-proof/driver-crawl.mts
-- M  docs/verification/reports/evidence/aeo-live-proof/driver-query.mts
-- M  docs/verification/reports/evidence/aeo-live-proof/driver-runs.mts
-- ?? .env.aeo-proof
+- M  docs/verification/reports/2026-11-14-main-live-proof.md
+- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaign-flow-recap.webm
+- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaign-session.png
+- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaigns-freshproof.png
+- A  docs/verification/reports/evidence/main-live-proof/tc-2-composer-visuals-recap.png
+- A  docs/verification/reports/evidence/main-live-proof/tc-3-series-batch-review-recap.png
 
 ## Next Agent Pickup
 
@@ -43,4 +42,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- verify/aeo-live-proof
+- verify/main-live-proof

@@ -91,7 +91,7 @@
       "runner": "contract",
       "tier": "live-receipt",
       "target": "node scripts/run-visual-live-qualification.mjs",
-      "command": "node scripts/run-visual-live-qualification.mjs --deployment-url <dev-url> --reference-dir <dir>",
+      "command": "npx --yes tsx scripts/run-visual-live-qualification.mjs --deployment-url <dev-url> --reference-dir <dir>",
       "fixtures": [],
       "prerequisites": [
         "OPENAI_API_KEY",
