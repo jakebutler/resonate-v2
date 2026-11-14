@@ -115,6 +115,34 @@ export const getRun = query({
   },
 });
 
+export const listRuns = query({
+  args: { brandId: brandIdValidator },
+  returns: v.array(aeoIntelRunValidator),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireBrandAccess(ctx, userId, args.brandId);
+    return await ctx.db
+      .query("intelRuns")
+      .withIndex("by_user_and_brand", (q) => q.eq("userId", userId).eq("brandId", args.brandId))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const listFindings = query({
+  args: { brandId: brandIdValidator },
+  returns: v.array(aeoIntelFindingValidator),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireBrandAccess(ctx, userId, args.brandId);
+    return await ctx.db
+      .query("intelFindings")
+      .withIndex("by_user_and_brand", (q) => q.eq("userId", userId).eq("brandId", args.brandId))
+      .order("desc")
+      .collect();
+  },
+});
+
 export const connectTarget = mutation({
   args: {
     brandId: brandIdValidator,
@@ -174,6 +202,37 @@ const crawlPageInput = v.object({
   schemaTypes: v.array(v.string()),
   description: v.optional(v.string()),
   contentSample: v.optional(v.string()),
+});
+
+/** The review pin is the human gate: intel cycles read only pinned targets. */
+export const pinTargetReview = mutation({
+  args: {
+    brandId: brandIdValidator,
+    pinned: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireBrandAccess(ctx, userId, args.brandId);
+    const target = await readTarget(ctx, userId, args.brandId);
+    if (target === null) {
+      throw new Error("No connected target for this brand — connect a target first.");
+    }
+    await ctx.db.patch(target._id, {
+      reviewPinned: args.pinned,
+      updatedAt: Date.now(),
+    });
+    await audit(ctx, {
+      userId,
+      brandId: args.brandId,
+      action: "aeo.target_review_pinned",
+      summary: args.pinned
+        ? "Pinned the target review — scheduled intel cycles will now read it."
+        : "Unpinned the target review — scheduled intel cycles will skip it.",
+      metadata: { targetId: String(target._id), reviewPinned: args.pinned },
+    });
+    return null;
+  },
 });
 
 export const recordCrawlSnapshot = mutation({
@@ -382,6 +441,7 @@ export const saveStrategyPlan = mutation({
   args: {
     brandId: brandIdValidator,
     status: v.union(v.literal("draft"), v.literal("reviewed")),
+    reviewNotes: v.optional(v.string()),
     plan: aeoPlanValidator,
   },
   returns: v.id("strategyPlans"),
@@ -403,6 +463,7 @@ export const saveStrategyPlan = mutation({
       brandId: args.brandId,
       version,
       status: args.status,
+      reviewNotes: args.reviewNotes,
       plan: args.plan,
       createdAt: Date.now(),
     });

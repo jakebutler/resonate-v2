@@ -26,6 +26,8 @@ export const brandTargetFields = {
   siteUrl: v.string(),
   productIdentifiers: v.array(v.string()),
   competitorUrls: v.array(v.string()),
+  /** Set by the review-pin flow: nothing reads or crawls an unpinned target. */
+  reviewPinned: v.optional(v.boolean()),
   validation: v.optional(aeoTargetValidationValidator),
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -180,6 +182,8 @@ export const strategyPlanFields = {
     v.literal("reviewed"),
     v.literal("accepted")
   ),
+  /** Human review notes: a change request lands as a new draft version. */
+  reviewNotes: v.optional(v.string()),
   plan: aeoPlanValidator,
   createdAt: v.number(),
 };

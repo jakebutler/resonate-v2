@@ -27,13 +27,17 @@ async function connectTarget(
   user: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
   overrides: Partial<{ brandId: BrandId; competitorUrls: string[]; productIdentifiers: string[] }> = {}
 ) {
-  return await user.mutation(api.aeoIntel.connectTarget, {
-    brandId: "freshproof",
+  const brandId = overrides.brandId ?? "freshproof";
+  const targetId = await user.mutation(api.aeoIntel.connectTarget, {
+    brandId,
     siteUrl: "https://www.freshproof.example",
     productIdentifiers: ["FreshProof band"],
     competitorUrls: [],
     ...overrides,
   });
+  // Discovery only acts on pinned targets; tests exercise the pinned path.
+  await user.mutation(api.aeoIntel.pinTargetReview, { brandId, pinned: true });
+  return targetId;
 }
 
 async function enabledEnv() {
@@ -127,6 +131,19 @@ describe("discovery batch gates", () => {
     expect(withoutGateway).toMatchObject({ started: 0, reason: "credentials-not-configured:gateway" });
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("never reads a connected target whose review is not pinned", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    await connectTarget(user);
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: false });
+
+    const unpinned = await t.query(internal.competitorSuggestions.allTargets, {});
+    expect(unpinned).toHaveLength(0);
+
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: true });
+    const pinned = await t.query(internal.competitorSuggestions.allTargets, {});
+    expect(pinned).toHaveLength(1);
   });
 
   it("refuses a run whose estimate exceeds the per-run ceiling and creates no rows", async () => {
