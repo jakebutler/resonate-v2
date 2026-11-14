@@ -5469,3 +5469,49 @@ Legacy hero compatibility: accept only the exact dated or undated directory deri
 ### Branch
 
 - verify/aeo-live-proof
+
+## 11/14/2026 08:09:38 UTC
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	docs/verification/reports/2026-11-14-aeo-live-proof.md
+- A	docs/verification/reports/evidence/aeo-live-proof/driver-crawl.mts
+- A	docs/verification/reports/evidence/aeo-live-proof/driver-query.mts
+- A	docs/verification/reports/evidence/aeo-live-proof/driver-runs.mts
+- A	docs/verification/reports/evidence/aeo-live-proof/tc-1-home-signed-in.png
+- A	docs/verification/reports/evidence/aeo-live-proof/tc-2-aeo-connect-connected.png
+- A	docs/verification/reports/evidence/aeo-live-proof/tc-3-aeo-review-pinned.png
+- A	docs/verification/reports/evidence/aeo-live-proof/tc-4-competitors-review-queue.png
+- A	docs/verification/reports/evidence/aeo-live-proof/tc-5-competitors-after-review.png
+- A	docs/verification/reports/evidence/aeo-live-proof/tc-6-competitors-reject-recorded.png
+- A	docs/verification/reports/evidence/aeo-live-proof/tc-7-gaps.png
+- A	docs/verification/reports/evidence/aeo-live-proof/tc-7-intel.png
+- A	docs/verification/reports/evidence/aeo-live-proof/tc-7-plan.png
+
+### Working Tree Snapshot
+
+-  M convex/_generated/api.d.ts
+-  M convex/_generated/server.d.ts
+-  M convex/_generated/server.js
+- M  docs/verification/reports/2026-11-14-aeo-live-proof.md
+- A  docs/verification/reports/evidence/aeo-live-proof/driver-crawl.mts
+- A  docs/verification/reports/evidence/aeo-live-proof/driver-query.mts
+- A  docs/verification/reports/evidence/aeo-live-proof/driver-runs.mts
+- A  docs/verification/reports/evidence/aeo-live-proof/tc-1-home-signed-in.png
+- A  docs/verification/reports/evidence/aeo-live-proof/tc-2-aeo-connect-connected.png
+- A  docs/verification/reports/evidence/aeo-live-proof/tc-3-aeo-review-pinned.png
+- A  docs/verification/reports/evidence/aeo-live-proof/tc-4-competitors-review-queue.png
+- A  docs/verification/reports/evidence/aeo-live-proof/tc-5-competitors-after-review.png
+- A  docs/verification/reports/evidence/aeo-live-proof/tc-6-competitors-reject-recorded.png
+- A  docs/verification/reports/evidence/aeo-live-proof/tc-7-gaps.png
+- A  docs/verification/reports/evidence/aeo-live-proof/tc-7-intel.png
+- A  docs/verification/reports/evidence/aeo-live-proof/tc-7-plan.png
+- ?? .env.aeo-proof
+
+### Branch
+
+- verify/aeo-live-proof
