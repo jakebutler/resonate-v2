@@ -60,4 +60,13 @@ describe("suggestCampaignIdeas", () => {
       }
     }
   });
+
+  it("never repeats a citation within one suggestion, even with one excerpt", () => {
+    // A repeated citation in an idea flows into v2Posts.sourceExcerptIds and
+    // the linked-evidence snapshot bounds check rejects duplicates outright.
+    const single = suggestCampaignIdeas([excerpts[0]]);
+    for (const suggestion of single) {
+      expect(new Set(suggestion.citations).size).toBe(suggestion.citations.length);
+    }
+  });
 });
