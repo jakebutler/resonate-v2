@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
   useQuery: vi.fn(),
+  useAction: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -30,6 +31,10 @@ vi.mock("@/convex/_generated/api", () => ({
     },
     ideas: {
       create: "ideas:create",
+    },
+    keywordResearch: {
+      listKeywordGaps: "keywordResearch:listKeywordGaps",
+      runKeywordResearch: "keywordResearch:runKeywordResearch",
     },
     shapes: {
       saveBrief: "shapes:saveBrief",

@@ -36,6 +36,7 @@ import type * as draftGeneration from "../draftGeneration.js";
 import type * as draftSet from "../draftSet.js";
 import type * as githubPrSync from "../githubPrSync.js";
 import type * as ideas from "../ideas.js";
+import type * as keywordResearch from "../keywordResearch.js";
 import type * as mockAck from "../mockAck.js";
 import type * as opsAudit from "../opsAudit.js";
 import type * as posts from "../posts.js";
@@ -111,6 +112,7 @@ declare const fullApi: ApiFromModules<{
   draftSet: typeof draftSet;
   githubPrSync: typeof githubPrSync;
   ideas: typeof ideas;
+  keywordResearch: typeof keywordResearch;
   mockAck: typeof mockAck;
   opsAudit: typeof opsAudit;
   posts: typeof posts;

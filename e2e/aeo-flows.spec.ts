@@ -423,3 +423,90 @@ test("plan-review: accept and change-request stay review states; seeding writes 
     )
   ).toBe(true);
 });
+
+const keywordGapFixture = (
+  id: string,
+  keyword: string,
+  status: "absent" | "present" | "unproven",
+  signal: "answer-engine" | "search" | "derived",
+  evidence: string[],
+  fromPlan = false,
+) => ({
+  _id: id,
+  _creationTime: 1,
+  userId: "fixture-user",
+  brandId: brand,
+  keyword,
+  status,
+  signal,
+  evidence,
+  sourcePageUrls: ["https://freshproof.example.com/methodology"],
+  sourceFindingIds: ["finding-fixture"],
+  sourceCrawlPageIds: [],
+  sourceSuggestionIds: [],
+  fromPlan,
+  ...(status === "unproven" ? {} : { searchedAt: 1 }),
+  updatedAt: 1,
+});
+
+test("keyword-gaps: the missing-query summary and honest statuses render from real runs", async ({
+  page,
+}) => {
+  const actions: Array<{ path: string; args: unknown }> = [];
+  await mockConvexSync(page, {
+    value: (path) => {
+      if (path === "aeoIntel:getTarget") return targetFixture(true);
+      if (path === "aeoIntel:listCrawls") return [];
+      if (path === "aeoIntel:listRuns") return [];
+      if (path === "aeoIntel:listFindings") return [];
+      if (path === "keywordResearch:listKeywordGaps") {
+        return [
+          // Observed by a real answer-engine run without the target cited.
+          keywordGapFixture("gap-absent", "freshproof alternative", "absent", "answer-engine", [
+            "Do any alternatives exist to FreshProof?",
+            "No answer mentioned FreshProof",
+          ]),
+          // Observed by a real run with the target cited.
+          keywordGapFixture("gap-present", "what is freshproof", "present", "answer-engine", [
+            "What is FreshProof?",
+            "FreshProof was cited in the answer",
+          ]),
+          // Saved-plan keyword no signal has observed yet: unproven, never absent.
+          keywordGapFixture("gap-plan", "proof marketing", "unproven", "derived", [
+            "Merged from the saved plan",
+          ], true),
+        ];
+      }
+      return null;
+    },
+    action: (path, args) => {
+      actions.push({ path, args });
+      return { recorded: 0 };
+    },
+  });
+
+  await page.goto("/aeo/gaps");
+
+  // The missing-N summary leads the view.
+  await expect(
+    page.getByText("You're missing 1 of 3 researched queries."),
+  ).toBeVisible();
+  // Per-keyword statuses are honest: the unproven plan keyword never renders
+  // as "Missing".
+  await expect(page.getByLabel("Missing: freshproof alternative")).toBeVisible();
+  await expect(page.getByLabel("Present: what is freshproof")).toBeVisible();
+  await expect(page.getByLabel("Unproven: proof marketing")).toBeVisible();
+  await expect(page.getByLabel("From the saved plan")).toBeVisible();
+
+  // Research is a budget-admitted action the user triggers; nothing runs on
+  // page load.
+  expect(actions).toEqual([]);
+  await page.getByRole("button", { name: "Run keyword research" }).click();
+  await expect(
+    page.getByText("Keyword research recorded."),
+  ).toBeVisible({ timeout: 15_000 });
+  expect(actions).toEqual([
+    { path: "keywordResearch:runKeywordResearch", args: { brandId: brand } },
+  ]);
+});
+

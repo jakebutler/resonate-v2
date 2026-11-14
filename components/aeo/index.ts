@@ -5,5 +5,6 @@ export { CompetitorComparisonPanel } from "./CompetitorComparisonPanel";
 export { CitationResultsPanel } from "./CitationResultsPanel";
 export { CompetitorsPanel } from "./CompetitorsPanel";
 export { GapsPanel, sortGaps } from "./GapsPanel";
+export { KeywordGapsPanel, missingKeywordCount } from "./KeywordGapsPanel";
 export { StrategyPlanPanel } from "./StrategyPlanPanel";
 export * from "./types";

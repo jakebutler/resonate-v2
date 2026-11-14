@@ -9,6 +9,7 @@ import type {
   CrawlSnapshot,
   Gap,
   GapPriority,
+  KeywordGap,
   StrategyPlan,
   SuggestedCompetitor,
   CompetitorSets,
@@ -21,6 +22,7 @@ type IntelRunRow = Doc<"intelRuns">;
 type IntelFindingRow = Doc<"intelFindings">;
 type StrategyPlanRow = Doc<"strategyPlans">;
 type SuggestionRow = Doc<"competitorSuggestions">;
+type KeywordGapRow = Doc<"keywordGaps">;
 
 /** The target's hostname without "www." — the display/matching convention used
  * by the data model's competitor names. */
@@ -234,6 +236,24 @@ export function suggestionRowsToSets(
   return { confirmed, suggestions };
 }
 
+/**
+ * Maps a stored keyword-gap row onto the display type. The row already holds
+ * the honest verdict and its sources; nothing is added or inferred here.
+ */
+export function keywordGapRowToKeywordGap(row: KeywordGapRow): KeywordGap {
+  return {
+    id: row._id,
+    keyword: row.keyword,
+    status: row.status,
+    signal: row.signal,
+    questions: row.evidence.filter((line) => line.endsWith("?")),
+    sourcePageUrls: row.sourcePageUrls,
+    fromPlan: row.fromPlan,
+    evidence: row.evidence,
+    ...(row.searchedAt !== undefined ? { searchedAt: row.searchedAt } : {}),
+  };
+}
+
 export function planRowToStrategyPlan(row: StrategyPlanRow): {
   plan: StrategyPlan;
   gapTitles: Record<string, string>;
@@ -260,4 +280,4 @@ export function planRowToStrategyPlan(row: StrategyPlanRow): {
   };
 }
 
-export type { BrandTargetRow, SiteCrawlRow, IntelRunRow, IntelFindingRow, StrategyPlanRow, SuggestionRow };
+export type { BrandTargetRow, SiteCrawlRow, IntelRunRow, IntelFindingRow, StrategyPlanRow, SuggestionRow, KeywordGapRow };
