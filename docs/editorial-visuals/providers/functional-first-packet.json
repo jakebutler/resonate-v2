@@ -3,11 +3,11 @@
   "status": "prepared_unqualified_not_dispatched",
   "authorization": "Jake 2026-09-30: cheaper functional validation before Image 2 quality",
   "base_packet": "qualification-packet.json",
-  "base_packet_sha256": "7752cbfbfb631109a5bd19c56a3fc8a64e2127776078b1fd347ecda89a54e1d4",
+  "base_packet_sha256": "e8a48dc363030f21c3a03c7fec5ec481a804a723b6e08f16b06c2175d808e31c",
   "paid_calls_made": 0,
   "provider": "openai",
-  "canonical_model": "gpt-image-1.5",
-  "api_model_id": "gpt-image-1.5",
+  "canonical_model": "gpt-image-2",
+  "api_model_id": "gpt-image-2-2026-04-21",
   "cumulative_cap_usd": 5,
   "cap_shared_with_later_image2_calls": true,
   "reference_inputs": [
@@ -46,7 +46,11 @@
   },
   "edit": {
     "selected_parent": "Exact returned GPT Image 1 parent first; unavailable until generation reconciles",
-    "reference_order": ["generated-parent", "raven-identity", "paper-style"],
+    "reference_order": [
+      "generated-parent",
+      "raven-identity",
+      "paper-style"
+    ],
     "feedback_source": "base_packet.edit.feedback",
     "preserve_model_quality_input_fidelity": true
   },
@@ -70,10 +74,19 @@
   "quote_guards": {
     "prompt_utf8_bytes_max": 9045,
     "ordered_reference_dimensions": [
-      [1448, 1086],
-      [1672, 941]
+      [
+        1448,
+        1086
+      ],
+      [
+        1672,
+        941
+      ]
     ],
-    "selected_parent_dimensions": [1536, 1024],
+    "selected_parent_dimensions": [
+      1536,
+      1024
+    ],
     "source": "gpt-image-1-functional-bound.md",
     "assumptions": "Explicit byte-tokenizer/envelope headroom; independently reviewed engineering maximum, not provider-enforced ceiling",
     "requires_exact_attempt_and_request_sha256": true

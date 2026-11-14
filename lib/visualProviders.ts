@@ -75,18 +75,6 @@ export const VISUAL_PROVIDER_CAPABILITIES: readonly VisualRouteCapability[] = [
     outputFormats: ["png", "jpeg", "webp"],
   },
   {
-    provider: "openai",
-    model: "gpt-image-1.5",
-    apiModelId: "gpt-image-1.5",
-    qualification: "unverified",
-    receiptIds: [],
-    operations: ["generate", "edit"],
-    referenceInputs: true,
-    maxInputImages: 16,
-    sizes: ["1024x1024", "1536x1024", "1024x1536"],
-    outputFormats: ["png", "jpeg", "webp"],
-  },
-  {
     provider: "digitalocean",
     model: "gpt-image-2",
     apiModelId: "openai-gpt-image-2",
