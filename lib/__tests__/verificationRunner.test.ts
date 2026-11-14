@@ -4,6 +4,7 @@ import type { ExecutorResult } from "../verificationRunner";
 import {
   isRunSuccessful,
   renderVerificationReport,
+  resolveContractCommandTokens,
   runVerification,
 } from "../verificationRunner";
 
@@ -51,6 +52,40 @@ function manifestJson() {
 const passingExecutor = async (): Promise<ExecutorResult> => ({
   outcome: "PASS",
   evidence: "$ npx vitest run …\nexit code: 0\nTests  3 passed (3)",
+});
+
+describe("resolveContractCommandTokens", () => {
+  it("leaves non-placeholder tokens untouched", () => {
+    const resolved = resolveContractCommandTokens("node scripts/run.mjs --live", {});
+    if (!resolved.ok) throw new Error("expected ok");
+    expect(resolved.tokens).toEqual(["node", "scripts/run.mjs", "--live"]);
+  });
+
+  it("maps <dev-url> to VERIFICATION_DEV_URL and <dir> to VERIFICATION_DIR", () => {
+    const resolved = resolveContractCommandTokens(
+      "node scripts/run-visual-live-qualification.mjs --deployment-url <dev-url> --reference-dir <dir>",
+      { VERIFICATION_DEV_URL: "https://precious-mole-481.convex.cloud", VERIFICATION_DIR: "docs/editorial-visuals/providers/references" },
+    );
+    if (!resolved.ok) throw new Error("expected ok");
+    expect(resolved.tokens).toEqual([
+      "node",
+      "scripts/run-visual-live-qualification.mjs",
+      "--deployment-url",
+      "https://precious-mole-481.convex.cloud",
+      "--reference-dir",
+      "docs/editorial-visuals/providers/references",
+    ]);
+  });
+
+  it("fails closed naming the env var when a placeholder is unset", () => {
+    const resolved = resolveContractCommandTokens("node run.mjs --deployment-url <dev-url>", {});
+    expect(resolved).toEqual({ ok: false, missingEnvVar: "VERIFICATION_DEV_URL" });
+  });
+
+  it("fails closed on a blank placeholder value", () => {
+    const resolved = resolveContractCommandTokens("node run.mjs --reference-dir <dir>", { VERIFICATION_DIR: "   " });
+    expect(resolved).toEqual({ ok: false, missingEnvVar: "VERIFICATION_DIR" });
+  });
 });
 
 describe("runVerification", () => {
