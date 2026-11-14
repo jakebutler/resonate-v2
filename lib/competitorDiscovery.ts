@@ -15,11 +15,16 @@ import { competitorNameFromUrl } from "./answerEngine";
 const DEFAULT_MAX_QUERIES = 4;
 const DEFAULT_RUN_CEILING_CENTS = 50;
 const DEFAULT_COST_PER_QUERY_CENTS = 2;
+// A discovery run that has not reached a terminal state within this window is
+// treated as crashed: without the bound, one stuck "running" row would make
+// hasRunningDiscoveryRun refuse every future daily cycle.
+const DEFAULT_STALE_RUN_MS = 30 * 60 * 1000;
 
 export type DiscoveryRunLimits = {
   maxQueries: number;
   runCeilingCents: number;
   costPerQueryCents: number;
+  staleRunMs: number;
 };
 
 function positiveIntFromEnv(raw: string | undefined, fallback: number): number {
@@ -35,6 +40,7 @@ export function discoveryRunLimits(env: Record<string, string | undefined>): Dis
       env.AEO_DISCOVERY_COST_PER_QUERY_CENTS,
       DEFAULT_COST_PER_QUERY_CENTS
     ),
+    staleRunMs: positiveIntFromEnv(env.AEO_DISCOVERY_STALE_RUN_MS, DEFAULT_STALE_RUN_MS),
   };
 }
 

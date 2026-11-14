@@ -274,13 +274,75 @@ describe("discovery proposal lifecycle", () => {
         status: "running",
         costCeilingCents: 50,
         questionCount: 4,
-        startedAt: 1,
+        startedAt: Date.now(), // fresh: inside the stale-run window
       });
     });
 
     const outcome = await t.action(internal.competitorSuggestions.runDiscoveryBatch, {});
     expect(outcome.started).toBe(0);
     expect(outcome.skipped[0]).toMatchObject({ brandId: "freshproof", reason: "run-already-running" });
+  });
+
+  it("recovers a crashed run so the next cycle can start, leaving fresh runs alone", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    await connectTarget(user);
+    await enabledEnv();
+    mockProviders();
+    const staleStartedAt = Date.now() - 31 * 60 * 1000;
+    await t.run(async (ctx) => {
+      await ctx.db.insert("intelRuns", {
+        userId: "owner",
+        brandId: "freshproof",
+        kind: "competitor-discovery",
+        status: "running",
+        costCeilingCents: 50,
+        questionCount: 4,
+        startedAt: staleStartedAt,
+      });
+    });
+
+    const outcome = await t.action(internal.competitorSuggestions.runDiscoveryBatch, {});
+    // The stuck run no longer blocks: the batch starts and completes a new one.
+    expect(outcome).toMatchObject({ started: 1, completed: 1 });
+
+    const runs = await t.run(async (ctx) =>
+      ctx.db.query("intelRuns").collect()
+    );
+    expect(runs).toHaveLength(2);
+    const recovered = runs.find((run) => run.startedAt === staleStartedAt);
+    expect(recovered).toMatchObject({ status: "failed" });
+    expect(recovered!.finishedAt).toBeDefined();
+    const fresh = runs.find((run) => run.startedAt !== staleStartedAt);
+    expect(fresh).toMatchObject({ status: "complete" });
+
+    const actions = await storedAuditActions(t);
+    expect(actions).toContain("aeo.discovery_run_recovered");
+  });
+
+  it("honors the configured stale-run window", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    await connectTarget(user);
+    await enabledEnv();
+    mockProviders();
+    vi.stubEnv("AEO_DISCOVERY_STALE_RUN_MS", "60000");
+    const twoMinutesAgo = Date.now() - 2 * 60 * 1000;
+    await t.run(async (ctx) => {
+      await ctx.db.insert("intelRuns", {
+        userId: "owner",
+        brandId: "freshproof",
+        kind: "competitor-discovery",
+        status: "running",
+        costCeilingCents: 50,
+        questionCount: 4,
+        startedAt: twoMinutesAgo,
+      });
+    });
+
+    const outcome = await t.action(internal.competitorSuggestions.runDiscoveryBatch, {});
+    expect(outcome).toMatchObject({ started: 1, completed: 1 });
+    const runs = await t.run(async (ctx) => ctx.db.query("intelRuns").collect());
+    const stale = runs.find((run) => run.startedAt === twoMinutesAgo);
+    expect(stale).toMatchObject({ status: "failed" });
   });
 
   it("writes an audit event for run start, proposal, and completion", async () => {

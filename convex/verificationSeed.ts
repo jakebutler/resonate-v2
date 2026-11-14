@@ -29,6 +29,48 @@ const PROD_DEPLOYMENT_HOST = "healthy-platypus-553";
 const DEFAULT_BUDGET_LIMIT_MICROS = 5_000_000; // $5 — matches the existing provider caps.
 const DEFAULT_BRAND: BrandId = "freshproof"; // AEO/SEO pilot brand.
 
+/**
+ * Deterministic fixture plan for verification runs and demos: the /aeo/plan
+ * screen renders the latest strategyPlans row for the seeded subject's brand,
+ * so the seed produces a generated draft plan with no claim content. Fields
+ * mirror aeoPlanValidator; sourceFindingIds stay empty because the seed
+ * creates no intelFindings rows.
+ */
+function verificationStrategyPlan() {
+  return {
+    gaps: [
+      {
+        title: "No comparison content in answer engines",
+        description:
+          "Verification seed fixture: answer engines surface no comparison pages for the brand's category questions.",
+        priority: 1,
+        sourceFindingIds: [],
+      },
+    ],
+    opportunities: [
+      {
+        title: "Third-party evidence question set",
+        description:
+          "Verification seed fixture: evidence-backed pages could answer the brand's target questions with citable sources.",
+        priority: 1,
+        sourceFindingIds: [],
+      },
+    ],
+    targetKeywords: ["verification seed fixture"],
+    targetQuestions: ["What does the verification seed fixture cover?"],
+    brief: {
+      goal: "Verification seed fixture: grow AEO citation share for the pilot brand.",
+      audience: "Fixture audience for verification runs and demos",
+      thesis: "Fixture thesis — deterministic seed data, no claim content",
+      window: "verification",
+      channels: ["blog"],
+      cta: "Join the waitlist",
+      metric: "Citation share in answer engines",
+      constraints: ["Fixture data only — no unverifiable claims"],
+    },
+  };
+}
+
 async function verificationSeedRecordExists(
   ctx: MutationCtx,
   subject: string,
@@ -100,6 +142,7 @@ export const seedVerificationWorkspace = internalMutation({
       brandId,
       corpusCreated: false,
       budgetCreated: false,
+      strategyPlanCreated: false,
       skipped: 0,
     };
 
@@ -198,12 +241,42 @@ export const seedVerificationWorkspace = internalMutation({
       }
     }
 
+    // A generated strategy plan for the seeded brand: the /aeo/plan screen
+    // reads the latest strategyPlans row for the subject's brand, so without
+    // this the plan step renders empty in verification runs and demos.
+    // Keyed through the same idempotency record as corpus and budget.
+    const planKey = `verificationSeed:strategyPlan:${brandId}`;
+    if (await verificationSeedRecordExists(ctx, subject, planKey)) {
+      summary.skipped += 1;
+    } else if (dryRun) {
+      summary.strategyPlanCreated = true;
+    } else {
+      const latestPlan = await ctx.db
+        .query("strategyPlans")
+        .withIndex("by_user_and_brand", (q) =>
+          q.eq("userId", subject).eq("brandId", brandId)
+        )
+        .order("desc")
+        .first();
+      const version = (latestPlan?.version ?? 0) + 1;
+      const planId = await ctx.db.insert("strategyPlans", {
+        userId: subject,
+        brandId,
+        version,
+        status: "draft",
+        plan: verificationStrategyPlan(),
+        createdAt: now,
+      });
+      await recordVerificationSeed(ctx, subject, planKey, "strategyPlans", String(planId), now);
+      summary.strategyPlanCreated = true;
+    }
+
     if (!dryRun) {
       await audit(ctx, {
         userId: subject,
         brandId,
         action: "verification.seed",
-        summary: `Verification seed completed for ${subject} (corpus: ${summary.corpusCreated ? "created" : "present"}, budget: ${summary.budgetCreated ? "created" : "present"}).`,
+        summary: `Verification seed completed for ${subject} (corpus: ${summary.corpusCreated ? "created" : "present"}, budget: ${summary.budgetCreated ? "created" : "present"}, strategy plan: ${summary.strategyPlanCreated ? "created" : "present"}).`,
       });
     }
 
