@@ -10,9 +10,8 @@
 
 import type * as __tests___helpers_mockMutationCtx from "../__tests__/helpers/mockMutationCtx.js";
 import type * as aeoIntel from "../aeoIntel.js";
-import type * as answerEngine from "../answerEngine.js";
-import type * as competitorSuggestions from "../competitorSuggestions.js";
 import type * as aeoTables from "../aeoTables.js";
+import type * as answerEngine from "../answerEngine.js";
 import type * as articleDependencies from "../articleDependencies.js";
 import type * as articlePublication from "../articlePublication.js";
 import type * as articleValidators from "../articleValidators.js";
@@ -27,6 +26,7 @@ import type * as bufferValidators from "../bufferValidators.js";
 import type * as campaignAccess from "../campaignAccess.js";
 import type * as campaigns from "../campaigns.js";
 import type * as cohesion from "../cohesion.js";
+import type * as competitorSuggestions from "../competitorSuggestions.js";
 import type * as corpora from "../corpora.js";
 import type * as crons from "../crons.js";
 import type * as draftSet from "../draftSet.js";
@@ -79,9 +79,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   "__tests__/helpers/mockMutationCtx": typeof __tests___helpers_mockMutationCtx;
   aeoIntel: typeof aeoIntel;
-  answerEngine: typeof answerEngine;
-  competitorSuggestions: typeof competitorSuggestions;
   aeoTables: typeof aeoTables;
+  answerEngine: typeof answerEngine;
   articleDependencies: typeof articleDependencies;
   articlePublication: typeof articlePublication;
   articleValidators: typeof articleValidators;
@@ -96,6 +95,7 @@ declare const fullApi: ApiFromModules<{
   campaignAccess: typeof campaignAccess;
   campaigns: typeof campaigns;
   cohesion: typeof cohesion;
+  competitorSuggestions: typeof competitorSuggestions;
   corpora: typeof corpora;
   crons: typeof crons;
   draftSet: typeof draftSet;

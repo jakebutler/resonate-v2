@@ -1,5 +1,3 @@
-"use node";
-
 import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -46,14 +44,18 @@ export const allTargets = internalQuery({
   ),
   handler: async (ctx) => {
     const targets = await ctx.db.query("brandTargets").collect();
-    return targets.map((target) => ({
-      _id: target._id,
-      _creationTime: target._creationTime,
-      userId: target.userId,
-      brandId: target.brandId,
-      productIdentifiers: target.productIdentifiers,
-      competitorUrls: target.competitorUrls,
-    }));
+    // The review pin is the human gate: an unpinned target is never read, so
+    // nothing acts on it until its review is pinned.
+    return targets
+      .filter((target) => target.reviewPinned === true)
+      .map((target) => ({
+        _id: target._id,
+        _creationTime: target._creationTime,
+        userId: target.userId,
+        brandId: target.brandId,
+        productIdentifiers: target.productIdentifiers,
+        competitorUrls: target.competitorUrls,
+      }));
   },
 });
 

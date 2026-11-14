@@ -27,13 +27,17 @@ async function connectTarget(
   user: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
   overrides: Partial<{ brandId: BrandId; competitorUrls: string[] }> = {}
 ) {
-  return await user.mutation(api.aeoIntel.connectTarget, {
-    brandId: "freshproof",
+  const brandId = overrides.brandId ?? "freshproof";
+  const targetId = await user.mutation(api.aeoIntel.connectTarget, {
+    brandId,
     siteUrl: "https://www.freshproof.example",
     productIdentifiers: ["FreshProof band"],
     competitorUrls: ["https://competitor.example"],
     ...overrides,
   });
+  // The intel cycles only act on pinned targets; tests exercise the pinned path.
+  await user.mutation(api.aeoIntel.pinTargetReview, { brandId, pinned: true });
+  return targetId;
 }
 
 function gatewayAnswer(content: string): Response {
@@ -92,6 +96,19 @@ describe("answer-engine run lifecycle", () => {
     const outcome = await t.action(internal.answerEngine.runAnswerEngineBatch, {});
     expect(outcome).toMatchObject({ started: 0, reason: "credentials-not-configured" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("never reads a connected target whose review is not pinned", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    await connectTarget(user);
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: false });
+
+    const unpinned = await t.query(internal.answerEngine.allTargets, {});
+    expect(unpinned).toHaveLength(0);
+
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: true });
+    const pinned = await t.query(internal.answerEngine.allTargets, {});
+    expect(pinned).toHaveLength(1);
   });
 
   it("runs the question set, records reviewable findings, and completes the run", async () => {
