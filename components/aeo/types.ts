@@ -74,12 +74,24 @@ export type CitationQuestionResult = {
   /** 0–1 extractability score against the connected target's content. */
   extractabilityScore?: number;
   answerExcerpt?: string;
+  /**
+   * Brand-mismatch classification for a cited answer. "suspect" means the
+   * cited content may describe a different product with the same name —
+   * the citation must always be displayed with that qualifier.
+   */
+  brandMatch?: BrandMatchVerdict;
+  brandMatchDetail?: string;
 };
+
+/** Verdict of the answer-engine brand-mismatch heuristic (lib/answerEngine). */
+export type BrandMatchVerdict = "match" | "suspect" | "unknown";
 
 export type CitationRun = {
   id: string;
   ranAt: number;
   results: CitationQuestionResult[];
+  /** How many cited answers in this run are suspected of a brand mismatch. */
+  brandMismatchCount?: number;
 };
 
 /** Evidence-cited competitor proposal from a discovery pass. */

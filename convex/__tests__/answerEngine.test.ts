@@ -25,15 +25,14 @@ async function fixture(userId: string, brands: BrandId[]) {
 
 async function connectTarget(
   user: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
-  overrides: Partial<{ brandId: BrandId; competitorUrls: string[] }> = {}
+  overrides: Partial<{ brandId: BrandId; siteUrl: string; productIdentifiers: string[]; competitorUrls: string[] }> = {}
 ) {
   const brandId = overrides.brandId ?? "freshproof";
   const targetId = await user.mutation(api.aeoIntel.connectTarget, {
     brandId,
-    siteUrl: "https://www.freshproof.example",
-    productIdentifiers: ["FreshProof band"],
-    competitorUrls: ["https://competitor.example"],
-    ...overrides,
+    siteUrl: overrides.siteUrl ?? "https://www.freshproof.example",
+    productIdentifiers: overrides.productIdentifiers ?? ["FreshProof band"],
+    competitorUrls: overrides.competitorUrls ?? ["https://competitor.example"],
   });
   // The intel cycles only act on pinned targets; tests exercise the pinned path.
   await user.mutation(api.aeoIntel.pinTargetReview, { brandId, pinned: true });
@@ -123,7 +122,9 @@ describe("answer-engine run lifecycle", () => {
 
     const outcome = await t.action(internal.answerEngine.runAnswerEngineBatch, {});
     expect(outcome).toMatchObject({ started: 1, completed: 1, failed: 0 });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // Default depth (12): 2 brand + 1 identifier + 1 competitor + 8 depth
+    // phrasings, one gateway call per question.
+    expect(fetchMock).toHaveBeenCalledTimes(12);
 
     const stored = await t.run(async (ctx) => {
       const runs = await ctx.db.query("intelRuns").collect();
@@ -138,11 +139,18 @@ describe("answer-engine run lifecycle", () => {
       userId: "owner",
     });
     expect(stored.runs[0].finishedAt).toBeDefined();
-    expect(stored.rows).toHaveLength(4);
+    expect(stored.rows).toHaveLength(12);
     // Brand-phrased answers cite the brand; the recommendation answer names
-    // only the competitor; the alternatives answer names the competitor too.
+    // only the competitor; the two alternatives-phrasings name the competitor
+    // too. Without a crawl snapshot every cited row's brand match is unknown.
     const citationStatuses = stored.rows.map((row) => row.citationStatus).sort();
-    expect(citationStatuses).toEqual(["cited", "cited", "uncited", "uncited"]);
+    expect(citationStatuses).toEqual([
+      ...Array(9).fill("cited"),
+      ...Array(3).fill("uncited"),
+    ]);
+    for (const row of stored.rows.filter((row) => row.citationStatus === "cited")) {
+      expect(row.brandMatch).toBe("unknown");
+    }
     const classifications = new Set(stored.rows.map((row) => row.classification));
     expect(classifications).toEqual(new Set(["gap", "opportunity"]));
     for (const row of stored.rows) {
@@ -158,9 +166,9 @@ describe("answer-engine run lifecycle", () => {
     const fetchMock = mockGateway();
 
     await t.action(internal.answerEngine.runAnswerEngineBatch, {});
-    // 2 brand questions + 1 identifier question = 3 gateway calls, no network
-    // beyond the mocked fetch boundary.
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // 2 brand questions + 1 identifier question + 8 depth questions = 11
+    // gateway calls, no network beyond the mocked fetch boundary.
+    expect(fetchMock).toHaveBeenCalledTimes(11);
     const [url] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/v1/chat/completions");
   });
@@ -220,7 +228,9 @@ describe("answer-engine budget refusal", () => {
 
     const outcome = await t.action(internal.answerEngine.runAnswerEngineBatch, {});
     expect(outcome.started).toBe(0);
-    expect(outcome.skipped[0]).toMatchObject({ brandId: "freshproof", reason: "budget-refused:budget-exceeded" });
+    expect(outcome.skipped[0].brandId).toBe("freshproof");
+    expect(outcome.skipped[0].reason).toMatch(/^budget-refused:budget-exceeded/);
+    expect(outcome.skipped[0].reason).toContain("estimate");
     const stored = await t.run(async (ctx) => ({
       runs: await ctx.db.query("intelRuns").collect(),
       findings: await ctx.db.query("intelFindings").collect(),
@@ -239,6 +249,91 @@ describe("answer-engine budget refusal", () => {
     await t.action(internal.answerEngine.runAnswerEngineBatch, {});
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it("fails a deep run closed with a numbered refusal when the ceiling cannot fit the depth", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    await connectTarget(user, { competitorUrls: [], productIdentifiers: [] });
+    await enabledEnv();
+    // 10 questions x 5¢ = 50¢ against a 20¢ ceiling.
+    vi.stubEnv("AEO_ANSWER_ENGINE_MAX_QUESTIONS", "20");
+    vi.stubEnv("AEO_ANSWER_ENGINE_RUN_CEILING_CENTS", "20");
+    vi.stubEnv("AEO_ANSWER_ENGINE_COST_PER_QUESTION_CENTS", "5");
+
+    const outcome = await t.action(internal.answerEngine.runAnswerEngineBatch, {});
+    expect(outcome.started).toBe(0);
+    expect(outcome.skipped[0].reason).toBe("budget-refused:budget-exceeded (estimate 50¢ > ceiling 20¢)");
+    const stored = await t.run(async (ctx) => ({
+      runs: await ctx.db.query("intelRuns").collect(),
+      findings: await ctx.db.query("intelFindings").collect(),
+    }));
+    expect(stored.runs).toHaveLength(0);
+    expect(stored.findings).toHaveLength(0);
+  });
+});
+
+describe("answer-engine brand-mismatch detection", () => {
+  const designProofingPages = [
+    {
+      url: "https://www.freshproof.example/",
+      title: "FreshProof online proofing",
+      headings: ["design review", "feedback management"],
+      schemaTypes: [],
+      description: "Real-time collaboration for creative teams and design review.",
+      contentSample: "Streamline your design review process with proofing and collaboration tools.",
+    },
+  ];
+
+  it("records a suspect classification and flags the run when a cited answer describes a different product", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    const targetId = await connectTarget(user, { competitorUrls: [], productIdentifiers: [] });
+    await user.mutation(api.aeoIntel.recordCrawlSnapshot, {
+      brandId: "freshproof",
+      targetId,
+      siteUrl: "https://www.freshproof.example",
+      version: 1,
+      status: "complete",
+      pages: designProofingPages,
+    });
+    await enabledEnv();
+    // The 2026-11-14 live-proof case: the "What is FreshProof" answer describes
+    // a blockchain/supply-chain homonym; every other answer matches the crawl.
+    const fetchMock = vi.mocked(fetch) as ReturnType<typeof vi.fn>;
+    fetchMock.mockImplementation((_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const question: string = body.messages.at(-1).content;
+      const answer = question.startsWith("What is FreshProof")
+        ? "FreshProof is a blockchain-based platform designed for supply chain traceability " +
+          "and authenticity verification. It helps businesses track and verify the origin of " +
+          "their products using tamper-proof blockchain records."
+        : "FreshProof is an online proofing tool that streamlines design review with " +
+          "real-time feedback and collaboration for creative teams.";
+      return gatewayAnswer(answer);
+    });
+
+    const outcome = await t.action(internal.answerEngine.runAnswerEngineBatch, {});
+    expect(outcome).toMatchObject({ started: 1, completed: 1, failed: 0 });
+
+    const stored = await t.run(async (ctx) => ({
+      runs: await ctx.db.query("intelRuns").collect(),
+      rows: await ctx.db.query("intelFindings").collect(),
+      events: await ctx.db.query("v2AuditEvents").collect(),
+    }));
+    const homonym = stored.rows.find((row) => row.summary.startsWith("What is FreshProof"));
+    expect(homonym).toBeDefined();
+    expect(homonym).toMatchObject({ citationStatus: "cited", brandMatch: "suspect" });
+    expect(homonym?.brandMatchDetail).toContain("different product");
+    // Matching answers still cite cleanly.
+    for (const row of stored.rows.filter((row) => !row.summary.startsWith("What is FreshProof"))) {
+      expect(row.citationStatus).toBe("cited");
+      expect(row.brandMatch).toBe("match");
+    }
+    // The run record itself carries the mismatch classification.
+    expect(stored.runs[0]).toMatchObject({ status: "complete", brandMismatchCount: 1 });
+    const finished = stored.events.find(
+      (event) => (event as { action?: string }).action === "aeo.answer_engine_run_finished"
+    ) as { summary?: string } | undefined;
+    expect(finished?.summary).toContain("brand mismatch");
+  });
 });
 
 describe("answer-engine finding review states", () => {
@@ -249,7 +344,7 @@ describe("answer-engine finding review states", () => {
     mockGateway();
     await t.action(internal.answerEngine.runAnswerEngineBatch, {});
     const stored = await t.run(async (ctx) => ctx.db.query("intelFindings").collect());
-    expect(stored).toHaveLength(4);
+    expect(stored).toHaveLength(12);
 
     // Review through the same public mutation sources/claims use.
     await user.mutation(api.aeoIntel.reviewIntelFinding, {

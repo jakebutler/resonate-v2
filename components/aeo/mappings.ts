@@ -125,11 +125,14 @@ export function runRowsToCitationRun(
   return {
     id: run._id,
     ranAt: run.finishedAt ?? run.startedAt,
+    brandMismatchCount: run.brandMismatchCount,
     results: findings.map((finding) => ({
       question: finding.summary,
       citedBrands: finding.citationStatus === "cited" ? [brandName] : [],
       citedCompetitors: [],
       extractabilityScore: finding.extractability,
+      brandMatch: finding.brandMatch,
+      brandMatchDetail: finding.brandMatchDetail,
       // recordFinding stores the question at evidence[0] and a truncated
       // answer excerpt at evidence[1].
       answerExcerpt: finding.evidence[1],
@@ -161,8 +164,10 @@ export function buildCompetitorComparison(input: {
 }): CompetitorComparison | null {
   const targetCrawl = latestCompleteCrawl(input.crawls, input.siteUrl);
   if (!targetCrawl) return null;
+  // A citation suspected of describing a different product is not a citation
+  // of this brand — it must not inflate the target's citation count.
   const targetCitationCount = input.findings.filter(
-    (finding) => finding.citationStatus === "cited"
+    (finding) => finding.citationStatus === "cited" && finding.brandMatch !== "suspect"
   ).length;
   return {
     target: {

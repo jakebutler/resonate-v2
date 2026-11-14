@@ -33,6 +33,7 @@ export function CitationResultsPanel({
       ) : (
         (() => {
           const data = run.data;
+          const mismatchCount = data.brandMismatchCount ?? 0;
           return (
             <div className="space-y-3">
               <p className={cn("text-sm", tokens.textMuted)}>
@@ -40,6 +41,13 @@ export function CitationResultsPanel({
                 {data.results.length === 1 ? "" : "s"} checked ·{" "}
                 {new Date(data.ranAt).toLocaleString()}
               </p>
+              {mismatchCount > 0 ? (
+                <div role="alert" className={tokens.noticeWarning}>
+                  Brand mismatch suspected: {mismatchCount} of {data.results.length} cited
+                  {data.results.length === 1 ? " answer" : " answers"} may describe a different
+                  product with this brand&apos;s name. Review the excerpts before acting on them.
+                </div>
+              ) : null}
               <ul className="space-y-2">
                 {data.results.map((result) => (
                   <li
@@ -50,8 +58,17 @@ export function CitationResultsPanel({
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       {result.citedBrands.length > 0 ? (
                         result.citedBrands.map((brand) => (
-                          <Badge key={brand} aria-label={`Cited: ${brand}`}>
-                            Cited: {brand}
+                          <Badge
+                            key={brand}
+                            aria-label={
+                              result.brandMatch === "suspect"
+                                ? `Cited with suspected brand mismatch: ${brand}`
+                                : `Cited: ${brand}`
+                            }
+                          >
+                            {result.brandMatch === "suspect"
+                              ? `Cited: ${brand} (mismatch suspected)`
+                              : `Cited: ${brand}`}
                           </Badge>
                         ))
                       ) : (
@@ -78,6 +95,13 @@ export function CitationResultsPanel({
                         </span>
                       ) : null}
                     </div>
+                    {result.brandMatch === "suspect" ? (
+                      <div role="alert" className={cn(tokens.noticeWarning, "mt-2")}>
+                        <span className="font-medium">Mismatch suspected.</span>{" "}
+                        {result.brandMatchDetail ??
+                          "The cited answer may describe a different product with the same name."}
+                      </div>
+                    ) : null}
                     {result.answerExcerpt ? (
                       <p className={cn("mt-1 text-sm", tokens.textMuted)}>
                         “{result.answerExcerpt}”
