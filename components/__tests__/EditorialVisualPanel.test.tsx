@@ -62,7 +62,7 @@ describe("EditorialVisualPanel", () => {
     vi.clearAllMocks();
     routeAvailability = { imageRoutes: [], reason: "Qualification pending" };
     textAvailability = { planning: false, reflection: false, reason: "No approved text route" };
-    workflow = emptyWorkflow; profile = profileFixture; resolvedPost = { postExceptionId: null, postException: null }; seedStatus = { imported: false, assets: [{ referenceId: "verified-1" }, { referenceId: null }], oneShotValidation: "not_tested", historicalModelId: null };
+    workflow = emptyWorkflow; profile = profileFixture; resolvedPost = { postExceptionId: null, postException: null, approvedSeedException: false }; seedStatus = { imported: false, assets: [{ referenceId: "verified-1" }, { referenceId: null }], oneShotValidation: "not_tested", historicalModelId: null };
     for (const name of ["requestPlan", "selectScene", "requestGeneration", "requestEdit", "selectVersion", "approveHero", "confirmRelevance", "setMonthlyBudget", "cancelQueuedAttempt", "saveRevision", "uploadReference", "prepareHero", "setPostException", "applyCorvoArticle7Exception", "executeImageAttempt", "executeTextAttempt"]) {
       calls[name] = vi.fn().mockResolvedValue(null);
     }
@@ -704,51 +704,82 @@ describe("EditorialVisualPanel", () => {
     expect(calls.uploadReference).not.toHaveBeenCalled();
     expect(calls.requestPlan).not.toHaveBeenCalled();
   });
-  it("edits only the exact saved article-7 exception through explicit imported-seed and revision-bound actions", async () => {
+  it("shows the post exception editor for every corvo blog post, data-driven over arbitrary post counts", async () => {
+    const secondPostContext = { title: "Second campaign post", blogSlug: "second-campaign-post", channelId: "corvo-blog" };
+    const view = render(<EditorialVisualPanel postId="post-9" brandId="corvo" savedPostContext={secondPostContext} />);
+    expect(screen.getByText("Post visual exception · none saved")).toBeInTheDocument();
+    expect(screen.getByLabelText("Post exception guidance")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply approved article-7 hand exception" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Post exception guidance"), { target: { value: "Keep this post on matte paper construction." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save post exception guidance" }));
+    await waitFor(() => expect(calls.setPostException).toHaveBeenCalledWith({ postId: "post-9", expectedExceptionId: null, expectedPostContext: secondPostContext, guidance: "Keep this post on matte paper construction." }));
+    for (const context of [{ ...secondPostContext, channelId: "corvo-linkedin" }, { ...secondPostContext, channelId: "freshproof-blog" }]) {
+      view.rerender(<EditorialVisualPanel postId="post-9" brandId="corvo" savedPostContext={context} />);
+      expect(screen.queryByLabelText("Post exception guidance")).not.toBeInTheDocument();
+    }
+    view.rerender(<EditorialVisualPanel postId="post-9" brandId="corvo" savedPostContext={secondPostContext} />);
+    resolvedPost = { postExceptionId: null, postException: null, approvedSeedException: true };
+    view.rerender(<EditorialVisualPanel postId="post-9" brandId="corvo" savedPostContext={secondPostContext} />);
+    expect(screen.getByRole("button", { name: "Apply approved article-7 hand exception" })).toBeInTheDocument();
+    expect(calls.applyCorvoArticle7Exception).not.toHaveBeenCalled();
+    expect(calls.requestPlan).not.toHaveBeenCalled();
+  });
+  it("keeps two posts in one campaign visually independent with no cross-post state bleed", () => {
+    const firstContext = { title: "First campaign post", blogSlug: "first-campaign-post", channelId: "corvo-blog" };
+    const secondContext = { title: "Second campaign post", blogSlug: "second-campaign-post", channelId: "corvo-blog" };
+    render(<>
+      <div data-testid="first-post"><EditorialVisualPanel postId="post-9" brandId="corvo" savedPostContext={firstContext} /></div>
+      <div data-testid="second-post"><EditorialVisualPanel postId="post-10" brandId="corvo" savedPostContext={secondContext} /></div>
+    </>);
+    const firstField = within(screen.getByTestId("first-post")).getByLabelText("Post exception guidance");
+    const secondField = within(screen.getByTestId("second-post")).getByLabelText("Post exception guidance");
+    fireEvent.change(firstField, { target: { value: "First post keeps the paper hand." } });
+    expect(secondField).toHaveValue("");
+    fireEvent.change(secondField, { target: { value: "Second post uses workshop lighting." } });
+    expect(firstField).toHaveValue("First post keeps the paper hand.");
+    expect(screen.getByText("First campaign post")).toBeInTheDocument();
+    expect(screen.getByText("Second campaign post")).toBeInTheDocument();
+    expect(calls.setPostException).not.toHaveBeenCalled();
+  });
+  it("applies the approved article-7 hand exception only where the backend reports it available", async () => {
     const savedPostContext = { title: "What Corvo Labs learned building an AI editorial workflow", blogSlug: "what-corvo-labs-learned-building-an-ai-editorial-workflow", channelId: "corvo-blog" };
+    resolvedPost = { postExceptionId: null, postException: null, approvedSeedException: true };
     calls.applyCorvoArticle7Exception.mockResolvedValue({ postExceptionId: "exception-1", revision: 1 });
     const view = render(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} />);
     expect(screen.getByText(savedPostContext.title)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Apply approved article-7 hand exception" })).toBeDisabled();
-    expect(calls.applyCorvoArticle7Exception).not.toHaveBeenCalled();
-    seedStatus = { imported: true, assets: [], oneShotValidation: "not_tested", historicalModelId: null };
-    view.rerender(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} />);
+    expect(screen.getByRole("button", { name: "Apply approved article-7 hand exception" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Apply approved article-7 hand exception" }));
     await waitFor(() => expect(calls.applyCorvoArticle7Exception).toHaveBeenCalledWith({ postId: "post-7", expectedExceptionId: null, expectedPostContext: savedPostContext }));
-    resolvedPost = { postExceptionId: "exception-1", postException: { _id: "exception-1", postId: "post-7", guidance: "Retain the approved photographic hand.", revision: 1, sourcePostTitle: savedPostContext.title, sourceBlogSlug: savedPostContext.blogSlug } };
+    resolvedPost = { postExceptionId: "exception-1", postException: { _id: "exception-1", postId: "post-7", guidance: "Retain the approved photographic hand.", revision: 1, sourcePostTitle: savedPostContext.title, sourceBlogSlug: savedPostContext.blogSlug }, approvedSeedException: true };
     view.rerender(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} />);
-    fireEvent.change(screen.getByLabelText("Article-7 exception guidance"), { target: { value: "Keep the photographic hand; all surrounding human elements use matte paper." } });
-    fireEvent.click(screen.getByRole("button", { name: "Save article-7 exception guidance" }));
+    fireEvent.change(screen.getByLabelText("Post exception guidance"), { target: { value: "Keep the photographic hand; all surrounding human elements use matte paper." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save post exception guidance" }));
     await waitFor(() => expect(calls.setPostException).toHaveBeenCalledWith({ postId: "post-7", expectedExceptionId: "exception-1", expectedPostContext: savedPostContext, guidance: "Keep the photographic hand; all surrounding human elements use matte paper." }));
     view.rerender(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} savedContentChanged />);
     expect(screen.getByRole("button", { name: "Apply approved article-7 hand exception" })).toBeDisabled();
-    for (const context of [{ ...savedPostContext, title: "Different saved title" }, { ...savedPostContext, blogSlug: "different-slug" }, { ...savedPostContext, channelId: "corvo-linkedin" }]) {
-      view.rerender(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={context} />);
-      expect(screen.queryByLabelText("Article-7 exception guidance")).not.toBeInTheDocument();
-    }
     expect(calls.requestPlan).not.toHaveBeenCalled();
   });
-  it("pins the viewed saved post context on both article-7 exception writes", async () => {
+  it("pins the viewed saved post context on both post exception writes", async () => {
     const savedPostContext = { title: "What Corvo Labs learned building an AI editorial workflow", blogSlug: "what-corvo-labs-learned-building-an-ai-editorial-workflow", channelId: "corvo-blog" };
-    seedStatus = { imported: true, assets: [], oneShotValidation: "not_tested", historicalModelId: null };
+    resolvedPost = { postExceptionId: null, postException: null, approvedSeedException: true };
     render(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} />);
     fireEvent.click(screen.getByRole("button", { name: "Apply approved article-7 hand exception" }));
     await waitFor(() => expect(calls.applyCorvoArticle7Exception).toHaveBeenCalledWith({ postId: "post-7", expectedExceptionId: null, expectedPostContext: savedPostContext }));
-    fireEvent.change(screen.getByLabelText("Article-7 exception guidance"), { target: { value: "Retain only this article's photographic hand." } });
-    fireEvent.click(screen.getByRole("button", { name: "Save article-7 exception guidance" }));
+    fireEvent.change(screen.getByLabelText("Post exception guidance"), { target: { value: "Retain only this article's photographic hand." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save post exception guidance" }));
     await waitFor(() => expect(calls.setPostException).toHaveBeenCalledWith({ postId: "post-7", expectedExceptionId: null, expectedPostContext: savedPostContext, guidance: "Retain only this article's photographic hand." }));
   });
-  it("preserves a dirty article-7 exception draft across an external revision until explicit reload", () => {
+  it("preserves a dirty post exception draft across an external revision until explicit reload", () => {
     const savedPostContext = { title: "What Corvo Labs learned building an AI editorial workflow", blogSlug: "what-corvo-labs-learned-building-an-ai-editorial-workflow", channelId: "corvo-blog" };
     const view = render(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} />);
-    fireEvent.change(screen.getByLabelText("Article-7 exception guidance"), { target: { value: "My unsaved photographic hand guidance." } });
-    resolvedPost = { postExceptionId: "exception-external", postException: { _id: "exception-external", revision: 2, guidance: "External exception direction." } };
+    fireEvent.change(screen.getByLabelText("Post exception guidance"), { target: { value: "My unsaved photographic hand guidance." } });
+    resolvedPost = { postExceptionId: "exception-external", postException: { _id: "exception-external", revision: 2, guidance: "External exception direction." }, approvedSeedException: false };
     view.rerender(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} />);
-    expect(screen.getByLabelText("Article-7 exception guidance")).toHaveValue("My unsaved photographic hand guidance.");
-    expect(screen.getByText(/Article-7 exception changed.*draft is preserved/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save article-7 exception guidance" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Reload saved article-7 exception" }));
-    expect(screen.getByLabelText("Article-7 exception guidance")).toHaveValue("External exception direction.");
+    expect(screen.getByLabelText("Post exception guidance")).toHaveValue("My unsaved photographic hand guidance.");
+    expect(screen.getByText(/Post exception changed.*draft is preserved/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save post exception guidance" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Reload saved post exception" }));
+    expect(screen.getByLabelText("Post exception guidance")).toHaveValue("External exception direction.");
     expect(calls.setPostException).not.toHaveBeenCalled();
   });
   it("keeps reflected prompts untested and presents profile proposals for human review", () => {
