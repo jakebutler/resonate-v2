@@ -1,22 +1,34 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { getOwnedLegacyPost, requireUserId } from "./campaignAccess";
+import {
+  getOwnedLegacyPost,
+  isCorvoWorkspaceMember,
+  requireUserId,
+} from "./campaignAccess";
 import { assertEditorialStorageAccess } from "./visualStorageAccess";
+import type { Doc } from "./_generated/dataModel";
 
 export const list = query({
   args: {
     type: v.optional(v.union(v.literal("blog"), v.literal("linkedin"))),
   },
   handler: async (ctx, args) => {
-    await requireUserId(ctx);
-    if (args.type) {
-      return await ctx.db
-        .query("posts")
-        .withIndex("by_type", (q) => q.eq("type", args.type!))
-        .order("desc")
-        .collect();
-    }
-    return await ctx.db.query("posts").order("desc").collect();
+    const userId = await requireUserId(ctx);
+    // ADR0004 scoping: callers see their own rows; historical ownerless rows
+    // stay visible only to Corvo workspace members.
+    const corvoMember = await isCorvoWorkspaceMember(ctx, userId);
+    const visible = (post: Doc<"posts">) =>
+      post.userId === userId || (!post.userId && corvoMember);
+
+    const typeFilter = args.type;
+    const rows = typeFilter
+      ? await ctx.db
+          .query("posts")
+          .withIndex("by_type", (q) => q.eq("type", typeFilter))
+          .order("desc")
+          .collect()
+      : await ctx.db.query("posts").order("desc").collect();
+    return rows.filter(visible);
   },
 });
 

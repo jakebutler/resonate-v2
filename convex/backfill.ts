@@ -1,7 +1,9 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { requireUserId } from "./campaignAccess";
+import { requireLegacyPostAccess, requireUserId } from "./campaignAccess";
+
+const MAX_UPSERT_BATCH = 100;
 
 const importedPostValidator = v.object({
   type: v.union(v.literal("blog"), v.literal("linkedin")),
@@ -24,6 +26,11 @@ export const upsertMany = mutation({
   }),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    if (args.posts.length > MAX_UPSERT_BATCH) {
+      throw new ConvexError(
+        `Too many posts: a backfill batch is limited to ${MAX_UPSERT_BATCH} posts, received ${args.posts.length}`
+      );
+    }
 
     let inserted = 0;
     let updated = 0;
@@ -46,6 +53,10 @@ export const upsertMany = mutation({
         inserted += 1;
         continue;
       }
+
+      // Ownership gate: a row another user created must never be patched by
+      // this caller, and ownerless legacy rows stay Corvo-members-only (ADR0004).
+      await requireLegacyPostAccess(ctx, userId, existing);
 
       if (hasImportedPostChanged(existing, post)) {
         await ctx.db.patch(existing._id, {
