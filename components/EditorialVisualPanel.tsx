@@ -1,6 +1,7 @@
 "use client";
 
 import type { BrandId } from "@/lib/domain";
+import { isClientE2eAuthBypassRequested } from "@/lib/e2eAuthBypass";
 import { useEffect, useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -271,7 +272,7 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
   const sceneSelectionPending = pendingScene !== null && pendingScene !== JSON.stringify([selectedPlan?._id, selectedIndex, workflow?.state?.refinedScene ?? null]);
   if (pendingScene !== null && !sceneSelectionPending) setPendingScene(null);
   const overrides = { ...(modelOverride.trim() ? { modelOverride: modelOverride.trim() } : {}), ...(providerOverride.trim() ? { providerOverride: providerOverride.trim() } : {}) };
-  const localFixture = Boolean(localFixtureTokenUrl({ runtime: process.env.NODE_ENV, bypass: process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1", convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL, tokenUrl: process.env.NEXT_PUBLIC_VISUAL_FIXTURE_TOKEN_URL, vercel: Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.VERCEL) }));
+  const localFixture = Boolean(localFixtureTokenUrl({ runtime: process.env.NODE_ENV, bypass: isClientE2eAuthBypassRequested(), convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL, tokenUrl: process.env.NEXT_PUBLIC_VISUAL_FIXTURE_TOKEN_URL, vercel: Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.VERCEL) }));
   const brandRoute = profile?.revision.defaultRoute;
   const canFixturePlan = localFixture && brandRoute?.provider === "offline-fixture" && brandRoute.model === "offline-fixture";
   const canPlan = canFixturePlan || textAvailability?.planning === true;

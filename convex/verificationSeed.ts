@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { audit, brandIdValidator, type BrandId } from "./campaignAccess";
+import { isProductionConvexDeployment } from "../lib/convexDeployment";
 import { seedBrandsAndChannels } from "./publishing";
 
 /**
@@ -25,7 +26,6 @@ import { seedBrandsAndChannels } from "./publishing";
  * seedMvpWorkspace.
  */
 
-const PROD_DEPLOYMENT_HOST = "healthy-platypus-553";
 const DEFAULT_BUDGET_LIMIT_MICROS = 5_000_000; // $5 — matches the existing provider caps.
 const DEFAULT_BRAND: BrandId = "freshproof"; // AEO/SEO pilot brand.
 
@@ -117,8 +117,7 @@ export const seedVerificationWorkspace = internalMutation({
         "seedVerificationWorkspace is disabled. Set ALLOW_VERIFICATION_SEED=1 on the Convex *dev* deployment only."
       );
     }
-    const cloudUrl = process.env.CONVEX_CLOUD_URL ?? "";
-    if (cloudUrl.includes(PROD_DEPLOYMENT_HOST)) {
+    if (isProductionConvexDeployment(process.env.CONVEX_CLOUD_URL)) {
       throw new Error(
         "seedVerificationWorkspace cannot run against the production Convex deployment."
       );

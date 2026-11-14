@@ -1,4 +1,5 @@
 "use client";
+import { isClientE2eAuthBypassRequested } from "@/lib/e2eAuthBypass";
 import {deliverySummary} from "@/lib/deliverySummary";
 import {ArticleDependencyPanel} from "./ArticleDependencyPanel";
 import { BufferDestinationPanel } from "./BufferDestinationPanel";
@@ -58,7 +59,7 @@ type CalendarView = "month" | "week";
 type BlogApprovalReview = FunctionReturnType<typeof api.publishing.getApprovalReview>;
 function visualPanelsEnabled() {
   return process.env.NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED === "1" || Boolean(localFixtureTokenUrl({
-    runtime: process.env.NODE_ENV, bypass: process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1",
+    runtime: process.env.NODE_ENV, bypass: isClientE2eAuthBypassRequested(),
     convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL, tokenUrl: process.env.NEXT_PUBLIC_VISUAL_FIXTURE_TOKEN_URL,
     vercel: Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.VERCEL),
   }));

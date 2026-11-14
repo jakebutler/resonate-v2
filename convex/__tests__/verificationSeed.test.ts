@@ -72,6 +72,27 @@ describe("verification seed (V5)", () => {
     );
   });
 
+  it("refuses the production deployment under a renamed host", async () => {
+    // Structural deployment-name compare: a Convex host-suffix rename must
+    // not silently disarm the refusal.
+    vi.stubEnv(
+      "CONVEX_CLOUD_URL",
+      "https://healthy-platypus-553.convex.site"
+    );
+    await expect(seed(t, { subject: "user_ci_verification" })).rejects.toThrow(
+      /production/i
+    );
+  });
+
+  it("still allows non-production deployments (dev, preview, CI)", async () => {
+    vi.stubEnv("CONVEX_CLOUD_URL", "https://tame-pika-42.convex.cloud");
+    // Refusal is the only gate under test here; the seed would proceed past
+    // the guard (it fails later only if the harness lacks rows). Assert the
+    // guard itself passes by dry-running.
+    const summary = await seed(t, { subject: "user_ci_verification", dryRun: true });
+    expect(summary.seeded).toBe(true);
+  });
+
   it("rejects an empty subject", async () => {
     await expect(seed(t, { subject: "   " })).rejects.toThrow(/subject/i);
   });

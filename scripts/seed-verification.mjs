@@ -26,7 +26,23 @@
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 
-const PROD_DEPLOYMENT_HOST = "healthy-platypus-553";
+const PROD_CONVEX_DEPLOYMENT_NAME = "healthy-platypus-553";
+
+// Mirrors convexDeploymentName() in lib/convexDeployment.ts (plain JS here:
+// this script runs under node before any TypeScript is loaded). The
+// deployment name is the first DNS label of the host, so the refusal survives
+// a Convex host-suffix rename; never match host substrings.
+function convexDeploymentName(cloudUrl) {
+  if (!cloudUrl) return null;
+  let hostname;
+  try {
+    hostname = new URL(cloudUrl).hostname;
+  } catch {
+    return null;
+  }
+  const name = hostname.split(".")[0]?.toLowerCase() ?? "";
+  return name === "" ? null : name;
+}
 
 function flag(name, fallback) {
   const match = process.argv.find((arg) => arg.startsWith(`--${name}=`));
@@ -49,7 +65,7 @@ if (!deployKey) {
 // Belt-and-braces local guard: the mutation refuses production regardless, but
 // never even point the CLI at prod (the env-flag step below is not mutation-gated).
 const cloudUrl = process.env.CONVEX_CLOUD_URL ?? "";
-if (cloudUrl.includes(PROD_DEPLOYMENT_HOST)) {
+if (convexDeploymentName(cloudUrl) === PROD_CONVEX_DEPLOYMENT_NAME) {
   console.error(
     "seed-verification: CONVEX_CLOUD_URL points at the production deployment; refusing."
   );
