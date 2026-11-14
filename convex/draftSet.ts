@@ -131,7 +131,7 @@ export const generateDraftSet = mutation({
         timezone: "America/Los_Angeles",
         sourceCampaignId: campaign._id,
         sourceSlotId: slot._id,
-        sourceExcerptIds: idea?.excerptCitations,
+        sourceExcerptIds: idea ? [...new Set(idea.excerptCitations ?? [])] : undefined,
         contentFingerprint: contentFingerprint(draft.title, draft.content),
         createdAt: now,
         updatedAt: now,
