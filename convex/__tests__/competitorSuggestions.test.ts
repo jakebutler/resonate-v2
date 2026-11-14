@@ -121,6 +121,10 @@ describe("discovery batch gates", () => {
     const { t, user } = await fixture("owner", ["freshproof"]);
     await connectTarget(user);
     vi.stubEnv("AEO_DISCOVERY_ENABLED", "1");
+    // Hermetic: CI exports placeholder gateway credentials for other suites; the
+    // no-credential paths must not depend on their ambient absence.
+    vi.stubEnv("CORTEX_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
     const fetchMock = vi.mocked(fetch);
 
     const withoutFirecrawl = await t.action(internal.competitorSuggestions.runDiscoveryBatch, {});

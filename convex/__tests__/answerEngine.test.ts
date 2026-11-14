@@ -92,6 +92,10 @@ describe("answer-engine run lifecycle", () => {
     const { t } = await fixture("owner", ["freshproof"]);
     await connectTarget(t.withIdentity({ subject: "owner" }));
     vi.stubEnv("AEO_ANSWER_ENGINE_ENABLED", "1");
+    // Hermetic: CI exports placeholder gateway credentials for other suites; the
+    // no-credential path must not depend on their ambient absence.
+    vi.stubEnv("CORTEX_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
     const fetchMock = vi.mocked(fetch);
     const outcome = await t.action(internal.answerEngine.runAnswerEngineBatch, {});
     expect(outcome).toMatchObject({ started: 0, reason: "credentials-not-configured" });
