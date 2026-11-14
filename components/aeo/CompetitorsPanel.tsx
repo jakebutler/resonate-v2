@@ -16,10 +16,13 @@ import type { CompetitorSets, Loadable } from "./types";
  */
 export function CompetitorsPanel({
   sets,
+  reviewPending = false,
   onAccept,
   onReject,
 }: {
   sets: Loadable<CompetitorSets>;
+  /** True while a review mutation is in flight; disables the review buttons. */
+  reviewPending?: boolean;
   onAccept?: (suggestionId: string) => void;
   onReject?: (suggestionId: string, reason: string) => void;
 }) {
@@ -121,7 +124,7 @@ export function CompetitorsPanel({
                         <div className="mt-2 flex gap-2">
                           <Button
                             size="sm"
-                            disabled={!onAccept}
+                            disabled={!onAccept || reviewPending}
                             onClick={() => onAccept?.(suggestion.id)}
                           >
                             Accept
@@ -154,7 +157,9 @@ export function CompetitorsPanel({
                             variant="outline"
                             size="sm"
                             disabled={
-                              rejecting.reason.trim() === "" || !onReject
+                              rejecting.reason.trim() === "" ||
+                              !onReject ||
+                              reviewPending
                             }
                             onClick={() => {
                               onReject?.(suggestion.id, rejecting.reason.trim());

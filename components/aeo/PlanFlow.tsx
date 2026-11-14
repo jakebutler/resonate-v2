@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { StrategyPlanPanel } from "./StrategyPlanPanel";
+import { MutationFeedbackBar, useAeoMutation } from "./mutationFeedback";
 import { planRowToStrategyPlan } from "./mappings";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,11 +29,12 @@ export function PlanFlow() {
   const { brandId } = useAeoBrand();
   const planRow = useQuery(api.aeoIntel.getLatestStrategyPlan, { brandId });
   const campaignRows = useQuery(api.campaigns.listCampaigns, {});
-  const saveStrategyPlan = useMutation(api.aeoIntel.saveStrategyPlan);
-  const saveBrief = useMutation(api.shapes.saveBrief);
+  const savePlan = useAeoMutation(
+    useMutation(api.aeoIntel.saveStrategyPlan)
+  );
+  const seedBrief = useAeoMutation(useMutation(api.shapes.saveBrief));
 
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
-  const [briefSeeded, setBriefSeeded] = useState(false);
 
   const plan: Loadable<StrategyPlan | null> =
     planRow === undefined
@@ -57,16 +59,18 @@ export function PlanFlow() {
     null;
 
   const seedBriefDisabled =
-    !selectedCampaign || planRow === null || planRow === undefined;
+    !selectedCampaign ||
+    planRow === null ||
+    planRow === undefined ||
+    seedBrief.state.status === "pending";
 
-  async function seedCampaignBrief() {
+  function seedCampaignBrief() {
     if (!planRow || !selectedCampaign) return;
-    await saveBrief({
+    void seedBrief.run({
       campaignId: selectedCampaign._id,
       goal: planRow.plan.brief.goal,
       audience: planRow.plan.brief.audience,
     });
-    setBriefSeeded(true);
   }
 
   return (
@@ -74,27 +78,28 @@ export function PlanFlow() {
       <StrategyPlanPanel
         plan={plan}
         gapTitles={gapTitles}
+        reviewPending={savePlan.state.status === "pending"}
         onAccept={(planId) => {
           if (!planRow) return;
-          void saveStrategyPlan({
+          void savePlan.run({
             brandId,
             status: "reviewed",
             // Optimistic concurrency: refuse the save when another save
             // appended a newer version since this row was loaded.
             expectedVersion: planRow.version,
             plan: planRow.plan,
-          }).then(() => undefined, () => undefined);
+          });
           void planId;
         }}
         onRequestChanges={(planId, note) => {
           if (!planRow) return;
-          void saveStrategyPlan({
+          void savePlan.run({
             brandId,
             status: "draft",
             reviewNotes: note,
             expectedVersion: planRow.version,
             plan: planRow.plan,
-          }).then(() => undefined, () => undefined);
+          });
           void planId;
         }}
       />
@@ -119,7 +124,7 @@ export function PlanFlow() {
               value={selectedCampaignId ?? ""}
               onValueChange={(value) => {
                 setSelectedCampaignId(value);
-                setBriefSeeded(false);
+                seedBrief.reset();
               }}
             >
               <SelectTrigger className="w-64" aria-label="Campaign">
@@ -138,19 +143,25 @@ export function PlanFlow() {
               variant="outline"
               disabled={seedBriefDisabled}
               onClick={() => {
-                void seedCampaignBrief();
+                seedCampaignBrief();
               }}
             >
               Seed brief fields
             </Button>
-            {briefSeeded ? (
-              <p role="status" className="text-sm">
-                Brief fields seeded into the campaign.
-              </p>
-            ) : null}
+            <MutationFeedbackBar
+              state={seedBrief.state}
+              successLabel="Brief fields seeded into the campaign."
+              onRetry={
+                seedBrief.state.status === "error" ? seedBrief.retry : undefined
+              }
+            />
           </div>
         )}
       </section>
+      <MutationFeedbackBar
+        state={savePlan.state}
+        onRetry={savePlan.state.status === "error" ? savePlan.retry : undefined}
+      />
     </>
   );
 }

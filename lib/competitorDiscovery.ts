@@ -47,8 +47,14 @@ export function discoveryRunLimits(env: Record<string, string | undefined>): Dis
 export type DiscoveryQuery = {
   /** Which leg of the pass produced it — a Firecrawl search or a gateway ask. */
   channel: "search" | "answer-engine";
-  /** The exact search query or question text (recorded as the phrasing). */
+  /** The exact search query or question text sent to the provider. */
   prompt: string;
+  /**
+   * The user-facing phrasing of the same query, shown in the review queue.
+   * answer-engine prompts carry response-format instructions the marketer
+   * never chose — those stay on the wire, never in the UI.
+   */
+  topic: string;
 };
 
 /**
@@ -56,6 +62,27 @@ export type DiscoveryQuery = {
  * across search and the gateway question set. The full set is returned in
  * priority order; callers cap it to the run's query budget.
  */
+const ANSWER_ENGINE_FORMAT_INSTRUCTION =
+  ' Reply with a JSON array of objects with "name" and "url".';
+
+function answerEngineQuery(about: string): DiscoveryQuery {
+  const question = `Which tools or products would you recommend ${about}?`;
+  return {
+    channel: "answer-engine",
+    prompt: `${question}${ANSWER_ENGINE_FORMAT_INSTRUCTION}`,
+    topic: question,
+  };
+}
+
+/**
+ * Removes the provider's response-format instruction from a stored phrasing or
+ * evidence label. Suggestions stored before the topic split carry the raw
+ * instruction text; the review queue renders none of it, old rows or new.
+ */
+export function stripResponseFormatInstruction(text: string): string {
+  return text.split(ANSWER_ENGINE_FORMAT_INSTRUCTION).join("").trim();
+}
+
 export function buildDiscoveryQueries(input: {
   brandName: string;
   productIdentifiers: string[];
@@ -64,21 +91,17 @@ export function buildDiscoveryQueries(input: {
     {
       channel: "search",
       prompt: `best alternatives to ${input.brandName}`,
+      topic: `best alternatives to ${input.brandName}`,
     },
-    {
-      channel: "answer-engine",
-      prompt: `Which tools or products would you recommend instead of ${input.brandName}? Reply with a JSON array of objects with "name" and "url".`,
-    },
+    answerEngineQuery(`instead of ${input.brandName}`),
   ];
   for (const identifier of input.productIdentifiers) {
     queries.push({
       channel: "search",
       prompt: `best ${identifier} tools and alternatives`,
+      topic: `best ${identifier} tools and alternatives`,
     });
-    queries.push({
-      channel: "answer-engine",
-      prompt: `Which tools or products would you recommend for ${identifier}? Reply with a JSON array of objects with "name" and "url".`,
-    });
+    queries.push(answerEngineQuery(`for ${identifier}`));
   }
   return queries;
 }
@@ -202,5 +225,8 @@ export function discoveryEvidenceLabel(
   const parts = [detail.url];
   if (detail.title) parts.push(detail.title);
   if (detail.description) parts.push(detail.description);
-  return `${source} (${query.prompt}) → ${parts.join(" — ")}`;
+  // The user-facing topic, never the wire prompt: the stored label renders in
+  // the review queue, and answer-engine prompts carry response-format
+  // instructions that are plumbing, not evidence.
+  return `${source} (${query.topic}) → ${parts.join(" — ")}`;
 }

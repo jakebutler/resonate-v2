@@ -41,12 +41,15 @@ function BriefValue({ value }: { value: string | string[] }) {
 export function StrategyPlanPanel({
   plan,
   gapTitles,
+  reviewPending = false,
   onAccept,
   onRequestChanges,
 }: {
   plan: Loadable<StrategyPlan | null>;
   /** Gap id → human title from the same intel run; ids render when absent. */
   gapTitles?: Record<string, string>;
+  /** True while the plan-review mutation is in flight; disables Accept. */
+  reviewPending?: boolean;
   onAccept?: (planId: string) => void;
   onRequestChanges?: (planId: string, note: string) => void;
 }) {
@@ -97,7 +100,7 @@ export function StrategyPlanPanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     size="sm"
-                    disabled={!onAccept}
+                    disabled={!onAccept || reviewPending}
                     onClick={() => onAccept?.(loaded.id)}
                   >
                     Accept plan
@@ -125,7 +128,7 @@ export function StrategyPlanPanel({
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={changeNote.trim() === "" || !onRequestChanges}
+                    disabled={changeNote.trim() === "" || !onRequestChanges || reviewPending}
                     onClick={() => {
                       onRequestChanges?.(loaded.id, changeNote.trim());
                       setChangeNote("");

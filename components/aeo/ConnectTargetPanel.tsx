@@ -20,7 +20,6 @@ const PROVIDER_LABEL: Record<ConnectionProvider, string> = {
   firecrawl: "Site crawl (Firecrawl)",
   answerEngine: "Answer-engine checks",
 };
-
 function ValidationBadge({ validation }: { validation: ConnectionValidation }) {
   const variant =
     validation.state === "valid"
@@ -41,14 +40,18 @@ function ValidationBadge({ validation }: { validation: ConnectionValidation }) {
   );
 }
 
+/**
+ * One provider row. There is no per-provider Validate control: validation is
+ * server-driven and happens once, at connect time, stored on the target —
+ * a client-side button would be a dead control, so the stored state renders
+ * as a badge instead.
+ */
 function ConnectionRow({
   provider,
   validation,
-  onValidate,
 }: {
   provider: ConnectionProvider;
   validation: ConnectionValidation;
-  onValidate?: (provider: ConnectionProvider) => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded border border-black/10 px-3 py-2">
@@ -60,14 +63,6 @@ function ConnectionRow({
       </div>
       <div className="flex items-center gap-2">
         <ValidationBadge validation={validation} />
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!onValidate}
-          onClick={() => onValidate?.(provider)}
-        >
-          Validate
-        </Button>
       </div>
     </div>
   );
@@ -75,8 +70,10 @@ function ConnectionRow({
 
 function ConnectForm({
   onSubmit,
+  pending = false,
 }: {
   onSubmit?: (input: ConnectTargetInput) => void;
+  pending?: boolean;
 }) {
   const [siteUrl, setSiteUrl] = useState("");
   const [competitorUrls, setCompetitorUrls] = useState("");
@@ -125,7 +122,7 @@ function ConnectForm({
           Enter a full URL starting with http:// or https://.
         </p>
       ) : null}
-      <Button type="submit" size="sm" disabled={!valid || !onSubmit}>
+      <Button type="submit" size="sm" disabled={!valid || !onSubmit || pending}>
         Connect target
       </Button>
     </form>
@@ -139,15 +136,19 @@ function ConnectForm({
 export function ConnectTargetPanel({
   brandName,
   target,
+  connectPending = false,
+  pinPending = false,
   onConnect,
   onPinReview,
-  onValidate,
 }: {
   brandName: string;
   target: Loadable<BrandTarget | null>;
+  /** True while the connect mutation is in flight. */
+  connectPending?: boolean;
+  /** True while the pin-review mutation is in flight. */
+  pinPending?: boolean;
   onConnect?: (input: ConnectTargetInput) => void;
   onPinReview?: () => void;
-  onValidate?: (provider: ConnectionProvider) => void;
 }) {
   return (
     <AeoPanel
@@ -160,7 +161,7 @@ export function ConnectTargetPanel({
       ) : target.status === "error" ? (
         <PanelError message={target.message} onRetry={target.onRetry} />
       ) : target.data === null ? (
-        <ConnectForm onSubmit={onConnect} />
+        <ConnectForm onSubmit={onConnect} pending={connectPending} />
       ) : (
         (() => {
           const connected = target.data;
@@ -194,7 +195,7 @@ export function ConnectTargetPanel({
                   </p>
                   <Button
                     size="sm"
-                    disabled={!onPinReview}
+                    disabled={!onPinReview || pinPending}
                     onClick={() => onPinReview?.()}
                   >
                     Pin review
@@ -208,7 +209,6 @@ export function ConnectTargetPanel({
                       key={provider}
                       provider={provider}
                       validation={connected.connections[provider]}
-                      onValidate={onValidate}
                     />
                   ),
                 )}

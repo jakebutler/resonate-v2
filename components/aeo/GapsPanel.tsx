@@ -28,9 +28,12 @@ export function sortGaps(gaps: Gap[]): Gap[] {
  */
 export function GapsPanel({
   gaps,
+  seedPending = false,
   onSeedIdea,
 }: {
   gaps: Loadable<Gap[]>;
+  /** True while the seed-idea mutation is in flight; disables seed buttons. */
+  seedPending?: boolean;
   onSeedIdea?: (gap: Gap) => void;
 }) {
   return (
@@ -70,7 +73,7 @@ export function GapsPanel({
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={!onSeedIdea}
+                    disabled={!onSeedIdea || seedPending}
                     onClick={() => onSeedIdea?.(gap)}
                   >
                     Seed captured idea

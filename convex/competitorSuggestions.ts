@@ -416,7 +416,10 @@ export const runDiscoveryBatch = internalAction({
             name: competitorNameFromUrl(result.url),
             url: result.url,
             evidence: discoveryEvidenceLabel(query, result),
-            phrasing: query.prompt,
+            // The user-facing topic, not the wire prompt: answer-engine
+            // prompts carry response-format instructions that must never
+            // surface in the review queue.
+            phrasing: query.topic,
           });
           if (suggestionId) outcome.proposed += 1;
         }

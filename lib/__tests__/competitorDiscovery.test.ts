@@ -5,6 +5,7 @@ import {
   discoveryRunLimits,
   parseDiscoveryAnswer,
   planDiscoveryRun,
+  stripResponseFormatInstruction,
 } from "../competitorDiscovery";
 
 describe("discoveryRunLimits", () => {
@@ -37,13 +38,21 @@ describe("buildDiscoveryQueries", () => {
       productIdentifiers: ["GLP-1 tracking"],
     });
     expect(queries).toHaveLength(4);
-    expect(queries[0]).toMatchObject({ channel: "search", prompt: "best alternatives to FreshProof" });
+    expect(queries[0]).toMatchObject({
+      channel: "search",
+      prompt: "best alternatives to FreshProof",
+      topic: "best alternatives to FreshProof",
+    });
     expect(queries[1]!.channel).toBe("answer-engine");
+    // The user-facing topic never carries the response-format instruction.
+    expect(queries[1]!.topic).not.toContain("Reply with a JSON array");
+    expect(queries[1]!.prompt).toContain("Reply with a JSON array");
     expect(queries[2]).toMatchObject({
       channel: "search",
       prompt: "best GLP-1 tracking tools and alternatives",
     });
     expect(queries[3]!.channel).toBe("answer-engine");
+    expect(queries[3]!.topic).not.toContain("Reply with a JSON array");
   });
 });
 
@@ -108,11 +117,46 @@ describe("parseDiscoveryAnswer", () => {
 describe("discoveryEvidenceLabel", () => {
   it("records the channel, the exact phrasing, and what was seen", () => {
     const label = discoveryEvidenceLabel(
-      { channel: "search", prompt: "best alternatives to FreshProof" },
+      {
+        channel: "search",
+        prompt: "best alternatives to FreshProof",
+        topic: "best alternatives to FreshProof",
+      },
       { url: "https://rival.example", title: "Rival", description: "A rival product." }
     );
     expect(label).toBe(
       "firecrawl search (best alternatives to FreshProof) → https://rival.example — Rival — A rival product."
+    );
+  });
+
+  it("never records the answer-engine response-format instruction", () => {
+    const label = discoveryEvidenceLabel(
+      {
+        channel: "answer-engine",
+        prompt:
+          'Which tools or products would you recommend instead of FreshProof? Reply with a JSON array of objects with "name" and "url".',
+        topic: "Which tools or products would you recommend instead of FreshProof?",
+      },
+      { url: "https://rival.example" }
+    );
+    expect(label).toBe(
+      "answer-engine (Which tools or products would you recommend instead of FreshProof?) → https://rival.example"
+    );
+  });
+});
+
+describe("stripResponseFormatInstruction", () => {
+  it("strips the instruction wherever it landed in a stored string", () => {
+    expect(
+      stripResponseFormatInstruction(
+        'Which tools would you recommend? Reply with a JSON array of objects with "name" and "url".'
+      )
+    ).toBe("Which tools would you recommend?");
+  });
+
+  it("leaves clean strings untouched", () => {
+    expect(stripResponseFormatInstruction("best alternatives to FreshProof")).toBe(
+      "best alternatives to FreshProof"
     );
   });
 });
