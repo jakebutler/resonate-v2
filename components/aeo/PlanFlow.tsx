@@ -5,7 +5,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { StrategyPlanPanel } from "./StrategyPlanPanel";
 import { MutationFeedbackBar, useAeoMutation } from "./mutationFeedback";
-import { planRowToStrategyPlan } from "./mappings";
+import { keywordGapRowToKeywordGap, planRowToStrategyPlan } from "./mappings";
+import { mergePlanTargetKeywords } from "@/lib/keywordResearch";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -32,6 +33,11 @@ export function PlanFlow() {
   const savePlan = useAeoMutation(
     useMutation(api.aeoIntel.saveStrategyPlan)
   );
+  const seedKeywords = useAeoMutation(
+    useMutation(api.aeoIntel.saveStrategyPlan)
+  );
+  const keywordGapRows = useQuery(api.keywordResearch.listKeywordGaps, { brandId });
+  const keywordGaps = (keywordGapRows ?? []).map(keywordGapRowToKeywordGap);
   const seedBrief = useAeoMutation(useMutation(api.shapes.saveBrief));
 
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
@@ -63,6 +69,31 @@ export function PlanFlow() {
     planRow === null ||
     planRow === undefined ||
     seedBrief.state.status === "pending";
+
+  const seedKeywordsDisabled =
+    planRow === null ||
+    planRow === undefined ||
+    keywordGapRows === undefined ||
+    keywordGaps.length === 0 ||
+    seedKeywords.state.status === "pending";
+
+  function seedTargetKeywords() {
+    if (!planRow || keywordGaps.length === 0) return;
+    void seedKeywords.run(
+      {
+        brandId,
+        // Seeding appends a draft version for review — the plan itself is
+        // never approved or published by this action (L8).
+        status: "draft",
+        reviewNotes: "Seeded target keywords from keyword-gap research.",
+        expectedVersion: planRow.version,
+        plan: {
+          ...planRow.plan,
+          targetKeywords: mergePlanTargetKeywords(planRow.plan.targetKeywords, keywordGaps),
+        },
+      },
+    );
+  }
 
   function seedCampaignBrief() {
     if (!planRow || !selectedCampaign) return;
@@ -156,6 +187,50 @@ export function PlanFlow() {
               }
             />
           </div>
+        )}
+      </section>
+      <section
+        aria-label="Keyword gaps"
+        className="rounded border border-black/10 bg-white p-4 space-y-3"
+      >
+        <p className="text-sm font-medium">Keyword gaps from research</p>
+        <p className="text-sm text-gray-500">
+          Researched queries and their honest presence status, derived only from
+          real data. Seeding appends a draft plan version whose target keywords
+          merge the observed gaps in — the plan stays unapproved until reviewed.
+        </p>
+        {keywordGaps.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No keyword gaps researched yet — run keyword research on the Gaps
+            step first.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm">
+              {keywordGaps.filter((gap) => gap.status === "absent").length}{" "}
+              missing of {keywordGaps.length}:{" "}
+              {keywordGaps.map((gap) => gap.keyword).join(" · ")}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={seedKeywordsDisabled}
+                onClick={seedTargetKeywords}
+              >
+                Seed target keywords from gaps
+              </Button>
+              <MutationFeedbackBar
+                state={seedKeywords.state}
+                successLabel="Target keywords seeded as a draft plan version."
+                onRetry={
+                  seedKeywords.state.status === "error"
+                    ? seedKeywords.retry
+                    : undefined
+                }
+              />
+            </div>
+          </>
         )}
       </section>
       <MutationFeedbackBar

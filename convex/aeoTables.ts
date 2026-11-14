@@ -69,7 +69,8 @@ export const crawlPageFields = {
 export const aeoRunKindValidator = v.union(
   v.literal("competitor-intel"),
   v.literal("competitor-discovery"),
-  v.literal("answer-engine")
+  v.literal("answer-engine"),
+  v.literal("keyword-research")
 );
 
 export const aeoReviewStateValidator = v.union(
@@ -209,6 +210,46 @@ export const strategyPlanFields = {
   createdAt: v.number(),
 };
 
+/**
+ * A candidate keyword with its demand-signal verdict (SEO half of AEO/SEO).
+ * Candidates are derived only from real rows (crawl pages, audit questions,
+ * competitor phrasings, plan keywords); the status is an honest tri-state:
+ * "absent" means a real run observed it without the target cited/surfaced,
+ * "present" means a run observed it with the target cited/surfaced, and
+ * "unproven" means no real signal has observed it yet — absence without
+ * observation is never recorded as evidence.
+ */
+export const keywordGapFields = {
+  userId: v.string(),
+  brandId: brandIdValidator,
+  runId: v.id("intelRuns"),
+  /** The candidate phrase, verbatim from its source rows. */
+  keyword: v.string(),
+  status: v.union(
+    v.literal("present"),
+    v.literal("absent"),
+    v.literal("unproven")
+  ),
+  /** Which real signal produced the status. */
+  signal: v.union(
+    v.literal("answer-engine"),
+    v.literal("search"),
+    v.literal("derived")
+  ),
+  // Convex ids are strings; these reference real rows but the pure lib
+  // carries them unbranded.
+  sourceFindingIds: v.array(v.string()),
+  sourcePageUrls: v.array(v.string()),
+  sourceSuggestionIds: v.array(v.string()),
+  fromPlan: v.boolean(),
+  /** Display evidence: matched questions, source page URLs, search notes. */
+  evidence: v.array(v.string()),
+  /** When the budgeted search leg ran, when a search produced the status. */
+  searchedAt: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
 export const aeoBrandTargetValidator = v.object({
   _id: v.id("brandTargets"),
   _creationTime: v.number(),
@@ -244,6 +285,11 @@ export const aeoCompetitorSuggestionValidator = v.object({
   _creationTime: v.number(),
   ...competitorSuggestionFields,
 });
+export const aeoKeywordGapValidator = v.object({
+  _id: v.id("keywordGaps"),
+  _creationTime: v.number(),
+  ...keywordGapFields,
+});
 
 export const aeoTables = {
   brandTargets: defineTable(brandTargetFields)
@@ -266,4 +312,7 @@ export const aeoTables = {
   competitorSuggestions: defineTable(competitorSuggestionFields)
     .index("by_user_and_brand", ["userId", "brandId"])
     .index("by_user_brand_and_name", ["userId", "brandId", "name"]),
+  keywordGaps: defineTable(keywordGapFields)
+    .index("by_user_and_brand", ["userId", "brandId"])
+    .index("by_user_brand_and_keyword", ["userId", "brandId", "keyword"]),
 };

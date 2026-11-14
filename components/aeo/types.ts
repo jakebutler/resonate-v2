@@ -133,6 +133,32 @@ export type Gap = {
   keywords: string[];
 };
 
+/** Honest tri-state verdict for a keyword-gap candidate. */
+export type KeywordPresence = "present" | "absent" | "unproven";
+
+/** Which real signal produced the verdict (never an invented demand metric). */
+export type KeywordSignal = "answer-engine" | "search" | "derived";
+
+/**
+ * One derived keyword candidate with its demand-signal verdict. Every source
+ * is a real row — audit questions, crawl pages, competitor phrasings — never
+ * an invented phrase; "unproven" means no real signal has observed it yet.
+ */
+export type KeywordGap = {
+  id: string;
+  keyword: string;
+  status: KeywordPresence;
+  signal: KeywordSignal;
+  /** Audit questions that observed this keyword. */
+  questions: string[];
+  /** Crawl pages the phrase came from. */
+  sourcePageUrls: string[];
+  fromPlan: boolean;
+  /** Display evidence lines: matched questions and search notes. */
+  evidence: string[];
+  searchedAt?: number;
+};
+
 /** Brief fields mapped to the Marketing Director's required brief set. */
 export type StrategyPlanBrief = {
   goal: string;
