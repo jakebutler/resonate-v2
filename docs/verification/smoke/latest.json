@@ -1,0 +1,43 @@
+{
+  "run": {
+    "featureId": "smoke",
+    "startedAt": "2026-11-14T10:16:51.373Z",
+    "finishedAt": "2026-11-14T10:16:52.943Z",
+    "results": [
+      {
+        "criterionId": "manifest-schema-validates",
+        "name": "Manifest schema suite passes",
+        "runner": "vitest",
+        "tier": "offline-fixture",
+        "outcome": "PASS",
+        "evidence": "$ npx vitest run lib/__tests__/verificationManifest.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m lib/__tests__/verificationManifest.test.ts \u001b[2m(\u001b[22m\u001b[2m11 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 11\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m11 passed\u001b[39m\u001b[22m\u001b[90m (11)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:16:52\n\u001b[2m   Duration \u001b[22m 861ms\u001b[2m (transform 65ms, setup 88ms, import 47ms, tests 11ms, environment 566ms)\u001b[22m",
+        "details": "Criterion passed."
+      },
+      {
+        "criterionId": "runner-core-contract",
+        "name": "Runner core contract",
+        "runner": "contract",
+        "tier": "offline-contract",
+        "outcome": "PASS",
+        "evidence": "$ node --version\nexit code: 0\nv20.20.2",
+        "details": "Criterion passed."
+      },
+      {
+        "criterionId": "composer-live-receipt",
+        "name": "Live image-provider receipt (illustrative gated criterion)",
+        "runner": "contract",
+        "tier": "live-receipt",
+        "outcome": "PASS",
+        "evidence": "$ echo live packet placeholder\nexit code: 0\nlive packet placeholder",
+        "details": "Criterion passed."
+      }
+    ],
+    "summary": {
+      "pass": 3,
+      "fail": 0,
+      "absent": 0,
+      "unproven": 0
+    }
+  },
+  "reportPath": "docs/verification/smoke/2026-11-14.md"
+}
