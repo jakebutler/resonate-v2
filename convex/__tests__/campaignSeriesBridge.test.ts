@@ -98,9 +98,12 @@ async function batchApprove(
     seriesId: seriesId as never,
     expectedRevision: 1,
   });
+  // Mock drafts ground their copy in evidence markers; batch approval now
+  // holds marker rows closed until each is explicitly confirmed.
   return fixture.asUser.mutation(api.seriesReview.approve, {
     packetId,
     expectedSelectionRevision: 1,
+    markerConfirmations: postIds as never[],
   });
 }
 

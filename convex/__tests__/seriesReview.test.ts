@@ -592,3 +592,53 @@ describe("visual-carrying batch approval", () => {
     ).toBe("unapproved");
   });
 });
+
+describe("evidence-marker hold", () => {
+  it("blocks batch approval of marker rows until they are explicitly confirmed", async () => {
+    const f = await fixture();
+    await f.t.run(async (ctx) => {
+      await ctx.db.patch(f.one, {
+        content:
+          "Draft copy with a live placeholder [EVIDENCE: corpus://corvo/c1#excerpt-1].",
+      });
+    });
+    const id = await packet(f);
+
+    const review = await f.user.query(api.seriesReview.packet, {
+      seriesId: f.seriesId,
+    });
+    const markerRow = review.rows.find((r: { postId: string }) => r.postId === f.one);
+    expect(markerRow?.snapshot.requiresMarkerConfirmation).toBe(true);
+    expect(markerRow?.snapshot.warnings).toContain(
+      "Evidence markers remain in the final copy. Check the source passages and publication formatting.",
+    );
+
+    // The hold fails the row closed; nothing is approved as a side effect.
+    const result = await f.user.mutation(api.seriesReview.approve, {
+      packetId: id,
+      expectedSelectionRevision: 1,
+    });
+    expect(result.approved).toBe(false);
+    expect(result.errors).toEqual([
+      {
+        postId: f.one,
+        reason:
+          "Evidence markers remain in the final copy; confirm this row explicitly to approve it.",
+      },
+    ]);
+    expect(
+      (await f.t.run((ctx) => ctx.db.get(f.one)))!.approvalState,
+    ).toBe("unapproved");
+
+    // Confirming the marker row releases the hold and the approval lands.
+    const confirmed = await f.user.mutation(api.seriesReview.approve, {
+      packetId: id,
+      expectedSelectionRevision: 1,
+      markerConfirmations: [f.one],
+    });
+    expect(confirmed.approved).toBe(true);
+    expect((await f.t.run((ctx) => ctx.db.get(f.one)))!.approvalState).toBe(
+      "approved",
+    );
+  });
+});

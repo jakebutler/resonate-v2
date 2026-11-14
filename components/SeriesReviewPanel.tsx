@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useMutation, useQuery } from "convex/react";
@@ -33,6 +33,9 @@ export function SeriesReviewPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [needsReReview, setNeedsReReview] = useState(false);
+  // Per-row confirmation for rows whose final copy still contains evidence
+  // markers; the approve CTA stays blocked until every marker row is confirmed.
+  const [confirmedMarkers, setConfirmedMarkers] = useState<Id<"v2Posts">[]>([]);
   // Optimistic local selection: checkbox state flips immediately and is
   // reconciled against the server selection when the query catches up.
   const [draftSelection, setDraftSelection] = useState<
@@ -43,10 +46,68 @@ export function SeriesReviewPanel({
   const busyRef = useRef(false);
   const selectQueue = useRef<Promise<void>>(Promise.resolve());
   // The selection revision the server will see after the queued selects
-  // land: each toggle optimistically counts one revision forward.
+  // land: each persisted batch counts one revision forward.
   const expectedRevisionRef = useRef<number | null>(null);
+  // Debounced selection persistence: toggles update local state instantly and
+  // the server write batches once toggling pauses, instead of one write per
+  // checkbox with a nudge after each.
+  const flushTimer = useRef<number | null>(null);
+  const pendingSelection = useRef<Id<"v2Posts">[] | null>(null);
   const alert = useRef<HTMLParagraphElement>(null);
   const selectedIds = draftSelection ?? selection?.postIds ?? [];
+  const markerRows =
+    review?.rows.filter((r) => r.snapshot.requiresMarkerConfirmation) ?? [];
+  const pendingMarkerRows = markerRows.filter(
+    (r) => !confirmedMarkers.includes(r.postId),
+  );
+  // Confirmations are packet-scoped: a new packet invalidates them.
+  useEffect(() => {
+    setConfirmedMarkers([]);
+  }, [review?.packet._id]);
+  async function flushSelectionSave() {
+    if (flushTimer.current !== null) {
+      window.clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    const next = pendingSelection.current;
+    pendingSelection.current = null;
+    if (!next) return selectQueue.current;
+    const expected = expectedRevisionRef.current ?? selection?.revision ?? 0;
+    expectedRevisionRef.current = expected + 1;
+    // Queued in order so bursts never send a stale expectedRevision; a
+    // server-side revision conflict surfaces the re-review state.
+    selectQueue.current = selectQueue.current
+      .then(() =>
+        select({ seriesId, postIds: next, expectedRevision: expected }),
+      )
+      .then(() => {
+        setNeedsReReview(false);
+      })
+      .catch((e: unknown) => {
+        expectedRevisionRef.current = null;
+        setDraftSelection(null);
+        setNeedsReReview(true);
+        setMessage(
+          e instanceof Error && e.message
+            ? `Selection changed — review again: ${e.message}`
+            : "Selection changed — review again.",
+        );
+        alert.current?.focus();
+      });
+    return selectQueue.current;
+  }
+  function toggleSelect(postId: Id<"v2Posts">, checked: boolean) {
+    const next = checked
+      ? [...selectedIds, postId]
+      : selectedIds.filter((id) => id !== postId);
+    setDraftSelection(next);
+    pendingSelection.current = next;
+    if (flushTimer.current !== null) window.clearTimeout(flushTimer.current);
+    flushTimer.current = window.setTimeout(() => {
+      flushTimer.current = null;
+      void flushSelectionSave();
+    }, 600);
+  }
   async function run(fn: () => Promise<void>) {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -68,34 +129,6 @@ export function SeriesReviewPanel({
       busyRef.current = false;
       setBusy(false);
     }
-  }
-  function toggleSelect(postId: Id<"v2Posts">, checked: boolean) {
-    const next = checked
-      ? [...selectedIds, postId]
-      : selectedIds.filter((id) => id !== postId);
-    setDraftSelection(next);
-    const expected = expectedRevisionRef.current ?? selection?.revision ?? 0;
-    expectedRevisionRef.current = expected + 1;
-    // Queued in order so rapid toggles never send a stale expectedRevision;
-    // a server-side revision conflict surfaces the re-review state.
-    selectQueue.current = selectQueue.current.then(() =>
-      select({ seriesId, postIds: next, expectedRevision: expected })
-        .then(() => {
-          setNeedsReReview(false);
-          setMessage("Selection saved; prepare a new packet.");
-        })
-        .catch((e: unknown) => {
-          expectedRevisionRef.current = null;
-          setDraftSelection(null);
-          setNeedsReReview(true);
-          setMessage(
-            e instanceof Error && e.message
-              ? `Selection changed — review again: ${e.message}`
-              : "Selection changed — review again.",
-          );
-          alert.current?.focus();
-        }),
-    );
   }
   return (
     <section
@@ -130,6 +163,9 @@ export function SeriesReviewPanel({
         disabled={busy || !selection?.postIds.length}
         onClick={() =>
           void run(async () => {
+            // Land any debounced selection first so the revision checked
+            // against the server is the one the reviewer settled on.
+            await flushSelectionSave();
             await prepare({
               seriesId,
               expectedRevision:
@@ -237,6 +273,28 @@ export function SeriesReviewPanel({
                           : "Review required"}
                       </p>
                     </>
+                  )}
+                  {s.requiresMarkerConfirmation && (
+                    <label
+                      className="flex items-start gap-2 rounded border border-amber-600 bg-amber-50 p-2 text-sm"
+                      data-testid={`confirm-markers-${row.postId}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={confirmedMarkers.includes(row.postId)}
+                        onChange={(e) =>
+                          setConfirmedMarkers((current) =>
+                            e.target.checked
+                              ? [...current, row.postId]
+                              : current.filter((id) => id !== row.postId),
+                          )
+                        }
+                      />
+                      <span>
+                        Evidence markers remain in this final copy — I reviewed
+                        the source passages and want to keep them.
+                      </span>
+                    </label>
                   )}
                   <p>
                     Local schedule: {p.scheduledDate ?? "missing"}{" "}
@@ -346,13 +404,18 @@ export function SeriesReviewPanel({
               busy ||
               review.stale ||
               review.packet.status === "approved" ||
+              pendingMarkerRows.length > 0 ||
               review.rows.some((r) => Boolean(r.snapshot.approvalError))
             }
             onClick={() =>
               void run(async () => {
+                // Land any debounced selection first so the revision the
+                // packet was prepared against still matches the server.
+                await flushSelectionSave();
                 const result = await approve({
                   packetId: review.packet._id,
                   expectedSelectionRevision: review.packet.selectionRevision,
+                  markerConfirmations: confirmedMarkers,
                 });
                 if (!result.approved) {
                   const reasons = (result.errors ?? []).map(
@@ -384,7 +447,9 @@ export function SeriesReviewPanel({
               })
             }
           >
-            Approve {review.rows.length} selected versions
+            {pendingMarkerRows.length > 0
+              ? `Confirm evidence markers in ${pendingMarkerRows.length} row${pendingMarkerRows.length === 1 ? "" : "s"} before approving`
+              : `Approve ${review.rows.length} selected versions`}
           </button>
         </>
       )}
