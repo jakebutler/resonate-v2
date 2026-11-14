@@ -81,6 +81,53 @@ describe("aeo data model access envelope", () => {
     ).rejects.toThrow(/Brand access denied/);
   });
 
+  it("refuses to store http or private-host target URLs", async () => {
+    const { user } = await fixture("owner", ["freshproof"]);
+    await expect(
+      user.mutation(api.aeoIntel.connectTarget, {
+        brandId: "freshproof",
+        siteUrl: "http://freshproof.example",
+        productIdentifiers: [],
+        competitorUrls: [],
+      })
+    ).rejects.toThrow(/Only https URLs are supported/);
+    await expect(
+      user.mutation(api.aeoIntel.connectTarget, {
+        brandId: "freshproof",
+        siteUrl: "https://192.168.1.10/",
+        productIdentifiers: [],
+        competitorUrls: [],
+      })
+    ).rejects.toThrow(/not allowed for this connection/);
+    await expect(
+      user.mutation(api.aeoIntel.connectTarget, {
+        brandId: "freshproof",
+        siteUrl: "https://freshproof.example",
+        productIdentifiers: [],
+        competitorUrls: ["https://127.0.0.1/"],
+      })
+    ).rejects.toThrow(/not allowed for this connection/);
+    await expect(
+      user.mutation(api.aeoIntel.connectTarget, {
+        brandId: "freshproof",
+        siteUrl: "https://localhost:3000/",
+        productIdentifiers: [],
+        competitorUrls: [],
+      })
+    ).rejects.toThrow(/not allowed for this connection/);
+  });
+
+  it("still connects a public https target after validation", async () => {
+    const { user } = await fixture("owner", ["freshproof"]);
+    const targetId = await user.mutation(api.aeoIntel.connectTarget, {
+      brandId: "freshproof",
+      siteUrl: "https://www.freshproof.example",
+      productIdentifiers: [],
+      competitorUrls: ["https://competitor.example"],
+    });
+    expect(targetId).toBeDefined();
+  });
+
   it("refuses records owned by another user even on a shared brand shape", async () => {
     const { t, user } = await fixture("owner", ["freshproof"]);
     const targetId = await connectFixtureTarget(user);

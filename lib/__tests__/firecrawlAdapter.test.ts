@@ -3,6 +3,7 @@ import { runProviderAdapterContractSuite } from "@/lib/__tests__/helpers/provide
 import {
   FIRECRAWL_SNAPSHOT_MAX_CHARS,
   adapterForProvider,
+  dedupePagesByUrl,
   firecrawlProviderAdapter,
   firecrawlRunLimits,
   firecrawlSearch,
@@ -24,6 +25,9 @@ function textResponse(body: string, status = 200): Response {
   return new Response(body, { status });
 }
 
+/** Stand-in for a real DNS lookup: every host resolves to a public address. */
+const publicLookup = async () => [{ address: "93.184.216.34", family: 4 as const }];
+
 const approvedContext = (
   fetchImpl: ReturnType<typeof vi.fn>,
   overrides: Record<string, string | undefined> = {}
@@ -31,6 +35,7 @@ const approvedContext = (
   env: { FIRECRAWL_API_KEY: "firecrawl-secret", ...overrides },
   liveProviderValidationApproved: true,
   fetchImpl: fetchImpl as unknown as typeof fetch,
+  lookup: publicLookup,
 });
 
 const blockedContext = (
@@ -40,6 +45,7 @@ const blockedContext = (
   env: { FIRECRAWL_API_KEY: "firecrawl-secret", ...overrides },
   liveProviderValidationApproved: false,
   fetchImpl: fetchImpl as unknown as typeof fetch,
+  lookup: publicLookup,
 });
 
 describe("firecrawl adapter contract", () => {
@@ -127,17 +133,63 @@ describe("firecrawl crawl gating", () => {
 
   it("refuses non-public crawl targets before any dispatch", async () => {
     const fetchImpl = vi.fn();
-    for (const url of [
-      "http://localhost:3000/",
-      "http://127.0.0.1/",
-      "http://192.168.1.10/",
-      "ftp://freshproof.example.com/file",
-      "not-a-url",
-    ]) {
+    for (const [url, reason] of [
+      ["http://localhost:3000/", "Only https URLs are supported."],
+      ["http://127.0.0.1/", "Only https URLs are supported."],
+      ["http://192.168.1.10/", "Only https URLs are supported."],
+      ["ftp://freshproof.example.com/file", "Only https URLs are supported."],
+      ["not-a-url", "Invalid URL."],
+      ["https://localhost:3000/", "That host is not reachable for ingest."],
+      ["https://192.168.1.10/", "That host is not reachable for ingest."],
+    ] as const) {
       const result = await firecrawlCrawl(approvedContext(fetchImpl), { url });
       expect(result.ok).toBe(false);
-      expect(result.reason).toBe("Crawl target must be a public http(s) URL.");
+      expect(result.reason).toBe(`Crawl target rejected by the SSRF guard: ${reason}`);
     }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses to crawl when no DNS resolver is configured (fail closed)", async () => {
+    const fetchImpl = vi.fn();
+    const context = approvedContext(fetchImpl);
+    delete context.lookup;
+    const result = await firecrawlCrawl(context, {
+      url: "https://freshproof.example.com/",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe(
+      "Crawl refused: no DNS resolver configured for outbound URL validation."
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses a private-address crawl target through the robots path before fetching", async () => {
+    // Regression: the robots.txt pre-fetch used to bypass validateRemoteUrl
+    // entirely — a public hostname resolving to a private address reached the
+    // fetch. The guard must run first and the robots fetch must never fire.
+    const fetchImpl = vi.fn();
+    const privateLookup = async () => [{ address: "10.1.2.3", family: 4 as const }];
+    const context = approvedContext(fetchImpl);
+    context.lookup = privateLookup;
+    const result = await firecrawlCrawl(context, {
+      url: "https://freshproof.example.com/",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe(
+      "Crawl target rejected by the SSRF guard: That host is not reachable for ingest."
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses a crawl target whose DNS resolves only to IPv6 loopback", async () => {
+    const fetchImpl = vi.fn();
+    const loopbackLookup = async () => [{ address: "::1", family: 6 as const }];
+    const context = approvedContext(fetchImpl);
+    context.lookup = loopbackLookup;
+    const result = await firecrawlCrawl(context, {
+      url: "https://freshproof.example.com/",
+    });
+    expect(result.ok).toBe(false);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -291,6 +343,69 @@ describe("firecrawl crawl execution", () => {
     });
     expect(result.ok).toBe(false);
     expect(fetchImpl).toHaveBeenCalledTimes(2 + 5);
+  });
+});
+
+describe("firecrawl crawl poll dedupe", () => {
+  it("keeps the first occurrence when pages repeat across polls", () => {
+    const page = (url: string) => ({
+      sourceUrl: url,
+      title: `Page ${url}`,
+      description: undefined,
+      markdown: "# x",
+      statusCode: 200,
+    });
+    const deduped = dedupePagesByUrl([
+      page("https://freshproof.example.com/a"),
+      page("https://freshproof.example.com/b"),
+      page("https://freshproof.example.com/a"),
+    ]);
+    expect(deduped.map((p) => p.sourceUrl)).toEqual([
+      "https://freshproof.example.com/a",
+      "https://freshproof.example.com/b",
+    ]);
+  });
+
+  it("does not persist re-served pages from later polls", async () => {
+    // Live proof of the bug: 5 unique URLs persisted as 10 rows because every
+    // poll re-served the pages collected so far. Poll 2 below re-serves the
+    // two pages from poll 1 alongside one new page — the result must hold 3.
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(textResponse("User-agent: *\nAllow: /"))
+      .mockResolvedValueOnce(jsonResponse({ success: true, id: "crawl-123" }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          status: "scraping",
+          next: "page-2",
+          data: [
+            { url: "https://freshproof.example.com/", markdown: "# Home" },
+            { url: "https://freshproof.example.com/about", markdown: "# About" },
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          status: "completed",
+          data: [
+            { url: "https://freshproof.example.com/", markdown: "# Home" },
+            { url: "https://freshproof.example.com/about", markdown: "# About" },
+            { url: "https://freshproof.example.com/pricing", markdown: "# Pricing" },
+          ],
+        })
+      );
+    const result = await firecrawlCrawl(approvedContext(fetchImpl), {
+      url: "https://freshproof.example.com/",
+      pollDelayMs: 0,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.pages?.map((page) => page.sourceUrl)).toEqual([
+      "https://freshproof.example.com/",
+      "https://freshproof.example.com/about",
+      "https://freshproof.example.com/pricing",
+    ]);
   });
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { CitationResultsPanel } from "./CitationResultsPanel";
 import { CompetitorComparisonPanel } from "./CompetitorComparisonPanel";
@@ -28,10 +28,32 @@ export function IntelFlow() {
   const [selectedCrawlId, setSelectedCrawlId] = useState<string | undefined>(
     undefined
   );
+  // The panel defaults to the newest snapshot when nothing is selected, so
+  // the pages query must gate on that same default — gating only on the
+  // explicit selection left the default view at "0 pages crawled".
+  // listCrawls is newest-first, so the default is its first row.
+  const newestCrawlId = crawlRows?.[0]?._id;
+  const activeCrawlId = selectedCrawlId ?? newestCrawlId;
   const selectedPageRows = useQuery(
     api.aeoIntel.listCrawlPages,
-    selectedCrawlId ? { brandId, crawlId: selectedCrawlId } : "skip"
+    activeCrawlId ? { brandId, crawlId: activeCrawlId } : "skip"
   );
+  const captureCrawl = useAction(api.aeoCrawl.captureCrawlSnapshot);
+  const [capturePending, setCapturePending] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+
+  const captureSnapshot = () => {
+    if (capturePending) return;
+    setCapturePending(true);
+    setCaptureError(null);
+    captureCrawl({ brandId })
+      .catch((error: unknown) => {
+        setCaptureError(
+          error instanceof Error ? error.message : "Crawl capture failed."
+        );
+      })
+      .finally(() => setCapturePending(false));
+  };
 
   const loading =
     targetRow === undefined ||
@@ -78,7 +100,7 @@ export function IntelFlow() {
         data: crawlRows.map((crawl) =>
           crawlRowToSnapshot(
             crawl,
-            selectedPageRows !== undefined && selectedCrawlId === crawl._id
+            selectedPageRows !== undefined && activeCrawlId === crawl._id
               ? selectedPageRows
               : []
           )
@@ -91,8 +113,11 @@ export function IntelFlow() {
       <CompetitorComparisonPanel comparison={comparison} />
       <SnapshotBrowserPanel
         snapshots={snapshots}
-        selectedId={selectedCrawlId}
+        selectedId={activeCrawlId}
         onSelectSnapshot={setSelectedCrawlId}
+        onCaptureCrawl={captureSnapshot}
+        capturePending={capturePending}
+        captureError={captureError}
       />
     </>
   );

@@ -15,10 +15,16 @@ export function SnapshotBrowserPanel({
   snapshots,
   selectedId,
   onSelectSnapshot,
+  onCaptureCrawl,
+  capturePending = false,
+  captureError = null,
 }: {
   snapshots: Loadable<CrawlSnapshot[]>;
   selectedId?: string;
   onSelectSnapshot?: (id: string) => void;
+  onCaptureCrawl?: () => void;
+  capturePending?: boolean;
+  captureError?: string | null;
 }) {
   return (
     <AeoPanel
@@ -33,11 +39,29 @@ export function SnapshotBrowserPanel({
         emptyDescription="Connect and pin a target, then run a crawl to capture its first snapshot."
       >
         {(loaded) => {
+          // Newest-first default (the list arrives newest-first) — kept in
+          // lockstep with IntelFlow's default selection so the default view
+          // and its loaded pages always agree.
           const selected =
-            loaded.find((snapshot) => snapshot.id === selectedId) ??
-            loaded[loaded.length - 1];
+            loaded.find((snapshot) => snapshot.id === selectedId) ?? loaded[0];
           return (
             <div className="space-y-3">
+              {onCaptureCrawl ? (
+                <div className="flex items-center justify-between gap-2">
+                  <Button
+                    size="sm"
+                    onClick={onCaptureCrawl}
+                    disabled={capturePending}
+                  >
+                    {capturePending ? "Capturing crawl…" : "Capture snapshot"}
+                  </Button>
+                  {captureError ? (
+                    <p role="alert" className="text-sm text-red-600">
+                      {captureError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <div
                 role="tablist"
                 aria-label="Snapshot versions"

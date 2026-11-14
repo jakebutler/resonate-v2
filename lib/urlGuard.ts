@@ -263,6 +263,30 @@ export async function validateRemoteUrl(
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
+/**
+ * Synchronous half of the SSRF guard for stored URL entry points (e.g. a
+ * Convex mutation, where DNS lookups are unavailable): https only and a
+ * non-blocked host (localhost/.local/.internal suffixes and private or
+ * unparseable IP literals). Full resolution-time validation still runs in
+ * `validateRemoteUrl` before any fetch.
+ */
+export function validatePublicHttpsUrl(rawUrl: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new BlockedUrlError("Invalid URL.");
+  }
+  if (parsed.protocol !== "https:") {
+    throw new BlockedUrlError("Only https URLs are supported.");
+  }
+  const hostname = normalizeHostname(parsed.hostname);
+  if (!hostname || isBlockedHostname(hostname)) {
+    throw new BlockedUrlError("That host is not allowed for this connection.");
+  }
+  return parsed;
+}
+
 export function isRedirectStatus(status: number): boolean {
   return REDIRECT_STATUSES.has(status);
 }
