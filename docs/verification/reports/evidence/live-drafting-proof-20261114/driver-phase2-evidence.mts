@@ -30,7 +30,7 @@ const receipt = {
   createdAt: new Date(view.materialization.createdAt as number).toISOString(),
   cohesionRun: review?.latestRun
     ? {
-        runNumber: review.latestRun.runNumber,
+        createdAt: new Date(review.latestRun.createdAt).toISOString(),
         passed: review.latestRun.passed,
         checks: review.latestRun.checks,
         autoFixLog: review.latestRun.autoFixLog ?? [],
@@ -39,4 +39,4 @@ const receipt = {
   drafts: dump,
 };
 writeFileSync("/home/user/work/phase2-receipt.json", JSON.stringify(receipt, null, 2) + "\n");
-console.log(JSON.stringify(dump.map((d: { title: unknown; content: string; excerptCitations: unknown }) => ({ title: d.title, chars: d.content?.length, cites: d.excerptCitations })), null, 2));
+console.log(JSON.stringify(dump.map((d) => ({ title: d.title, chars: typeof d.content === "string" ? d.content.length : 0, cites: d.excerptCitations })), null, 2));

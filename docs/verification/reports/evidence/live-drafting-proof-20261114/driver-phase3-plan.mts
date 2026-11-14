@@ -18,6 +18,7 @@ import { writeFileSync } from "node:fs";
 
 const { ConvexHttpClient } = await import("convex/browser");
 const { api } = await import("../../../../../convex/_generated/api.js");
+import type { Id } from "../../../../../convex/_generated/dataModel.js";
 
 const CONVEX_URL = process.env.CONVEX_URL;
 const CONVEX_JWT = process.env.CONVEX_JWT;
@@ -35,9 +36,14 @@ if (!CONVEX_URL || !CONVEX_JWT || !BRAND_ID || !CAMPAIGN_ID) {
 
 const client = new ConvexHttpClient(CONVEX_URL);
 client.setAuth(CONVEX_JWT);
+const BRAND = "freshproof";
+// The campaign is provided by the phase-1 run; Convex serializes document ids
+// as plain strings on the wire, so this narrows the runtime id for the typed
+// mutation args.
+const campaignId = CAMPAIGN_ID as Id<"campaigns">;
 
 // 1. Real findings only — refuse to proceed on zero rows.
-const findings = await client.query(api.aeoIntel.listFindings, { brandId: BRAND_ID as never });
+const findings = await client.query(api.aeoIntel.listFindings, { brandId: BRAND });
 if (!findings || findings.length === 0) fail("No intel findings for the brand — run the answer-engine batch first.");
 const gaps = findings.filter((f: { classification: string }) => f.classification === "gap");
 const opportunities = findings.filter((f: { classification: string }) => f.classification === "opportunity");
@@ -47,20 +53,20 @@ const runnerRecorded = findings.filter((f: { source?: string }) => f.source === 
 // 2. Compose the plan from the real rows: items cite their source finding ids;
 // the brief is the analyst's synthesis of the observed evidence.
 const plan = {
-  gaps: gaps.map((f: { _id: unknown; summary: string }, index: number) => ({
+  gaps: gaps.map((f, index: number) => ({
     title: `Close the observed gap: ${f.summary}`,
     description: "Answer-engine run observed the target missing or uncompetitive for this question; strengthen the linked campaign.",
     priority: index + 1,
-    sourceFindingIds: [String(f._id)],
+    sourceFindingIds: [f._id],
   })),
-  opportunities: opportunities.map((f: { _id: unknown; summary: string }, index: number) => ({
+  opportunities: opportunities.map((f, index: number) => ({
     title: `Double down: ${f.summary}`,
     description: "Answer-engine run observed the target cited and matching on this question; reinforce it in this campaign.",
     priority: index + 1,
-    sourceFindingIds: [String(f._id)],
+    sourceFindingIds: [f._id],
   })),
   targetKeywords: ["freshproof", "fact checking", "citation verification"],
-  targetQuestions: findings.map((f: { summary: string }) => f.summary),
+  targetQuestions: findings.map((f) => f.summary),
   brief: {
     goal: cited.length > 0
       ? "Defend and extend the answer-engine visibility the live run observed for FreshProof."
@@ -77,13 +83,14 @@ const plan = {
 
 // 3. Append-only save: draft v1, then the accept action appends reviewed v2.
 const draftId = await client.mutation(api.aeoIntel.saveStrategyPlan, {
-  brandId: BRAND_ID as never,
+  brandId: BRAND,
   status: "draft",
   plan,
 });
-const draftRow = await client.query(api.aeoIntel.getLatestStrategyPlan, { brandId: BRAND_ID as never });
+const draftRow = await client.query(api.aeoIntel.getLatestStrategyPlan, { brandId: BRAND });
+if (!draftRow) fail("Strategy plan readback returned null after the draft save");
 const reviewedId = await client.mutation(api.aeoIntel.saveStrategyPlan, {
-  brandId: BRAND_ID as never,
+  brandId: BRAND,
   status: "reviewed",
   expectedVersion: draftRow.version,
   plan: draftRow.plan,
@@ -91,14 +98,15 @@ const reviewedId = await client.mutation(api.aeoIntel.saveStrategyPlan, {
 
 // 4. Seed the campaign brief — the exact PlanFlow UI call.
 await client.mutation(api.shapes.saveBrief, {
-  campaignId: CAMPAIGN_ID as never,
+  campaignId,
   goal: plan.brief.goal,
   audience: plan.brief.audience,
 });
 
 // 5. Verify end to end: plan row + campaign brief readback.
-const finalPlan = await client.query(api.aeoIntel.getLatestStrategyPlan, { brandId: BRAND_ID as never });
-const session = await client.query(api.campaigns.getCampaignSession, { campaignId: CAMPAIGN_ID as never });
+const finalPlan = await client.query(api.aeoIntel.getLatestStrategyPlan, { brandId: BRAND });
+const session = await client.query(api.campaigns.getCampaignSession, { campaignId });
+if (!session) fail("Campaign session readback returned null");
 
 const receipt = {
   ok: true,
@@ -117,8 +125,8 @@ const receipt = {
         gapItems: finalPlan.plan.gaps.length,
         opportunityItems: finalPlan.plan.opportunities.length,
         sourceFindingIdsAllReal: [...finalPlan.plan.gaps, ...finalPlan.plan.opportunities]
-          .every((item: { sourceFindingIds: string[] }) =>
-            item.sourceFindingIds.every((id) => findings.some((f: { _id: unknown }) => String(f._id) === id))
+          .every((item) =>
+            item.sourceFindingIds.every((id) => findings.some((f) => String(f._id) === String(id)))
           ),
         brief: finalPlan.plan.brief,
       }

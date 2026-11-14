@@ -18,6 +18,12 @@ const { ConvexHttpClient } = await import("convex/browser");
 const { api } = await import("../../../../../convex/_generated/api.js");
 const { firecrawlCrawl } = await import("../../../../../lib/providerAdapters.js");
 import dnsPromises from "node:dns/promises";
+import type { Id, TableNames } from "../../../../../convex/_generated/dataModel.js";
+
+// Convex serializes document ids as plain strings on the wire; the branded
+// arg types require the table-specific id. This narrows runtime id strings
+// the mutations themselves returned.
+const asId = <K extends TableNames>(tableName: K, s: string) => s as Id<K>;
 
 const CONVEX_URL = process.env.CONVEX_URL;
 const CONVEX_JWT = process.env.CONVEX_JWT;
@@ -166,8 +172,8 @@ const campaign = await client.mutation(api.campaigns.createCampaign, {
   brandId: BRAND,
   title: CAMPAIGN_TITLE,
 });
-const campaignId = campaign.campaignId;
-await client.mutation(api.campaigns.attachCorpus, { campaignId, corpusId: corpusResult.corpusId as never });
+const campaignId = asId("campaigns", campaign.campaignId);
+await client.mutation(api.campaigns.attachCorpus, { campaignId, corpusId: asId("corpora", corpusResult.corpusId) });
 console.log(JSON.stringify({ step: "campaign-ready", campaignId }));
 
 // 7. Suggested ideas in acknowledged mock mode (D-21 server-issued token).
@@ -180,25 +186,28 @@ console.log(JSON.stringify({ step: "ideas-suggested", created: suggestions.creat
 
 // 8. Move suggestions into the working set (state member).
 const session = await client.query(api.campaigns.getCampaignSession, { campaignId });
+if (!session) fail("Campaign session readback returned null");
 const suggested = session.suggested;
 const membersBefore = session.workingSet.length;
 const need = Math.max(0, 5 - membersBefore);
 const added: string[] = [];
 for (const entry of suggested.slice(0, need)) {
-  await client.mutation(api.campaigns.addIdeaToCampaign, { campaignId, ideaId: String(entry.idea._id) });
+  if (!entry.idea) continue;
+  await client.mutation(api.campaigns.addIdeaToCampaign, { campaignId, ideaId: entry.idea._id });
   added.push(String(entry.idea._id));
 }
 console.log(JSON.stringify({ step: "ideas-in-working-set", added: added.length, ideaIds: added }));
 
 // 9. Propose + accept the standard shape (auto-links working-set ideas).
 const shape = await client.mutation(api.shapes.proposeShape, { campaignId, preset: "standard" });
+const shapeId = asId("campaignShapes", shape.shapeId);
 const shapeView = await client.query(api.shapes.getCampaignShape, { campaignId });
 const unlinked = shapeView.slots.filter((slot) => !slot.ideaId);
 for (const slot of unlinked) {
   const idea = suggested[unlinked.indexOf(slot)];
-  if (idea) await client.mutation(api.shapes.linkSlotIdea, { shapeId: shape.shapeId, slotId: String(slot._id), ideaId: String(idea.idea._id) });
+  if (idea?.idea) await client.mutation(api.shapes.linkSlotIdea, { shapeId, slotId: slot._id, ideaId: idea.idea._id });
 }
-await client.mutation(api.shapes.acceptShape, { shapeId: shape.shapeId });
+await client.mutation(api.shapes.acceptShape, { shapeId });
 const acceptedView = await client.query(api.shapes.getCampaignShape, { campaignId });
 console.log(JSON.stringify({
   step: "shape-accepted",
