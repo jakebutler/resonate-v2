@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { convexTest } from "convex-test";
+import { createHash } from "node:crypto";
 import schema from "../schema";
 import { api } from "../_generated/api";
+import { articleSignature, relevanceSignature, stableInputSignature } from "../../lib/visualWorkflow";
 const modules = import.meta.glob("../**/*.ts");
 afterEach(() => vi.restoreAllMocks());
 async function fixture() {
@@ -304,5 +306,201 @@ describe("selected immutable editorial approval", () => {
         approvalState: "approved",
       }),
     ).rejects.toThrow(/Editor/);
+  });
+});
+
+describe("visual-carrying batch approval", () => {
+  /** Approved hero inserted straight into the visual workflow tables with every
+   *  invariant buildPublicationVisuals/assertCurrentVisuals enforce, so the post
+   *  is visual-carrying and its visual approval signature is computable. */
+  async function withApprovedHero(
+    f: Awaited<ReturnType<typeof fixture>>,
+  ): Promise<void> {
+    const { profileRevisionId } = await f.user.mutation(
+      api.visualProfiles.saveRevision,
+      {
+        brandId: "corvo",
+        expectedRevisionId: null,
+        guidance: {
+          artDirection: "Offline fixture direction",
+          palette: [{ name: "Fixture teal", color: "#123456" }],
+          mascotGuidance: "One raven",
+          compositionGuidance: "Visible action",
+          textPolicy: "No text",
+          heroChartPolicy: "No charts",
+        },
+        referenceBindings: [],
+        defaultRoute: { provider: "offline-fixture", model: "offline-fixture", qualification: "unqualified" },
+      },
+    );
+    await f.t.run(async (ctx) => {
+      const post = (await ctx.db.get(f.articleId))!;
+      const pixels = new Uint8Array(8);
+      const exportStorageId = await ctx.storage.store(
+        new Blob([pixels], { type: "image/webp" }),
+      );
+      const storage = await ctx.db.system.get(exportStorageId);
+      const hexHash = createHash("sha256").update(pixels).digest("hex");
+      const exportMetadata = {
+        width: 1600,
+        height: 900,
+        bytes: storage.size,
+        format: "webp" as const,
+        crop: "center",
+      };
+      const input = {
+        article: {
+          title: post.title,
+          content: post.content,
+          signature: articleSignature({ title: post.title, content: post.content }),
+        },
+        pins: { profileRevisionId, referenceIds: [], lessonIds: [], postExceptionId: null },
+        references: [],
+        scene: null,
+        planId: null,
+        parentVersionId: null,
+        parentStorageId: null,
+        prompt: "Offline fixture hero prompt",
+        feedback: null,
+        provider: "offline-fixture",
+        model: "offline-fixture",
+        size: "1600x900",
+        outputFormat: "webp" as const,
+      };
+      const attemptId = await ctx.db.insert("v2VisualAttempts", {
+        userId: post.userId,
+        brandId: post.brandId,
+        postId: f.articleId,
+        stage: "generation",
+        operationKey: "fixture-hero",
+        input,
+        inputSignature: stableInputSignature(input),
+        status: "completed",
+        quoteProvenance: "OFFLINE FIXTURE CONTRACT",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const planId = await ctx.db.insert("v2VisualPlans", {
+        userId: post.userId,
+        brandId: post.brandId,
+        postId: f.articleId,
+        attemptId,
+        input,
+        scenes: [],
+        status: "complete",
+        reasons: [],
+        createdAt: 1,
+      });
+      const quoteId = await ctx.db.insert("v2VisualDispatchQuotes", {
+        attemptId,
+        inputSignature: stableInputSignature(input),
+        stage: "generation",
+        provider: "offline-fixture",
+        model: "offline-fixture",
+        maximumMicros: 0,
+        qualification: "offline-fixture",
+        boundVerified: true,
+        capabilityReceiptIds: [],
+        provenance: "OFFLINE FIXTURE CONTRACT",
+        createdAt: 1,
+      });
+      const versionId = await ctx.db.insert("v2VisualVersions", {
+        userId: post.userId,
+        brandId: post.brandId,
+        postId: f.articleId,
+        attemptId,
+        planId,
+        parentVersionId: null,
+        feedback: null,
+        input,
+        storageId: exportStorageId,
+        sha256: hexHash,
+        contentType: "image/webp",
+        width: 1600,
+        height: 900,
+        bytes: storage.size,
+        provider: "offline-fixture",
+        model: "offline-fixture",
+        createdAt: 1,
+        exportStorageId,
+        exportHash: hexHash,
+        approvedExportHash: hexHash,
+        exportMetadata,
+        approvedExportMetadataSignature: stableInputSignature(exportMetadata),
+        approvedAlt: "Fixture approved hero",
+        approvedBy: post.userId,
+        approvedAt: 1,
+        approvedRelevanceSignature: relevanceSignature({ title: post.title, content: post.content }),
+      });
+      await ctx.db.patch(attemptId, { quoteId, resultVersionId: versionId });
+      await ctx.db.insert("v2VisualStates", {
+        userId: post.userId,
+        brandId: post.brandId,
+        postId: f.articleId,
+        selectedVersionId: versionId,
+        updatedAt: 1,
+      });
+    });
+  }
+
+  it("approves a visual-carrying blog post through batch review", async () => {
+    const f = await fixture();
+    await withApprovedHero(f);
+    const id = await packet(f, [f.articleId]);
+    const result = await f.user.mutation(api.seriesReview.approve, {
+      packetId: id,
+      expectedSelectionRevision: 1,
+    });
+    expect(result.approved).toBe(true);
+    expect(
+      (await f.t.run((ctx) => ctx.db.get(f.articleId)))!.approvalState,
+    ).toBe("approved");
+  });
+
+  it("fails closed when the packet row is missing its review signature", async () => {
+    const f = await fixture();
+    await withApprovedHero(f);
+    const id = await packet(f, [f.articleId]);
+    // Legacy row written before signatures were captured.
+    await f.t.run(async (ctx) => {
+      for (const row of await ctx.db
+        .query("seriesReviewRows")
+        .collect())
+        await ctx.db.patch(row._id, { visualSignature: undefined });
+    });
+    await expect(
+      f.user.mutation(api.seriesReview.approve, {
+        packetId: id,
+        expectedSelectionRevision: 1,
+      }),
+    ).rejects.toThrow(
+      "Review the current article and visual snapshot before final approval",
+    );
+    expect(
+      (await f.t.run((ctx) => ctx.db.get(f.articleId)))!.approvalState,
+    ).toBe("unapproved");
+  });
+
+  it("fails closed when the visuals change after the packet was prepared", async () => {
+    const f = await fixture();
+    await withApprovedHero(f);
+    const id = await packet(f, [f.articleId]);
+    await f.t.run(async (ctx) => {
+      const state = await ctx.db
+        .query("v2VisualStates")
+        .withIndex("by_post", (q) => q.eq("postId", f.articleId))
+        .unique();
+      const version = await ctx.db.get(state!.selectedVersionId!);
+      await ctx.db.patch(version!._id, { approvedAlt: "Changed after review" });
+    });
+    await expect(
+      f.user.mutation(api.seriesReview.approve, {
+        packetId: id,
+        expectedSelectionRevision: 1,
+      }),
+    ).rejects.toThrow("Reviewed visuals changed; reload before final approval");
+    expect(
+      (await f.t.run((ctx) => ctx.db.get(f.articleId)))!.approvalState,
+    ).toBe("unapproved");
   });
 });
