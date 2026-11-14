@@ -22,13 +22,16 @@ export const QUALIFICATION_MAX_PROMPT_BYTES = 9_045;
 export const QUALIFICATION_MAX_INPUT_BYTES = 4 * 1024 * 1024;
 
 /**
- * gpt-image-1 shutdown was scheduled for 2026-10-23 per the functional bound doc.
- * The reviewed packet still targets gpt-image-1, so this is surfaced, never silently
+ * gpt-image-1 shutdown was scheduled for 2026-10-23 and the model is no longer
+ * served (confirmed via /v1/models on 2026-11-13). Jake approved re-pinning to
+ * gpt-image-1.5 on 2026-11-13, then upgraded the pin to gpt-image-2 the same
+ * day after the model comparison (PR #163); the pin is never silently changed
+ * without that approval trail.
  * enforced: operators must verify model availability before a live dispatch and must
  * not fall back to another model under this quote.
  */
 export const IMAGE_ROUTE_MODEL_AVAILABILITY_NOTICE =
-  "gpt-image-1 shutdown was scheduled for 2026-10-23 (gpt-image-1-functional-bound.md); verify model availability before dispatch and never silently fall back under this quote.";
+  "Original pin gpt-image-1 is no longer served (shutdown was scheduled 2026-10-23); Jake approved gpt-image-1.5 on 2026-11-13, then upgraded the pin to gpt-image-2 the same day after the model comparison (PR #163): image-2 best matches the cut-paper style references and preserves edits best at comparable cost ($0.150 vs $0.153 per sequence) with roughly double latency (~60s vs ~36s), a tradeoff Jake accepted — model pins require explicit review.";
 
 /** Frozen approved reference inputs, mirrored from functional-first-packet.json (lib test enforces the mirror stays in sync). */
 export const IMAGE_PACKET_REFERENCES = [
@@ -79,15 +82,15 @@ export type QualificationRouteIdentity = {
 
 export type PreparedImageQualificationRoute = {
   provider: "openai";
-  model: "gpt-image-1";
-  apiModelId: "gpt-image-1";
+  model: "gpt-image-2";
+  apiModelId: "gpt-image-2-2026-04-21";
   operations: ["generate", "edit"];
   referenceInputs: true;
   maxInputImages: 3;
   size: "1536x1024";
   outputFormat: "png";
   quality: "low";
-  inputFidelity: "low";
+  inputFidelity?: "low";
   maximumMicros: typeof QUALIFICATION_PER_ATTEMPT_CAP_MICROS;
   maxPromptBytes: typeof QUALIFICATION_MAX_PROMPT_BYTES;
   maxInputBytes: typeof QUALIFICATION_MAX_INPUT_BYTES;
@@ -158,8 +161,8 @@ export function prepareImageQualificationRoute(
   const capability = VISUAL_PROVIDER_CAPABILITIES.find(
     (route) =>
       route.provider === "openai" &&
-      route.model === "gpt-image-1" &&
-      route.apiModelId === "gpt-image-1",
+      route.model === "gpt-image-2" &&
+      route.apiModelId === "gpt-image-2-2026-04-21",
   );
   if (!capability)
     throw new Error(
@@ -167,8 +170,8 @@ export function prepareImageQualificationRoute(
     );
   return {
     provider: "openai",
-    model: "gpt-image-1",
-    apiModelId: "gpt-image-1",
+    model: "gpt-image-2",
+    apiModelId: "gpt-image-2-2026-04-21",
     operations: ["generate", "edit"],
     referenceInputs: true,
     // Generation binds 2 references; the edit binds the generated parent plus both references.
@@ -176,7 +179,6 @@ export function prepareImageQualificationRoute(
     size: "1536x1024",
     outputFormat: "png",
     quality: "low",
-    inputFidelity: "low",
     maximumMicros: QUALIFICATION_PER_ATTEMPT_CAP_MICROS,
     maxPromptBytes: QUALIFICATION_MAX_PROMPT_BYTES,
     maxInputBytes: QUALIFICATION_MAX_INPUT_BYTES,

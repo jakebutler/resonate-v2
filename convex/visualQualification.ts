@@ -186,8 +186,7 @@ const packetRequestValidator = v.object({
 const EDIT_PROMPT_PREFIX =
   "Image 1 is the selected image to edit. Image 2 supplies raven identity. Image 3 supplies materials and lighting. ";
 const packetFields = (prompt: string) => ({
-  input_fidelity: "low" as const,
-  model: "gpt-image-1",
+  model: "gpt-image-2-2026-04-21",
   prompt,
   n: 1 as const,
   size: "1536x1024",
@@ -201,8 +200,8 @@ function packetCapability() {
   const capability = VISUAL_PROVIDER_CAPABILITIES.find(
     (route) =>
       route.provider === "openai" &&
-      route.model === "gpt-image-1" &&
-      route.apiModelId === "gpt-image-1",
+      route.model === "gpt-image-2" &&
+      route.apiModelId === "gpt-image-2-2026-04-21",
   );
   if (!capability)
     throw new Error(
@@ -289,7 +288,7 @@ async function callReceipt(
 ): Promise<CallReceipt> {
   const verified = await verifyVisualOutput(output.bytes, output.mimeType);
   const usageCost = result.usage
-    ? calculateVisualUsageCost("openai", result.usage, "gpt-image-1")
+    ? calculateVisualUsageCost("openai", result.usage, "gpt-image-2")
     : null;
   const outputStorageId = await store(output);
   return {
@@ -463,7 +462,7 @@ export const executeImageQualificationPacket = action({
       prompt: editPrompt,
       feedback: args.editFeedback,
       parentVersionId: "qualification-probe-generate",
-      parentModel: "gpt-image-1",
+      parentModel: "gpt-image-2",
       images: [parentReference, ...references],
     });
     const edited = await dispatchVisualImageRequest(
