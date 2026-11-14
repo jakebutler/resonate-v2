@@ -26,15 +26,17 @@ export function GapsFlow() {
 
   const [runState, setRunState] = useState<AeoMutationState>({ status: "idle" });
 
+  // List query: undefined is pending; null is the sync fixture's empty-set
+  // convention — normalize so derivations always see an array.
   const gaps: Loadable<Gap[]> =
     findingRows === undefined
       ? { status: "loading" }
-      : { status: "ready", data: findingRows.map(findingRowToGap) };
+      : { status: "ready", data: (findingRows ?? []).map(findingRowToGap) };
 
   const keywordGaps: Loadable<KeywordGap[]> =
     keywordGapRows === undefined
       ? { status: "loading" }
-      : { status: "ready", data: keywordGapRows.map(keywordGapRowToKeywordGap) };
+      : { status: "ready", data: (keywordGapRows ?? []).map(keywordGapRowToKeywordGap) };
 
   const runResearch = () => {
     if (runState.status === "pending") return;
@@ -55,6 +57,9 @@ export function GapsFlow() {
       <GapsPanel
         gaps={gaps}
         seedPending={seedIdea.state.status === "pending"}
+        // Duplicate guard: a success means the idea row exists — re-clicking
+        // would create a second inbox idea for the same gap.
+        seedSucceeded={seedIdea.state.status === "success"}
         onSeedIdea={(gap) => {
           void seedIdea.run({
             brandId,

@@ -510,3 +510,160 @@ test("keyword-gaps: the missing-query summary and honest statuses render from re
   ]);
 });
 
+// Wave 3 additions: brand persistence, client-side competitor URL validation,
+// and the explicit not-crawled state for confirmed competitors without a crawl.
+
+test("brand-persistence: ?brand= drives aeo queries and survives navigation and reload", async ({
+  page,
+}) => {
+  const getTargetArgs: Array<Record<string, unknown>> = [];
+
+  await mockConvexSync(page, {
+    value: (path, args) => {
+      if (path === "aeoIntel:getTarget") {
+        getTargetArgs.push(args);
+        return targetFixture(true);
+      }
+      if (path === "aeoIntel:listCrawls") return [];
+      if (path === "aeoIntel:listRuns") return [];
+      return null;
+    },
+  });
+
+  // A deep link pins the brand from the very first render.
+  await page.goto("/aeo?brand=freshproof");
+  await expect
+    .poll(() => getTargetArgs.some((a) => a.brandId === "freshproof"))
+    .toBe(true);
+
+  // Flow navigation keeps the brand in the URL instead of resetting to corvo.
+  await page.getByRole("link", { name: "Intel", exact: true }).click();
+  await expect(page).toHaveURL(/\/aeo\/intel\?brand=freshproof/);
+
+  // Reload on a deep-linked route still queries the pinned brand.
+  await page.reload();
+  await expect
+    .poll(
+      () =>
+        getTargetArgs.some(
+          (a) => a.brandId === "freshproof" && a !== undefined
+        )
+    )
+    .toBe(true);
+
+  // Switching brands rewrites the URL. The radio input is visually hidden
+  // behind a styled label, so click the visible label text.
+  await page.getByText("the lower dB", { exact: true }).click();
+  await expect(page).toHaveURL(/brand=lower-db/);
+  await expect
+    .poll(() => getTargetArgs.some((a) => a.brandId === "lower-db"))
+    .toBe(true);
+});
+
+test("connect-target: invalid competitor URLs are rejected client-side", async ({
+  page,
+}) => {
+  const mutations: Array<{ path: string; args: Record<string, unknown> }> = [];
+
+  await mockConvexSync(page, {
+    value: () => null,
+    mutation: (path, args) => {
+      mutations.push({ path, args });
+      return null;
+    },
+  });
+
+  await page.goto("/aeo?brand=corvo");
+  await expect(page.getByLabel("Connect target form")).toBeVisible();
+
+  await page.getByLabel("Target site URL").fill("https://freshproof.example.com");
+  await page.getByLabel("Competitor URLs").fill("competitor-a, https://b.com");
+
+  // The alert names the offending entry and blocks submission. Scoped by
+  // text: the app shell renders its own bare role="alert" region.
+  const invalidAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "missing a scheme or host" });
+  await expect(invalidAlert).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect target" })).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Connect target" })
+    .click({ force: true })
+    .catch(() => {});
+  expect(mutations).toHaveLength(0);
+
+  // Fixing the entry clears the alert and lets the connect through.
+  await page
+    .getByLabel("Competitor URLs")
+    .fill("https://competitor-a.com, https://b.com");
+  await expect(invalidAlert).toBeHidden();
+  await page.getByRole("button", { name: "Connect target" }).click();
+  expect(
+    mutations.some(
+      (m) =>
+        m.path === "aeoIntel:connectTarget" &&
+        JSON.stringify(m.args.competitorUrls) ===
+          JSON.stringify(["https://competitor-a.com", "https://b.com"])
+    )
+  ).toBe(true);
+});
+
+test("competitor-comparison: confirmed-but-never-crawled competitors show an explicit not-crawled state", async ({
+  page,
+}) => {
+  await mockConvexSync(page, {
+    value: (path, args) => {
+      if (path === "aeoIntel:getTarget") return targetFixture(true);
+      // Only the target site has a crawl; the confirmed competitor does
+      // not. Rows mirror the siteCrawls table shape (pages live in the
+      // separate crawlPages table, fetched by listCrawlPages).
+      if (path === "aeoIntel:listCrawls") {
+        return [
+          {
+            _id: "crawl-target",
+            _creationTime: 1,
+            userId: "fixture-user",
+            brandId: brand,
+            targetId: "target-fixture",
+            siteUrl: "https://freshproof.example.com",
+            version: 1,
+            status: "complete",
+            pageCount: 1,
+            createdAt: 1,
+          },
+        ];
+      }
+      // No runs or findings exist in this scenario.
+      if (path === "aeoIntel:listRuns" || path === "aeoIntel:listFindings") {
+        return [];
+      }
+      // The target crawl captured one page; the competitor has no crawl at
+      // all, so its (never-subscribed) pages query stays unanswered.
+      if (path === "aeoIntel:listCrawlPages") {
+        return args.crawlId === "crawl-target"
+          ? [
+              {
+                _id: "page-target-home",
+                _creationTime: 1,
+                userId: "fixture-user",
+                brandId: brand,
+                crawlId: "crawl-target",
+                url: "https://freshproof.example.com/",
+                title: "FreshProof",
+                headings: ["Evidence review"],
+                schemaTypes: [],
+                createdAt: 1,
+              },
+            ]
+          : [];
+      }
+      return null;
+    },
+  });
+
+  await page.goto("/aeo/intel?brand=corvo");
+
+  await expect(page.getByText("Not crawled yet")).toBeVisible();
+  // No zeroed counts for the never-crawled competitor.
+  await expect(page.getByText("0 pages")).toHaveCount(0);
+});
