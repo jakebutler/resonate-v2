@@ -17,7 +17,12 @@ const DEFAULT_CORTEX_BASE_URL = "https://cortex.corvolabs.com";
 // inflate a stored finding (FIRECRAWL_SNAPSHOT_MAX_CHARS precedent).
 export const ANSWER_ENGINE_EXCERPT_MAX_CHARS = 500;
 
-const DEFAULT_MAX_QUESTIONS = 6;
+// Depth bounds: the default question depth sits inside a bounded 10–20 set
+// (marketer-council audit-depth finding) so a run is deep enough to matter
+// while the per-run ceiling stays in control; a configured depth above the
+// cap clamps down rather than silently spending more.
+export const ANSWER_ENGINE_MAX_QUESTIONS_CAP = 20;
+const DEFAULT_MAX_QUESTIONS = 12;
 const DEFAULT_RUN_CEILING_CENTS = 50;
 const DEFAULT_COST_PER_QUESTION_CENTS = 2;
 
@@ -39,7 +44,10 @@ function positiveIntFromEnv(raw: string | undefined, fallback: number): number {
 
 export function answerEngineRunLimits(env: Record<string, string | undefined>): AnswerEngineRunLimits {
   return {
-    maxQuestions: positiveIntFromEnv(env.AEO_ANSWER_ENGINE_MAX_QUESTIONS, DEFAULT_MAX_QUESTIONS),
+    maxQuestions: Math.min(
+      ANSWER_ENGINE_MAX_QUESTIONS_CAP,
+      positiveIntFromEnv(env.AEO_ANSWER_ENGINE_MAX_QUESTIONS, DEFAULT_MAX_QUESTIONS)
+    ),
     runCeilingCents: positiveIntFromEnv(env.AEO_ANSWER_ENGINE_RUN_CEILING_CENTS, DEFAULT_RUN_CEILING_CENTS),
     costPerQuestionCents: positiveIntFromEnv(
       env.AEO_ANSWER_ENGINE_COST_PER_QUESTION_CENTS,
@@ -89,8 +97,8 @@ export function competitorNamesFromUrls(urls: string[]): string[] {
 
 export type AnswerEngineQuestion = {
   question: string;
-  /** Which phrasing produced the question (brand, recommendation, identifier, competitor). */
-  phrasing: "brand" | "recommendation" | "identifier" | "competitor";
+  /** Which phrasing produced the question (brand, recommendation, identifier, competitor, depth). */
+  phrasing: "brand" | "recommendation" | "identifier" | "competitor" | "depth";
 };
 
 /**
@@ -116,6 +124,20 @@ export function buildAnswerEngineQuestions(input: {
   for (const name of competitorNamesFromUrls(input.competitorUrls)) {
     questions.push({ question: `What alternatives are there to ${name}?`, phrasing: "competitor" });
   }
+  // Generic brand-depth phrasings keep the set usable for a brand with few
+  // identifiers or tracked competitors — without them, raising the question
+  // depth would only ever ask the same two brand questions.
+  const depthQuestions: AnswerEngineQuestion[] = [
+    { question: `What problems does ${input.brandName} solve?`, phrasing: "depth" },
+    { question: `Who should use ${input.brandName}?`, phrasing: "depth" },
+    { question: `What do users say about ${input.brandName}?`, phrasing: "depth" },
+    { question: `Is ${input.brandName} worth trying?`, phrasing: "depth" },
+    { question: `How does ${input.brandName} compare to its alternatives?`, phrasing: "depth" },
+    { question: `What makes ${input.brandName} different from other options?`, phrasing: "depth" },
+    { question: `What are the strengths and weaknesses of ${input.brandName}?`, phrasing: "depth" },
+    { question: `Would ${input.brandName} be a good choice for a small team?`, phrasing: "depth" },
+  ];
+  questions.push(...depthQuestions);
   return questions;
 }
 
@@ -252,7 +274,99 @@ export type AnswerCitationAnalysis = {
   citationStatus: "cited" | "uncited" | "not-observed";
   extractability: number;
   classification: "gap" | "opportunity";
+  /**
+   * Set only when the answer cites the brand: whether the cited content is
+   * actually about the connected target. A suspect citation must never be
+   * displayed as a plain "cited" (the trust-blocker finding).
+   */
+  brandMatch?: BrandMatchAssessment;
 };
+
+export type BrandMatchVerdict = "match" | "suspect" | "unknown";
+
+export type BrandMatchAssessment = {
+  verdict: BrandMatchVerdict;
+  /** Human-readable reason, stored with the finding and shown in the intel UI. */
+  detail: string;
+};
+
+// Brand-mismatch disambiguation thresholds (the extractability precedent: a
+// documented, bounded heuristic, not ground truth). A cited answer that shares
+// almost none of its topic vocabulary with the target's crawled content is
+// probably describing a different product that happens to share the brand
+// name — the homonym case seen in the 2026-11-14 live proof (a blockchain/
+// supply-chain "FreshProof" recorded as a clean citation).
+const BRAND_MATCH_MIN_ANSWER_TERMS = 6;
+const BRAND_MATCH_SUSPECT_OVERLAP = 0.2;
+const BRAND_MATCH_MATCH_OVERLAP = 0.4;
+
+/** Topic-word vocabulary of the target's crawled content. */
+function targetVocabulary(pages: AnswerTargetPage[]): Set<string> {
+  const joined = pages
+    .map((page) =>
+      [page.title, ...page.headings, page.description, page.contentSample]
+        .filter((part): part is string => typeof part === "string")
+        .join(" ")
+    )
+    .join(" ");
+  return new Set(contentTerms(joined));
+}
+
+/**
+ * Whether a cited answer is actually about the connected target. The gateway
+ * returns prose (no citation URLs), so the verdict is a heuristic over three
+ * signals, strongest first:
+ *
+ * - the answer cites the target's own domain, or names one of the target's
+ *   product identifiers — treat as a match;
+ * - otherwise, vocabulary overlap between the answer and the target's crawl:
+ *   high overlap → match, near-zero overlap → suspect (a homonym brand),
+ *   in between or too little text on either side → unknown.
+ */
+export function assessAnswerBrandMatch(input: {
+  answer: string;
+  productIdentifiers: string[];
+  targetDomain: string;
+  targetPages: AnswerTargetPage[];
+}): BrandMatchAssessment {
+  const textLower = input.answer.toLowerCase();
+  const domain = input.targetDomain.toLowerCase().trim();
+  if (domain && hasWordMatch(textLower, domain)) {
+    return { verdict: "match", detail: `Answer cites the target's domain (${domain}).` };
+  }
+  const identifiers = input.productIdentifiers.map((id) => id.toLowerCase().trim()).filter(Boolean);
+  if (identifiers.length && mentionsAny(textLower, identifiers)) {
+    return { verdict: "match", detail: "Answer names one of the target's product identifiers." };
+  }
+  const crawlVocabulary = targetVocabulary(input.targetPages);
+  const answerTerms = [...new Set(contentTerms(input.answer))];
+  if (!crawlVocabulary.size || answerTerms.length < BRAND_MATCH_MIN_ANSWER_TERMS) {
+    return {
+      verdict: "unknown",
+      detail: "Not enough crawled content or answer text to verify the citation against the target.",
+    };
+  }
+  const overlap = answerTerms.filter((term) => crawlVocabulary.has(term)).length / answerTerms.length;
+  const percent = Math.round(overlap * 100);
+  if (overlap < BRAND_MATCH_SUSPECT_OVERLAP) {
+    return {
+      verdict: "suspect",
+      detail:
+        `Answer names the brand but shares almost none of its topic vocabulary with the ` +
+        `target's crawled content (${percent}% overlap) — it may describe a different product with the same name.`,
+    };
+  }
+  if (overlap >= BRAND_MATCH_MATCH_OVERLAP) {
+    return {
+      verdict: "match",
+      detail: `Answer vocabulary overlaps the target's crawled content (${percent}% overlap).`,
+    };
+  }
+  return {
+    verdict: "unknown",
+    detail: `Citation could not be confidently verified against the target's crawled content (${percent}% overlap).`,
+  };
+}
 
 // A small stopword set so content-coverage measures topic words only.
 const CONTENT_TERM_STOPWORDS = new Set([
@@ -322,6 +436,7 @@ export function analyzeAnswerCitation(input: {
   brandName: string;
   productIdentifiers: string[];
   competitorNames: string[];
+  targetDomain: string;
   targetPages: AnswerTargetPage[];
 }): AnswerCitationAnalysis {
   const textLower = input.answer.toLowerCase();
@@ -336,6 +451,12 @@ export function analyzeAnswerCitation(input: {
       // content can back the citation.
       extractability: round2(Math.min(1, 0.7 * structure + 0.3 * coverage)),
       classification: "opportunity",
+      brandMatch: assessAnswerBrandMatch({
+        answer: input.answer,
+        productIdentifiers: input.productIdentifiers,
+        targetDomain: input.targetDomain,
+        targetPages: input.targetPages,
+      }),
     };
   }
   return {

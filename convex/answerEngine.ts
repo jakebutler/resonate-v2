@@ -9,6 +9,7 @@ import {
   brandNameFor,
   buildAnswerEngineQuestions,
   askAnswerEngine,
+  competitorNameFromUrl,
   competitorNamesFromUrls,
   planAnswerEngineRun,
   truncateAnswerExcerpt,
@@ -38,6 +39,7 @@ export const allTargets = internalQuery({
       _creationTime: v.number(),
       userId: v.string(),
       brandId: brandIdValidator,
+      siteUrl: v.string(),
       productIdentifiers: v.array(v.string()),
       competitorUrls: v.array(v.string()),
     })
@@ -53,6 +55,7 @@ export const allTargets = internalQuery({
         _creationTime: target._creationTime,
         userId: target.userId,
         brandId: target.brandId,
+        siteUrl: target.siteUrl,
         productIdentifiers: target.productIdentifiers,
         competitorUrls: target.competitorUrls,
       }));
@@ -122,6 +125,10 @@ export const recordFinding = internalMutation({
     citationStatus: v.union(v.literal("cited"), v.literal("uncited"), v.literal("not-observed")),
     extractability: v.number(),
     evidence: v.array(v.string()),
+    brandMatch: v.optional(
+      v.union(v.literal("match"), v.literal("suspect"), v.literal("unknown"))
+    ),
+    brandMatchDetail: v.optional(v.string()),
   },
   returns: v.id("intelFindings"),
   handler: async (ctx, args) => {
@@ -143,14 +150,23 @@ export const recordFinding = internalMutation({
       // responses are never stored whole.
       evidence: [...args.evidence.slice(0, 1), truncateAnswerExcerpt(args.evidence[1] ?? "")].filter(Boolean),
       reviewStatus: "unreviewed",
+      brandMatch: args.brandMatch,
+      brandMatchDetail: args.brandMatchDetail,
       createdAt: Date.now(),
     });
     await audit(ctx, {
       userId: args.userId,
       brandId: args.brandId,
       action: "aeo.answer_engine_finding_recorded",
-      summary: `Recorded a ${args.classification} finding (${args.citationStatus}) in the answer-engine run.`,
-      metadata: { runId: String(run._id), findingId: String(findingId) },
+      summary:
+        args.brandMatch === "suspect"
+          ? `Recorded a ${args.classification} finding (${args.citationStatus}, brand mismatch suspected) in the answer-engine run.`
+          : `Recorded a ${args.classification} finding (${args.citationStatus}) in the answer-engine run.`,
+      metadata: {
+        runId: String(run._id),
+        findingId: String(findingId),
+        ...(args.brandMatch ? { brandMatch: args.brandMatch } : {}),
+      },
     });
     return findingId;
   },
@@ -171,13 +187,27 @@ export const finishRun = internalMutation({
     }
     if (run.status !== "running") throw new Error("Intel run is not running");
     await requireBrandAccess(ctx, args.userId, args.brandId);
-    await ctx.db.patch(run._id, { status: args.status, finishedAt: Date.now() });
+    // The run record itself carries the mismatch classification, so a reader
+    // of the run alone (not the per-finding rows) still sees the qualifier.
+    const findings = await ctx.db
+      .query("intelFindings")
+      .withIndex("by_run", (q) => q.eq("runId", run._id))
+      .collect();
+    const brandMismatchCount = findings.filter((finding) => finding.brandMatch === "suspect").length;
+    await ctx.db.patch(run._id, {
+      status: args.status,
+      finishedAt: Date.now(),
+      ...(brandMismatchCount > 0 ? { brandMismatchCount } : {}),
+    });
     await audit(ctx, {
       userId: args.userId,
       brandId: args.brandId,
       action: "aeo.answer_engine_run_finished",
-      summary: `Answer-engine run finished as ${args.status}.`,
-      metadata: { runId: String(run._id), status: args.status },
+      summary:
+        brandMismatchCount > 0
+          ? `Answer-engine run finished as ${args.status} — ${brandMismatchCount} cited answer(s) suspected of a brand mismatch.`
+          : `Answer-engine run finished as ${args.status}.`,
+      metadata: { runId: String(run._id), status: args.status, brandMismatchCount },
     });
     return null;
   },
@@ -272,7 +302,10 @@ export const runAnswerEngineBatch = internalAction({
       }).slice(0, limits.maxQuestions);
       const plan = planAnswerEngineRun({ questionCount: questions.length, limits });
       if (!plan.ok) {
-        outcome.skipped.push({ brandId: target.brandId, reason: `budget-refused:${plan.reason}` });
+        outcome.skipped.push({
+          brandId: target.brandId,
+          reason: `budget-refused:${plan.reason} (estimate ${plan.estimatedCostCents}¢ > ceiling ${plan.ceilingCents}¢)`,
+        });
         continue;
       }
       const targetPages = await ctx.runQuery(internal.answerEngine.latestTargetPages, {
@@ -289,6 +322,7 @@ export const runAnswerEngineBatch = internalAction({
       outcome.started += 1;
 
       const competitorNames = competitorNamesFromUrls(target.competitorUrls);
+      const targetDomain = competitorNameFromUrl(target.siteUrl);
       let failed = false;
       for (const question of questions) {
         const ask = await askAnswerEngine({ env: process.env }, { question: question.question });
@@ -309,6 +343,7 @@ export const runAnswerEngineBatch = internalAction({
           brandName: brandNameFor(target.brandId),
           productIdentifiers: target.productIdentifiers,
           competitorNames,
+          targetDomain,
           targetPages,
         });
         await ctx.runMutation(internal.answerEngine.recordFinding, {
@@ -323,6 +358,9 @@ export const runAnswerEngineBatch = internalAction({
             `question: ${question.question}`,
             `answer: ${ask.answer}`,
           ],
+          ...(analysis.brandMatch
+            ? { brandMatch: analysis.brandMatch.verdict, brandMatchDetail: analysis.brandMatch.detail }
+            : {}),
         });
       }
       if (!failed) {

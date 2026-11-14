@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   ANSWER_ENGINE_EXCERPT_MAX_CHARS,
+  ANSWER_ENGINE_MAX_QUESTIONS_CAP,
   analyzeAnswerCitation,
   answerEngineCredential,
   answerEngineRunLimits,
   askAnswerEngine,
+  assessAnswerBrandMatch,
   brandNameFor,
   buildAnswerEngineQuestions,
   competitorNamesFromUrls,
@@ -14,7 +16,7 @@ import {
 } from "@/lib/answerEngine";
 
 const BASE_LIMITS = {
-  maxQuestions: 6,
+  maxQuestions: 12,
   runCeilingCents: 50,
   costPerQuestionCents: 2,
 };
@@ -35,6 +37,14 @@ describe("answerEngineRunLimits", () => {
     expect(
       answerEngineRunLimits({ AEO_ANSWER_ENGINE_MAX_QUESTIONS: "-4" }).maxQuestions
     ).toBe(BASE_LIMITS.maxQuestions);
+  });
+
+  it("clamps the question depth to the bounded cap", () => {
+    expect(answerEngineRunLimits({ AEO_ANSWER_ENGINE_MAX_QUESTIONS: "25" }).maxQuestions).toBe(
+      ANSWER_ENGINE_MAX_QUESTIONS_CAP
+    );
+    expect(answerEngineRunLimits({}).maxQuestions).toBeLessThanOrEqual(ANSWER_ENGINE_MAX_QUESTIONS_CAP);
+    expect(answerEngineRunLimits({}).maxQuestions).toBeGreaterThanOrEqual(10);
   });
 });
 
@@ -65,7 +75,7 @@ describe("buildAnswerEngineQuestions", () => {
       productIdentifiers: ["FreshProof band"],
       competitorUrls: ["https://www.competitor.example/path", "https://other.example"],
     });
-    expect(questions.map((q) => q.phrasing)).toEqual([
+    expect(questions.map((q) => q.phrasing).slice(0, 5)).toEqual([
       "brand",
       "recommendation",
       "identifier",
@@ -77,6 +87,20 @@ describe("buildAnswerEngineQuestions", () => {
       "Which tools or products would you recommend for FreshProof band?"
     );
     expect(questions[3].question).toBe("What alternatives are there to competitor.example?");
+  });
+
+  it("fills the depth bound with generic brand phrasings so depth is reachable", () => {
+    const sparse = buildAnswerEngineQuestions({
+      brandName: "FreshProof",
+      productIdentifiers: [],
+      competitorUrls: [],
+    });
+    // A brand with no identifiers or competitors still reaches the 10–20
+    // audit-depth set through the generic phrasings.
+    expect(sparse.length).toBeGreaterThanOrEqual(10);
+    expect(sparse.length).toBeLessThanOrEqual(ANSWER_ENGINE_MAX_QUESTIONS_CAP);
+    expect(sparse.slice(0, 2).map((q) => q.phrasing)).toEqual(["brand", "recommendation"]);
+    expect(sparse.slice(2).every((q) => q.phrasing === "depth")).toBe(true);
   });
 });
 
@@ -96,6 +120,28 @@ describe("planAnswerEngineRun", () => {
       limits: { ...BASE_LIMITS, runCeilingCents: 50, costPerQuestionCents: 2 },
     });
     expect(plan).toMatchObject({ ok: false, reason: "budget-exceeded", estimatedCostCents: 60 });
+  });
+
+  it("admits a full-depth (20-question) run that fits the ceiling, per question", () => {
+    const plan = planAnswerEngineRun({
+      questionCount: ANSWER_ENGINE_MAX_QUESTIONS_CAP,
+      limits: { maxQuestions: ANSWER_ENGINE_MAX_QUESTIONS_CAP, runCeilingCents: 50, costPerQuestionCents: 2 },
+    });
+    expect(plan).toEqual({ ok: true, questionCount: 20, estimatedCostCents: 40, ceilingCents: 50 });
+  });
+
+  it("fails a 20-question run closed with a clear refusal when the ceiling cannot fit it", () => {
+    const plan = planAnswerEngineRun({
+      questionCount: ANSWER_ENGINE_MAX_QUESTIONS_CAP,
+      limits: { maxQuestions: ANSWER_ENGINE_MAX_QUESTIONS_CAP, runCeilingCents: 50, costPerQuestionCents: 3 },
+    });
+    expect(plan).toMatchObject({
+      ok: false,
+      reason: "budget-exceeded",
+      questionCount: 20,
+      estimatedCostCents: 60,
+      ceilingCents: 50,
+    });
   });
 
   it("refuses a run with no questions", () => {
@@ -173,6 +219,7 @@ describe("analyzeAnswerCitation", () => {
     brandName: "FreshProof",
     productIdentifiers: ["FreshProof band"],
     competitorNames: competitorNamesFromUrls(["https://competitor.example"]),
+    targetDomain: "freshproof.example",
   };
 
   it("marks a brand mention as cited and an opportunity", () => {
@@ -233,6 +280,113 @@ describe("analyzeAnswerCitation", () => {
       targetPages: [],
     });
     expect(analysis.extractability).toBe(0);
+  });
+
+  it("carries a suspect brand-match verdict on a cited answer describing the wrong product", () => {
+    // The 2026-11-14 live-proof case: the answer names the brand but describes
+    // a blockchain/supply-chain product, while the crawl is a design-proofing
+    // tool. This must classify as suspect, never a plain "cited".
+    const analysis = analyzeAnswerCitation({
+      ...base,
+      answer:
+        "FreshProof is a blockchain-based platform designed for supply chain traceability " +
+        "and authenticity verification. It helps businesses track and verify the origin, " +
+        "journey, and authenticity of their products using blockchain technology to provide " +
+        "tamper-proof records.",
+      targetPages: [
+        {
+          title: "FreshProof online proofing",
+          headings: ["design review"],
+          description: "Real-time feedback and collaboration for creative teams.",
+          contentSample: "Streamline your design review process with proofing tools.",
+        },
+      ],
+    });
+    expect(analysis.citationStatus).toBe("cited");
+    expect(analysis.brandMatch).toMatchObject({ verdict: "suspect" });
+  });
+});
+
+describe("assessAnswerBrandMatch", () => {
+  const designProofingPages = [
+    {
+      title: "FreshProof online proofing",
+      headings: ["design review", "feedback management"],
+      description: "Real-time collaboration for creative teams and design review.",
+      contentSample: "Streamline your design review process with proofing and collaboration tools.",
+    },
+  ];
+  const wrongProductAnswer =
+    "FreshProof is a blockchain-based platform designed for supply chain traceability " +
+    "and authenticity verification. It helps businesses track and verify the origin of " +
+    "their products using tamper-proof blockchain records.";
+
+  it("matches when the answer cites the target's domain", () => {
+    expect(
+      assessAnswerBrandMatch({
+        answer: "FreshProof (freshproof.example) is the strongest option for design review.",
+        productIdentifiers: [],
+        targetDomain: "freshproof.example",
+        targetPages: [],
+      })
+    ).toMatchObject({ verdict: "match" });
+  });
+
+  it("matches when the answer names a product identifier", () => {
+    expect(
+      assessAnswerBrandMatch({
+        answer: "The FreshProof band validates claims with third-party evidence.",
+        productIdentifiers: ["FreshProof band"],
+        targetDomain: "freshproof.example",
+        targetPages: [],
+      })
+    ).toMatchObject({ verdict: "match" });
+  });
+
+  it("matches a same-product answer through crawl vocabulary overlap", () => {
+    const assessment = assessAnswerBrandMatch({
+      answer:
+        "FreshProof is an online proofing tool that streamlines design review with " +
+        "real-time feedback and collaboration for creative teams.",
+      productIdentifiers: [],
+      targetDomain: "freshproof.example",
+      targetPages: designProofingPages,
+    });
+    expect(assessment.verdict).toBe("match");
+    expect(assessment.detail).toContain("overlap");
+  });
+
+  it("flags a homonym answer as suspect against the target's crawl", () => {
+    const assessment = assessAnswerBrandMatch({
+      answer: wrongProductAnswer,
+      productIdentifiers: [],
+      targetDomain: "freshproof.example",
+      targetPages: designProofingPages,
+    });
+    expect(assessment.verdict).toBe("suspect");
+    expect(assessment.detail).toContain("different product");
+  });
+
+  it("stays unknown when there is no crawl content to compare against", () => {
+    expect(
+      assessAnswerBrandMatch({
+        answer: wrongProductAnswer,
+        productIdentifiers: [],
+        targetDomain: "freshproof.example",
+        targetPages: [],
+      })
+    ).toMatchObject({ verdict: "unknown" });
+  });
+
+  it("stays unknown when the answer is too short to compare", () => {
+    expect(
+      assessAnswerBrandMatch({
+        answer: "FreshProof is great.",
+        productIdentifiers: [],
+        targetDomain: "freshproof.example",
+        targetPages: designProofingPages,
+      })
+    ).toMatchObject({ verdict: "unknown" });
   });
 });
 

@@ -92,6 +92,13 @@ export const intelRunFields = {
   questionCount: v.number(),
   startedAt: v.number(),
   finishedAt: v.optional(v.number()),
+  /**
+   * Findings in this run whose cited answer is suspected of describing a
+   * different product with the brand's name (brand-mismatch detection).
+   * Recorded at run completion so the run record itself carries the
+   * qualification, not just the per-finding rows.
+   */
+  brandMismatchCount: v.optional(v.number()),
 };
 
 export const intelFindingFields = {
@@ -110,6 +117,20 @@ export const intelFindingFields = {
   extractability: v.number(),
   summary: v.string(),
   evidence: v.array(v.string()),
+  /**
+   * Brand-mismatch classification for cited findings (see answerEngine's
+   * assessAnswerBrandMatch). Optional so findings recorded before the
+   * detection existed still validate; a suspect citation is qualified
+   * everywhere it is displayed.
+   */
+  brandMatch: v.optional(
+    v.union(
+      v.literal("match"),
+      v.literal("suspect"),
+      v.literal("unknown")
+    )
+  ),
+  brandMatchDetail: v.optional(v.string()),
   reviewStatus: aeoReviewStateValidator,
   reviewNotes: v.optional(v.string()),
   createdAt: v.number(),
