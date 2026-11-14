@@ -196,11 +196,17 @@ describe("answer-engine run lifecycle", () => {
     mockGateway();
 
     await t.action(internal.answerEngine.runAnswerEngineBatch, {});
-    const rows = await t.run(async (ctx) => ctx.db.query("intelFindings").collect());
-    const cited = rows.filter((row) => row.citationStatus === "cited");
+    const stored = await t.run(async (ctx) => ctx.db.query("intelFindings").collect());
+    const cited = stored.filter((row) => row.citationStatus === "cited");
     expect(cited.length).toBeGreaterThan(0);
     for (const row of cited) {
+      // Stored scale: an integer 0–100.
+      expect(Number.isInteger(row.extractability)).toBe(true);
+      expect(row.extractability).toBeGreaterThanOrEqual(0);
+      expect(row.extractability).toBeLessThanOrEqual(100);
       expect(row.extractability).toBeGreaterThan(0);
+      // Runner-written rows are stamped by the write path.
+      expect(row.source).toBe("runner");
     }
   });
 
@@ -215,6 +221,92 @@ describe("answer-engine run lifecycle", () => {
     const stored = await t.run(async (ctx) => ctx.db.query("intelRuns").collect());
     expect(stored[0]).toMatchObject({ status: "failed" });
     expect(stored[0].finishedAt).toBeDefined();
+  });
+
+  it("refuses a second running run inside the admitting mutation itself", async () => {
+    // The batch's hasRunningRun pre-check is advisory: two concurrent
+    // triggers can both pass it. The admission must re-check in the same
+    // mutation that inserts the run, or concurrent triggers double-spend the
+    // per-run ceiling.
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    const targetId = await connectTarget(user);
+    const runId = await t.run((ctx) =>
+      ctx.db.insert("intelRuns", {
+        userId: "owner",
+        brandId: "freshproof",
+        kind: "answer-engine",
+        status: "running",
+        costCeilingCents: 50,
+        questionCount: 2,
+        startedAt: 1,
+      })
+    );
+
+    // Simulated concurrency: a trigger whose pre-check ran before the row
+    // above existed still arrives at the admission mutation.
+    const refused = await t.mutation(internal.answerEngine.startRun, {
+      targetId,
+      userId: "owner",
+      brandId: "freshproof",
+      questionCount: 2,
+      estimatedCostCents: 4,
+      costCeilingCents: 50,
+    });
+    expect(refused).toBeNull();
+
+    const runs = await t.run(async (ctx) => ctx.db.query("intelRuns").collect());
+    expect(runs).toHaveLength(1);
+    expect(String(runs[0]._id)).toBe(String(runId));
+  });
+
+  it("admits a run once the previous one is no longer running", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    const targetId = await connectTarget(user);
+    await t.run((ctx) =>
+      ctx.db.insert("intelRuns", {
+        userId: "owner",
+        brandId: "freshproof",
+        kind: "answer-engine",
+        status: "failed",
+        costCeilingCents: 50,
+        questionCount: 2,
+        startedAt: 1,
+      })
+    );
+
+    const runId = await t.mutation(internal.answerEngine.startRun, {
+      targetId,
+      userId: "owner",
+      brandId: "freshproof",
+      questionCount: 2,
+      estimatedCostCents: 4,
+      costCeilingCents: 50,
+    });
+    expect(runId).not.toBeNull();
+  });
+
+  it("skips a brand at the batch level when admission loses the race", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    await connectTarget(user);
+    await enabledEnv();
+    mockGateway();
+    await t.run((ctx) =>
+      ctx.db.insert("intelRuns", {
+        userId: "owner",
+        brandId: "freshproof",
+        kind: "answer-engine",
+        status: "running",
+        costCeilingCents: 50,
+        questionCount: 2,
+        startedAt: 1,
+      })
+    );
+
+    const outcome = await t.action(internal.answerEngine.runAnswerEngineBatch, {});
+    expect(outcome).toMatchObject({ started: 0, completed: 0 });
+    expect(outcome.skipped).toEqual([
+      { brandId: "freshproof", reason: "run-already-running" },
+    ]);
   });
 });
 
@@ -322,10 +414,15 @@ describe("answer-engine brand-mismatch detection", () => {
     expect(homonym).toBeDefined();
     expect(homonym).toMatchObject({ citationStatus: "cited", brandMatch: "suspect" });
     expect(homonym?.brandMatchDetail).toContain("different product");
-    // Matching answers still cite cleanly.
+    // A suspect citation is never an unflagged opportunity: the finding row
+    // carries the explicit needs-review classification downstream consumers
+    // (gaps list, strategy plan) render.
+    expect(homonym?.classification).toBe("needs-review");
+    // Matching answers still cite cleanly (and classify as opportunities).
     for (const row of stored.rows.filter((row) => !row.summary.startsWith("What is FreshProof"))) {
       expect(row.citationStatus).toBe("cited");
       expect(row.brandMatch).toBe("match");
+      expect(row.classification).toBe("opportunity");
     }
     // The run record itself carries the mismatch classification.
     expect(stored.runs[0]).toMatchObject({ status: "complete", brandMismatchCount: 1 });

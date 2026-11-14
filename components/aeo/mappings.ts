@@ -90,13 +90,14 @@ export function crawlRowToSnapshot(
 
 /**
  * Extractability drives gap priority: easily extractable content that is not
- * yet cited is the fastest win; a cited finding is already landing.
+ * yet cited is the fastest win; a cited finding is already landing. Stored
+ * extractability is an integer 0–100.
  */
 export function gapPriorityForFinding(row: IntelFindingRow): GapPriority {
-  if (row.citationStatus !== "cited" && row.extractability >= 0.7) {
+  if (row.citationStatus !== "cited" && row.extractability >= 70) {
     return "high";
   }
-  if (row.extractability >= 0.4) return "medium";
+  if (row.extractability >= 40) return "medium";
   return "low";
 }
 
@@ -110,6 +111,10 @@ export function findingRowToGap(row: IntelFindingRow): Gap {
     // The data model records questions and evidence, not keywords; none are
     // invented here.
     keywords: [],
+    // The mismatch verdict rides into every gap-list and plan surface, so a
+    // suspect citation warns there exactly as it does on the intel screen.
+    brandMatch: row.brandMatch,
+    brandMatchDetail: row.brandMatchDetail,
   };
 }
 

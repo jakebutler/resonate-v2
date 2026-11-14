@@ -18,9 +18,16 @@ export function sortGaps(gaps: Gap[]): Gap[] {
   return [...gaps].sort(
     (a, b) =>
       PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] ||
-      (a.kind === b.kind ? 0 : a.kind === "gap" ? -1 : 1),
+      (a.kind === b.kind ? 0 : a.kind === "opportunity" ? 1 : -1),
   );
 }
+
+const KIND_BADGE: Record<Gap["kind"], { label: string; variant: "default" | "secondary" | "destructive" }> = {
+  gap: { label: "Gap", variant: "destructive" },
+  opportunity: { label: "Opportunity", variant: "secondary" },
+  // A suspect citation lands here instead of slipping in as an opportunity.
+  "needs-review": { label: "Needs review", variant: "destructive" },
+};
 
 /**
  * Prioritized keyword and question gaps. Every action here only seeds
@@ -58,10 +65,10 @@ export function GapsPanel({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Badge
-                      variant={gap.kind === "gap" ? "destructive" : "secondary"}
+                      variant={KIND_BADGE[gap.kind].variant}
                       aria-label={`${gap.kind}: ${gap.title}`}
                     >
-                      {gap.kind === "gap" ? "Gap" : "Opportunity"}
+                      {KIND_BADGE[gap.kind].label}
                     </Badge>
                     <Badge
                       variant="outline"
@@ -81,6 +88,12 @@ export function GapsPanel({
                 </div>
                 <p className="mt-1 text-sm font-medium">{gap.title}</p>
                 <p className={cn("text-sm", tokens.textMuted)}>{gap.detail}</p>
+                {gap.brandMatch === "suspect" ? (
+                  <p role="alert" className={cn(tokens.noticeWarning, "mt-1 text-xs")}>
+                    Brand mismatch suspected: {gap.brandMatchDetail ??
+                      "the cited answer may describe a different product with the same name."}
+                  </p>
+                ) : null}
                 {gap.keywords.length > 0 ? (
                   <p className={cn("mt-1 text-xs", tokens.textSubtle)}>
                     {gap.keywords.join(" · ")}

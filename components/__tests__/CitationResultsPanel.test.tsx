@@ -11,7 +11,7 @@ const run: CitationRun = {
       question: "Which tools would you recommend for GLP-1 tracking?",
       citedBrands: ["FreshProof"],
       citedCompetitors: ["TrackGLP"],
-      extractabilityScore: 0.62,
+      extractabilityScore: 62,
       answerExcerpt: "FreshProof tracks doses with cited sources.",
     },
     {

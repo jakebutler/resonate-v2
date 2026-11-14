@@ -41,6 +41,7 @@ function BriefValue({ value }: { value: string | string[] }) {
 export function StrategyPlanPanel({
   plan,
   gapTitles,
+  gapWarnings,
   reviewPending = false,
   onAccept,
   onRequestChanges,
@@ -48,6 +49,12 @@ export function StrategyPlanPanel({
   plan: Loadable<StrategyPlan | null>;
   /** Gap id → human title from the same intel run; ids render when absent. */
   gapTitles?: Record<string, string>;
+  /**
+   * Gap id → mismatch warning for findings a run flagged suspect. A cited
+   * answer suspected of describing a different product carries the same
+   * warning here that the intel screen shows.
+   */
+  gapWarnings?: Record<string, string>;
   /** True while the plan-review mutation is in flight; disables Accept. */
   reviewPending?: boolean;
   onAccept?: (planId: string) => void;
@@ -87,13 +94,27 @@ export function StrategyPlanPanel({
                 ))}
               </dl>
               {loaded.priorityIds.length > 0 ? (
-                <p className={cn("text-sm", tokens.textMuted)}>
-                  Prioritizes {loaded.priorityIds.length} gap
-                  {loaded.priorityIds.length === 1 ? "" : "s"}:{" "}
-                  {loaded.priorityIds
-                    .map((id) => gapTitles?.[id] ?? id)
-                    .join(", ")}
-                </p>
+                <div className={cn("text-sm", tokens.textMuted)}>
+                  <p>
+                    Prioritizes {loaded.priorityIds.length} gap
+                    {loaded.priorityIds.length === 1 ? "" : "s"}:
+                  </p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {loaded.priorityIds.map((id) => {
+                      const warning = gapWarnings?.[id];
+                      return (
+                        <li key={id}>
+                          {gapTitles?.[id] ?? id}
+                          {warning ? (
+                            <span role="alert" className={cn(tokens.noticeWarning, "ml-2 text-xs")}>
+                              Brand mismatch suspected: {warning}
+                            </span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               ) : null}
               {loaded.reviewState === "unreviewed" ||
               loaded.reviewState === "changes-requested" ? (

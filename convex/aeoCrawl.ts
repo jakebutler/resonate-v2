@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import dnsPromises from "node:dns/promises";
 import { BlockedUrlError, validateRemoteUrl } from "../lib/urlGuard";
@@ -69,7 +69,11 @@ export const captureCrawlSnapshot = action({
       throw new Error(result.reason ?? "Firecrawl crawl failed.");
     }
 
-    return await ctx.runMutation(api.aeoIntel.recordCrawlSnapshot, {
+    // The system performed this crawl, so the snapshot is stamped "runner"
+    // via the internal write path — manually recorded snapshots (the public
+    // recordCrawlSnapshot) can never claim runner provenance.
+    return await ctx.runMutation(internal.aeoIntel.recordRunnerCrawlSnapshot, {
+      userId: target.userId,
       brandId: args.brandId,
       targetId: target._id,
       siteUrl: target.siteUrl,
