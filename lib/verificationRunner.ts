@@ -49,6 +49,35 @@ export type VerificationRunResult = {
   summary: { pass: number; fail: number; absent: number; unproven: number };
 };
 
+/** A `<slug>` placeholder token in a contract command, e.g. `<dev-url>`. */
+const CONTRACT_PLACEHOLDER = /^<([a-z0-9-]+)>$/;
+
+/**
+ * Resolves `<slug>` placeholders in a contract command from operator
+ * environment variables (`<dev-url>` -> VERIFICATION_DEV_URL, `<dir>` ->
+ * VERIFICATION_DIR). A placeholder whose variable is unset or blank fails
+ * closed: the caller reports ABSENT naming the variable instead of executing
+ * a command with a literal placeholder.
+ */
+export function resolveContractCommandTokens(
+  command: string,
+  env: Record<string, string | undefined>,
+): { ok: true; tokens: string[] } | { ok: false; missingEnvVar: string } {
+  const resolved: string[] = [];
+  for (const token of command.split(/\s+/)) {
+    const placeholder = CONTRACT_PLACEHOLDER.exec(token);
+    if (!placeholder) {
+      resolved.push(token);
+      continue;
+    }
+    const envVar = `VERIFICATION_${placeholder[1].replaceAll("-", "_").toUpperCase()}`;
+    const value = env[envVar]?.trim();
+    if (!value) return { ok: false, missingEnvVar: envVar };
+    resolved.push(value);
+  }
+  return { ok: true, tokens: resolved };
+}
+
 /** A run is successful only with zero FAIL and zero UNPROVEN — an explicit ABSENT is tolerated. */
 export function isRunSuccessful(result: VerificationRunResult): boolean {
   return result.summary.fail === 0 && result.summary.unproven === 0;

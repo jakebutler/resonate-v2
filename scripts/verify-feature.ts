@@ -27,6 +27,7 @@ import { z } from "zod";
 import {
   isRunSuccessful,
   renderVerificationReport,
+  resolveContractCommandTokens,
   runVerification,
   type CriterionExecutor,
   type ExecutorResult,
@@ -80,10 +81,50 @@ function defaultCommand(criterion: VerificationCriterion): string[] | null {
       return ["npx", "vitest", "run", criterion.target];
     case "playwright":
       return ["npx", "playwright", "test", criterion.target];
+    // Contract criteria are executed separately (executeContract), so their
+    // command is never resolved here.
     case "contract":
-      // The schema requires an explicit command for contract criteria.
-      return criterion.command ? criterion.command.split(/\s+/) : null;
+      return null;
   }
+}
+
+/**
+ * Executes a contract criterion's command. `<slug>` placeholders are resolved
+ * from operator env vars (see resolveContractCommandTokens); an unresolved
+ * placeholder reports ABSENT naming the variable instead of running a literal
+ * placeholder string.
+ */
+async function executeContract(
+  criterion: VerificationCriterion,
+): Promise<ExecutorResult> {
+  if (!criterion.command) {
+    return {
+      outcome: "ABSENT",
+      missingComponent: `command for criterion "${criterion.id}"`,
+      details: "Criterion not run: no command available.",
+    };
+  }
+  const resolved = resolveContractCommandTokens(criterion.command, process.env);
+  if (!resolved.ok) {
+    return {
+      outcome: "ABSENT",
+      missingComponent: `prerequisite "${resolved.missingEnvVar}" (contract command placeholder not set)`,
+      details:
+        `Criterion not run: contract command placeholder requires env var "${resolved.missingEnvVar}". ` +
+        `Provide it to make this criterion runnable.`,
+    };
+  }
+  const result = await runCommand(resolved.tokens[0], resolved.tokens.slice(1));
+  if (result.code === 0) {
+    return { outcome: "PASS", evidence: evidenceFor(resolved.tokens, result) };
+  }
+  return {
+    outcome: "FAIL",
+    details:
+      `\`${resolved.tokens.join(" ")}\` exited ${result.code}.\n` +
+      `stderr tail:\n${result.stderr.slice(-1200)}\n` +
+      `stdout tail:\n${result.stdout.slice(-1200)}`,
+  };
 }
 
 function evidenceFor(command: string[], result: SpawnResult): string {
@@ -134,6 +175,10 @@ function makeExecutor(): CriterionExecutor {
         missingComponent: `target file "${criterion.target}"`,
         details: `Criterion not run: target "${criterion.target}" does not exist in the repo.`,
       };
+    }
+
+    if (criterion.runner === "contract") {
+      return await executeContract(criterion);
     }
 
     const command = defaultCommand(criterion);
