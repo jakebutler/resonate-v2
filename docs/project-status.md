@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 11/14/2026 06:44:47 UTC
+Last updated: 11/14/2026 07:04:17 UTC
 
 ## State
 
@@ -12,27 +12,26 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Refreshed documentation for the current repository state.
+- Updated repository documentation and handoff records.
 
 ## Last Completed Task
 
-- af6e9ee Release: AEO/SEO intelligence surface (#142)
+- f497cfc fix(verify): resolve contract command placeholders from operator env
 
 ## Recent Commits
 
+- f497cfc fix(verify): resolve contract command placeholders from operator env
 - af6e9ee Release: AEO/SEO intelligence surface (#142)
 - 75957b5 Release: feature-verification workflow (#141)
 - f30ac91 Merge pull request #140 from jakebutler/codex/visual-figure-sans
 - 899d79e test: require inherited sans-serif text in exported figures
-- d5e5ad2 chore: preserve unrelated publishing status documentation
 
 ## Local Working Tree
 
--  M convex/_generated/api.d.ts
-- M  lib/__tests__/verificationRunner.test.ts
-- M  lib/verificationRunner.ts
-- M  scripts/verify-feature.ts
+- M  lib/__tests__/visualFigures.test.ts
+- M  tests/setup.ts
 - ?? bun.lock
+- ?? docs/verification/campaigns/2026-11-14.md
 
 ## Next Agent Pickup
 

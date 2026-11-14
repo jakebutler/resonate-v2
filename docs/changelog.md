@@ -5425,3 +5425,25 @@ Legacy hero compatibility: accept only the exact dated or undated directory deri
 ### Branch
 
 - verify/main-live-proof
+
+## 11/14/2026 07:04:17 UTC
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	lib/__tests__/visualFigures.test.ts
+- M	tests/setup.ts
+
+### Working Tree Snapshot
+
+- M  lib/__tests__/visualFigures.test.ts
+- M  tests/setup.ts
+- ?? bun.lock
+- ?? docs/verification/campaigns/2026-11-14.md
+
+### Branch
+
+- verify/main-live-proof

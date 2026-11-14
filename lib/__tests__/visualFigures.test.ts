@@ -60,7 +60,9 @@ describe("evidence-bound figures", () => {
     expect(plan.candidates[0].rows).toEqual([["Reader 🚦", "Editor", "visible feedback"]]);
     expect(plan.candidates[0].insertionAnchor).toBe("## Visible");
     expect(plan.candidates[0].evidence.every(span => content.slice(span.start, span.end) === span.text)).toBe(true);
-  }, 30000);
+    // 24k-break article mapping takes ~13s uncontended; the default-budget 30s
+    // cap makes the test flaky under full-suite CPU contention.
+  }, 120000);
 
   it("refuses unsupported context wrapper tags ignored by HTML fragment parsing", () => {
     const table = "| from | to | relation |\n|---|---|---|\n| Hidden | Editor | unseen feedback |";
