@@ -6,7 +6,9 @@
  *
  * Loads `verification/<featureId>.manifest.json`, executes each criterion on
  * the existing ladder, and writes a dated report to
- * `docs/verification/<featureId>/<date>.md`. Exit code 0 only when no
+ * `docs/verification/<featureId>/<date>.md` plus a structured JSON sidecar of
+ * the same run (`<date>.json` and `latest.json`) for the /verification route.
+ * Exit code 0 only when no
  * criterion FAILED (or was rejected as UNPROVEN); an explicit ABSENT — a
  * missing component feeding the build list, live criteria included — does not
  * fail the run.
@@ -256,6 +258,18 @@ async function main(): Promise<number> {
   await mkdir(reportDir, { recursive: true });
   await writeFile(reportPath, `${report}\n`);
   console.log(`\nReport: ${path.relative(REPO_ROOT, reportPath)}`);
+
+  // Structured sidecar of the same run, next to the markdown report, plus a
+  // stable latest.json the /verification route ingests at build time.
+  const runFile = {
+    run,
+    reportPath: path.relative(REPO_ROOT, reportPath),
+  };
+  const runJson = `${JSON.stringify(runFile, null, 2)}\n`;
+  await writeFile(path.join(reportDir, `${reportDate}.json`), runJson);
+  const latestPath = path.join(reportDir, "latest.json");
+  await writeFile(latestPath, runJson);
+  console.log(`Run file: ${path.relative(REPO_ROOT, latestPath)}`);
 
   if (!isRunSuccessful(run)) {
     console.error(`\n[verify:feature] Feature "${manifest.featureId}" is NOT READY.`);
