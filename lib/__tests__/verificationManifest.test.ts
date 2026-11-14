@@ -101,6 +101,30 @@ describe("verificationManifestSchema", () => {
     expect(rejectedWithIssues(json).length).toBeGreaterThan(0);
   });
 
+  it("rejects a forward reference — a criterion depending on one ordered after it", () => {
+    const json = validManifest();
+    // Reorder so the dependent comes first and its dependency second.
+    const [providerContract, ladderGreen] = [json.criteria[1], json.criteria[0]];
+    json.criteria = [providerContract, ladderGreen];
+    const issues = rejectedWithIssues(json);
+    expect(
+      issues.some((issue) =>
+        issue.includes(
+          'depends on criterion "ladder-green" which is ordered after it',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a dependency cycle (a cycle requires a forward reference)", () => {
+    const json = validManifest();
+    json.criteria[0].dependsOn = ["provider-contract"];
+    const issues = rejectedWithIssues(json);
+    expect(
+      issues.some((issue) => issue.includes("which is ordered after it")),
+    ).toBe(true);
+  });
+
   it("requires an explicit command for contract criteria", () => {
     const json = validManifest();
     delete json.criteria[1].command;
@@ -120,6 +144,15 @@ describe("verificationManifestSchema", () => {
     json.criteria[1].tier = "live-receipt";
     json.criteria[1].prerequisites = ["OPENAI_API_KEY"];
     expect(() => parseVerificationManifest(json)).not.toThrow();
+  });
+
+  it("accepts a criterion declaring a committed receipt path", () => {
+    const json = validManifest();
+    json.criteria[1].receipt = "docs/verification/receipts/2026-11-14-smoke-live-receipt.md";
+    const manifest = parseVerificationManifest(json);
+    expect(manifest.criteria[1].receipt).toBe(
+      "docs/verification/receipts/2026-11-14-smoke-live-receipt.md",
+    );
   });
 
   it("rejects a manifest with zero criteria", () => {

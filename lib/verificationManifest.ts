@@ -63,6 +63,13 @@ export const verificationCriterionSchema = z.object({
   prerequisites: z.array(z.string().min(1)).default([]),
   /** Criterion ids that must PASS before this criterion runs. */
   dependsOn: z.array(kebabCase).default([]),
+  /**
+   * Repo-relative path to a committed, dated live receipt for this criterion.
+   * When its prerequisites are not set in the run environment (e.g. keys
+   * rotated since the receipt was recorded), the runner accepts the receipt
+   * as the criterion's evidence instead of reporting a misleading ABSENT.
+   */
+  receipt: z.string().min(1).optional(),
   description: z.string().optional(),
 });
 
@@ -137,9 +144,27 @@ export const verificationManifestSchema = z
             path: ["criteria", index, "dependsOn", depIndex],
             message: `criterion "${criterion.id}" depends on unknown criterion "${depId}"`,
           });
+          return;
+        }
+        const depIndexInList = manifest.criteria.findIndex((other) => other.id === depId);
+        if (depIndexInList > index) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["criteria", index, "dependsOn", depIndex],
+            message:
+              `criterion "${criterion.id}" depends on criterion "${depId}" which is ordered after it ` +
+              `(forward reference — the runner walks criteria in manifest order, so a dependency must come first)`,
+          });
         }
       });
     });
+
+    // Ordering invariant: the runner walks criteria in manifest order and a
+    // dependency must already have run when its dependent is reached. The
+    // forward-reference rejection above enforces exactly that — every accepted
+    // dependsOn edge points strictly backwards, and backward-only edges are
+    // acyclic by construction (following them strictly decreases position), so
+    // rejecting forward references rejects cycles too.
   });
 
 export type VerificationFixture = z.infer<typeof verificationFixtureSchema>;
