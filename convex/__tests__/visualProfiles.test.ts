@@ -187,6 +187,7 @@ describe("persistent visual profiles", () => {
     await t.run(ctx => ctx.db.patch(article7.postId, { blogSlug: slug }));
     await expect(user.mutation(profileApi.applyCorvoArticle7Exception, { postId: article7.postId, expectedExceptionId: null, expectedPostContext: article7Context }))
       .rejects.toThrow(/Import the approved Corvo seed first/);
+    expect(defined(await user.query(profileApi.resolveForPost, { postId: article7.postId })).approvedSeedException).toBe(false);
     await t.run(ctx => ctx.db.insert("v2VisualSeedImports", {
       brandId: "corvo", seedId: CORVO_VISUAL_SEED_ID, sourceDocumentSha256: corvoSeed.manifest.source_sha256,
       initialProfileRevisionId: saved.profileRevisionId, sourceDocument: corvoSeed.sourceDocument,
@@ -197,10 +198,14 @@ describe("persistent visual profiles", () => {
       .rejects.toThrow(/article 7/);
     await user.mutation(profileApi.applyCorvoArticle7Exception, { postId: article7.postId, expectedExceptionId: null, expectedPostContext: article7Context });
     const before = defined(await user.query(profileApi.resolveForPost, { postId: article7.postId }));
+    expect(before.approvedSeedException).toBe(true);
+    expect(defined(await user.query(profileApi.resolveForPost, { postId: other.postId })).approvedSeedException).toBe(false);
     const pin = { profileRevisionId: before.profileRevisionId, referenceIds: before.referenceIds,
       lessonIds: before.lessonIds, postExceptionId: before.postExceptionId };
     await t.run(ctx => ctx.db.patch(article7.postId, { title: "A newly unrelated article" }));
-    expect(defined(await user.query(profileApi.resolveForPost, { postId: article7.postId })).postExceptionId).toBeNull();
+    const unrelated = defined(await user.query(profileApi.resolveForPost, { postId: article7.postId }));
+    expect(unrelated.postExceptionId).toBeNull();
+    expect(unrelated.approvedSeedException).toBe(false);
     await expect(user.query(profileApi.resolveFromPin, { postId: article7.postId, pin })).rejects.toThrow(/association changed/);
     await t.run(async ctx => {
       await ctx.db.patch(article7.postId, { title: article7Context.title, blogSlug: "unrelated-slug" });
@@ -317,7 +322,8 @@ describe("persistent visual profiles", () => {
       return ctx.db.insert("v2VisualLessons", { ...fields, brandId: "lower-db", postId: null });
     });
     const reloaded = await user.query(profileApi.resolveFromPin, { postId, pin });
-    expect(reloaded).toEqual(resolved);
+    // Pin replay is exact saved state; approvedSeedException is computed live only by resolveForPost.
+    expect(reloaded).toEqual({ ...resolved, approvedSeedException: undefined });
     expect(reloaded.lessons[0].instruction).toBe("Original instruction");
     expect(reloaded.postException?.sourceRecord).toContain("authored by");
     await expect(user.query(profileApi.resolveFromPin, {
@@ -407,7 +413,7 @@ describe("persistent visual profiles", () => {
       expect(profile.references[0].storageId).toBeTruthy();
       const resolved = defined(await session.query(profileApi.resolveForPost, { postId }));
       expect(resolved.referenceIds).toEqual([referenceId]);
-      expect(await session.query(profileApi.resolveFromPin, { postId, pin })).toEqual(resolved);
+      expect(await session.query(profileApi.resolveFromPin, { postId, pin })).toEqual({ ...resolved, approvedSeedException: undefined });
     }
   });
 

@@ -87,7 +87,7 @@ export const getProfile = query({
   },
 });
 
-export const resolvedVisualProfileValidator = v.object({
+const resolvedVisualProfileCore = {
   ...visualProfilePinValidator.fields,
   revision: visualProfileRevisionValidator,
   references: v.array(v.object({
@@ -96,6 +96,12 @@ export const resolvedVisualProfileValidator = v.object({
   })),
   postException: v.union(v.null(), visualPostExceptionValidator),
   lessons: v.array(visualLessonValidator),
+};
+
+/** Frontend-facing resolution; approvedSeedException is computed live per viewed post. */
+export const resolvedVisualProfileValidator = v.object({
+  ...resolvedVisualProfileCore,
+  approvedSeedException: v.boolean(),
 });
 
 const ARTICLE7_SLUG = "what-corvo-labs-learned-building-an-ai-editorial-workflow";
@@ -163,7 +169,9 @@ export const resolveForPost = query({
     const userId = await requireUserId(ctx);
     const post = await ownedBlogPost(ctx, userId, args.postId);
     await requireProfileWrite(ctx, userId, post.brandId, false);
-    return resolveVisualProfileForPost(ctx, userId, args.postId, args);
+    const resolved = await resolveVisualProfileForPost(ctx, userId, args.postId, args);
+    if (!resolved) return null;
+    return { ...resolved, approvedSeedException: (await approvedSeedExceptionBlocker(ctx, post)) === null };
   },
 });
 
@@ -211,7 +219,7 @@ export async function resolveVisualProfileFromPin(
 
 export const resolveFromPin = query({
   args: { postId: v.id("v2Posts"), pin: visualProfilePinValidator },
-  returns: resolvedVisualProfileValidator,
+  returns: v.object(resolvedVisualProfileCore),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await ownedBlogPost(ctx, userId, args.postId);
@@ -492,6 +500,20 @@ function assertViewedPostContext(post: Doc<"v2Posts">, expected: { title: string
   }
 }
 
+/** Shared gate for the verified Corvo archive's approved photographic hand; null means available for this post. */
+async function approvedSeedExceptionBlocker(ctx: QueryCtx | MutationCtx, post: Doc<"v2Posts">): Promise<string | null> {
+  if (post.brandId !== "corvo" || post.channelId !== "corvo-blog" || post.blogSlug !== ARTICLE7_SLUG || post.title !== ARTICLE7_TITLE) {
+    return "The approved photographic hand belongs only to Corvo article 7";
+  }
+  const imported = await ctx.db.query("v2VisualSeedImports")
+    .withIndex("by_brandId_and_seedId", q => q.eq("brandId", "corvo").eq("seedId", CORVO_VISUAL_SEED_ID)).unique();
+  if (!imported) return "Import the approved Corvo seed first";
+  const matching = await ctx.db.query("v2Posts")
+    .withIndex("by_brand_and_blogSlug", q => q.eq("brandId", "corvo").eq("blogSlug", ARTICLE7_SLUG)).take(2);
+  if (matching.length !== 1 || matching[0]._id !== post._id) return "Article 7 must have a unique saved post mapping";
+  return null;
+}
+
 export const setPostException = mutation({
   args: {
     postId: v.id("v2Posts"), expectedExceptionId: v.union(v.null(), v.id("v2VisualPostExceptions")), guidance: v.string(),
@@ -537,15 +559,8 @@ export const applyCorvoArticle7Exception = mutation({
     const post = await ownedBlogPost(ctx, userId, args.postId);
     await requireProfileWrite(ctx, userId, post.brandId);
     assertViewedPostContext(post, args.expectedPostContext);
-    if (post.brandId !== "corvo" || post.title !== ARTICLE7_TITLE || post.blogSlug !== ARTICLE7_SLUG || post.channelId !== "corvo-blog") {
-      throw new Error("The approved photographic hand belongs only to Corvo article 7");
-    }
-    const imported = await ctx.db.query("v2VisualSeedImports")
-      .withIndex("by_brandId_and_seedId", q => q.eq("brandId", "corvo").eq("seedId", CORVO_VISUAL_SEED_ID)).unique();
-    if (!imported) throw new Error("Import the approved Corvo seed first");
-    const matching = await ctx.db.query("v2Posts")
-      .withIndex("by_brand_and_blogSlug", q => q.eq("brandId", "corvo").eq("blogSlug", ARTICLE7_SLUG)).take(2);
-    if (matching.length !== 1 || matching[0]._id !== post._id) throw new Error("Article 7 must have a unique saved post mapping");
+    const blocker = await approvedSeedExceptionBlocker(ctx, post);
+    if (blocker) throw new Error(blocker);
     const latest = await ctx.db.query("v2VisualPostExceptions")
       .withIndex("by_postId_and_revision", q => q.eq("postId", post._id)).order("desc").first();
     if (latest?.seedId === CORVO_VISUAL_SEED_ID && await exceptionApplies(ctx, post, latest)) return { postExceptionId: latest._id, revision: latest.revision };

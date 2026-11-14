@@ -12,8 +12,6 @@ import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { localFixtureTokenUrl } from "@/lib/localFixtureAuth";
 
 export type EditorialVisualPanelProps = { postId: string; brandId: BrandId; savedContentChanged?: boolean; savedPostContext?: { title: string; blogSlug?: string; channelId: string } };
-const article7Title = "What Corvo Labs learned building an AI editorial workflow";
-const article7Slug = "what-corvo-labs-learned-building-an-ai-editorial-workflow";
 const sceneFields: [keyof SceneConcept, string][] = [["subject", "Subject"], ["metaphor", "Core metaphor"], ["action", "Visible action"], ["reveal", "Reveal"], ["articleConnection", "Article connection"], ["articleAnchor", "Article passage"]];
 const usd = (micros: number) => (micros / 1_000_000).toLocaleString("en-US", { style: "currency", currency: "USD" });
 type Profile = FunctionReturnType<typeof api.visualProfiles.getProfile>;
@@ -179,7 +177,7 @@ function ProfileEditor({ brandId, profile, disabled, onSave, onUpload }: { brand
   </details>;
 }
 
-function Article7ExceptionEditor({ context, exception, disabled, seedImported, onApply, onSave }: { context: NonNullable<EditorialVisualPanelProps["savedPostContext"]>; exception: Doc<"v2VisualPostExceptions"> | null; disabled: boolean; seedImported: boolean; onApply(expectedExceptionId: Id<"v2VisualPostExceptions"> | null): Promise<ExceptionSaveReceipt | null>; onSave(guidance: string, expectedExceptionId: Id<"v2VisualPostExceptions"> | null): Promise<ExceptionSaveReceipt | null> }) {
+function PostExceptionEditor({ context, exception, disabled, approvedSeedException, onApply, onSave }: { context: NonNullable<EditorialVisualPanelProps["savedPostContext"]>; exception: Doc<"v2VisualPostExceptions"> | null; disabled: boolean; approvedSeedException: boolean; onApply(expectedExceptionId: Id<"v2VisualPostExceptions"> | null): Promise<ExceptionSaveReceipt | null>; onSave(guidance: string, expectedExceptionId: Id<"v2VisualPostExceptions"> | null): Promise<ExceptionSaveReceipt | null> }) {
   const [baseException, setBaseException] = useState(exception);
   const [ownExceptionId, setOwnExceptionId] = useState<Id<"v2VisualPostExceptions"> | null>(null);
   const [guidance, setGuidance] = useState(exception?.guidance ?? "");
@@ -190,19 +188,19 @@ function Article7ExceptionEditor({ context, exception, disabled, seedImported, o
     setBaseException(exception); setOwnExceptionId(null);
   }
   const dirty = guidance.trim() !== (baseException?.guidance ?? "");
-  async function apply() { if (disabled || conflict || waitingForSave || !seedImported) return; const receipt = await onApply(baseException?._id ?? null); if (receipt) setOwnExceptionId(receipt.postExceptionId); }
+  async function apply() { if (disabled || conflict || waitingForSave || !approvedSeedException) return; const receipt = await onApply(baseException?._id ?? null); if (receipt) setOwnExceptionId(receipt.postExceptionId); }
   async function save() { if (disabled || conflict || waitingForSave || !dirty || !guidance.trim() || guidance.trim().length > 4000) return; const receipt = await onSave(guidance.trim(), baseException?._id ?? null); if (receipt) setOwnExceptionId(receipt.postExceptionId); }
-  return <details className="rounded-lg border border-gray-200 p-3"><summary className="cursor-pointer text-sm font-semibold">Article-7 visual exception{baseException ? ` · revision ${baseException.revision}` : " · none saved"}</summary><div className="mt-3 space-y-3">
-    {conflict && <p role="alert" className="text-sm text-amber-700">Article-7 exception changed in another session. Your draft is preserved; reload the saved exception to continue.</p>}
-    {waitingForSave && <p role="status" className="text-sm text-gray-500">Waiting for the saved article-7 exception revision…</p>}
-    {(conflict || waitingForSave) && <Button type="button" variant="outline" disabled={disabled} onClick={() => { setBaseException(exception); setGuidance(exception?.guidance ?? ""); setOwnExceptionId(null); }}>Reload saved article-7 exception</Button>}
+  return <details className="rounded-lg border border-gray-200 p-3"><summary className="cursor-pointer text-sm font-semibold">Post visual exception{baseException ? ` · revision ${baseException.revision}` : " · none saved"}</summary><div className="mt-3 space-y-3">
+    {conflict && <p role="alert" className="text-sm text-amber-700">Post exception changed in another session. Your draft is preserved; reload the saved exception to continue.</p>}
+    {waitingForSave && <p role="status" className="text-sm text-gray-500">Waiting for the saved post exception revision…</p>}
+    {(conflict || waitingForSave) && <Button type="button" variant="outline" disabled={disabled} onClick={() => { setBaseException(exception); setGuidance(exception?.guidance ?? ""); setOwnExceptionId(null); }}>Reload saved post exception</Button>}
     <fieldset disabled={disabled || conflict || waitingForSave} className="space-y-3">
     <p className="text-sm font-semibold">{context.title}</p><p className="text-xs text-gray-500">{context.blogSlug} · {context.channelId}</p>
-    <p className="text-xs text-gray-500">The approved photographic hand is specific to this saved article. Ordinary human elements use paper construction.</p>
-    {!seedImported && <p className="text-sm text-amber-700">Import the verified Corvo archive before applying its approved hand exception.</p>}
-    <Button type="button" variant="outline" disabled={disabled || !seedImported} onClick={() => void apply()}>Apply approved article-7 hand exception</Button>
-    <Field label="Article-7 exception guidance" value={guidance} onChange={setGuidance} multiline />
-    <Button type="button" variant="outline" disabled={disabled || !dirty || !guidance.trim() || guidance.trim().length > 4000} onClick={() => void save()}>Save article-7 exception guidance</Button>
+    <p className="text-xs text-gray-500">Authored guidance applies only to this saved post, on top of the brand profile.</p>
+    {approvedSeedException && <><p className="text-xs text-gray-500">The approved photographic hand from the verified Corvo archive belongs to this saved article. Ordinary human elements use paper construction.</p>
+    <Button type="button" variant="outline" disabled={disabled} onClick={() => void apply()}>Apply approved article-7 hand exception</Button></>}
+    <Field label="Post exception guidance" value={guidance} onChange={setGuidance} multiline />
+    <Button type="button" variant="outline" disabled={disabled || !dirty || !guidance.trim() || guidance.trim().length > 4000} onClick={() => void save()}>Save post exception guidance</Button>
     <p className="text-xs text-gray-500">Authored guidance creates a post-specific revision. Reload if the post association or exception changes during saving.</p>
     </fieldset>
   </div></details>;
@@ -218,8 +216,8 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
   const availability = useQuery(api.visualProviderConfig.getAvailability, { postId: postId as Id<"v2Posts"> });
   const textAvailability = useQuery(api.visualTextConfig.getAvailability, { postId: postId as Id<"v2Posts"> });
   const seed = useQuery(api.visualProfiles.getSeedStatus, brandId === "corvo" ? { brandId: "corvo" } : "skip");
-  const exactArticle7 = brandId === "corvo" && savedPostContext?.channelId === "corvo-blog" && savedPostContext.blogSlug === article7Slug && savedPostContext.title === article7Title;
-  const postProfile = useQuery(api.visualProfiles.resolveForPost, exactArticle7 && profile ? { postId: postId as Id<"v2Posts"> } : "skip");
+  const isCorvoBlogPost = brandId === "corvo" && savedPostContext?.channelId === "corvo-blog";
+  const postProfile = useQuery(api.visualProfiles.resolveForPost, isCorvoBlogPost && profile ? { postId: postId as Id<"v2Posts"> } : "skip");
   const requestPlan = useMutation(api.visualWorkflow.requestPlan);
   const selectScene = useMutation(api.visualWorkflow.selectScene);
   const requestGeneration = useMutation(api.visualWorkflow.requestGeneration);
@@ -385,9 +383,9 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
         <p>Replace both path and destination placeholders. The command uploads the verified masters and imports the archive. Inspect saved status here before any retry.</p>
       </div></details>
     </div>}
-    {exactArticle7 && savedPostContext && (postProfile ? <Article7ExceptionEditor context={savedPostContext} exception={postProfile.postException} seedImported={Boolean(seed?.imported)} disabled={Boolean(busy || savedContentChanged)}
+    {isCorvoBlogPost && savedPostContext && (postProfile ? <PostExceptionEditor context={savedPostContext} exception={postProfile.postException} approvedSeedException={postProfile.approvedSeedException} disabled={Boolean(busy || savedContentChanged)}
       onApply={async expectedExceptionId => { let receipt: ExceptionSaveReceipt | null = null; const saved = await run(async () => { receipt = await applyArticle7Exception({ postId: postId as Id<"v2Posts">, expectedExceptionId, expectedPostContext: savedPostContext }); }); return saved ? receipt : null; }}
-      onSave={async (guidance, expectedExceptionId) => { let receipt: ExceptionSaveReceipt | null = null; const saved = await run(async () => { receipt = await setPostException({ postId: postId as Id<"v2Posts">, expectedExceptionId, expectedPostContext: savedPostContext, guidance }); }); return saved ? receipt : null; }} /> : <p className="text-xs text-gray-500">{profile ? "Loading article-7 exception…" : "Set up the brand profile to configure article-7 guidance."}</p>)}
+      onSave={async (guidance, expectedExceptionId) => { let receipt: ExceptionSaveReceipt | null = null; const saved = await run(async () => { receipt = await setPostException({ postId: postId as Id<"v2Posts">, expectedExceptionId, expectedPostContext: savedPostContext, guidance }); }); return saved ? receipt : null; }} /> : <p className="text-xs text-gray-500">{profile ? "Loading post exception…" : "Set up the brand profile to configure post exception guidance."}</p>)}
     {savedContentChanged && <p className="text-sm text-amber-700">Save article changes before requesting visuals.</p>}
     {error && <p role="alert">{error}</p>}
     <Button type="button" disabled={busy || !canPlan || pending || savedContentChanged || !profile || !workflow || operations.current.get(planSignature)?.accepted} onClick={() => void plan()}>Plan visuals</Button>
