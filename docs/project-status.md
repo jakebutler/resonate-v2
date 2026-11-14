@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 11/14/2026 08:13:19 UTC
+Last updated: 11/14/2026 10:24:15 UTC
 
 ## State
 
@@ -16,25 +16,23 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 06e7938 docs(verification): record AEO live-proof runs, review-queue walk, and spend
+- ac79c25 docs(verify): date the main-bundle live evidence for campaigns, images, smoke
 
 ## Recent Commits
 
-- 06e7938 docs(verification): record AEO live-proof runs, review-queue walk, and spend
-- 46725d7 docs(verification): scaffold AEO live-proof report (aeo-proof worker)
+- ac79c25 docs(verify): date the main-bundle live evidence for campaigns, images, smoke
+- 43fe2b2 docs(verification): AEO live proof — Firecrawl crawl, visibility run, competitor discovery (#168)
 - b5ea7d3 fix(test): bridge SubtleCrypto digest realm mismatch in the vitest environment (#167)
 - af6e9ee Release: AEO/SEO intelligence surface (#142)
 - 75957b5 Release: feature-verification workflow (#141)
 
 ## Local Working Tree
 
--  M convex/_generated/api.d.ts
--  M convex/_generated/server.d.ts
--  M convex/_generated/server.js
-- M  docs/verification/reports/evidence/aeo-live-proof/driver-crawl.mts
-- M  docs/verification/reports/evidence/aeo-live-proof/driver-query.mts
-- M  docs/verification/reports/evidence/aeo-live-proof/driver-runs.mts
-- ?? .env.aeo-proof
+- M  docs/editorial-visuals/providers/qualification-runs/2026-11-14-live.md
+- M  docs/verification/campaigns/2026-11-14.md
+- M  docs/verification/image-generation/2026-11-14.md
+- M  docs/verification/receipts/2026-11-14-openai-image-editorial-visuals-functional-route-qualification-live-receipt.md
+- M  docs/verification/smoke/2026-11-14.md
 
 ## Next Agent Pickup
 
@@ -43,4 +41,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- verify/aeo-live-proof
+- verify/main-live-proof
