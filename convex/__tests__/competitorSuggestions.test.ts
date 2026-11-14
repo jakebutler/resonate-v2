@@ -209,6 +209,10 @@ describe("discovery proposal lifecycle", () => {
     for (const row of suggestions) {
       expect(row.evidence.length).toBe(row.frequency);
       expect(row.evidence[0]).toContain("→");
+      // The stored phrasings and evidence are user-facing: the provider's
+      // response-format instruction never leaks into the review queue.
+      expect(row.phrasings.join("\n")).not.toContain("Reply with a JSON array");
+      expect(row.evidence.join("\n")).not.toContain("Reply with a JSON array");
     }
     const runs = await t.run(async (ctx) => ctx.db.query("intelRuns").collect());
     expect(runs[0]).toMatchObject({ kind: "competitor-discovery", status: "complete" });

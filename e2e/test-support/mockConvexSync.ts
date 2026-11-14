@@ -3,6 +3,14 @@ import type { Page } from "@playwright/test";
 type Args = Record<string, unknown>;
 
 /**
+ * Thrown by a `mutation` (or `action`) handler to reject the mutation the way
+ * a Convex deployment does: the client's mutation promise rejects, any
+ * optimistic local query patch rolls back, and the error carries the given
+ * message. Handlers must not throw anything else.
+ */
+export class SyncMutationFailure extends Error {}
+
+/**
  * Handlers a spec (or a named fixture module) supplies to fake the Convex
  * sync channel. `value` answers every subscribed query; `mutation` and
  * `action` answer client mutations/actions with their return value sent
@@ -10,7 +18,8 @@ type Args = Record<string, unknown>;
  * subscribed query. A mutation/action handler may return a promise (the
  * harness awaits it and answers only when it settles) or throw — a thrown
  * error is answered as a failed response whose message the real Convex
- * client surfaces as the rejection reason, so specs can exercise failure UI.
+ * client surfaces as the rejection reason, so specs can exercise failure
+ * UI. Throw a `SyncMutationFailure` for an expected failure under test.
  */
 export type SyncHandlers = {
   value: (path: string, args: Args) => unknown;

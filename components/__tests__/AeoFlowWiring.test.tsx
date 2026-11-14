@@ -46,6 +46,14 @@ import { AeoWorkspaceChrome } from "@/components/aeo/AeoWorkspaceChrome";
 const useQueryMock = vi.mocked(useQuery);
 const useMutationMock = vi.mocked(useMutation);
 
+/** A mocked mutation callable that also carries the withOptimisticUpdate API. */
+function mutationMock(impl: (args: never) => Promise<unknown>) {
+  const fn = vi.fn(impl);
+  (fn as unknown as { withOptimisticUpdate: () => typeof fn }).withOptimisticUpdate =
+    () => fn;
+  return fn;
+}
+
 // Radix Select calls scrollIntoView on mount of the selected option; jsdom
 // does not implement it.
 beforeAll(() => {
@@ -193,7 +201,7 @@ describe("AEO flow wiring", () => {
   });
 
   it("wires accept and reject to the review-only suggestion mutation", async () => {
-    const reviewSuggestion = vi.fn().mockResolvedValue(null);
+    const reviewSuggestion = mutationMock(async () => null);
     useMutationMock.mockImplementation((reference: unknown) =>
       reference === "competitorSuggestions:reviewSuggestion" ? reviewSuggestion : vi.fn()
     );
@@ -226,6 +234,39 @@ describe("AEO flow wiring", () => {
         reviewNotes: "Not a real competitor",
       })
     );
+  });
+
+  it("shows a retryable error when the review mutation rejects, and retries it", async () => {
+    const reviewSuggestion = mutationMock(async () => {
+      if (reviewSuggestion.mock.calls.length <= 1) {
+        throw new Error("Competitor suggestion not found");
+      }
+      return null;
+    });
+    useMutationMock.mockImplementation((reference: unknown) =>
+      reference === "competitorSuggestions:reviewSuggestion" ? reviewSuggestion : vi.fn()
+    );
+    useQueryMock.mockImplementation((reference: unknown) => {
+      if (reference === "aeoIntel:getTarget") return targetRow;
+      if (reference === "competitorSuggestions:listSuggestions") return suggestionRows;
+      return undefined;
+    });
+
+    renderFlow(<CompetitorsFlow />);
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+    // The rejection is never swallowed: a visible alert explains it and offers
+    // a Retry that re-runs the same mutation.
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Competitor suggestion not found");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(reviewSuggestion).toHaveBeenCalledTimes(2));
+    expect(reviewSuggestion.mock.calls[0][0]).toMatchObject({
+      brandId: "corvo",
+      suggestionId: "suggestion-1",
+      reviewStatus: "accepted",
+    });
+    expect(reviewSuggestion.mock.calls[1][0]).toEqual(reviewSuggestion.mock.calls[0][0]);
   });
 
   it("accepts and change-requests plans as review states, never approving content", async () => {

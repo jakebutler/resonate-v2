@@ -82,20 +82,18 @@ describe("ConnectTargetPanel", () => {
     expect(onPinReview).toHaveBeenCalledOnce();
   });
 
-  it("shows provider validation states and per-provider validate actions", () => {
-    const onValidate = vi.fn();
+  it("shows provider validation states and no dead per-provider Validate buttons", () => {
     render(
       <ConnectTargetPanel
         brandName="FreshProof"
         target={{ status: "ready", data: connectedTarget }}
-        onValidate={onValidate}
       />,
     );
     expect(screen.getByLabelText("Validated connection")).toBeInTheDocument();
     expect(screen.getByLabelText("Not validated connection")).toBeInTheDocument();
-    const validateButtons = screen.getAllByRole("button", { name: "Validate" });
-    fireEvent.click(validateButtons[1]);
-    expect(onValidate).toHaveBeenCalledWith("answerEngine");
+    // Validation is server-driven and happens at connect time; there is no
+    // per-provider check a client button could run, so none renders.
+    expect(screen.queryByRole("button", { name: "Validate" })).not.toBeInTheDocument();
   });
 
   it("shows the pinned badge once review is pinned", () => {

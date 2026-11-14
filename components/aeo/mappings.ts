@@ -1,4 +1,5 @@
 import type { Doc } from "@/convex/_generated/dataModel";
+import { stripResponseFormatInstruction } from "@/lib/competitorDiscovery";
 import type {
   BrandTarget,
   CitationRun,
@@ -204,17 +205,27 @@ export function suggestionRowsToSets(
   }));
   const suggestions: SuggestedCompetitor[] = rows
     .filter((row) => row.status === "suggested")
-    .map((row) => ({
-      id: row._id,
-      name: row.name,
-      domain: hostOf(row.url),
-      evidence: {
-        source: row.evidence[0] ?? "Discovery pass",
-        occurrences: row.frequency,
-        examplePhrasing: row.phrasings[0],
-      },
-      status: "pending",
-    }));
+    .map((row) => {
+      // Stored labels and phrasings from before the topic split may carry
+      // the provider's response-format instruction — plumbing that never
+      // renders.
+      const phrasings = row.phrasings
+        .map(stripResponseFormatInstruction)
+        .filter((phrasing) => phrasing !== "");
+      return {
+        id: row._id,
+        name: row.name,
+        domain: hostOf(row.url),
+        evidence: {
+          source:
+            stripResponseFormatInstruction(row.evidence[0] ?? "") ||
+            "Discovery pass",
+          occurrences: row.frequency,
+          examplePhrasing: phrasings[0],
+        },
+        status: "pending" as const,
+      };
+    });
   return { confirmed, suggestions };
 }
 

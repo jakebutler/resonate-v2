@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { mockConvexSync } from "./test-support/mockConvexSync";
+import { mockConvexSync, SyncMutationFailure } from "./test-support/mockConvexSync";
 
 // The /aeo flow family against the shared local-sync harness: fixtures never
 // reach a Convex deployment, and every mutation below is a review or a seed —
@@ -259,6 +259,82 @@ test("competitor-review: accept and reject suggestions are review-only writes", 
   });
   // Review-only: every mutation is a review decision, nothing publishes.
   expect(mutations.every((m) => m.path === "competitorSuggestions:reviewSuggestion")).toBe(true);
+});
+
+test("competitor-review: a failed accept shows the error, rolls the row back, and retry succeeds", async ({
+  page,
+}) => {
+  const mutations: Array<{ path: string; args: Record<string, unknown> }> = [];
+  let failAccepts = true;
+  let accepted = false;
+
+  await mockConvexSync(page, {
+    value: (path) => {
+      if (path === "aeoIntel:getTarget") return targetFixture(true);
+      if (path === "competitorSuggestions:listSuggestions") {
+        return [
+          {
+            ...suggestionFixture,
+            // Evidence/phrasing text as a raw answer-engine prompt would have
+            // stored it: the response-format instruction never renders.
+            phrasings: [
+              'Which tools or products would you recommend instead of FreshProof? Reply with a JSON array of objects with "name" and "url".',
+            ],
+            evidence: [
+              'answer-engine (Which tools or products would you recommend instead of FreshProof? Reply with a JSON array of objects with "name" and "url".) → https://rival.example — Rival',
+            ],
+            status: accepted ? "accepted" : "suggested",
+          },
+        ];
+      }
+      return null;
+    },
+    mutation: (path, args) => {
+      mutations.push({ path, args });
+      if (
+        path === "competitorSuggestions:reviewSuggestion" &&
+        args.reviewStatus === "accepted"
+      ) {
+        if (failAccepts) {
+          throw new SyncMutationFailure("Suggestion no longer exists");
+        }
+        accepted = true;
+      }
+      return null;
+    },
+  });
+
+  await page.goto("/aeo/competitors");
+  await expect(page.getByText("Competitor A", { exact: true })).toBeVisible();
+  // The raw response-format instruction from the stored row never renders.
+  await expect(page.getByText("Reply with a JSON array")).toHaveCount(0);
+
+  await page
+    .locator("li", { hasText: "Competitor A" })
+    .getByRole("button", { name: "Accept", exact: true })
+    .click();
+
+  // The optimistic queue removal rolled back: the row is still pending review
+  // and a visible, retryable error explains the failure. Scoped by text —
+  // Next.js's route announcer is also role="alert".
+  const feedbackAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "Suggestion no longer exists" });
+  await expect(feedbackAlert).toBeVisible();
+  await expect(page.getByText("Competitor A", { exact: true })).toBeVisible();
+  await expect(
+    feedbackAlert.getByRole("button", { name: "Retry" }),
+  ).toBeVisible();
+  expect(mutations).toHaveLength(1);
+
+  failAccepts = false;
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByText("Competitor A", { exact: true })).toBeHidden({
+    timeout: 15_000,
+  });
+  expect(mutations).toHaveLength(2);
+  expect(mutations[0]!.args).toMatchObject({ reviewStatus: "accepted" });
+  expect(mutations[1]!.args).toMatchObject({ reviewStatus: "accepted" });
 });
 
 test("plan-review: accept and change-request stay review states; seeding writes brief fields", async ({
