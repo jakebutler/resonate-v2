@@ -57,11 +57,21 @@ export async function getOwnedCampaign(
 }
 
 /**
- * Legacy `posts` rows predate per-row ownership (ADR0004 migration window).
- * Rows created after the ownership fix carry a userId and are owner-only.
- * Historical ownerless rows remain editable as the shared authenticated
- * workspace ADR0004 describes, but only for Corvo workspace members.
+ * Shared ADR0004 access rule for legacy `posts` rows: rows created after the
+ * ownership fix carry a userId and are owner-only; historical ownerless rows
+ * stay editable only by Corvo workspace members.
  */
+export async function requireLegacyPostAccess(
+  ctx: QueryCtx | MutationCtx,
+  userId: string,
+  post: Doc<"posts">
+): Promise<void> {
+  if (post.userId && post.userId !== userId) {
+    throw new Error("Post not found");
+  }
+  if (!post.userId) await requireBrandAccess(ctx, userId, "corvo");
+}
+
 export async function getOwnedLegacyPost(
   ctx: QueryCtx | MutationCtx,
   userId: string,
@@ -70,11 +80,26 @@ export async function getOwnedLegacyPost(
   const normalized = ctx.db.normalizeId("posts", postId);
   if (!normalized) throw new Error("Post not found");
   const post = await ctx.db.get(normalized);
-  if (!post || (post.userId && post.userId !== userId)) {
-    throw new Error("Post not found");
-  }
-  if (!post.userId) await requireBrandAccess(ctx, userId, "corvo");
+  if (!post) throw new Error("Post not found");
+  await requireLegacyPostAccess(ctx, userId, post);
   return post;
+}
+
+/**
+ * Non-throwing membership probe for listing surfaces: callers without the
+ * brand simply do not see the rows that require it.
+ */
+export async function isCorvoWorkspaceMember(
+  ctx: QueryCtx | MutationCtx,
+  userId: string
+): Promise<boolean> {
+  const memberships = await ctx.db
+    .query("v2BrandMemberships")
+    .withIndex("by_user_and_brand", (q) =>
+      q.eq("userId", userId).eq("brandId", "corvo")
+    )
+    .take(2);
+  return memberships.length > 0;
 }
 
 export async function audit(
