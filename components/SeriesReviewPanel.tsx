@@ -5,11 +5,12 @@ import Image from "next/image";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import type { reviewRow } from "@/convex/seriesReview";
+import type { reviewRow, rowDisplay } from "@/convex/seriesReview";
 type Row = Omit<Doc<"seriesReviewRows">, "snapshot"> & {
   snapshot: Awaited<ReturnType<typeof reviewRow>>["snapshot"];
   staleReason: string | null;
   heroUrl: string | null;
+  display: Awaited<ReturnType<typeof rowDisplay>>;
 };
 export function SeriesReviewPanel({
   seriesId,
@@ -31,17 +32,70 @@ export function SeriesReviewPanel({
   const approve = useMutation(api.seriesReview.approve);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [needsReReview, setNeedsReReview] = useState(false);
+  // Optimistic local selection: checkbox state flips immediately and is
+  // reconciled against the server selection when the query catches up.
+  const [draftSelection, setDraftSelection] = useState<
+    Id<"v2Posts">[] | null
+  >(null);
+  // Ref-based in-flight guard: a synchronous double click must not submit
+  // twice before React re-renders the disabled state.
+  const busyRef = useRef(false);
+  const selectQueue = useRef<Promise<void>>(Promise.resolve());
+  // The selection revision the server will see after the queued selects
+  // land: each toggle optimistically counts one revision forward.
+  const expectedRevisionRef = useRef<number | null>(null);
   const alert = useRef<HTMLParagraphElement>(null);
+  const selectedIds = draftSelection ?? selection?.postIds ?? [];
   async function run(fn: () => Promise<void>) {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       await fn();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Review failed.");
+      const text = e instanceof Error ? e.message : "Review failed.";
+      // A server-side revision conflict throws instead of returning a
+      // result; classify it as the re-review state, not a generic failure.
+      if (/changed|reload|review again/i.test(text)) {
+        setNeedsReReview(true);
+        setMessage(`Content changed — review again: ${text}`);
+      } else {
+        setMessage(text);
+      }
       alert.current?.focus();
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
+  }
+  function toggleSelect(postId: Id<"v2Posts">, checked: boolean) {
+    const next = checked
+      ? [...selectedIds, postId]
+      : selectedIds.filter((id) => id !== postId);
+    setDraftSelection(next);
+    const expected = expectedRevisionRef.current ?? selection?.revision ?? 0;
+    expectedRevisionRef.current = expected + 1;
+    // Queued in order so rapid toggles never send a stale expectedRevision;
+    // a server-side revision conflict surfaces the re-review state.
+    selectQueue.current = selectQueue.current.then(() =>
+      select({ seriesId, postIds: next, expectedRevision: expected })
+        .then(() => {
+          setNeedsReReview(false);
+          setMessage("Selection saved; prepare a new packet.");
+        })
+        .catch((e: unknown) => {
+          expectedRevisionRef.current = null;
+          setDraftSelection(null);
+          setNeedsReReview(true);
+          setMessage(
+            e instanceof Error && e.message
+              ? `Selection changed — review again: ${e.message}`
+              : "Selection changed — review again.",
+          );
+          alert.current?.focus();
+        }),
+    );
   }
   return (
     <section
@@ -64,20 +118,8 @@ export function SeriesReviewPanel({
           <label className="block py-1" key={post._id}>
             <input
               type="checkbox"
-              checked={selection?.postIds.includes(post._id) ?? false}
-              onChange={(e) => {
-                const next = e.target.checked
-                  ? [...(selection?.postIds ?? []), post._id]
-                  : (selection?.postIds ?? []).filter((id) => id !== post._id);
-                void run(async () => {
-                  await select({
-                    seriesId,
-                    postIds: next,
-                    expectedRevision: selection?.revision ?? 0,
-                  });
-                  setMessage("Selection saved; prepare a new packet.");
-                });
-              }}
+              checked={selectedIds.includes(post._id)}
+              onChange={(e) => toggleSelect(post._id, e.target.checked)}
             />{" "}
             {post.title} · {post.channelId} · {post.approvalState}
           </label>
@@ -88,7 +130,12 @@ export function SeriesReviewPanel({
         disabled={busy || !selection?.postIds.length}
         onClick={() =>
           void run(async () => {
-            await prepare({ seriesId, expectedRevision: selection!.revision });
+            await prepare({
+              seriesId,
+              expectedRevision:
+                expectedRevisionRef.current ?? selection!.revision,
+            });
+            setNeedsReReview(false);
             setMessage(
               "Saved exact selected review packet. Read each complete row before approving.",
             );
@@ -103,13 +150,24 @@ export function SeriesReviewPanel({
       {review && (
         <>
           <p>
-            Packet {review.packet._id} · {review.rows.length} selected ·
-            reviewed {new Date(review.packet.createdAt).toLocaleString()}
+            Review packet prepared{" "}
+            {new Date(review.packet.createdAt).toLocaleString()} ·{" "}
+            {review.rows.length} selected
+          </p>
+          <p className="font-mono text-xs opacity-70">
+            Packet ID {review.packet._id}
           </p>
           {review.stale && (
             <p role="status">
               This packet is stale because selection, membership or a row
               changed. Prepare a new packet.
+            </p>
+          )}
+          {needsReReview && (
+            <p role="alert" className="rounded border border-amber-600 p-2">
+              Content changed — review again. What you reviewed no longer
+              matches the current selection or content; your approval was not
+              applied. Review the refreshed rows, then prepare a new packet.
             </p>
           )}
           <div className="space-y-4">
@@ -204,11 +262,53 @@ export function SeriesReviewPanel({
                     </p>
                   )}
                   <p>
-                    Source idea: {s.sourceIdeaId ?? "none"} · Brief:{" "}
-                    {s.sourceResearchBriefId ?? "none"} · Campaign:{" "}
-                    {s.sourceCampaignId ?? "none"}
+                    Source idea:{" "}
+                    {s.sourceIdeaId
+                      ? (row.display.ideaTitle ??
+                        "Unavailable in this workspace")
+                      : "none"}{" "}
+                    · Brief:{" "}
+                    {s.sourceResearchBriefId
+                      ? (row.display.briefTopic ??
+                        "Unavailable in this workspace")
+                      : "none"}{" "}
+                    · Campaign:{" "}
+                    {s.sourceCampaignId
+                      ? (row.display.campaignTitle ??
+                        "Unavailable in this workspace")
+                      : "none"}
                   </p>
-                  <p>Citations: {s.citations.join(", ") || "none"}</p>
+                  {(s.sourceIdeaId ||
+                    s.sourceResearchBriefId ||
+                    s.sourceCampaignId) && (
+                    <p className="font-mono text-xs opacity-70">
+                      Source IDs: idea {s.sourceIdeaId ?? "—"} · brief{" "}
+                      {s.sourceResearchBriefId ?? "—"} · campaign{" "}
+                      {s.sourceCampaignId ?? "—"}
+                    </p>
+                  )}
+                  {s.citations.length ? (
+                    <div>
+                      <p>Citations</p>
+                      <ul className="space-y-1">
+                        {s.citations.map((c, i) => {
+                          const resolved = row.display.citations[i];
+                          return (
+                            <li key={c}>
+                              {resolved?.text
+                                ? `Excerpt from ${resolved.documentName ?? "brand corpus"}: “${resolved.text}”`
+                                : c}
+                              <span className="block font-mono text-xs opacity-70">
+                                {c}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p>Citations: none</p>
+                  )}
                   <ul aria-label={`Warnings for ${p.title}`}>
                     {s.warnings.map((w) => (
                       <li key={w}>Warning: {w}</li>
@@ -223,10 +323,18 @@ export function SeriesReviewPanel({
                     ))}
                   </ul>
                   {row.approvedAt && (
-                    <p>
-                      Editorial version approved by {row.actor} at{" "}
-                      {new Date(row.approvedAt).toLocaleString()}.
-                    </p>
+                    <>
+                      {/* The actor is always this viewer: approve stamps the
+                      requireUserId identity and ownPacket gates rows to the
+                      packet owner's own selection. */}
+                      <p>
+                        Editorial version approved by you at{" "}
+                        {new Date(row.approvedAt).toLocaleString()}.
+                      </p>
+                      <p className="font-mono text-xs opacity-70">
+                        Actor {row.actor}
+                      </p>
+                    </>
                   )}
                 </article>
               );
@@ -247,10 +355,17 @@ export function SeriesReviewPanel({
                   expectedSelectionRevision: review.packet.selectionRevision,
                 });
                 if (!result.approved) {
+                  const reasons = (result.errors ?? []).map(
+                    (e: { reason: string }) => e.reason,
+                  );
+                  // The server refuses to apply a stale approval; surface it
+                  // as a re-review state rather than a generic error.
+                  if (reasons.some((r) => /changed|refresh/i.test(r)))
+                    setNeedsReReview(true);
                   setMessage(
-                    (result.errors ?? [])
-                      .map((e: { reason: string }) => e.reason)
-                      .join(" "),
+                    reasons.some((r) => /changed|refresh/i.test(r))
+                      ? `Content changed — review again. ${reasons.join(" ")}`
+                      : reasons.join(" "),
                   );
                   requestAnimationFrame(() => {
                     const first = result.errors?.[0]?.postId;
@@ -260,10 +375,12 @@ export function SeriesReviewPanel({
                         : null) ?? alert.current
                     )?.focus();
                   });
-                } else
+                } else {
+                  setNeedsReReview(false);
                   setMessage(
                     `Approved exactly ${review.rows.length} selected editorial versions. No dispatch or PR was requested.`,
                   );
+                }
               })
             }
           >
