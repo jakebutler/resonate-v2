@@ -3,7 +3,7 @@ import { UserButton } from "@clerk/nextjs";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 
-export type WorkspaceSurface = "calendar" | "queue" | "series" | "campaigns" | "research" | "connections" | "aeo-seo";
+export type WorkspaceSurface = "calendar" | "queue" | "series" | "campaigns" | "research" | "connections" | "aeo-seo" | "verification";
 
 type ShellProps = {
   activeSurface: WorkspaceSurface;
@@ -65,6 +65,13 @@ export function Shell({ activeSurface, children }: ShellProps) {
               className={navLinkClass(activeSurface === "aeo-seo")}
             >
               AEO/SEO
+            </Link>
+            <Link
+              href="/verification"
+              aria-current={activeSurface === "verification" ? "page" : undefined}
+              className={navLinkClass(activeSurface === "verification")}
+            >
+              Verification
             </Link>
             <Link
               href="/#connections"
