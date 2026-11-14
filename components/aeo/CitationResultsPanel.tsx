@@ -90,8 +90,8 @@ export function CitationResultsPanel({
                       ))}
                       {typeof result.extractabilityScore === "number" ? (
                         <span className={cn("text-xs", tokens.textSubtle)}>
-                          Extractability{" "}
-                          {Math.round(result.extractabilityScore * 100)}%
+                          {/* Stored scale is an integer 0–100. */}
+                          Extractability {result.extractabilityScore}%
                         </span>
                       ) : null}
                     </div>

@@ -50,6 +50,14 @@ export const siteCrawlFields = {
   ),
   pageCount: v.number(),
   detail: v.optional(v.string()),
+  /**
+   * Who wrote this row: "runner" (a system crawl capture the user triggered
+   * through the app) or "manual" (client-recorded content, no system crawl
+   * behind it). Stamped by the write path, never client-supplied — manual
+   * rows cannot claim "runner". Optional only so rows written before the
+   * field existed still validate on read.
+   */
+  source: v.optional(v.union(v.literal("runner"), v.literal("manual"))),
   createdAt: v.number(),
 };
 
@@ -107,16 +115,26 @@ export const intelFindingFields = {
   runId: v.id("intelRuns"),
   classification: v.union(
     v.literal("gap"),
-    v.literal("opportunity")
+    v.literal("opportunity"),
+    v.literal("needs-review")
   ),
   citationStatus: v.union(
     v.literal("cited"),
     v.literal("uncited"),
     v.literal("not-observed")
   ),
+  /** Stored scale: an integer 0–100 (validateStoredExtractability). */
   extractability: v.number(),
   summary: v.string(),
   evidence: v.array(v.string()),
+  /**
+   * Who wrote this row: "runner" (the scheduled answer-engine batch, via the
+   * internal recordFinding) or "manual" (a client-recorded finding). Stamped
+   * by the write path, never client-supplied — manual rows cannot claim
+   * "runner". Optional only so rows written before the field existed still
+   * validate on read.
+   */
+  source: v.optional(v.union(v.literal("runner"), v.literal("manual"))),
   /**
    * Brand-mismatch classification for cited findings (see answerEngine's
    * assessAnswerBrandMatch). Optional so findings recorded before the

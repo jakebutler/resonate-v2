@@ -81,9 +81,9 @@ const findingRows = [
     brandId: "corvo",
     runId: "run-1",
     question: "What is FreshProof?",
-    classification: "product-gap" as const,
+    classification: "gap" as const,
     citationStatus: "uncited" as const,
-    extractability: 0.8,
+    extractability: 80,
     summary: "No third-party pages describe FreshProof's methodology",
     evidence: ["What is FreshProof?", "No answer mentioned FreshProof"],
     reviewStatus: "unreviewed" as const,
@@ -350,7 +350,7 @@ describe("AEO flow wiring", () => {
         brandId: "corvo",
         content:
           "No third-party pages describe FreshProof's methodology\n\nWhat is FreshProof? · No answer mentioned FreshProof",
-        tags: ["aeo-gap", "product-gap", "high"],
+        tags: ["aeo-gap", "gap", "high"],
         sourceTitle: "No third-party pages describe FreshProof's methodology",
       })
     );

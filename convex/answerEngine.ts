@@ -11,8 +11,10 @@ import {
   askAnswerEngine,
   competitorNameFromUrl,
   competitorNamesFromUrls,
+  extractabilityToStorage,
   planAnswerEngineRun,
   truncateAnswerExcerpt,
+  validateStoredExtractability,
 } from "../lib/answerEngine";
 
 /**
@@ -83,13 +85,26 @@ export const startRun = internalMutation({
     estimatedCostCents: v.number(),
     costCeilingCents: v.number(),
   },
-  returns: v.id("intelRuns"),
+  /** The admitted run's id, or null when another run is already running. */
+  returns: v.union(v.id("intelRuns"), v.null()),
   handler: async (ctx, args) => {
     const target = await ctx.db.get(args.targetId);
     if (!target || target.userId !== args.userId || target.brandId !== args.brandId) {
       throw new Error("Brand target not found");
     }
     await requireBrandAccess(ctx, args.userId, args.brandId);
+    // Atomic admission: the running-run check lives in the same mutation that
+    // inserts the run. The batch's earlier hasRunningRun query is advisory —
+    // two concurrent triggers can both pass it — so the insert itself
+    // re-checks and the loser gets null instead of a second running row
+    // (double-spending the per-run ceiling).
+    const runs = await ctx.db
+      .query("intelRuns")
+      .withIndex("by_user_and_brand", (q) => q.eq("userId", args.userId).eq("brandId", args.brandId))
+      .collect();
+    if (runs.some((run) => run.kind === "answer-engine" && run.status === "running")) {
+      return null;
+    }
     const runId = await ctx.db.insert("intelRuns", {
       userId: args.userId,
       brandId: args.brandId,
@@ -121,7 +136,7 @@ export const recordFinding = internalMutation({
     userId: v.string(),
     brandId: brandIdValidator,
     question: v.string(),
-    classification: v.union(v.literal("gap"), v.literal("opportunity")),
+    classification: v.union(v.literal("gap"), v.literal("opportunity"), v.literal("needs-review")),
     citationStatus: v.union(v.literal("cited"), v.literal("uncited"), v.literal("not-observed")),
     extractability: v.number(),
     evidence: v.array(v.string()),
@@ -144,12 +159,16 @@ export const recordFinding = internalMutation({
       runId: run._id,
       classification: args.classification,
       citationStatus: args.citationStatus,
-      extractability: args.extractability,
+      // Runner rows are bounded to the stored 0–100 integer scale at the
+      // write boundary, same as manual rows.
+      extractability: validateStoredExtractability(args.extractability),
       summary: args.question,
       // Evidence is the question plus a bounded answer excerpt; raw provider
       // responses are never stored whole.
       evidence: [...args.evidence.slice(0, 1), truncateAnswerExcerpt(args.evidence[1] ?? "")].filter(Boolean),
       reviewStatus: "unreviewed",
+      // Stamped by the write path: a runner row is always runner-written.
+      source: "runner",
       brandMatch: args.brandMatch,
       brandMatchDetail: args.brandMatchDetail,
       createdAt: Date.now(),
@@ -319,6 +338,12 @@ export const runAnswerEngineBatch = internalAction({
         estimatedCostCents: plan.estimatedCostCents,
         costCeilingCents: plan.ceilingCents,
       });
+      // The atomic admission inside startRun refused: another trigger admitted
+      // a run between our pre-check and the insert.
+      if (runId === null) {
+        outcome.skipped.push({ brandId: target.brandId, reason: "run-already-running" });
+        continue;
+      }
       outcome.started += 1;
 
       const competitorNames = competitorNamesFromUrls(target.competitorUrls);
@@ -353,7 +378,8 @@ export const runAnswerEngineBatch = internalAction({
           question: question.question,
           classification: analysis.classification,
           citationStatus: analysis.citationStatus,
-          extractability: analysis.extractability,
+          // Stored scale is an integer 0–100; the heuristic scores 0–1.
+          extractability: extractabilityToStorage(analysis.extractability),
           evidence: [
             `question: ${question.question}`,
             `answer: ${ask.answer}`,

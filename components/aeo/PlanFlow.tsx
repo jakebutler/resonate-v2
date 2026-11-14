@@ -28,6 +28,7 @@ type CampaignOption = { _id: Id<"campaigns">; title: string };
 export function PlanFlow() {
   const { brandId } = useAeoBrand();
   const planRow = useQuery(api.aeoIntel.getLatestStrategyPlan, { brandId });
+  const findingRows = useQuery(api.aeoIntel.listFindings, { brandId });
   const campaignRows = useQuery(api.campaigns.listCampaigns, {});
   const savePlan = useAeoMutation(
     useMutation(api.aeoIntel.saveStrategyPlan)
@@ -47,6 +48,19 @@ export function PlanFlow() {
     planRow !== undefined && planRow !== null
       ? planRowToStrategyPlan(planRow).gapTitles
       : undefined;
+
+  // A cited answer suspected of describing a different product carries its
+  // warning into the plan: same verdict, same detail, as the intel screen.
+  // Tolerates null/undefined while the subscription is loading or unmocked.
+  const gapWarnings = Object.fromEntries(
+    (findingRows ?? [])
+      .filter((row) => row.brandMatch === "suspect")
+      .map((row) => [
+        row._id,
+        row.brandMatchDetail ??
+          "the cited answer may describe a different product with the same name.",
+      ]),
+  );
 
   const brandCampaigns: CampaignOption[] = (campaignRows ?? []).filter(
     (campaign) => campaign.brandId === brandId
@@ -78,6 +92,7 @@ export function PlanFlow() {
       <StrategyPlanPanel
         plan={plan}
         gapTitles={gapTitles}
+        gapWarnings={gapWarnings}
         reviewPending={savePlan.state.status === "pending"}
         onAccept={(planId) => {
           if (!planRow) return;

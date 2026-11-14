@@ -83,7 +83,7 @@ function findingRow(overrides: Partial<Doc<"intelFindings">>): Doc<"intelFinding
     runId,
     classification: "opportunity",
     citationStatus: "cited",
-    extractability: 0.5,
+    extractability: 50,
     summary: "Would you recommend FreshProof?",
     evidence: ["question: q", "answer: a"],
     reviewStatus: "unreviewed",

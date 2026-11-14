@@ -273,7 +273,7 @@ export type AnswerTargetPage = {
 export type AnswerCitationAnalysis = {
   citationStatus: "cited" | "uncited" | "not-observed";
   extractability: number;
-  classification: "gap" | "opportunity";
+  classification: "gap" | "opportunity" | "needs-review";
   /**
    * Set only when the answer cites the brand: whether the cited content is
    * actually about the connected target. A suspect citation must never be
@@ -445,18 +445,22 @@ export function analyzeAnswerCitation(input: {
   const structure = answerStructureScore(input.answer, brandSubjects);
   const coverage = contentCoverage(input.question, input.targetPages);
   if (cited) {
+    const brandMatch = assessAnswerBrandMatch({
+      answer: input.answer,
+      productIdentifiers: input.productIdentifiers,
+      targetDomain: input.targetDomain,
+      targetPages: input.targetPages,
+    });
     return {
       citationStatus: "cited",
       // 70% quotability of the answer itself, 30% whether the target's
       // content can back the citation.
       extractability: round2(Math.min(1, 0.7 * structure + 0.3 * coverage)),
-      classification: "opportunity",
-      brandMatch: assessAnswerBrandMatch({
-        answer: input.answer,
-        productIdentifiers: input.productIdentifiers,
-        targetDomain: input.targetDomain,
-        targetPages: input.targetPages,
-      }),
+      // A suspect citation is never an unflagged opportunity: it comes back
+      // "needs-review" so every consumer (gaps list, strategy plan) treats
+      // it as unverified until a human confirms which product was cited.
+      classification: brandMatch.verdict === "suspect" ? "needs-review" : "opportunity",
+      brandMatch,
     };
   }
   return {
@@ -472,4 +476,24 @@ export function truncateAnswerExcerpt(answer: string): string {
   return answer.length > ANSWER_ENGINE_EXCERPT_MAX_CHARS
     ? `${answer.slice(0, ANSWER_ENGINE_EXCERPT_MAX_CHARS)}...`
     : answer;
+}
+
+/**
+ * Stored extractability scale: an integer 0–100. The heuristics above score
+ * 0–1; every write boundary converts through this helper so neither the
+ * runner nor a manual caller can persist an unbounded or fractional value.
+ */
+export function extractabilityToStorage(score01: number): number {
+  return Math.max(0, Math.min(100, Math.round(score01 * 100)));
+}
+
+/**
+ * Validates the stored scale at every write boundary (runner and manual rows
+ * alike). Returns the value so the call site can inline it in the insert.
+ */
+export function validateStoredExtractability(value: number): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 100) {
+    throw new Error("Extractability must be an integer from 0 to 100.");
+  }
+  return value;
 }

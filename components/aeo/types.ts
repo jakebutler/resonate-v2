@@ -71,7 +71,10 @@ export type CitationQuestionResult = {
   question: string;
   citedBrands: string[];
   citedCompetitors: string[];
-  /** 0–1 extractability score against the connected target's content. */
+  /**
+   * Stored extractability score against the connected target's content: an
+   * integer 0–100 (the storage scale validateStoredExtractability bounds).
+   */
   extractabilityScore?: number;
   answerExcerpt?: string;
   /**
@@ -120,7 +123,7 @@ export type CompetitorSets = {
   suggestions: SuggestedCompetitor[];
 };
 
-export type GapKind = "gap" | "opportunity";
+export type GapKind = "gap" | "opportunity" | "needs-review";
 
 export type GapPriority = "high" | "medium" | "low";
 
@@ -131,6 +134,13 @@ export type Gap = {
   title: string;
   detail: string;
   keywords: string[];
+  /**
+   * Brand-mismatch verdict carried from the finding row: "suspect" means the
+   * cited answer may describe a different product — the gap list and plan
+   * must show the same warning the intel screen shows.
+   */
+  brandMatch?: BrandMatchVerdict;
+  brandMatchDetail?: string;
 };
 
 /** Brief fields mapped to the Marketing Director's required brief set. */

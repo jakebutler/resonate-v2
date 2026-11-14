@@ -11,8 +11,10 @@ import {
   buildAnswerEngineQuestions,
   competitorNamesFromUrls,
   contentCoverage,
+  extractabilityToStorage,
   planAnswerEngineRun,
   truncateAnswerExcerpt,
+  validateStoredExtractability,
 } from "@/lib/answerEngine";
 
 const BASE_LIMITS = {
@@ -304,6 +306,40 @@ describe("analyzeAnswerCitation", () => {
     });
     expect(analysis.citationStatus).toBe("cited");
     expect(analysis.brandMatch).toMatchObject({ verdict: "suspect" });
+    // A suspect answer is never an unflagged opportunity: it classifies as
+    // needs-review so every downstream surface treats it as unverified.
+    expect(analysis.classification).toBe("needs-review");
+  });
+
+  it("keeps a cited answer with an unknown verdict an opportunity", () => {
+    const analysis = analyzeAnswerCitation({
+      ...base,
+      answer: "FreshProof is a solid choice for claim validation.",
+      targetPages: [],
+    });
+    expect(analysis.classification).toBe("opportunity");
+  });
+});
+
+describe("stored extractability scale", () => {
+  it("converts the 0–1 heuristic score to an integer 0–100", () => {
+    expect(extractabilityToStorage(0)).toBe(0);
+    expect(extractabilityToStorage(0.79)).toBe(79);
+    expect(extractabilityToStorage(0.555)).toBe(56);
+    expect(extractabilityToStorage(1)).toBe(100);
+  });
+
+  it("clamps out-of-range heuristic scores", () => {
+    expect(extractabilityToStorage(-0.2)).toBe(0);
+    expect(extractabilityToStorage(1.4)).toBe(100);
+  });
+
+  it("accepts only in-range integers at the write boundary", () => {
+    expect(validateStoredExtractability(0)).toBe(0);
+    expect(validateStoredExtractability(100)).toBe(100);
+    expect(() => validateStoredExtractability(-1)).toThrow(/integer from 0 to 100/);
+    expect(() => validateStoredExtractability(101)).toThrow(/integer from 0 to 100/);
+    expect(() => validateStoredExtractability(0.5)).toThrow(/integer from 0 to 100/);
   });
 });
 

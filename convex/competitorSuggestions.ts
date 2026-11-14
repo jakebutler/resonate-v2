@@ -85,13 +85,25 @@ export const startDiscoveryRun = internalMutation({
     estimatedCostCents: v.number(),
     costCeilingCents: v.number(),
   },
-  returns: v.id("intelRuns"),
+  /** The admitted run's id, or null when another run is already running. */
+  returns: v.union(v.id("intelRuns"), v.null()),
   handler: async (ctx, args) => {
     const target = await ctx.db.get(args.targetId);
     if (!target || target.userId !== args.userId || target.brandId !== args.brandId) {
       throw new Error("Brand target not found");
     }
     await requireBrandAccess(ctx, args.userId, args.brandId);
+    // Atomic admission (the same TOCTOU fix as answerEngine.startRun): the
+    // running-run check lives in the same mutation that inserts the run, so
+    // two concurrent batch triggers cannot both admit a run and double-spend
+    // the per-run ceiling.
+    const runs = await ctx.db
+      .query("intelRuns")
+      .withIndex("by_user_and_brand", (q) => q.eq("userId", args.userId).eq("brandId", args.brandId))
+      .collect();
+    if (runs.some((run) => run.kind === "competitor-discovery" && run.status === "running")) {
+      return null;
+    }
     const runId = await ctx.db.insert("intelRuns", {
       userId: args.userId,
       brandId: args.brandId,
@@ -363,6 +375,12 @@ export const runDiscoveryBatch = internalAction({
         estimatedCostCents: plan.estimatedCostCents,
         costCeilingCents: plan.ceilingCents,
       });
+      // The atomic admission inside startDiscoveryRun refused: another
+      // trigger admitted a run between our pre-check and the insert.
+      if (runId === null) {
+        outcome.skipped.push({ brandId: target.brandId, reason: "run-already-running" });
+        continue;
+      }
       outcome.started += 1;
 
       let failed = false;

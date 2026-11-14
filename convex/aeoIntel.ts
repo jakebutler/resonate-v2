@@ -1,7 +1,9 @@
 import { v } from "convex/values";
-import { query, mutation, type QueryCtx, type MutationCtx } from "./_generated/server";
+import { query, mutation, internalMutation, type QueryCtx, type MutationCtx } from "./_generated/server";
 import { BlockedUrlError, validatePublicHttpsUrl } from "../lib/urlGuard";
 import { audit, brandIdValidator, requireBrandAccess, requireUserId } from "./campaignAccess";
+import { answerEngineRunLimits, validateStoredExtractability } from "../lib/answerEngine";
+import type { Id } from "./_generated/dataModel";
 import {
   aeoBrandTargetValidator,
   aeoCrawlPageValidator,
@@ -248,6 +250,92 @@ export const pinTargetReview = mutation({
   },
 });
 
+type CrawlPageWrite = {
+  url: string;
+  title?: string;
+  headings: string[];
+  schemaTypes: string[];
+  description?: string;
+  contentSample?: string;
+};
+
+/**
+ * Shared write path for immutable crawl snapshots. `source` is stamped by the
+ * caller's path — never accepted from client args — so a manually recorded
+ * snapshot cannot claim it was written by the system's crawl runner.
+ */
+async function insertCrawlSnapshot(
+  ctx: MutationCtx,
+  input: {
+    userId: string;
+    brandId: BrandId;
+    targetId: string;
+    siteUrl: string;
+    version: number;
+    status: "complete" | "failed";
+    detail?: string;
+    pages: CrawlPageWrite[];
+    source: "runner" | "manual";
+  }
+): Promise<Id<"siteCrawls">> {
+  const target = await getOwnedTarget(ctx, input.userId, input.brandId, input.targetId);
+
+  // Snapshots are immutable, append-only versions: a (target, version) pair
+  // is written exactly once. A second write is refused, never merged.
+  const duplicate = await ctx.db
+    .query("siteCrawls")
+    .withIndex("by_target_and_version", (q) =>
+      q.eq("targetId", target._id).eq("version", input.version)
+    )
+    .first();
+  if (duplicate) {
+    throw new Error(
+      `Crawl snapshot version ${input.version} already exists for this target; write a new version instead.`
+    );
+  }
+
+  const now = Date.now();
+  const crawlId = await ctx.db.insert("siteCrawls", {
+    userId: input.userId,
+    brandId: input.brandId,
+    targetId: target._id,
+    siteUrl: input.siteUrl,
+    version: input.version,
+    status: input.status,
+    pageCount: input.pages.length,
+    detail: input.detail,
+    source: input.source,
+    createdAt: now,
+  });
+  for (const page of input.pages) {
+    await ctx.db.insert("crawlPages", {
+      userId: input.userId,
+      brandId: input.brandId,
+      crawlId,
+      ...page,
+      createdAt: now,
+    });
+  }
+  await audit(ctx, {
+    userId: input.userId,
+    brandId: input.brandId,
+    action: "aeo.crawl_snapshot",
+    summary: `Recorded crawl v${input.version} of ${input.siteUrl} — ${input.pages.length} page(s), ${input.status} (${input.source}).`,
+    metadata: {
+      targetId: String(target._id),
+      crawlId: String(crawlId),
+      version: input.version,
+      source: input.source,
+    },
+  });
+  return crawlId;
+}
+
+/**
+ * Manual snapshot recording: the caller supplies the crawl content itself, so
+ * the row is stamped `manual` unconditionally. System-crawl capture goes
+ * through `recordRunnerCrawlSnapshot`, which stamps `runner`.
+ */
 export const recordCrawlSnapshot = mutation({
   args: {
     brandId: brandIdValidator,
@@ -262,51 +350,36 @@ export const recordCrawlSnapshot = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     await requireBrandAccess(ctx, userId, args.brandId);
-    const target = await getOwnedTarget(ctx, userId, args.brandId, args.targetId);
-
-    // Snapshots are immutable, append-only versions: a (target, version) pair
-    // is written exactly once. A second write is refused, never merged.
-    const duplicate = await ctx.db
-      .query("siteCrawls")
-      .withIndex("by_target_and_version", (q) =>
-        q.eq("targetId", target._id).eq("version", args.version)
-      )
-      .first();
-    if (duplicate) {
-      throw new Error(
-        `Crawl snapshot version ${args.version} already exists for this target; write a new version instead.`
-      );
-    }
-
-    const now = Date.now();
-    const crawlId = await ctx.db.insert("siteCrawls", {
+    return await insertCrawlSnapshot(ctx, {
+      ...args,
       userId,
-      brandId: args.brandId,
-      targetId: target._id,
-      siteUrl: args.siteUrl,
-      version: args.version,
-      status: args.status,
-      pageCount: args.pages.length,
-      detail: args.detail,
-      createdAt: now,
+      source: "manual",
     });
-    for (const page of args.pages) {
-      await ctx.db.insert("crawlPages", {
-        userId,
-        brandId: args.brandId,
-        crawlId,
-        ...page,
-        createdAt: now,
-      });
-    }
-    await audit(ctx, {
-      userId,
-      brandId: args.brandId,
-      action: "aeo.crawl_snapshot",
-      summary: `Recorded crawl v${args.version} of ${args.siteUrl} — ${args.pages.length} page(s), ${args.status}.`,
-      metadata: { targetId: String(target._id), crawlId: String(crawlId), version: args.version },
+  },
+});
+
+/**
+ * Internal runner write path for the in-app crawl capture action: same
+ * envelope as the manual mutation, but stamped `runner` and admitting an
+ * explicit userId (the action already resolved the owned target).
+ */
+export const recordRunnerCrawlSnapshot = internalMutation({
+  args: {
+    userId: v.string(),
+    brandId: brandIdValidator,
+    targetId: v.string(),
+    siteUrl: v.string(),
+    version: v.number(),
+    status: v.union(v.literal("complete"), v.literal("failed")),
+    detail: v.optional(v.string()),
+    pages: v.array(crawlPageInput),
+  },
+  returns: v.id("siteCrawls"),
+  handler: async (ctx, args) => {
+    return await insertCrawlSnapshot(ctx, {
+      ...args,
+      source: "runner",
     });
-    return crawlId;
   },
 });
 
@@ -331,19 +404,30 @@ export const createIntelRun = mutation({
   args: {
     brandId: brandIdValidator,
     kind: aeoRunKindValidator,
-    costCeilingCents: v.number(),
     questionCount: v.number(),
   },
   returns: v.id("intelRuns"),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     await requireBrandAccess(ctx, userId, args.brandId);
+    // Scheduled admission is internal-only. A client-created "running"
+    // answer-engine run makes every scheduled cycle skip the brand (a cheap
+    // batch DoS); a client-created "running" discovery run pins the discovery
+    // batch the same way. Neither kind can be created manually.
+    if (args.kind !== "competitor-intel") {
+      throw new Error(
+        `Runs of kind "${args.kind}" are admitted internally by their scheduled batch and cannot be created manually.`
+      );
+    }
+    // The ceiling is a server-side budget fact derived from env limits —
+    // never a client-supplied number.
+    const costCeilingCents = answerEngineRunLimits(process.env).runCeilingCents;
     const runId = await ctx.db.insert("intelRuns", {
       userId,
       brandId: args.brandId,
       kind: args.kind,
       status: "running",
-      costCeilingCents: args.costCeilingCents,
+      costCeilingCents,
       questionCount: args.questionCount,
       startedAt: Date.now(),
     });
@@ -351,7 +435,7 @@ export const createIntelRun = mutation({
       userId,
       brandId: args.brandId,
       action: "aeo.intel_run_created",
-      summary: `Started a ${args.kind} intel run (ceiling ${args.costCeilingCents} cents, ${args.questionCount} question(s)).`,
+      summary: `Started a ${args.kind} intel run (ceiling ${costCeilingCents} cents, ${args.questionCount} question(s)).`,
       metadata: { runId: String(runId), kind: args.kind },
     });
     return runId;
@@ -385,7 +469,7 @@ export const addIntelFinding = mutation({
   args: {
     brandId: brandIdValidator,
     runId: v.string(),
-    classification: v.union(v.literal("gap"), v.literal("opportunity")),
+    classification: v.union(v.literal("gap"), v.literal("opportunity"), v.literal("needs-review")),
     citationStatus: v.union(
       v.literal("cited"),
       v.literal("uncited"),
@@ -406,10 +490,15 @@ export const addIntelFinding = mutation({
       runId: run._id,
       classification: args.classification,
       citationStatus: args.citationStatus,
-      extractability: args.extractability,
+      // Manual rows are bounded to the stored 0–100 integer scale, same as
+      // runner rows.
+      extractability: validateStoredExtractability(args.extractability),
       summary: args.summary,
       evidence: args.evidence,
       reviewStatus: "unreviewed",
+      // Stamped by the write path: a manually recorded finding can never
+      // claim it was runner-written.
+      source: "manual",
       createdAt: Date.now(),
     });
     await audit(ctx, {

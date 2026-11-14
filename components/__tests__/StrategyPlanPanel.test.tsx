@@ -53,11 +53,24 @@ describe("StrategyPlanPanel", () => {
         gapTitles={{ g_high: "Win the compliance answer", g_med: "Add FAQ schema" }}
       />,
     );
-    expect(
-      screen.getByText(
-        /Win the compliance answer, Add FAQ schema/,
-      ),
-    ).toBeInTheDocument();
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Win the compliance answer");
+    expect(items[1]).toHaveTextContent("Add FAQ schema");
+  });
+
+  it("carries a suspect finding's mismatch warning into the prioritized list", () => {
+    render(
+      <StrategyPlanPanel
+        plan={{ status: "ready", data: plan }}
+        gapTitles={{ g_high: "Win the compliance answer", g_med: "Add FAQ schema" }}
+        gapWarnings={{ g_high: "5% topic-vocabulary overlap with the crawl." }}
+      />,
+    );
+    const items = screen.getAllByRole("listitem");
+    expect(items[0]).toHaveTextContent("Brand mismatch suspected");
+    expect(items[0]).toHaveTextContent("5% topic-vocabulary overlap");
+    expect(items[1]).not.toHaveTextContent("Brand mismatch suspected");
   });
 
   it("accepts a plan on demand", () => {

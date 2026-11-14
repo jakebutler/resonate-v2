@@ -65,6 +65,34 @@ describe("GapsPanel", () => {
     expect(screen.getByLabelText("opportunity: Low-priority opportunity")).toBeInTheDocument();
   });
 
+  it("renders a suspect citation as needs-review with the mismatch warning", () => {
+    render(
+      <GapsPanel
+        gaps={{
+          status: "ready",
+          data: [
+            {
+              id: "g_suspect",
+              kind: "needs-review",
+              priority: "medium",
+              title: "What is FreshProof?",
+              detail: "Cited, but the answer may describe another product.",
+              keywords: [],
+              brandMatch: "suspect",
+              brandMatchDetail: "5% topic-vocabulary overlap with the crawl.",
+            },
+          ],
+        }}
+      />
+    );
+    expect(screen.getByLabelText("needs-review: What is FreshProof?")).toHaveTextContent(
+      "Needs review"
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Brand mismatch suspected");
+    expect(alert).toHaveTextContent("5% topic-vocabulary overlap");
+  });
+
   it("seeds a captured idea for a specific gap", () => {
     const onSeedIdea = vi.fn();
     render(<GapsPanel gaps={{ status: "ready", data: gaps }} onSeedIdea={onSeedIdea} />);
