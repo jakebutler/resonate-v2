@@ -120,6 +120,37 @@ export const aeoPlanItemValidator = v.object({
   sourceFindingIds: v.array(v.id("intelFindings")),
 });
 
+/**
+ * A competitor surfaced by a discovery pass (A5). Suggestions are evidence,
+ * never instructions: a row starts `suggested` and only a human review moves
+ * it to `accepted` (which adds it to `brandTargets.competitorUrls`) or
+ * `rejected` (which is remembered so discovery never re-proposes it).
+ */
+export const competitorSuggestionFields = {
+  userId: v.string(),
+  brandId: brandIdValidator,
+  runId: v.id("intelRuns"),
+  /** Display/matching name: the candidate URL's hostname without "www.". */
+  name: v.string(),
+  /** Candidate URL; accepting adds it to brandTargets.competitorUrls. */
+  url: v.string(),
+  status: v.union(
+    v.literal("suggested"),
+    v.literal("accepted"),
+    v.literal("rejected")
+  ),
+  /** How many distinct discovery queries surfaced this candidate. */
+  frequency: v.number(),
+  /** Which phrasings surfaced it, e.g. `search: "best glp-1 trackers"`. */
+  phrasings: v.array(v.string()),
+  /** Per-appearance evidence: the query/answer that surfaced the candidate. */
+  evidence: v.array(v.string()),
+  reviewNotes: v.optional(v.string()),
+  reviewedAt: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
 /** Brief fields mapped to the Marketing Director L5 required set. */
 export const aeoPlanBriefValidator = v.object({
   goal: v.string(),
@@ -183,6 +214,11 @@ export const aeoStrategyPlanValidator = v.object({
   _creationTime: v.number(),
   ...strategyPlanFields,
 });
+export const aeoCompetitorSuggestionValidator = v.object({
+  _id: v.id("competitorSuggestions"),
+  _creationTime: v.number(),
+  ...competitorSuggestionFields,
+});
 
 export const aeoTables = {
   brandTargets: defineTable(brandTargetFields)
@@ -202,4 +238,7 @@ export const aeoTables = {
   strategyPlans: defineTable(strategyPlanFields)
     .index("by_user_and_brand", ["userId", "brandId"])
     .index("by_brand", ["brandId"]),
+  competitorSuggestions: defineTable(competitorSuggestionFields)
+    .index("by_user_and_brand", ["userId", "brandId"])
+    .index("by_user_brand_and_name", ["userId", "brandId", "name"]),
 };

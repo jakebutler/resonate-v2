@@ -19,4 +19,14 @@ crons.daily(
   internal.answerEngine.runAnswerEngineBatch
 );
 
+// A5: daily suggested-competitor discovery, alongside the answer-engine
+// cycle. Fail-closed like the answer-engine batch: disabled without the
+// runtime kill switch, and explicit (never silent) about missing credentials
+// or a refused budget.
+crons.daily(
+  "aeo-competitor-discovery",
+  { hourUTC: 7, minuteUTC: 50 },
+  internal.competitorSuggestions.runDiscoveryBatch
+);
+
 export default crons;
