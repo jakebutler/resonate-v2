@@ -1,0 +1,169 @@
+name: Feature verification
+
+# V6 — feature-verification CI wiring.
+#
+# Runs the V2 runner (`npm run verify:feature -- <featureId>`) over every
+# committed manifest (verification/*.manifest.json) so a feature's readiness
+# criteria are proven on every PR that touches a manifest or the verification
+# machinery, and on demand via workflow_dispatch.
+#
+# Seeding follows the fail-closed pattern of the gated live-validation
+# workflows: when the dev-deployment deploy key secret is not configured the
+# seed step records an explicit "credentials not configured" outcome (step
+# summary + warning annotation) instead of failing the run or skipping
+# silently. Criteria whose execution depends on seeded rows report ABSENT
+# through the runner's own prerequisite mechanism.
+#
+# One-time operator provisioning (docs/verification-seed.md):
+#   - repo secret CONVEX_DEPLOY_KEY_DEV = the DEV deployment's deploy key
+#   - `npx convex env set ALLOW_VERIFICATION_SEED 1` on that dev deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature:
+        description: "Feature id to verify (verification/<id>.manifest.json). Leave empty to verify every manifest."
+        required: false
+        default: ""
+  pull_request:
+    branches:
+      - main
+      - "release/feature-verification-20261113-200812"
+    paths:
+      # Feature manifests and the code paths that execute them.
+      - "verification/**"
+      - "lib/verificationManifest.ts"
+      - "lib/verificationRunner.ts"
+      - "lib/__tests__/verificationManifest.test.ts"
+      - "lib/__tests__/verificationRunner.test.ts"
+      - "scripts/verify-feature.ts"
+      - "scripts/seed-verification.mjs"
+      - ".github/workflows/feature-verification.yml"
+
+concurrency:
+  group: feature-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify feature manifests
+    # Pinned like the Tests workflow's e2e job: Playwright 1.58.2 cannot
+    # install its Chromium dependencies on ubuntu-26.04.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        # The Playwright rungs of the ladder need Chromium; without this the
+        # specs exit before any test runs ("Playwright was just installed").
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Next.js production bundle
+        # Playwright criteria refuse to run without .next/BUILD_ID (the runner
+        # checks for it), so the production build is part of the ladder.
+        # Placeholder env values match the Tests workflow — real secrets are
+        # never used to build or verify offline criteria.
+        run: npm run build
+        env:
+          NEXT_PUBLIC_CONVEX_URL: https://convex.test
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA==
+          CLERK_SECRET_KEY: sk_test_ci_placeholder
+          CLERK_JWT_ISSUER_DOMAIN: https://clerk.test
+          NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
+          NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
+          NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: /
+          NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: /setup
+          CORTEX_API_KEY: test_key
+          CORTEX_BASE_URL: https://cortex.test
+          GITHUB_TOKEN: test_token
+          BLOG_REPO_OWNER: test-owner
+          BLOG_REPO_NAME: test-repo
+          BLOG_CONTENT_PATH: content/posts
+          PIONEER_API_KEY: test_key
+          PIONEER_DRAFT_MODEL: test-model
+          # C5: baked into the production build so the editorial visual composer
+          # mounts in the composer and its e2e spec can drive it.
+          NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED: "1"
+          # Current Playwright coverage exercises unauthenticated smoke paths,
+          # so the auth bypass matches the Tests workflow's e2e job.
+          E2E_BYPASS_AUTH: "1"
+          NEXT_PUBLIC_E2E_BYPASS_AUTH: "1"
+
+      - name: Seed verification workspace (dev Convex deployment)
+        id: seed
+        env:
+          # The DEV deployment's deploy key — deliberately a different secret
+          # from CONVEX_DEPLOY_KEY, which holds the production deployment's key
+          # and must never reach the seeding path.
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_DEV }}
+        run: |
+          if [ -z "$CONVEX_DEPLOY_KEY" ]; then
+            {
+              echo "## Verification seeding: credentials not configured"
+              echo ""
+              echo "The \`CONVEX_DEPLOY_KEY_DEV\` secret is not set, so the seeded dev"
+              echo "deployment was not provisioned for this run. This is an explicit"
+              echo "outcome, not a silent skip: criteria that need seeded rows report"
+              echo "ABSENT through the runner. Provision steps are in \`docs/verification-seed.md\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::CONVEX_DEPLOY_KEY_DEV is not configured — verification seeding skipped explicitly (see docs/verification-seed.md). Criteria needing seeded rows report ABSENT."
+            echo "outcome=credentials-not-configured" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node scripts/seed-verification.mjs
+          echo "outcome=seeded" >> "$GITHUB_OUTPUT"
+
+      - name: Run feature verification
+        env:
+          # Placeholder env values for the vitest rungs of the ladder (same
+          # policy as the Tests workflow: no real secrets in offline checks).
+          GITHUB_TOKEN: test_token
+          BLOG_REPO_OWNER: test-owner
+          BLOG_REPO_NAME: test-repo
+          BLOG_CONTENT_PATH: content/posts
+          CORTEX_API_KEY: test_key
+          CORTEX_BASE_URL: https://cortex.test
+          NEXT_PUBLIC_CONVEX_URL: https://convex.test
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA==
+          CLERK_SECRET_KEY: sk_test_ci_placeholder
+          CLERK_JWT_ISSUER_DOMAIN: https://clerk.test
+          PIONEER_API_KEY: test_key
+          PIONEER_DRAFT_MODEL: test-model
+          # Runtime flags for the Playwright rungs: the bypass keeps covered
+          # flows unauthenticated; the visual flag must match the baked build.
+          E2E_BYPASS_AUTH: "1"
+          NEXT_PUBLIC_E2E_BYPASS_AUTH: "1"
+          NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED: "1"
+        run: |
+          feature="${{ github.event.inputs.feature }}"
+          if [ -n "$feature" ]; then
+            npm run verify:feature -- "$feature"
+          else
+            failed=0
+            for manifest in verification/*.manifest.json; do
+              id="$(basename "$manifest" .manifest.json)"
+              npm run verify:feature -- "$id" || failed=1
+            done
+            exit "$failed"
+          fi
+
+      - name: Upload verification reports
+        # The dated per-feature reports under docs/verification/<featureId>/
+        # are the durable, comparable verdict record (V2) — published as the
+        # run's artifact on every outcome, including failures.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-reports
+          path: docs/verification/
+          retention-days: 30
+

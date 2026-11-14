@@ -55,13 +55,13 @@ export function suggestCampaignIdeas(
     flavor: "opinion",
     title: `${keyPhrase(firstClause(second.text))} deserves the pillar treatment`,
     text: `The corpus leads with a claim worth anchoring on: "${firstClause(second.text)}" Our take: this is the thesis the whole campaign should hang from, not a footnote.`,
-    citations: [second.citation, primary.citation],
+    citations: [...new Set([second.citation, primary.citation])],
   });
   suggestions.push({
     flavor: "insight",
     title: `Pattern worth naming from ${primary.provenance}`,
     text: `Reading "${firstClause(primary.text)}" side by side with "${firstClause(third.text)}" surfaces a pattern: the mechanism matters more than the metric. Name the pattern and the audience carries it away.`,
-    citations: [primary.citation, third.citation],
+    citations: [...new Set([primary.citation, third.citation])],
   });
   suggestions.push({
     flavor: "opinion",

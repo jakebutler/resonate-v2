@@ -303,7 +303,8 @@ async function audit(
   });
 }
 
-async function seedBrandsAndChannels(
+/** Exported for the CI verification seed (verificationSeed.ts) — same rows seedMvpWorkspace writes. */
+export async function seedBrandsAndChannels(
   ctx: MutationCtx,
   userId: string,
   now: number

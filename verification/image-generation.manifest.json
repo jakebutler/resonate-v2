@@ -1,0 +1,106 @@
+{
+  "featureId": "image-generation",
+  "name": "Editorial visuals (image generation)",
+  "description": "Readiness for the editorial-visuals image-generation feature: the workflow state machine (attempts, reservations, budgets, recovery), the provider dispatch path, text planning and pixel reflection, route qualification, exports and figures, and the composer e2e spec on the production build. The live-qualification criteria are declared but gated on provider keys Jake mints via Obvious secrets — they report ABSENT with the named prerequisite until then, feeding the provisioning build list rather than failing the run.",
+  "fixtures": [
+    {
+      "name": "visual-seed-package",
+      "module": "lib/visualSeed/index.ts",
+      "description": "Frozen Corvo seed package (hash-anchored manifest + prompting lessons + final-direction prompts) shared by the visual suites."
+    },
+    {
+      "name": "queue-capacity-fixture",
+      "module": "convex/__tests__/helpers/mockMutationCtx.ts",
+      "description": "Shared convex-test identity/ctx helpers used by the visual suites."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "visual-workflow-state-machine",
+      "name": "Workflow state machine suite passes",
+      "runner": "convex-test",
+      "tier": "offline-fixture",
+      "target": "convex/__tests__/visualWorkflow.test.ts",
+      "fixtures": ["queue-capacity-fixture", "visual-seed-package"],
+      "prerequisites": [],
+      "dependsOn": [],
+      "description": "Attempt lifecycle (reserve/claim/complete/fail/recover/reconcile), budget ledgers with $5 provider caps, overrun acknowledgement epochs, and late-receipt settlement on the in-memory Convex rung."
+    },
+    {
+      "id": "visual-provider-dispatch",
+      "name": "Provider actions and dispatch contract suite passes",
+      "runner": "convex-test",
+      "tier": "offline-contract",
+      "target": "convex/__tests__/visualProviderActions.test.ts",
+      "fixtures": ["queue-capacity-fixture"],
+      "prerequisites": [],
+      "dependsOn": ["visual-workflow-state-machine"],
+      "description": "executeImageAttempt quote/reserve/claim/dispatch sequencing against mocked provider transports, and the fail-closed blocked outcomes (no qualified route, credential unavailable)."
+    },
+    {
+      "id": "visual-text-pipeline",
+      "name": "Text planning and pixel reflection suite passes",
+      "runner": "convex-test",
+      "tier": "offline-fixture",
+      "target": "convex/__tests__/visualTextActions.test.ts",
+      "fixtures": ["queue-capacity-fixture"],
+      "prerequisites": [],
+      "dependsOn": ["visual-workflow-state-machine"],
+      "description": "Scene-planning attempts and queued vision-reflection mechanics (queueing, reconciliation, stale cancellation) with text/vision gateway calls mocked at the fetch boundary."
+    },
+    {
+      "id": "visual-route-qualification",
+      "name": "Route qualification suite passes",
+      "runner": "convex-test",
+      "tier": "offline-fixture",
+      "target": "convex/__tests__/visualQualification.test.ts",
+      "fixtures": ["queue-capacity-fixture"],
+      "prerequisites": [],
+      "dependsOn": [],
+      "description": "registerReviewedImageRoute / registerReviewedTextRoute validation against the capability matrix, capability-receipt requirements, and reviewer/provenance trail via the C3 qualification tooling."
+    },
+    {
+      "id": "visual-exports-and-figures",
+      "name": "Exports and evidence-figure suites pass",
+      "runner": "vitest",
+      "tier": "offline-fixture",
+      "target": "convex/__tests__/visualExports.test.ts",
+      "fixtures": [],
+      "prerequisites": [],
+      "dependsOn": [],
+      "description": "Hero export contract (1600x900 WebP < 150 KB) and the linked-evidence figure lifecycle gating publication."
+    },
+    {
+      "id": "visual-composer-e2e",
+      "name": "Composer e2e drives plan-generate-select-edit-export-approve",
+      "runner": "playwright",
+      "tier": "offline-fixture",
+      "target": "e2e/editorial-visuals.spec.ts",
+      "fixtures": [],
+      "prerequisites": [],
+      "dependsOn": [
+        "visual-workflow-state-machine",
+        "visual-provider-dispatch",
+        "visual-route-qualification"
+      ],
+      "description": "Playwright rung against the production build: EditorialVisualPanel through plan → generate → select → edit → export → approve with mock image-provider transport (C5)."
+    },
+    {
+      "id": "live-route-qualification-receipt",
+      "name": "Live functional packet records capability receipts",
+      "runner": "contract",
+      "tier": "live-receipt",
+      "target": "node scripts/run-visual-live-qualification.mjs",
+      "command": "node scripts/run-visual-live-qualification.mjs --deployment-url <dev-url> --reference-dir <dir>",
+      "fixtures": [],
+      "prerequisites": [
+        "OPENAI_API_KEY",
+        "DIGITALOCEAN_INFERENCE_API_KEY",
+        "OPENAI_TEXT_API_KEY",
+        "CORTEX_API_KEY"
+      ],
+      "dependsOn": ["visual-route-qualification"],
+      "description": "C6 gated live tier: executes the prepared gpt-image-1 low/low functional packet (<= $0.50 total, under the $5 provider caps) and the text/vision packet, registering reviewed image and text routes with capability receipts. Requires VISUAL_QUALIFICATION_APPROVED=approved. Reports ABSENT naming the missing key until Jake provisions them via Obvious secrets."
+    }
+  ]
+}

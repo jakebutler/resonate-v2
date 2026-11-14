@@ -6,6 +6,10 @@ const baseURL = process.env.BASE_URL || `http://${hostname}:${port}`
 
 export default defineConfig({
   testDir: './e2e',
+  // Mints a Clerk dev-instance session into e2e/.auth/state.json when keys are
+  // configured; otherwise records a named skip reason and exits. See
+  // docs/e2e-authenticated-sessions.md.
+  globalSetup: './e2e/global-setup',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -26,6 +30,11 @@ export default defineConfig({
       HOSTNAME: hostname,
       PORT: port,
       E2E_BYPASS_AUTH: process.env.E2E_BYPASS_AUTH || '',
+      // Real-session runs (authenticated-session.spec.ts) need the proxy's
+      // allowlist and its Clerk Backend lookup for email resolution; both are
+      // absent under the bypass, so passing them through is harmless there.
+      CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY_DEV || process.env.CLERK_SECRET_KEY || '',
+      RESONATE_ALLOWED_EMAILS: process.env.RESONATE_ALLOWED_EMAILS || '',
     },
     url: baseURL,
     reuseExistingServer: !process.env.CI,

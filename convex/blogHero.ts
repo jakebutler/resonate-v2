@@ -19,6 +19,10 @@ export const prepare = action({
     if (source.size > 10 * 1024 * 1024) throw new Error("Hero input must be under 10 MB.");
     const {bytes, ...receipt} = await prepareBlogHero(new Uint8Array(await source.arrayBuffer()), args.crop);
     const storageId = await ctx.storage.store(new Blob([new Uint8Array(bytes)], {type: "image/webp"}));
+    // Register the crop as an owned upload: unregistered bytes fail the
+    // editorial storage access check and crash composer renders of the
+    // exported-hero preview.
+    await ctx.runMutation(internal.v2Storage.recordUpload, { storageId, sha256: receipt.sha256, bytes: receipt.byteLength, contentType: "image/webp", fileName: `blog-hero-${receipt.sha256.slice(0, 8)}.webp` });
     try {
       await ctx.runMutation(internal.publishing.recordPreparedHero, {postId: post._id, userId, hero: {...receipt, sourceStorageId: post.heroImageStorageId!, storageId}});
     } catch (error) { await ctx.storage.delete(storageId); throw error; }
