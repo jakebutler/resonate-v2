@@ -10,6 +10,8 @@ import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 import { channelLabel } from "@/lib/campaignLabels";
 import { ToastBanner, useToast } from "./useToast";
+import { ContentWithTokens } from "./ContentWithTokens";
+import { typedId } from "@/lib/typedIds";
 import {
   ROLE_LEGEND,
   ROLE_TINTS,
@@ -41,26 +43,8 @@ type QueueView = {
   unreviewedCitationCount: number;
 } | null | undefined;
 
-const TOKEN_PATTERN = /(\[[A-Z]+:[^\]]*\])/g;
-
-function renderContentWithTokens(content: string) {
-  return content.split(TOKEN_PATTERN).map((part, index) => {
-    if (/^\[[A-Z]+:/.test(part)) {
-      return (
-        <span
-          key={index}
-          className="rounded bg-[#ffefe0] px-1 py-0.5 font-mono text-[11px] text-[#8a4b00]"
-        >
-          {part}
-        </span>
-      );
-    }
-    return <span key={index}>{part}</span>;
-  });
-}
-
 export function ApprovalQueue({ campaignId }: { campaignId: string }) {
-  const typedCampaignId = campaignId as never;
+  const typedCampaignId = typedId<"campaigns">(campaignId);
   const view = useQuery(api.queue.getCampaignQueue, {
     campaignId: typedCampaignId,
   }) as QueueView;
@@ -99,13 +83,32 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
 
   async function handleApprove(entry: QueueEntry): Promise<boolean> {
     try {
-      await setApproval({ postId: entry.postId as never, approvalState: "approved" });
+      await setApproval({
+        postId: typedId<"v2Posts">(entry.postId),
+        approvalState: "approved",
+      });
     } catch (caught) {
       showToast(caught instanceof Error ? caught.message : "Could not approve this draft.");
       return false;
     }
     showToast(`Approved — this post is unblocked. Submission still happens in the composer, by you.`);
     return true;
+  }
+
+  async function handleUndoApproval(entry: QueueEntry) {
+    try {
+      await setApproval({
+        postId: typedId<"v2Posts">(entry.postId),
+        approvalState: "unapproved",
+      });
+      showToast("Approval removed — the draft is back in the review queue.");
+    } catch (caught) {
+      showToast(
+        caught instanceof Error
+          ? caught.message
+          : "Could not remove this approval."
+      );
+    }
   }
 
   async function approveAndAdvance(entry: QueueEntry) {
@@ -204,7 +207,7 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
 
       {view.unreviewedCitationCount > 0 ? (
         <div className={cn(tokens.noticeWarning, "mt-4")} data-testid="unreviewed-warning" role="alert">
-          <b>D-17 warning:</b> this batch cites {view.unreviewedCitationCount} excerpt
+          <b>Unreviewed citations:</b> this batch cites {view.unreviewedCitationCount} excerpt
           {view.unreviewedCitationCount === 1 ? "" : "s"} still marked{" "}
           <b>unreviewed</b>. They may include internal-only material.{" "}
           <Link href="/campaigns" className={cn("underline", tokens.accent)}>
@@ -297,7 +300,7 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
               {isExpanded ? (
                 <div className="border-t px-4 pb-4 pt-3" style={{ borderColor: "rgba(0,0,0,0.08)" }} data-testid="queue-expand">
                   <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                    {renderContentWithTokens(entry.content)}
+                    <ContentWithTokens content={entry.content} />
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {isLongForm ? (
@@ -315,6 +318,15 @@ export function ApprovalQueue({ campaignId }: { campaignId: string }) {
                       <>
                         <Button variant="secondary" size="xs" asChild>
                           <Link href={`/?postId=${entry.postId}`}>Open on calendar ↗</Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={approvingPostId === entry.postId}
+                          onClick={() => void handleUndoApproval(entry)}
+                          data-testid="undo-approval"
+                        >
+                          Undo approval
                         </Button>
                         <span className={cn("text-xs", tokens.textMuted)}>
                           ✓ Approved — this post is unblocked. Submission still

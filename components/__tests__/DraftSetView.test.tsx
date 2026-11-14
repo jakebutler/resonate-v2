@@ -118,9 +118,10 @@ describe("DraftSetView", () => {
     expect(button.disabled).toBe(false);
     fireEvent.click(button);
     const confirm = await screen.findByTestId("draft-mock-confirm");
-    expect(confirm.textContent).toContain("mock mode");
+    expect(confirm.textContent).toContain("sample content");
+    expect(confirm.textContent).not.toContain("mock mode");
 
-    fireEvent.click(screen.getByText("Run in mock mode"));
+    fireEvent.click(screen.getByText("Generate sample drafts"));
     await waitFor(() => {
       // D-21: the confirm dialog mints a server-issued token; the client
       // never asserts acknowledgment on its own.

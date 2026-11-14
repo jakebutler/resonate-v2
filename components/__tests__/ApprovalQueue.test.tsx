@@ -225,4 +225,66 @@ describe("ApprovalQueue", () => {
     // gate is blocking, so the block is real, not cosmetic.
     expect((screen.getByTestId("materialize-button") as HTMLButtonElement).disabled).toBe(false);
   });
+
+  it("states the unreviewed-citation warning in product voice with no internal spec IDs", () => {
+    useQueryMock.mockImplementation((reference: unknown) => {
+      if (reference === "queue:getCampaignQueue")
+        return { ...queueView, unreviewedCitationCount: 2 };
+      return undefined;
+    });
+    render(<ApprovalQueue campaignId="campaign_1" />);
+    const warning = screen.getByTestId("unreviewed-warning");
+    expect(warning.textContent).toContain("Unreviewed citations:");
+    expect(warning.textContent).not.toMatch(/D-\d+/);
+    expect(document.body.textContent).not.toMatch(/D-\d+/);
+  });
+
+  it("wraps placeholder tokens in a labeled container, not a bare span", () => {
+    render(<ApprovalQueue campaignId="campaign_1" />);
+    const firstRow = screen.getAllByTestId("queue-row")[0]!;
+    fireEvent.click(within(firstRow).getByText("Review ▾"));
+    const token = screen.getAllByTestId("placeholder-token")[0]!;
+    expect(token.getAttribute("aria-label")).toBe(
+      "Placeholder — generated copy goes here"
+    );
+    expect(token.textContent).toContain("[THESIS: the core claim]");
+  });
+
+  it("reverts an approval through the audited approval path (undo)", async () => {
+    const setApproval = vi.fn().mockResolvedValue(undefined);
+    useMutationMock.mockImplementation(((reference: unknown) =>
+      reference === "publishing:setApproval" ? setApproval : vi.fn()) as never);
+
+    render(<ApprovalQueue campaignId="campaign_1" />);
+    const approvedRow = screen.getAllByTestId("queue-row")[2]!;
+    fireEvent.click(within(approvedRow).getByText("Review ▾"));
+
+    fireEvent.click(within(approvedRow).getByTestId("undo-approval"));
+    await waitFor(() => {
+      expect(setApproval).toHaveBeenCalledWith({
+        postId: "post_3",
+        approvalState: "unapproved",
+      });
+    });
+    const toast = await screen.findByTestId("queue-toast");
+    expect(toast.textContent).toContain("Approval removed");
+  });
+
+  it("surfaces the server's refusal when an approval can no longer be reverted", async () => {
+    const setApproval = vi
+      .fn()
+      .mockRejectedValue(
+        new Error("This post has entered publishing; approval can no longer be reverted here.")
+      );
+    useMutationMock.mockImplementation(((reference: unknown) =>
+      reference === "publishing:setApproval" ? setApproval : vi.fn()) as never);
+
+    render(<ApprovalQueue campaignId="campaign_1" />);
+    const approvedRow = screen.getAllByTestId("queue-row")[2]!;
+    fireEvent.click(within(approvedRow).getByText("Review ▾"));
+    fireEvent.click(within(approvedRow).getByTestId("undo-approval"));
+
+    const toast = await screen.findByTestId("queue-toast");
+    expect(toast.textContent).toContain("can no longer be reverted");
+  });
 });

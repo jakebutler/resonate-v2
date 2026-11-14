@@ -278,6 +278,38 @@ describe("publishing cross-brand authorization", () => {
     expect(post?.approvalState).toBe("approved");
   });
 
+  it("refuses to revert approval once the post has entered publishing", async () => {
+    const t = createTestHarness();
+    const { asUser } = await setupCorvoOnlyMember(t);
+    const { postId } = await asUser.mutation(api.publishing.createPostWithIntent, {
+      brandId: "corvo",
+      channelId: "linkedin",
+      title: "Queued post",
+      content: "Queued content",
+    });
+
+    await asUser.mutation(api.publishing.setApproval, {
+      postId,
+      approvalState: "approved",
+    });
+
+    // Simulate the release pipeline claiming the post.
+    await t.run(async (ctx) => {
+      await ctx.db.patch(postId, { status: "queued" });
+    });
+
+    await expect(
+      asUser.mutation(api.publishing.setApproval, {
+        postId,
+        approvalState: "unapproved",
+      })
+    ).rejects.toThrow(/can no longer be reverted/);
+
+    // The refusal is not cosmetic: the approval stays in place and audited.
+    const post = await t.run(async (ctx) => ctx.db.get(postId));
+    expect(post?.approvalState).toBe("approved");
+  });
+
   it("creates, accepts, and rejects variant posts linked to ideas", async () => {
     const t = createTestHarness();
     const { asUser, userId } = await setupCorvoOnlyMember(t);

@@ -54,6 +54,7 @@ const sessionData = {
     {
       corpus: { _id: CORPUS_ID, version: 1 },
       excerptCount: 1,
+      excerptCountComplete: true,
     },
   ],
   citedExcerpts: [
@@ -123,9 +124,10 @@ describe("CampaignSession", () => {
     render(<CampaignSession campaignId="campaign_1" />);
     fireEvent.click(screen.getByTestId("suggest-ideas"));
     expect(await screen.findByTestId("mock-confirm")).toBeDefined();
-    expect(screen.getByTestId("mock-confirm").textContent).toContain("mock mode");
+    expect(screen.getByTestId("mock-confirm").textContent).toContain("sample content");
+    expect(screen.getByTestId("mock-confirm").textContent).not.toContain("mock mode");
 
-    fireEvent.click(screen.getByText("Run in mock mode"));
+    fireEvent.click(screen.getByText("Generate sample ideas"));
     await waitFor(() => {
       // D-21: the confirm dialog mints a server-issued token and the
       // suggestion runs against it — the client never asserts "acknowledged".
@@ -157,8 +159,8 @@ describe("CampaignSession", () => {
     const corporaSession = {
       ...sessionData,
       corpora: [
-        { corpus: { _id: "corpus_b", version: 2 }, excerptCount: 1 },
-        { corpus: { _id: "corpus_a", version: 1 }, excerptCount: 1 },
+        { corpus: { _id: "corpus_b", version: 2 }, excerptCount: 1, excerptCountComplete: true },
+        { corpus: { _id: "corpus_a", version: 1 }, excerptCount: 1, excerptCountComplete: true },
       ],
       citedExcerpts: [
         {

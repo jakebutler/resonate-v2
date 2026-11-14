@@ -231,7 +231,7 @@ export function CampaignsHome() {
         open={startOpen}
         onOpenChange={setStartOpen}
         onCreated={(campaignId) => {
-          showToast("Campaign started — title-only, light confirm. Goal & audience land on the Propose shape step.");
+          showToast("Campaign started. Next: propose the shape with your goal and audience.");
           window.location.href = `/campaigns/${campaignId}`;
         }}
       />
