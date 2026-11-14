@@ -30,6 +30,7 @@ import type * as cohesion from "../cohesion.js";
 import type * as competitorSuggestions from "../competitorSuggestions.js";
 import type * as corpora from "../corpora.js";
 import type * as crons from "../crons.js";
+import type * as draftGeneration from "../draftGeneration.js";
 import type * as draftSet from "../draftSet.js";
 import type * as githubPrSync from "../githubPrSync.js";
 import type * as ideas from "../ideas.js";
@@ -100,6 +101,7 @@ declare const fullApi: ApiFromModules<{
   competitorSuggestions: typeof competitorSuggestions;
   corpora: typeof corpora;
   crons: typeof crons;
+  draftGeneration: typeof draftGeneration;
   draftSet: typeof draftSet;
   githubPrSync: typeof githubPrSync;
   ideas: typeof ideas;
