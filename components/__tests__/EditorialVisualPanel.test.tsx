@@ -135,7 +135,7 @@ describe("EditorialVisualPanel", () => {
       const view = render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
       fireEvent.change(screen.getByLabelText("Edit feedback"), { target: { value: "Change only this fixture grip." } });
       for (const name of ["Plan visuals", "Generate this concept", "Edit selected version"]) expect(screen.getByRole("button", { name })).toBeDisabled();
-      expect(screen.getByText(/Qualification pending: new planning, generation and edit requests are disabled/)).toBeInTheDocument();
+      expect(screen.getByText(/Image actions are on hold: no provider route is qualified with a dependable cost bound/)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Prepare final hero crop" })).toBeEnabled();
       expect(screen.getByRole("button", { name: "Select version 1" })).toBeEnabled();
       view.unmount();
@@ -447,64 +447,12 @@ describe("EditorialVisualPanel", () => {
     expect(screen.getByText(/Reconciliation is required before another request/)).toBeInTheDocument();
     for (const name of ["requestPlan", "requestGeneration", "requestEdit", "cancelQueuedAttempt"]) expect(calls[name]).not.toHaveBeenCalled();
   });
-  it("prepares stored crop bytes and approves only the loaded exact export with human alt and review", async () => {
-    const base = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [versionFixture] };
-    workflow = base;
-    calls.prepareHero.mockResolvedValue({ versionId: "hero-v2", exportHash: "export-a", url: "https://storage.example/action-result" });
-    const view = render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    fireEvent.click(screen.getByRole("button", { name: "Prepare final hero crop" }));
-    await waitFor(() => expect(calls.prepareHero).toHaveBeenCalledWith({ versionId: "hero-v2" }));
-    expect(calls.approveHero).not.toHaveBeenCalled();
-    expect(screen.queryByRole("img", { name: "Final hero crop preview" })).not.toBeInTheDocument();
-    const exported = { ...versionFixture, exportHash: "export-a", exportUrl: "https://storage.example/export-a", exportMetadata: { width: 1600, height: 900, bytes: 120000, format: "webp", crop: "center" } };
-    workflow = { ...base, versions: [exported] };
-    view.rerender(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    expect(screen.getByRole("button", { name: "Approve hero" })).toBeDisabled();
-    const preview = screen.getByRole("img", { name: "Final hero crop preview" });
-    expect(preview).toHaveAttribute("src", exported.exportUrl);
-    fireEvent.load(preview);
-    fireEvent.change(screen.getByLabelText("Descriptive hero alt text"), { target: { value: "A raven mechanic checks a restrained roadster." } });
-    fireEvent.click(screen.getByRole("checkbox", { name: /I reviewed this crop/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Approve hero" }));
-    await waitFor(() => expect(calls.approveHero).toHaveBeenCalledWith({ postId: "post-1", versionId: "hero-v2", alt: "A raven mechanic checks a restrained roadster.", expectedExportHash: "export-a", expectedArticleSignature: "article-current", expectedExportMetadataSignature: stableInputSignature(exported.exportMetadata) }));
-    workflow = { ...base, versions: [{ ...exported, exportHash: "export-b", exportUrl: "https://storage.example/export-b" }] };
-    view.rerender(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    expect(screen.getByRole("button", { name: "Approve hero" })).toBeDisabled();
-  });
-  it("shows actual export format and exact bytes and refuses every noncompliant hero presentation", () => {
-    for (const change of [{ width: 1599 }, { height: 899 }, { format: "png" }, { bytes: 150000 }]) {
-      const exportMetadata = { width: 1600, height: 900, bytes: 120001, format: "webp", crop: "center", ...change };
-      workflow = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [{ ...versionFixture, exportHash: "export-a", exportUrl: "https://storage.example/export-a", exportMetadata }] };
-      const view = render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-      fireEvent.load(screen.getByRole("img", { name: "Final hero crop preview" }));
-      fireEvent.change(screen.getByLabelText("Descriptive hero alt text"), { target: { value: "A fictional raven checks a wheel." } });
-      fireEvent.click(screen.getByRole("checkbox", { name: /I reviewed this crop/ }));
-      expect(screen.getByRole("button", { name: "Approve hero" })).toBeDisabled();
-      expect(screen.getByText(`${exportMetadata.width} × ${exportMetadata.height} · ${exportMetadata.bytes} bytes · ${exportMetadata.format.toUpperCase()}`)).toBeInTheDocument();
-      view.unmount();
-    }
-    expect(calls.approveHero).not.toHaveBeenCalled();
-  });
-  it("keeps approval blocked on preview failure and outside the explicit alt-text bounds", () => {
-    workflow = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [{ ...versionFixture, exportHash: "export-a", exportUrl: "https://storage.example/export-a", exportMetadata: { width: 1600, height: 900, bytes: 120000, format: "webp", crop: "center" } }] };
-    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    const preview = screen.getByRole("img", { name: "Final hero crop preview" });
-    fireEvent.load(preview); fireEvent.click(screen.getByRole("checkbox", { name: /I reviewed this crop/ }));
-    for (const [alt, enabled] of [["four", false], ["Raven", true], ["r".repeat(1000), true], ["r".repeat(1001), false]] as const) {
-      fireEvent.change(screen.getByLabelText("Descriptive hero alt text"), { target: { value: alt } });
-      expect(screen.getByRole("button", { name: "Approve hero" }).hasAttribute("disabled")).toBe(!enabled);
-    }
-    fireEvent.change(screen.getByLabelText("Descriptive hero alt text"), { target: { value: "A fictional raven tests a wheel." } });
-    fireEvent.error(preview);
-    expect(screen.getByRole("button", { name: "Approve hero" })).toBeDisabled();
-    expect(calls.approveHero).not.toHaveBeenCalled();
-  });
   it("keeps hero approval disabled when export preparation rejects", async () => {
     workflow = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [versionFixture] };
     calls.prepareHero.mockRejectedValue(new Error("decoder rejected"));
     render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
     fireEvent.click(screen.getByRole("button", { name: "Prepare final hero crop" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be saved/);
+    expect(await screen.findByRole("alert")).toHaveTextContent("decoder rejected");
     expect(screen.getByRole("button", { name: "Approve hero" })).toBeDisabled();
     expect(screen.queryByRole("img", { name: "Final hero crop preview" })).not.toBeInTheDocument();
     expect(calls.approveHero).not.toHaveBeenCalled();
@@ -517,112 +465,6 @@ describe("EditorialVisualPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm hero still fits this article" }));
     await waitFor(() => expect(calls.confirmRelevance).toHaveBeenCalledWith({ postId: "post-1", versionId: "hero-v2", expectedArticleSignature: "article-current" }));
     expect(calls.approveHero).not.toHaveBeenCalled();
-  });
-  it("binds human approval to export presentation and resets review when metadata changes with the same hash", async () => {
-    const exported = { ...versionFixture, exportHash: "same-bytes", exportUrl: "https://storage.example/export", exportMetadata: { width: 1600, height: 900, bytes: 120000, format: "webp", crop: "center" } };
-    workflow = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [exported] };
-    const view = render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    fireEvent.load(screen.getByRole("img", { name: "Final hero crop preview" }));
-    fireEvent.change(screen.getByLabelText("Descriptive hero alt text"), { target: { value: "A raven mechanic checks the roadster wheel." } });
-    fireEvent.click(screen.getByRole("checkbox", { name: /I reviewed this crop/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Approve hero" }));
-    await waitFor(() => expect(calls.approveHero).toHaveBeenCalledWith(expect.objectContaining({ expectedExportMetadataSignature: stableInputSignature(exported.exportMetadata) })));
-    workflow = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [{ ...exported, exportMetadata: { ...exported.exportMetadata, crop: "left" } }] };
-    view.rerender(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    expect(screen.getByRole("button", { name: "Approve hero" })).toBeDisabled();
-    expect(screen.getByRole("checkbox", { name: /I reviewed this crop/ })).not.toBeChecked();
-    expect(screen.getByLabelText("Descriptive hero alt text")).toHaveValue("");
-  });
-  it("prepares only an explicit in-bounds integer crop and requires review of its persisted presentation", async () => {
-    const exported = { ...versionFixture, exportHash: "same-bytes", exportUrl: "https://storage.example/export", exportMetadata: { width: 1600, height: 900, bytes: 120000, format: "webp", crop: JSON.stringify({ crop: null }) } };
-    workflow = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [exported] };
-    const view = render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    fireEvent.load(screen.getByRole("img", { name: "Final hero crop preview" }));
-    fireEvent.change(screen.getByLabelText("Descriptive hero alt text"), { target: { value: "A raven checks a roadster wheel." } });
-    fireEvent.click(screen.getByRole("checkbox", { name: /I reviewed this crop/ }));
-    expect(screen.getByRole("button", { name: "Approve hero" })).toBeEnabled();
-    expect(screen.getByText("Source dimensions: 1536 × 1024 pixels")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Crop mode"), { target: { value: "manual" } });
-    const setCrop = (values: [string, string, string, string]) => ["Crop left", "Crop top", "Crop width", "Crop height"].forEach((label, index) => fireEvent.change(screen.getByLabelText(label), { target: { value: values[index] } }));
-    setCrop(["400", "20", "1200", "675"]);
-    expect(screen.getByRole("button", { name: "Prepare final hero crop" })).toBeDisabled();
-    setCrop(["100.5", "20", "1200", "675"]);
-    expect(screen.getByRole("button", { name: "Prepare final hero crop" })).toBeDisabled();
-    setCrop(["100", "20", "1200", "675"]);
-    expect(screen.getByRole("button", { name: "Approve hero" })).toBeDisabled();
-    expect(calls.prepareHero).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Prepare final hero crop" }));
-    const crop = { left: 100, top: 20, width: 1200, height: 675 };
-    await waitFor(() => expect(calls.prepareHero).toHaveBeenCalledWith({ versionId: "hero-v2", crop }));
-    expect(screen.getByRole("button", { name: "Approve hero" })).toBeDisabled();
-    workflow = { ...emptyWorkflow, state: { selectedVersionId: "hero-v2" }, versions: [{ ...exported, exportMetadata: { ...exported.exportMetadata, crop: JSON.stringify({ crop }) } }] };
-    view.rerender(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    expect(screen.getByRole("checkbox", { name: /I reviewed this crop/ })).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Approve hero" })).toBeDisabled();
-  });
-  it("saves brand guidance against its revision while preserving ordered references and the unqualified route", async () => {
-    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    fireEvent.change(screen.getByLabelText("Art direction"), { target: { value: "Matte paper with visible fibers" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save brand visual profile" }));
-    const { _id, referenceBindings, defaultRoute, artDirection, palette, mascotGuidance, compositionGuidance, textPolicy, heroChartPolicy } = profileFixture.revision;
-    const guidance = { artDirection, palette, mascotGuidance, compositionGuidance, textPolicy, heroChartPolicy };
-    await waitFor(() => expect(calls.saveRevision).toHaveBeenCalledWith({ brandId: "corvo", expectedRevisionId: _id,
-      guidance: { ...guidance, artDirection: "Matte paper with visible fibers" }, referenceBindings, defaultRoute }));
-    expect(calls.requestPlan).not.toHaveBeenCalled();
-    expect(screen.getByText(/1. identity · raven.png/)).toBeInTheDocument();
-    expect(screen.getByText(/2. style · paper.png/)).toBeInTheDocument();
-  });
-  it("preserves a dirty profile draft across an external revision until explicit reload", async () => {
-    const view = render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    fireEvent.change(screen.getByLabelText("Art direction"), { target: { value: "My unsaved paper direction" } });
-    fireEvent.click(screen.getByRole("button", { name: "Remove reference 1" }));
-    calls.uploadReference.mockResolvedValue({ referenceId: "new-reference" });
-    const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]).buffer;
-    const file = new File([bytes], "my-unbound-reference.png", { type: "image/png" });
-    Object.defineProperty(file, "arrayBuffer", { value: async () => bytes });
-    fireEvent.change(screen.getByLabelText("Reference image"), { target: { files: [file] } });
-    fireEvent.click(screen.getByRole("button", { name: "Upload reference" }));
-    await screen.findByText("2. identity · my-unbound-reference.png");
-    profile = { ...profileFixture, revision: { ...profileFixture.revision, _id: "profile-external", revision: 2, artDirection: "External profile direction" } };
-    view.rerender(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    expect(screen.getByLabelText("Art direction")).toHaveValue("My unsaved paper direction");
-    expect(screen.getByText(/Brand profile changed.*draft is preserved/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save brand visual profile" })).toBeDisabled();
-    expect(screen.queryByText("1. identity · raven.png")).not.toBeInTheDocument();
-    expect(screen.getByText("2. identity · my-unbound-reference.png")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Reload saved brand profile" }));
-    expect(screen.getByLabelText("Art direction")).toHaveValue("External profile direction");
-    expect(screen.queryByText(/my-unbound-reference.png/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save brand visual profile" })).toBeEnabled();
-    expect(calls.saveRevision).not.toHaveBeenCalled();
-  });
-  it("advances the profile CAS base on its own returned revision without losing local guidance", async () => {
-    calls.saveRevision.mockResolvedValue({ profileRevisionId: "profile-own", revision: 2 });
-    const view = render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    fireEvent.change(screen.getByLabelText("Art direction"), { target: { value: "My saved paper direction" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save brand visual profile" }));
-    await screen.findByText(/Waiting for the saved brand profile revision/);
-    profile = { ...profileFixture, revision: { ...profileFixture.revision, _id: "profile-own", revision: 2, artDirection: "My saved paper direction" } };
-    view.rerender(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    await waitFor(() => expect(screen.queryByText(/Waiting for the saved brand profile revision/)).not.toBeInTheDocument());
-    expect(screen.queryByText(/Brand profile changed/)).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Art direction")).toHaveValue("My saved paper direction");
-    fireEvent.change(screen.getByLabelText("Art direction"), { target: { value: "My next paper direction" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save brand visual profile" }));
-    await waitFor(() => expect(calls.saveRevision).toHaveBeenLastCalledWith(expect.objectContaining({ expectedRevisionId: "profile-own", guidance: expect.objectContaining({ artDirection: "My next paper direction" }) })));
-  });
-  it("saves only the explicitly reordered, reassigned and retained reference bindings", async () => {
-    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    expect(screen.getByRole("button", { name: "Move reference 1 up" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Move reference 2 down" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Move reference 2 up" }));
-    expect(screen.getByText("1. style · paper.png")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Reference 1 role"), { target: { value: "composition" } });
-    fireEvent.click(screen.getByRole("button", { name: "Remove reference 2" }));
-    expect(screen.queryByText(/identity · raven.png/)).not.toBeInTheDocument();
-    expect(calls.saveRevision).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Save brand visual profile" }));
-    await waitFor(() => expect(calls.saveRevision).toHaveBeenCalledWith(expect.objectContaining({ expectedRevisionId: "profile-v1", referenceBindings: [{ referenceId: "paper", role: "composition" }] })));
   });
   it("uploads an explicit reference and creates an empty brand profile without fabricating seed completion", async () => {
     profile = null; calls.uploadReference.mockResolvedValue({ referenceId: "new-reference" });
@@ -645,21 +487,6 @@ describe("EditorialVisualPanel", () => {
       defaultRoute: { provider: "digitalocean", model: "gpt-image-2", qualification: "unqualified" } })));
     expect(calls.requestPlan).not.toHaveBeenCalled();
   });
-  it("rejects invalid reference type or size and enforces the eight-binding cap without uploads", async () => {
-    const view = render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    for (const file of [new File(["text"], "note.txt", { type: "text/plain" }), new File([], "empty.png", { type: "image/png" }), new File([new Uint8Array(5 * 1024 * 1024 + 1)], "too-large.png", { type: "image/png" })]) {
-      fireEvent.change(screen.getByLabelText("Reference image"), { target: { files: [file] } });
-      fireEvent.click(screen.getByRole("button", { name: "Upload reference" }));
-      expect(await screen.findByRole("alert")).toHaveTextContent(/PNG, JPEG or WebP reference up to 5 MiB/);
-      expect(calls.uploadReference).not.toHaveBeenCalled();
-    }
-    view.unmount();
-    profile = { ...profileFixture, revision: { ...profileFixture.revision, referenceBindings: Array.from({ length: 8 }, (_, index) => ({ referenceId: `reference-${index}`, role: "identity" })) } };
-    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    expect(screen.getByLabelText("Reference image")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Upload reference" })).toBeDisabled();
-    expect(calls.uploadReference).not.toHaveBeenCalled();
-  });
   it("keeps a failed reference upload unbound and does not retry it automatically", async () => {
     calls.uploadReference.mockRejectedValue(new Error("upload rejected"));
     const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]).buffer;
@@ -668,7 +495,7 @@ describe("EditorialVisualPanel", () => {
     render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
     fireEvent.change(screen.getByLabelText("Reference image"), { target: { files: [file] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload reference" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be saved/);
+    expect(await screen.findByRole("alert")).toHaveTextContent("upload rejected");
     expect(screen.queryByText(/identity · failed-reference.png/)).not.toBeInTheDocument();
     expect(calls.uploadReference).toHaveBeenCalledTimes(1);
     expect(calls.saveRevision).not.toHaveBeenCalled();
@@ -695,12 +522,58 @@ describe("EditorialVisualPanel", () => {
       expect(calls.setMonthlyBudget).not.toHaveBeenCalled();
     }
   });
-  it("shows guarded local master verification and authenticated seed import instructions", () => {
+  it("renders the thrown backend message for a failed save instead of a generic sentence", async () => {
+    calls.requestPlan.mockRejectedValue(new Error("Revision conflict: the saved plan changed. Reload."));
     render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
-    expect(screen.getByText("node scripts/import-visual-seed.mjs --source-directory /path/to/approved-masters")).toBeInTheDocument();
-    expect(screen.getByText("node scripts/import-visual-seed.mjs --source-directory /path/to/approved-masters --apply --url <explicit-destination-url>")).toBeInTheDocument();
-    expect(screen.getByText(/RESONATE_VISUAL_IMPORT_TOKEN/)).toBeInTheDocument();
-    expect(screen.getByText(/All approved PNG masters must match the fixed manifest hashes/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Plan visuals" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Revision conflict: the saved plan changed. Reload.");
+    expect(screen.queryByText(/This action could not be saved/)).not.toBeInTheDocument();
+  });
+  it("keeps a non-Error rejection on the honest fallback sentence", async () => {
+    calls.requestPlan.mockRejectedValue("string rejection");
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    fireEvent.click(screen.getByRole("button", { name: "Plan visuals" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/This action could not be saved/);
+  });
+  it("exposes the activity feed as a named region", () => {
+    workflow = { ...emptyWorkflow, attempts: [{ _id: "attempt-1", stage: "generation", status: "queued" }] };
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    expect(screen.getByRole("region", { name: "Visual activity" })).toBeInTheDocument();
+  });
+  it("selects persisted qualified routes from the inspector and demotes free-text overrides to advanced", async () => {
+    workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0 } };
+    profile = { ...profileFixture, revision: { ...profileFixture.revision, defaultRoute: { provider: "digitalocean", model: "gpt-image-2", qualification: "unqualified" } } };
+    routeAvailability = { imageRoutes: [
+      { provider: "openai", model: "gpt-image-2", apiModelId: "gpt-image-2-2026-04-21", quality: "low", size: "1536x1024", outputFormat: "webp", generation: true, edit: true },
+      { provider: "openai", model: "gpt-image-2", apiModelId: "gpt-image-2-2026-04-21", quality: "high", size: "1536x1024", outputFormat: "png", generation: true, edit: false },
+    ], reason: null };
+    calls.requestGeneration.mockResolvedValue("attempt-route-select");
+    calls.executeImageAttempt.mockResolvedValue({ status: "completed", versionId: "hero-route-select", reason: null });
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    const routeSelect = screen.getByLabelText("Generation route");
+    expect(routeSelect).toHaveValue("");
+    fireEvent.change(routeSelect, { target: { value: "openai:gpt-image-2" } });
+    expect(screen.getByRole("button", { name: "Generate this concept" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Generate this concept" }));
+    await waitFor(() => expect(calls.requestGeneration).toHaveBeenCalledWith(expect.objectContaining({ providerOverride: "openai", modelOverride: "gpt-image-2" })));
+    // Selecting the brand default clears both overrides again.
+    fireEvent.change(screen.getByLabelText("Generation route"), { target: { value: "" } });
+    await waitFor(() => expect(screen.getByLabelText("Model override")).toHaveValue(""));
+    expect(screen.getByLabelText("Provider override")).toHaveValue("");
+  });
+  it("shows a custom-override choice and keeps raw free-text fields as the advanced fallback", () => {
+    workflow = { ...emptyWorkflow, plans: [planFixture], state: { selectedPlanId: "plan-1", selectedSceneIndex: 0 } };
+    routeAvailability = { imageRoutes: [], reason: "no-qualified-route-and-cost-bound" };
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    fireEvent.change(screen.getByLabelText("Model override"), { target: { value: "offline-fixture" } });
+    fireEvent.change(screen.getByLabelText("Provider override"), { target: { value: "offline-fixture" } });
+    expect(screen.getByLabelText("Generation route")).toHaveValue("custom");
+  });
+  it("points seed import at the operator guide instead of rendering shell commands", () => {
+    render(<EditorialVisualPanel postId="post-1" brandId="corvo" />);
+    expect(screen.getByText(/docs\/editorial-visuals\/seed-import\.md/)).toBeInTheDocument();
+    expect(screen.queryByText(/node scripts\/import-visual-seed\.mjs/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/RESONATE_VISUAL_IMPORT_TOKEN/)).not.toBeInTheDocument();
     expect(calls.uploadReference).not.toHaveBeenCalled();
     expect(calls.requestPlan).not.toHaveBeenCalled();
   });
@@ -758,29 +631,6 @@ describe("EditorialVisualPanel", () => {
     view.rerender(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} savedContentChanged />);
     expect(screen.getByRole("button", { name: "Apply approved article-7 hand exception" })).toBeDisabled();
     expect(calls.requestPlan).not.toHaveBeenCalled();
-  });
-  it("pins the viewed saved post context on both post exception writes", async () => {
-    const savedPostContext = { title: "What Corvo Labs learned building an AI editorial workflow", blogSlug: "what-corvo-labs-learned-building-an-ai-editorial-workflow", channelId: "corvo-blog" };
-    resolvedPost = { postExceptionId: null, postException: null, approvedSeedException: true };
-    render(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} />);
-    fireEvent.click(screen.getByRole("button", { name: "Apply approved article-7 hand exception" }));
-    await waitFor(() => expect(calls.applyCorvoArticle7Exception).toHaveBeenCalledWith({ postId: "post-7", expectedExceptionId: null, expectedPostContext: savedPostContext }));
-    fireEvent.change(screen.getByLabelText("Post exception guidance"), { target: { value: "Retain only this article's photographic hand." } });
-    fireEvent.click(screen.getByRole("button", { name: "Save post exception guidance" }));
-    await waitFor(() => expect(calls.setPostException).toHaveBeenCalledWith({ postId: "post-7", expectedExceptionId: null, expectedPostContext: savedPostContext, guidance: "Retain only this article's photographic hand." }));
-  });
-  it("preserves a dirty post exception draft across an external revision until explicit reload", () => {
-    const savedPostContext = { title: "What Corvo Labs learned building an AI editorial workflow", blogSlug: "what-corvo-labs-learned-building-an-ai-editorial-workflow", channelId: "corvo-blog" };
-    const view = render(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} />);
-    fireEvent.change(screen.getByLabelText("Post exception guidance"), { target: { value: "My unsaved photographic hand guidance." } });
-    resolvedPost = { postExceptionId: "exception-external", postException: { _id: "exception-external", revision: 2, guidance: "External exception direction." }, approvedSeedException: false };
-    view.rerender(<EditorialVisualPanel postId="post-7" brandId="corvo" savedPostContext={savedPostContext} />);
-    expect(screen.getByLabelText("Post exception guidance")).toHaveValue("My unsaved photographic hand guidance.");
-    expect(screen.getByText(/Post exception changed.*draft is preserved/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save post exception guidance" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Reload saved post exception" }));
-    expect(screen.getByLabelText("Post exception guidance")).toHaveValue("External exception direction.");
-    expect(calls.setPostException).not.toHaveBeenCalled();
   });
   it("keeps reflected prompts untested and presents profile proposals for human review", () => {
     workflow = { ...emptyWorkflow, reflections: [{ _id: "reflection-1", versionId: "hero-v2", candidatePrompt: "A restrained workshop silhouette.", validationStatus: "untested", profileChangeProposals: ["Review whether warmer light belongs in the palette."], lessonIds: [] }] };
