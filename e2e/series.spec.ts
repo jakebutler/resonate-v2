@@ -5,7 +5,8 @@ test("15 articles and 30 companions persist grouping and open the canonical cale
   const fx = await mockSyncFixture<SeriesPostsFixture>(page, "series-15-30");
   const original=JSON.stringify(fx.posts);
   await page.goto("/series?seriesId=series-fixture");
-  await expect(page.getByLabel("Series progress")).toContainText("15 articles · 30 companions");
+  await expect(page.getByTestId("series-stat-articles")).toContainText("15");
+  await expect(page.getByTestId("series-stat-companions")).toContainText("30");
   await expect(page.getByRole("link",{name:"Prepared article 1",exact:true})).toHaveAttribute("href","/?postId=post-0");
   await page.getByRole("button",{name:"Move down",exact:true}).first().click();
   await expect.poll(()=>fx.calls.includes("series:move")).toBe(true);

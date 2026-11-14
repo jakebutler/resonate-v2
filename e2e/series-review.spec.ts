@@ -193,8 +193,8 @@ test("rapid toggles never race the selection revision and approve submits once",
   const panel = page.getByRole("region", { name: "Selected editorial review" });
   const cb0 = panel.getByRole("checkbox", { name: /Exact review 0/ });
   const cb1 = panel.getByRole("checkbox", { name: /Exact review 1/ });
-  // Two toggles in quick succession: each queued select must carry the
-  // revision the server will see, not the revision at render time.
+  // Two toggles in quick succession coalesce into one batched select call
+  // that flushes before prepare, so the server never sees a stale revision.
   await cb0.focus();
   await page.keyboard.press("Space");
   await cb1.click();
@@ -206,7 +206,7 @@ test("rapid toggles never race the selection revision and approve submits once",
     .click();
   expect(
     fx.calls.filter((c) => c === "seriesReview:select").length,
-  ).toBe(2);
+  ).toBe(1);
   // In-flight approval disables the button and submits exactly one mutation.
   const approveButton = panel.getByRole("button", {
     name: "Approve 2 selected versions",
