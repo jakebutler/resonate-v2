@@ -51,14 +51,16 @@ export function PlanFlow() {
 
   // A cited answer suspected of describing a different product carries its
   // warning into the plan: same verdict, same detail, as the intel screen.
-  const gapWarnings =
-    findingRows !== undefined
-      ? Object.fromEntries(
-          findingRows
-            .filter((row) => row.brandMatch === "suspect")
-            .map((row) => [row._id, row.brandMatchDetail ?? "the cited answer may describe a different product with the same name."])
-        )
-      : undefined;
+  // Tolerates null/undefined while the subscription is loading or unmocked.
+  const gapWarnings = Object.fromEntries(
+    (findingRows ?? [])
+      .filter((row) => row.brandMatch === "suspect")
+      .map((row) => [
+        row._id,
+        row.brandMatchDetail ??
+          "the cited answer may describe a different product with the same name.",
+      ]),
+  );
 
   const brandCampaigns: CampaignOption[] = (campaignRows ?? []).filter(
     (campaign) => campaign.brandId === brandId
