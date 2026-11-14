@@ -5659,3 +5659,31 @@ Legacy hero compatibility: accept only the exact dated or undated directory deri
 ### Branch
 
 - verify/main-live-proof
+
+## 11/14/2026 13:22:04 UTC
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	docs/verification/reports/2026-11-14-main-live-proof.md
+- A	docs/verification/reports/evidence/main-live-proof/tc-1-campaign-flow-recap.webm
+- A	docs/verification/reports/evidence/main-live-proof/tc-1-campaign-session.png
+- A	docs/verification/reports/evidence/main-live-proof/tc-1-campaigns-freshproof.png
+- A	docs/verification/reports/evidence/main-live-proof/tc-2-composer-visuals-recap.png
+- A	docs/verification/reports/evidence/main-live-proof/tc-3-series-batch-review-recap.png
+
+### Working Tree Snapshot
+
+- M  docs/verification/reports/2026-11-14-main-live-proof.md
+- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaign-flow-recap.webm
+- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaign-session.png
+- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaigns-freshproof.png
+- A  docs/verification/reports/evidence/main-live-proof/tc-2-composer-visuals-recap.png
+- A  docs/verification/reports/evidence/main-live-proof/tc-3-series-batch-review-recap.png
+
+### Branch
+
+- verify/main-live-proof
