@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { ChannelIcon } from "@/components/campaigns/ChannelIcon";
@@ -34,6 +34,7 @@ type DraftSetView = {
   materialization: { _id: string; mode: string } | null;
   drafts: DraftEntry[];
   shapeAccepted?: boolean;
+  liveGenerationAvailable?: boolean;
 } | null | undefined;
 
 const TOKEN_PATTERN = /(\[[A-Z]+:[^\]]*\])/g;
@@ -61,6 +62,7 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
   }) as DraftSetView;
 
   const generateDraftSet = useMutation(api.draftSet.generateDraftSet);
+  const generateLiveDraftSet = useAction(api.draftGeneration.generateLiveDraftSet);
   const requestMockAcknowledgment = useMutation(
     api.mockAck.requestMockAcknowledgment
   );
@@ -68,6 +70,24 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
   const [mockConfirmOpen, setMockConfirmOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const { toast, showToast } = useToast(3600);
+
+  const liveAvailable = view?.liveGenerationAvailable === true;
+
+  async function handleLiveGenerate() {
+    setGenerating(true);
+    try {
+      const result = await generateLiveDraftSet({
+        campaignId: typedCampaignId,
+      });
+      showToast(
+        `Generated ${result.draftCount} AI drafts grounded in your corpus citations — every one unapproved; cohesion gate run #${result.cohesionRunNumber} ${result.cohesionPassed ? "passed" : "is blocking"}.`
+      );
+    } catch (caught) {
+      showToast(caught instanceof Error ? caught.message : "Live generation failed.");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function handleGenerate() {
     setGenerating(true);
@@ -128,12 +148,27 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
         ) : null}
         <div className={cn("flex items-center gap-2", !view?.materialization && "ml-auto")}>
           <span className="rounded-full bg-[#fff1e0] px-2.5 py-0.5 text-[11px] font-normal text-[#b25400]">
-            mock mode
+            {view.materialization?.mode === "live" ? "AI mode" : "mock mode"}
           </span>
           {view.materialization ? (
             <span className={cn("text-xs", tokens.textMuted)}>
               One set per shape — regeneration arrives with live generation.
             </span>
+          ) : liveAvailable ? (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={generating || view.shapeAccepted !== true}
+              title={
+                view.shapeAccepted
+                  ? undefined
+                  : "Accept a complete shape on the shape page first."
+              }
+              onClick={() => void handleLiveGenerate()}
+              data-testid="generate-draft-set-live"
+            >
+              {generating ? "Generating…" : "Generate with AI"}
+            </Button>
           ) : (
             <Button
               variant="primary"
@@ -153,10 +188,9 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
         </div>
       </div>
       <p className={cn("mt-1 text-sm", tokens.textMuted)}>
-        Placeholders are generated <b>as one set</b> from the accepted shape —
-        never per-post. Bracketed tokens mark where real generated copy would
-        go. Everything lands <b>scheduled-but-unapproved</b> once it is added
-        to the calendar; nothing auto-approves.
+        {liveAvailable
+          ? "AI drafts are generated as one set from the accepted shape, grounded in your corpus citations — every draft stays unapproved until a human approves it."
+          : "Placeholders are generated as one set from the accepted shape — never per-post. Bracketed tokens mark where real generated copy would go. Everything lands scheduled-but-unapproved once it is added to the calendar; nothing auto-approves."}
       </p>
 
       {mockConfirmOpen ? (
@@ -190,8 +224,9 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
         <div className={cn(tokens.panel, "mt-6 border-dashed px-6 py-10 text-center")}>
           <p className={cn("text-sm", tokens.textMuted)}>
             No draft set yet. Generation is gated: it runs only from an accepted
-            shape, in acknowledged mock mode, and produces visibly
-            placeholder-grade copy.
+            shape — with AI drafting when a verified gateway credential is
+            configured, and in acknowledged mock mode otherwise. Every draft
+            lands visibly unapproved either way.
           </p>
         </div>
       ) : null}

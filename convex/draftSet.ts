@@ -13,6 +13,7 @@ import {
   containsPlaceholderTokens,
   type DraftSlotInput,
 } from "@/lib/campaignDrafts";
+import { campaignDraftingCredential } from "@/lib/campaignDrafting";
 
 function contentFingerprint(title: string, content: string) {
   return `${title.trim()}\n${content.trim()}`;
@@ -194,6 +195,9 @@ export const getDraftSet = query({
         materialization: null,
         drafts: [],
         shapeAccepted: acceptedShape !== null || shape?.status === "accepted",
+        // The client pre-gates the live Generate path on verified gateway
+        // credentials; without them the mock confirm flow is the only offer.
+        liveGenerationAvailable: campaignDraftingCredential(process.env) !== null,
       };
     }
 
@@ -232,6 +236,7 @@ export const getDraftSet = query({
       materialization,
       drafts: hydrated,
       shapeAccepted: true,
+      liveGenerationAvailable: campaignDraftingCredential(process.env) !== null,
     };
   },
 });

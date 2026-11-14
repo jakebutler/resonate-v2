@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
   useQuery: vi.fn(),
+  useAction: () => vi.fn(),
 }));
 
 vi.mock("@/convex/_generated/api", () => ({
@@ -13,6 +14,9 @@ vi.mock("@/convex/_generated/api", () => ({
     draftSet: {
       getDraftSet: "draftSet:getDraftSet",
       generateDraftSet: "draftSet:generateDraftSet",
+    },
+    draftGeneration: {
+      generateLiveDraftSet: "draftGeneration:generateLiveDraftSet",
     },
     cohesion: {
       getReviewPasses: "cohesion:getReviewPasses",
