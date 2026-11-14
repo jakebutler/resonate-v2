@@ -53,6 +53,11 @@ export type CrawlSnapshot = {
   version: number;
   crawledAt: number;
   pages: CrawlPage[];
+  /**
+   * True while this snapshot's page query is still in flight — the browser
+   * must show a loading state instead of a false "0 pages crawled".
+   */
+  pagesLoading?: boolean;
 };
 
 export type CompetitorCitationRow = {
@@ -60,6 +65,11 @@ export type CompetitorCitationRow = {
   domain: string;
   pageCount: number;
   citationCount: number;
+  /**
+   * False when this competitor has never been crawled — the row must render
+   * an explicit "not crawled yet" state instead of meaningless zeros.
+   */
+  crawled: boolean;
 };
 
 export type CompetitorComparison = {

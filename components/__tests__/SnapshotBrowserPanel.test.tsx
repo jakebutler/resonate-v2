@@ -73,7 +73,8 @@ describe("SnapshotBrowserPanel", () => {
       />,
     );
     expect(screen.getByText(/2 pages crawled/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "v1" }));
+    // Version switches are real tabs now — selected via their tab role.
+    fireEvent.click(screen.getByRole("tab", { name: "v1" }));
     expect(onSelectSnapshot).toHaveBeenCalledWith("snap_1");
   });
 
