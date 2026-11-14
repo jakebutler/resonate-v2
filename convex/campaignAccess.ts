@@ -56,6 +56,27 @@ export async function getOwnedCampaign(
   return campaign;
 }
 
+/**
+ * Legacy `posts` rows predate per-row ownership (ADR0004 migration window).
+ * Rows created after the ownership fix carry a userId and are owner-only.
+ * Historical ownerless rows remain editable as the shared authenticated
+ * workspace ADR0004 describes, but only for Corvo workspace members.
+ */
+export async function getOwnedLegacyPost(
+  ctx: QueryCtx | MutationCtx,
+  userId: string,
+  postId: string
+): Promise<Doc<"posts">> {
+  const normalized = ctx.db.normalizeId("posts", postId);
+  if (!normalized) throw new Error("Post not found");
+  const post = await ctx.db.get(normalized);
+  if (!post || (post.userId && post.userId !== userId)) {
+    throw new Error("Post not found");
+  }
+  if (!post.userId) await requireBrandAccess(ctx, userId, "corvo");
+  return post;
+}
+
 export async function audit(
   ctx: MutationCtx,
   params: {

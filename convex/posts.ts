@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireUserId } from "./campaignAccess";
+import { getOwnedLegacyPost, requireUserId } from "./campaignAccess";
 import { assertEditorialStorageAccess } from "./visualStorageAccess";
 
 export const list = query({
@@ -23,8 +23,8 @@ export const list = query({
 export const getById = query({
   args: { id: v.id("posts") },
   handler: async (ctx, args) => {
-    await requireUserId(ctx);
-    return await ctx.db.get(args.id);
+    const userId = await requireUserId(ctx);
+    return await getOwnedLegacyPost(ctx, userId, args.id);
   },
 });
 
@@ -61,6 +61,7 @@ export const create = mutation({
     const now = Date.now();
     for (const fileId of new Set([...(args.fileIds ?? []), ...(args.heroImageId ? [args.heroImageId] : [])])) await assertEditorialStorageAccess(ctx, userId, fileId);
     return await ctx.db.insert("posts", {
+      userId,
       ...args,
       createdAt: now,
       updatedAt: now,
@@ -102,7 +103,7 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const { id, ...fields } = args;
-    const current = await ctx.db.get(id);
+    const current = await getOwnedLegacyPost(ctx, userId, id);
     const retained = new Set([...(current?.fileIds ?? []), ...(current?.heroImageId ? [current.heroImageId] : [])]);
     for (const fileId of new Set([...(args.fileIds ?? []), ...(args.heroImageId ? [args.heroImageId] : [])])) {
       if (!retained.has(fileId)) await assertEditorialStorageAccess(ctx, userId, fileId);
@@ -114,8 +115,9 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("posts") },
   handler: async (ctx, args) => {
-    await requireUserId(ctx);
-    await ctx.db.delete(args.id);
+    const userId = await requireUserId(ctx);
+    const post = await getOwnedLegacyPost(ctx, userId, args.id);
+    await ctx.db.delete(post._id);
   },
 });
 
@@ -165,6 +167,7 @@ export const createFromIdea = mutation({
     const now = Date.now();
 
     const postId = await ctx.db.insert("posts", {
+      userId,
       type: args.type,
       title: args.type === "blog" ? idea.sourceTitle || "Idea draft" : undefined,
       content:

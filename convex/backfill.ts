@@ -23,7 +23,7 @@ export const upsertMany = mutation({
     unchanged: v.number(),
   }),
   handler: async (ctx, args) => {
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
 
     let inserted = 0;
     let updated = 0;
@@ -38,6 +38,7 @@ export const upsertMany = mutation({
       if (!existing) {
         const now = Date.now();
         await ctx.db.insert("posts", {
+          userId,
           ...post,
           createdAt: now,
           updatedAt: now,

@@ -642,6 +642,7 @@ export default defineSchema({
     category: v.optional(v.string()),
     featured: v.optional(v.boolean()),
     coverImageAlt: v.optional(v.string()),
+    userId: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

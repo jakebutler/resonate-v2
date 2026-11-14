@@ -586,6 +586,7 @@ export const createDraftFromIdea = mutation({
     const now = Date.now();
     const title = args.seedTitle?.trim() || idea.title;
     const postId = await ctx.db.insert("posts", {
+      userId,
       type: args.type,
       title,
       content: args.seedContent?.trim() || seedPostContent(args.type, idea),
