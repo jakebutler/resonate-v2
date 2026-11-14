@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 11/14/2026 07:04:17 UTC
+Last updated: 11/14/2026 08:13:19 UTC
 
 ## State
 
@@ -16,22 +16,25 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- f497cfc fix(verify): resolve contract command placeholders from operator env
+- 06e7938 docs(verification): record AEO live-proof runs, review-queue walk, and spend
 
 ## Recent Commits
 
-- f497cfc fix(verify): resolve contract command placeholders from operator env
+- 06e7938 docs(verification): record AEO live-proof runs, review-queue walk, and spend
+- 46725d7 docs(verification): scaffold AEO live-proof report (aeo-proof worker)
+- b5ea7d3 fix(test): bridge SubtleCrypto digest realm mismatch in the vitest environment (#167)
 - af6e9ee Release: AEO/SEO intelligence surface (#142)
 - 75957b5 Release: feature-verification workflow (#141)
-- f30ac91 Merge pull request #140 from jakebutler/codex/visual-figure-sans
-- 899d79e test: require inherited sans-serif text in exported figures
 
 ## Local Working Tree
 
-- M  lib/__tests__/visualFigures.test.ts
-- M  tests/setup.ts
-- ?? bun.lock
-- ?? docs/verification/campaigns/2026-11-14.md
+-  M convex/_generated/api.d.ts
+-  M convex/_generated/server.d.ts
+-  M convex/_generated/server.js
+- M  docs/verification/reports/evidence/aeo-live-proof/driver-crawl.mts
+- M  docs/verification/reports/evidence/aeo-live-proof/driver-query.mts
+- M  docs/verification/reports/evidence/aeo-live-proof/driver-runs.mts
+- ?? .env.aeo-proof
 
 ## Next Agent Pickup
 
@@ -40,4 +43,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- verify/main-live-proof
+- verify/aeo-live-proof
