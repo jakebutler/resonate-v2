@@ -1045,6 +1045,17 @@ export const setApproval = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await getOwnedPost(ctx, userId, args.postId);
+    // Un-approving is only safe before dispatch: reverting a queued,
+    // publishing or published post would desynchronize the release records.
+    if (
+      args.approvalState !== "approved" &&
+      ["submitted", "queued", "publishing", "published", "cancel-requested", "removed"].includes(
+        post.status,
+      )
+    )
+      throw new Error(
+        "This post has entered publishing; approval can no longer be reverted here.",
+      );
     await applyEditorialApproval(ctx, userId, post, args.approvalState, args);
   }
 });

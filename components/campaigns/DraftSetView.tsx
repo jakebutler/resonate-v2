@@ -11,6 +11,8 @@ import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
 import { channelLabel } from "@/lib/campaignLabels";
 import { ToastBanner, useToast } from "./useToast";
+import { ContentWithTokens } from "./ContentWithTokens";
+import { typedId } from "@/lib/typedIds";
 import {
   ROLE_LEGEND,
   ROLE_TINTS,
@@ -37,26 +39,8 @@ type DraftSetView = {
   liveGenerationAvailable?: boolean;
 } | null | undefined;
 
-const TOKEN_PATTERN = /(\[[A-Z]+:[^\]]*\])/g;
-
-function renderContentWithTokens(content: string) {
-  return content.split(TOKEN_PATTERN).map((part, index) => {
-    if (/^\[[A-Z]+:/.test(part)) {
-      return (
-        <span
-          key={index}
-          className="rounded bg-[#ffefe0] px-1 py-0.5 font-mono text-[11px] text-[#8a4b00]"
-        >
-          {part}
-        </span>
-      );
-    }
-    return <span key={index}>{part}</span>;
-  });
-}
-
 export function DraftSetView({ campaignId }: { campaignId: string }) {
-  const typedCampaignId = campaignId as never;
+  const typedCampaignId = typedId<"campaigns">(campaignId);
   const view = useQuery(api.draftSet.getDraftSet, {
     campaignId: typedCampaignId,
   }) as DraftSetView;
@@ -148,7 +132,9 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
         ) : null}
         <div className={cn("flex items-center gap-2", !view?.materialization && "ml-auto")}>
           <span className="rounded-full bg-[#fff1e0] px-2.5 py-0.5 text-[11px] font-normal text-[#b25400]">
-            {view.materialization?.mode === "live" ? "AI mode" : "mock mode"}
+            {view.materialization?.mode === "live"
+              ? "Generated with AI"
+              : "Sample content — offline"}
           </span>
           {view.materialization ? (
             <span className={cn("text-xs", tokens.textMuted)}>
@@ -190,7 +176,7 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
       <p className={cn("mt-1 text-sm", tokens.textMuted)}>
         {liveAvailable
           ? "AI drafts are generated as one set from the accepted shape, grounded in your corpus citations — every draft stays unapproved until a human approves it."
-          : "Placeholders are generated as one set from the accepted shape — never per-post. Bracketed tokens mark where real generated copy would go. Everything lands scheduled-but-unapproved once it is added to the calendar; nothing auto-approves."}
+          : "Placeholders are generated as one set from the accepted shape — never per-post. Labeled placeholders mark where real generated copy would go. Everything lands scheduled-but-unapproved once it is added to the calendar; nothing auto-approves."}
       </p>
 
       {mockConfirmOpen ? (
@@ -199,13 +185,13 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
           data-testid="draft-mock-confirm"
         >
           <p>
-            Generation runs in <b>mock mode</b> — placeholder drafts composed
+            This generates <b>sample content</b> — placeholder drafts composed
             from your accepted shape, linked ideas, and cited excerpts. Nothing
             publishes and nothing submits.
           </p>
           <div className="mt-2 flex gap-2">
             <Button size="xs" disabled={generating} onClick={() => void handleGenerate()}>
-              {generating ? "Generating…" : "Run in mock mode"}
+              {generating ? "Generating…" : "Generate sample drafts"}
             </Button>
             <Button variant="ghost" size="xs" onClick={() => setMockConfirmOpen(false)}>
               Cancel
@@ -225,7 +211,7 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
           <p className={cn("text-sm", tokens.textMuted)}>
             No draft set yet. Generation is gated: it runs only from an accepted
             shape — with AI drafting when a verified gateway credential is
-            configured, and in acknowledged mock mode otherwise. Every draft
+            configured, and as offline sample content otherwise. Every draft
             lands visibly unapproved either way.
           </p>
         </div>
@@ -270,7 +256,7 @@ export function DraftSetView({ campaignId }: { campaignId: string }) {
             </div>
             <h2 className="text-[15px] font-semibold">{entry.post.title}</h2>
             <div className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">
-              {renderContentWithTokens(entry.post.content)}
+              <ContentWithTokens content={entry.post.content} />
             </div>
           </article>
         ))}

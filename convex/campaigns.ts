@@ -518,7 +518,13 @@ export const getCampaignSession = query({
         .query("corpusExcerpts")
         .withIndex("by_corpus", (q) => q.eq("corpusId", corpusId))
         .take(51);
-      corporaWithCounts.push({ corpus, excerptCount: excerptSample.length });
+      corporaWithCounts.push({
+        corpus,
+        excerptCount: excerptSample.length,
+        // A capped sample is a lower bound, not a count: report honesty so
+        // the UI can show "51+" instead of passing 51 off as exact.
+        excerptCountComplete: excerptSample.length < 51,
+      });
     }
 
     const joins = await ctx.db

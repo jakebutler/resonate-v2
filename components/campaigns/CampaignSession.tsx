@@ -17,8 +17,9 @@ import {
 import { CitationChip } from "@/components/campaigns/CitationChip";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
-import { BRANDS } from "@/lib/domain";
+import { BRANDS, type BrandId } from "@/lib/domain";
 import { parseCorpusCitation } from "@/lib/campaignGrounding";
+import { typedId } from "@/lib/typedIds";
 
 function brandLabel(brandId: string) {
   return BRANDS.find((brand) => brand.id === brandId)?.name ?? brandId;
@@ -37,7 +38,7 @@ type SessionData = {
   campaign: {
     _id: string;
     title: string;
-    brandId: string;
+    brandId: BrandId;
     status: string;
     corpusIds: string[];
   };
@@ -45,6 +46,11 @@ type SessionData = {
   corpora: {
     corpus: { _id: string; version: number };
     excerptCount: number;
+    /**
+     * False when the server's excerpt count is a capped sample (51+);
+     * the UI must then show a lower bound, not an exact number.
+     */
+    excerptCountComplete: boolean;
   }[];
   citedExcerpts: {
     _id: string;
@@ -78,7 +84,7 @@ type CampaignSessionProps = {
 };
 
 export function CampaignSession({ campaignId }: CampaignSessionProps) {
-  const typedCampaignId = campaignId as never;
+  const typedCampaignId = typedId<"campaigns">(campaignId);
   const session = useQuery(api.campaigns.getCampaignSession, {
     campaignId: typedCampaignId,
   }) as SessionData | null | undefined;
@@ -102,7 +108,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
   ) as { idea: IdeaDoc; state: string | null }[] | undefined;
   const brandCorpora = useQuery(
     api.corpora.listCorpora,
-    session ? ({ brandId: session.campaign.brandId } as never) : "skip"
+    session ? { brandId: session.campaign.brandId } : "skip"
   ) as CorpusSummary[] | undefined;
 
   const [attachCorpusId, setAttachCorpusId] = useState<string>("");
@@ -122,7 +128,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
     try {
       await attachCorpus({
         campaignId: typedCampaignId,
-        corpusId: attachCorpusId as never,
+        corpusId: typedId<"corpora">(attachCorpusId),
       });
       setAttachCorpusId("");
       showToast("Corpus version attached — suggestions cite its excerpts.");
@@ -171,7 +177,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
       setMockConfirmOpen(false);
       showToast(
         result.created > 0
-          ? `Generated ${result.created} suggested idea(s) in mock mode — every one cites its corpus excerpts.`
+          ? `Generated ${result.created} suggested idea(s) from offline sample content — every one cites its corpus excerpts.`
           : "Suggestions are already up to date."
       );
     } catch (caught) {
@@ -183,7 +189,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
 
   async function handleAdd(idea: IdeaDoc, inOtherCampaign?: string) {
     try {
-      await addIdea({ campaignId: typedCampaignId, ideaId: idea._id as never });
+      await addIdea({ campaignId: typedCampaignId, ideaId: typedId<"ideas">(idea._id) });
     } catch (caught) {
       showToast(caught instanceof Error ? caught.message : "Could not add the idea.");
       return;
@@ -198,7 +204,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
   async function handleRemove(idea: IdeaDoc) {
     let result: { removed: boolean };
     try {
-      result = await removeIdea({ campaignId: typedCampaignId, ideaId: idea._id as never });
+      result = await removeIdea({ campaignId: typedCampaignId, ideaId: typedId<"ideas">(idea._id) });
     } catch (caught) {
       showToast(caught instanceof Error ? caught.message : "Could not remove the idea.");
       return;
@@ -306,7 +312,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
               size="xs"
               onClick={async () => {
                 try {
-                  await rejectIdea({ campaignId: typedCampaignId, ideaId: idea._id as never });
+                  await rejectIdea({ campaignId: typedCampaignId, ideaId: typedId<"ideas">(idea._id) });
                 } catch (caught) {
                   showToast(caught instanceof Error ? caught.message : "Could not mark as not useful.");
                   return;
@@ -389,7 +395,13 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
             </p>
           ) : null}
           {session.corpora.map((entry) => (
-            <CorpusExcerptSection key={`${entry.corpus._id}-excerpts`} corpusId={entry.corpus._id} version={entry.corpus.version} excerptCount={entry.excerptCount} />
+            <CorpusExcerptSection
+              key={`${entry.corpus._id}-excerpts`}
+              corpusId={entry.corpus._id}
+              version={entry.corpus.version}
+              excerptCount={entry.excerptCount}
+              excerptCountComplete={entry.excerptCountComplete}
+            />
           ))}
           <p className={cn("border-t px-4 py-2.5 text-[11px] leading-relaxed", tokens.border, tokens.textMuted)}>
             Brand corpora are shared across campaigns. This campaign holds a
@@ -404,7 +416,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
             </span>
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-[#fff1e0] px-2.5 py-0.5 text-[11px] font-normal text-[#b25400]">
-                mock mode
+                Sample content — offline
               </span>
               <Button
                 variant="primary"
@@ -424,13 +436,13 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
           {mockConfirmOpen ? (
             <div className="border-t bg-[#fff8f0] px-4 py-3 text-sm" style={{ borderColor: "rgba(255,125,0,0.3)" }} data-testid="mock-confirm">
               <p className="text-[#8a4b00]">
-                Generation runs in <b>mock mode</b> — suggestions are template
-                drafts grounded in your corpus excerpts. Nothing publishes and
-                nothing submits.
+                This generates <b>sample content</b> — suggested ideas are
+                template drafts grounded in your corpus excerpts. Nothing
+                publishes and nothing submits.
               </p>
               <div className="mt-2 flex gap-2">
                 <Button size="xs" disabled={suggesting} onClick={() => void handleSuggest()}>
-                  {suggesting ? "Suggesting…" : "Run in mock mode"}
+                  {suggesting ? "Suggesting…" : "Generate sample ideas"}
                 </Button>
                 <Button variant="ghost" size="xs" onClick={() => setMockConfirmOpen(false)}>
                   Cancel
@@ -456,7 +468,7 @@ export function CampaignSession({ campaignId }: CampaignSessionProps) {
                       size="xs"
                       onClick={async () => {
                         try {
-                          await undoRejection({ campaignId: typedCampaignId, ideaId: entry.idea!._id as never });
+                          await undoRejection({ campaignId: typedCampaignId, ideaId: typedId<"ideas">(entry.idea!._id) });
                         } catch (caught) {
                           showToast(caught instanceof Error ? caught.message : "Could not restore the idea.");
                           return;
@@ -562,18 +574,22 @@ function CorpusExcerptSection({
   corpusId,
   version,
   excerptCount,
+  excerptCountComplete,
 }: {
   corpusId: string;
   version: number;
   excerptCount: number;
+  excerptCountComplete: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const preview = useQuery(
     api.corpora.listCorpusExcerptPreview,
-    expanded ? { corpusId: corpusId as never, limit: EXCERPT_PREVIEW_LIMIT } : "skip"
+    expanded ? { corpusId: typedId<"corpora">(corpusId), limit: EXCERPT_PREVIEW_LIMIT } : "skip"
   ) as { excerpts: { _id: string; seq: number; text: string; provenance: string }[]; hasMore: boolean } | null | undefined;
 
-  const excerptLabel = excerptCount > 50 ? "50+" : String(excerptCount);
+  const excerptLabel = excerptCountComplete
+    ? `${excerptCount} excerpt${excerptCount === 1 ? "" : "s"}`
+    : "51+ excerpts";
 
   return (
     <div className="border-t" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
@@ -584,7 +600,7 @@ function CorpusExcerptSection({
         onClick={() => setExpanded((value) => !value)}
       >
         <span className="text-[13px] font-medium">
-          Corpus v{version} — {excerptLabel} excerpt{excerptCount === 1 ? "" : "s"}
+          Corpus v{version} — {excerptLabel}
         </span>
         <span className={cn("ml-auto text-xs", tokens.textMuted)}>
           {expanded ? "Hide ▴" : "Browse ▾"}

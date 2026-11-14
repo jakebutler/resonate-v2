@@ -117,7 +117,9 @@ export async function sourceWarnings(ctx: Ctx, post: Doc<"v2Posts">) {
         warnings.push("Research sources include items not accepted for use.");
     }
   }
-  if (post.content.includes("[EVIDENCE:") || post.content.includes("[SOURCE:"))
+  const markerConfirmation = post.content.includes("[EVIDENCE:") ||
+    post.content.includes("[SOURCE:");
+  if (markerConfirmation)
     warnings.push(
       "Evidence markers remain in the final copy. Check the source passages and publication formatting.",
     );
@@ -127,6 +129,9 @@ export async function sourceWarnings(ctx: Ctx, post: Doc<"v2Posts">) {
     );
   return {
     warnings,
+    // Promoted from an advisory warning to a hold: a batch approval must not
+    // silently absorb rows whose final copy still contains evidence markers.
+    requiresMarkerConfirmation: markerConfirmation,
     citations,
     sourceIdeaId: post.sourceIdeaId ?? null,
     sourceResearchBriefId: post.sourceResearchBriefId ?? null,
@@ -188,6 +193,10 @@ export async function reviewRow(
       );
   }
   const source = await sourceWarnings(ctx, post);
+  if (source.requiresMarkerConfirmation)
+    holds.push(
+      "Evidence markers remain in the final copy; confirm each affected row explicitly before approving.",
+    );
   const state = await ctx.db
     .query("v2ProviderStates")
     .withIndex("by_post", (q) => q.eq("postId", post._id))
@@ -453,6 +462,10 @@ export const approve = mutation({
   args: {
     packetId: v.id("seriesReviewPackets"),
     expectedSelectionRevision: v.number(),
+    // Rows whose final copy still contains evidence markers may only be
+    // approved when the reviewer explicitly confirms them; the list is the
+    // per-row confirmation the review panel collects.
+    markerConfirmations: v.optional(v.array(v.id("v2Posts"))),
   },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -496,6 +509,15 @@ export const approve = mutation({
               ? "Schedule, destination, evidence or readiness changed; refresh the packet."
               : fresh.snapshot.approvalError;
         if (reason) errors.push({ postId: row.postId, reason });
+        else if (
+          fresh.snapshot.requiresMarkerConfirmation &&
+          !(args.markerConfirmations ?? []).includes(row.postId)
+        )
+          errors.push({
+            postId: row.postId,
+            reason:
+              "Evidence markers remain in the final copy; confirm this row explicitly to approve it.",
+          });
         posts.push(post);
       } catch {
         errors.push({
