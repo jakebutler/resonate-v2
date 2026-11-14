@@ -43,10 +43,10 @@ test("intel-citations: a suspect citation renders the mismatch warning and a qua
   await expect(page.getByText("Mismatch suspected.")).toBeVisible();
   // The suspect citation is always qualified, never a plain "cited".
   await expect(
-    page.getByText("Cited: FreshProof (mismatch suspected)", { exact: true })
+    page.getByText("Cited: Corvo Labs (mismatch suspected)", { exact: true })
   ).toBeVisible();
   await expect(
-    page.getByText("Cited: FreshProof", { exact: true })
+    page.getByText("Cited: Corvo Labs", { exact: true })
   ).toBeVisible();
 });
 
