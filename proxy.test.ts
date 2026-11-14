@@ -74,6 +74,17 @@ describe("E2E_BYPASS_AUTH production failsafe", () => {
     expect(result).toEqual({ kind: "next" });
   });
 
+  it("lets the bypass serve requests when only the NEXT_PUBLIC flag spelling is set", async () => {
+    vi.stubEnv("E2E_BYPASS_AUTH", "");
+    vi.stubEnv("NEXT_PUBLIC_E2E_BYPASS_AUTH", "1");
+    vi.stubEnv("VERCEL_ENV", "");
+
+    const proxy = await importProxy();
+    const result = await proxy.default(PROTECTED_REQ);
+
+    expect(result).toEqual({ kind: "next" });
+  });
+
   it("denies requests when VERCEL_ENV is production", async () => {
     vi.stubEnv("E2E_BYPASS_AUTH", "1");
     vi.stubEnv("VERCEL_ENV", "production");

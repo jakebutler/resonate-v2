@@ -2,6 +2,7 @@ import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { tokens } from "@/components/shell/tokens";
 import { cn } from "@/lib/utils";
+import { isE2eAuthBypassEnabled } from "@/lib/e2eAuthBypass";
 
 export type WorkspaceSurface = "calendar" | "queue" | "series" | "campaigns" | "research" | "connections" | "aeo-seo";
 
@@ -10,9 +11,7 @@ type ShellProps = {
   children: React.ReactNode;
 };
 
-const bypassAuthForE2E =
-  process.env.E2E_BYPASS_AUTH === "1" ||
-  process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1";
+const bypassAuthForE2E = isE2eAuthBypassEnabled();
 
 function navLinkClass(active: boolean) {
   return cn(

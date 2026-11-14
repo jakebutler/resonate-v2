@@ -4,6 +4,7 @@ import {
   adapterForProvider,
   type ProviderValidationResult,
 } from "@/lib/providerAdapters";
+import { isE2eAuthBypassEnabled } from "@/lib/e2eAuthBypass";
 
 function isLiveProviderValidationApproved(value: string | undefined): boolean {
   const normalized = (value ?? "").trim().toLowerCase();
@@ -40,7 +41,7 @@ async function validateProvider(
 }
 
 export async function GET() {
-  if (process.env.E2E_BYPASS_AUTH !== "1") {
+  if (!isE2eAuthBypassEnabled()) {
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

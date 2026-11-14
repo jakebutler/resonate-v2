@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { isE2eAuthBypassRequested, isProductionDeployment } from "@/lib/e2eAuthBypass";
 
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
@@ -9,27 +10,7 @@ const isPublicRoute = createRouteMatcher([
   // middleware-level Clerk auth would make the bearer-auth CLI unreachable.
   "/api/ops/lab-import",
 ]);
-const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
-
-/**
- * Production Convex deployment host — kept in sync with the production
- * refusal in convex/verificationSeed.ts.
- */
-const PROD_CONVEX_DEPLOYMENT_HOST = "healthy-platypus-553";
-
-/**
- * Detect a production deployment. Deliberately does NOT consider NODE_ENV:
- * CI and local E2E legitimately run the auth bypass against production
- * builds, where NODE_ENV is "production". The authoritative signals are the
- * Vercel environment and the Convex deployment the server points at (the
- * same host check the verification seed uses to refuse production).
- */
-function isProductionDeployment(): boolean {
-  return (
-    process.env.VERCEL_ENV === "production" ||
-    (process.env.CONVEX_CLOUD_URL ?? "").includes(PROD_CONVEX_DEPLOYMENT_HOST)
-  );
-}
+const bypassAuthForE2E = isE2eAuthBypassRequested();
 
 function parseAllowedEmails(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];

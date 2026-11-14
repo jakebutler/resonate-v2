@@ -4,9 +4,10 @@ import { fetchBlogPrStatus } from "@/lib/github";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { isE2eAuthBypassEnabled } from "@/lib/e2eAuthBypass";
 
 export async function POST(req: NextRequest) {
-  if (process.env.E2E_BYPASS_AUTH !== "1") {
+  if (!isE2eAuthBypassEnabled()) {
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
