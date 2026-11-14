@@ -9,6 +9,7 @@
  */
 
 import type * as __tests___helpers_mockMutationCtx from "../__tests__/helpers/mockMutationCtx.js";
+import type * as aeoCrawl from "../aeoCrawl.js";
 import type * as aeoIntel from "../aeoIntel.js";
 import type * as aeoTables from "../aeoTables.js";
 import type * as answerEngine from "../answerEngine.js";
@@ -78,6 +79,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "__tests__/helpers/mockMutationCtx": typeof __tests___helpers_mockMutationCtx;
+  aeoCrawl: typeof aeoCrawl;
   aeoIntel: typeof aeoIntel;
   aeoTables: typeof aeoTables;
   answerEngine: typeof answerEngine;

@@ -4,20 +4,8 @@ import { SnapshotBrowserPanel } from "@/components/aeo/SnapshotBrowserPanel";
 import type { CrawlSnapshot } from "@/components/aeo/types";
 
 const snapshots: CrawlSnapshot[] = [
-  {
-    id: "snap_1",
-    version: 1,
-    crawledAt: Date.parse("2026-11-01T00:00:00Z"),
-    pages: [
-      {
-        url: "https://freshproof.example.com/",
-        title: "FreshProof home",
-        metaDescription: "GLP-1 tracking, evidenced.",
-        headingCount: 5,
-        schemaTypes: ["Organization"],
-      },
-    ],
-  },
+  // Production order: listCrawls is newest-first (verified in
+  // convex/__tests__/aeoIntel.test.ts — versions [3, 2, 1]).
   {
     id: "snap_2",
     version: 2,
@@ -34,6 +22,20 @@ const snapshots: CrawlSnapshot[] = [
         title: "Pricing",
         headingCount: 3,
         schemaTypes: ["FAQPage"],
+      },
+    ],
+  },
+  {
+    id: "snap_1",
+    version: 1,
+    crawledAt: Date.parse("2026-11-01T00:00:00Z"),
+    pages: [
+      {
+        url: "https://freshproof.example.com/",
+        title: "FreshProof home",
+        metaDescription: "GLP-1 tracking, evidenced.",
+        headingCount: 5,
+        schemaTypes: ["Organization"],
       },
     ],
   },
