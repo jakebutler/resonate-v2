@@ -1,0 +1,93 @@
+{
+  "materializationId": "mx7bx5xj034wm9b5pjcd507n8h8j6s0k",
+  "mode": "live",
+  "createdAt": "2026-11-14T18:53:41.497Z",
+  "cohesionRun": {
+    "passed": true,
+    "checks": [
+      {
+        "blocking": true,
+        "id": "one-pillar",
+        "label": "Exactly one pillar anchors the set.",
+        "passed": true
+      },
+      {
+        "blocking": true,
+        "id": "one-cta",
+        "label": "Exactly one CTA makes the ask.",
+        "passed": true
+      },
+      {
+        "blocking": true,
+        "failedPostIds": [],
+        "id": "unique-openers",
+        "label": "No repeated framing openers across drafts.",
+        "passed": true
+      },
+      {
+        "blocking": true,
+        "failedPostIds": [],
+        "id": "satellites-reference-pillar",
+        "label": "Satellites reference the pillar's core claim.",
+        "passed": true
+      }
+    ],
+    "autoFixLog": [
+      {
+        "checkId": "one-cta",
+        "fixedAt": 1794682421536,
+        "note": "CTA slot — not in initial generation; created automatically by the cohesion gate."
+      }
+    ]
+  },
+  "drafts": [
+    {
+      "seq": 1,
+      "role": "pillar",
+      "channel": "corvo-blog",
+      "title": "Harnessing FreshProof: Revolutionizing Editorial Accuracy One Draft at a Time",
+      "content": "In an age where content accuracy is king, FreshProof emerges as a revolutionary tool that empowers writers to maintain editorial integrity by transforming their drafts into verified claims, complete with evidence and suggestions for modifications. Our campaign centers on an innovative animated example featuring a draft about the Eiffel Tower. Here, FreshProof effortlessly extracts factual claims, specifically correcting the erroneous completion year from 1899 to 1889, while cross-referencing with official historical records [corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-2]. This validation process underscores an essential principle: a verdict is only meaningful if you understand its foundation, keeping your original words, the assessment, and the sources all seamlessly connected.\n\nThis approach aligns perfectly with FreshProof's mission to enable writers to check facts before publication, transforming drafts into precise claims and evidence with suggestions for improved accuracy—yet always leaving the final decision in the hands of the writer [corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-1]. It's not merely a proofreading tool; it's an editorial ally designed to uphold the highest standards of authenticity and reliability. Give FreshProof a try, and experience how it can elevate your writing with its incisive recommendations and factual clarity, ensuring that your content stands the test of scrutiny in the digital age.",
+      "approvalState": "unapproved"
+    },
+    {
+      "seq": 2,
+      "role": "hook",
+      "channel": "x",
+      "title": "The Authentication Pattern: Prioritize Process Over Numbers",
+      "content": "Fact-checking rigor isn't just about statistics and data checkpoints—it's about the *process* you choose. FreshProof emphasizes dissecting drafts into claims and evidence, giving editors the control to verify before hitting publish. This isn't about the flashy numbers but the way you trace claims to authentic sources and verify without blindly trusting AI outputs [corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-1] [corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-3]. Trust the method, not just the metric, and make your content bulletproof.",
+      "approvalState": "unapproved"
+    },
+    {
+      "seq": 3,
+      "role": "satellite",
+      "channel": "linkedin",
+      "title": "Evolving Practices with AI and Citations",
+      "content": "As AI tools like ChatGPT become more integrated into our workflows, they offer new opportunities not just in what we can measure, but in how we operate as practitioners. The common question, \"Can ChatGPT check citations?\" shows a surface-level application—it's capable of comparing details but doesn't provide proof without user verification. Essentially, it’s not just about the AI's ability to check citations but how this capability prompts a shift in practitioners' responsibilities and processes [corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-4]. Adapting to these changes means moving beyond traditional methods and embracing a future where AI tools transform our approach to verification and accuracy.",
+      "approvalState": "unapproved"
+    },
+    {
+      "seq": 4,
+      "role": "satellite",
+      "channel": "linkedin",
+      "title": "The Role of ChatGPT in Citation Checking",
+      "content": "While ChatGPT is a powerful tool for inspecting citation details, it's important to understand its limitations in the citation verification process. ChatGPT can compare the reference you provide with reliable sources, but it cannot independently verify the existence of a source or affirm that the source supports a specific claim. Checking the format, locating the record, and confirming the content requires additional verification against the original materials or other authoritative records [corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-5]. Understanding these roles helps harness ChatGPT's strengths effectively in academic writing.",
+      "approvalState": "unapproved"
+    },
+    {
+      "seq": 5,
+      "role": "recap",
+      "channel": "linkedin",
+      "title": "Ensuring Editorial Integrity in the Age of AI",
+      "content": "As AI-generated content becomes increasingly prevalent, the integrity of our editorial processes faces new challenges. FreshProof's recent blog series emphasizes the importance of meticulous fact-checking and editorial judgment to combat AI hallucinations, such as fake legal citations and invented quotes [corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-3]. By implementing practical workflows—splitting content into claims, tracing each back to their sources, and verifying their authenticity—editors can uphold the quality and trustworthiness of published content [corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-3]. As we move forward, these practices are crucial for maintaining the reliability of digital media, setting the stage for a follow-up campaign that explores the compounding effects of AI on editorial workflows.",
+      "approvalState": "unapproved"
+    },
+    {
+      "seq": 6,
+      "role": "cta",
+      "channel": "linkedin",
+      "title": "The ask — follow the build",
+      "content": "[CTA: one ask — name the single action this campaign drives] Grounding: [EVIDENCE: corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-2] [EVIDENCE: corpus://freshproof/mh7772w6pbj0zngjs50d1dxbtn8j71s7#excerpt-1]",
+      "approvalState": "unapproved"
+    }
+  ]
+}

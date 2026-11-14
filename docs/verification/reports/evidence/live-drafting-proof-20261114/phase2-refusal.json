@@ -1,0 +1,5 @@
+{
+  "ok": true,
+  "expected": "budget-refusal",
+  "refusalMessage": "[Request ID: 116c6c29214ad078] Server Error\nUncaught Error: Live draft generation refused: generating 5 draft(s) is estimated at 20 cents, above the 10-cent run ceiling (CAMPAIGN_DRAFT_RUN_CEILING_CENTS). Raise the ceiling and retry, or generate in mock mode.\n    at handler (../convex/draftGeneration.ts:328:11)\n"
+}

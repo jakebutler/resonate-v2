@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "findingCount": 6,
+  "gapCount": 1,
+  "opportunityCount": 5,
+  "citedCount": 5,
+  "runnerRecordedCount": 6,
+  "draftPlanId": "x175237q0gwwkkb2j9qd21246d8j6zxn",
+  "reviewedPlanId": "x179nw6z55am2pdp7c4rzzg8as8j643a",
+  "finalPlan": {
+    "id": "x179nw6z55am2pdp7c4rzzg8as8j643a",
+    "version": 2,
+    "status": "reviewed",
+    "gapItems": 1,
+    "opportunityItems": 5,
+    "sourceFindingIdsAllReal": true,
+    "brief": {
+      "audience": "Writers and editors who need verifiable factual accuracy before publishing.",
+      "channels": [
+        "corvo-blog",
+        "x",
+        "linkedin"
+      ],
+      "constraints": [
+        "Every claim must cite a corpus excerpt.",
+        "Nothing publishes without human approval."
+      ],
+      "cta": "Follow the build and try FreshProof on your next draft.",
+      "goal": "Defend and extend the answer-engine visibility the live run observed for FreshProof.",
+      "metric": "Answer-engine citation rate on tracked questions.",
+      "thesis": "FreshProof turns drafts into verified claims with evidence, and the live intel run shows where answers already cite us and where they do not.",
+      "window": "Next two weeks (verification proof window)."
+    }
+  },
+  "campaignBrief": {
+    "goal": "Defend and extend the answer-engine visibility the live run observed for FreshProof.",
+    "audience": "Writers and editors who need verifiable factual accuracy before publishing."
+  }
+}

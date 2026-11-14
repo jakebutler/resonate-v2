@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "targetId": "w9786jy4nzq2bz8650hg89phf58j7emr",
+  "crawlId": "wx75kqvkjqdwgqg6hw24cdt38h8j71we",
+  "crawlPageCount": 5,
+  "crawlRawRows": 5,
+  "corpusId": "mh7772w6pbj0zngjs50d1dxbtn8j71s7",
+  "corpusVersion": 4,
+  "corpusExcerptCount": 10,
+  "campaignId": "m57e1ac49ayhhja3bshyer60k58j7z7s",
+  "suggestedIdeas": 5,
+  "ideasAddedToWorkingSet": 5,
+  "shapeId": "kx7bvcsm472n6f6ae5w39655x18j71ky",
+  "preset": "standard",
+  "slotCount": 5,
+  "ideaSuggestionMode": "acknowledged-mock",
+  "productCrawlActionFailure": {
+    "action": "aeoCrawl.captureCrawlSnapshot",
+    "error": "Error: Firecrawl crawl did not complete within 30 status polls; retry with a smaller limit.",
+    "requestId": "79f9e6bc7a4c93cf",
+    "rootCause": "captureCrawlSnapshot passes no pollDelayMs, so the adapter's 30 status polls burn back-to-back before a real crawl completes (see aeoIntel.recordCrawlSnapshot comment; dedupe half fixed in #173, delay gap remains).",
+    "resolution": "Recorded as a product gap; the proof proceeded through the same Firecrawl adapter with pollDelayMs 2000 and a real DNS resolver, then recorded the snapshot via the public aeoIntel.recordCrawlSnapshot mutation."
+  }
+}

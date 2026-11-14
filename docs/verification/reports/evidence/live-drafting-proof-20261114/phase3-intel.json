@@ -1,0 +1,92 @@
+{
+  "runs": [
+    {
+      "id": "ws70sbvnzg30eeka6dwaa3jd598j6pmv",
+      "kind": "answer-engine",
+      "status": "complete",
+      "questionCount": 6,
+      "startedAt": "2026-11-14T18:57:41.959Z"
+    }
+  ],
+  "findings": [
+    {
+      "id": "wn72twgrgjmwd0eateg8ex0h7s8j6pc5",
+      "runId": "ws70sbvnzg30eeka6dwaa3jd598j6pmv",
+      "classification": "opportunity",
+      "citationStatus": "cited",
+      "extractability": 43,
+      "brandMatch": "match",
+      "brandMatchDetail": "Answer names one of the target's product identifiers.",
+      "evidence": [
+        "question: What do users say about FreshProof?",
+        "answer: FreshProof, a digital verification service, generally receives positive feedback for its user-friendly interface and reliable tracking features. Users appreciate its ability to ensure authenticity and provide real-time updates on product status, making it valuable for supply chain transparency. However, some users mention occasional issues with data integration and customer support responsiveness."
+      ]
+    },
+    {
+      "id": "wn7171w228pdwkaytnq29rf6ys8j7bkq",
+      "runId": "ws70sbvnzg30eeka6dwaa3jd598j6pmv",
+      "classification": "opportunity",
+      "citationStatus": "cited",
+      "extractability": 58,
+      "brandMatch": "match",
+      "brandMatchDetail": "Answer names one of the target's product identifiers.",
+      "evidence": [
+        "question: Who should use FreshProof?",
+        "answer: FreshProof is ideal for creators and businesses needing to protect their digital content from unauthorized distribution. It's particularly effective for artists, photographers, and writers looking to establish proof of ownership. The blockchain-based verification attracts those who want to preserve copyright integrity while providing a transparent way of tracking content authenticity."
+      ]
+    },
+    {
+      "id": "wn7e2kessnc2an5shsbcx9h7ys8j6yp1",
+      "runId": "ws70sbvnzg30eeka6dwaa3jd598j6pmv",
+      "classification": "opportunity",
+      "citationStatus": "cited",
+      "extractability": 59,
+      "brandMatch": "match",
+      "brandMatchDetail": "Answer names one of the target's product identifiers.",
+      "evidence": [
+        "question: What problems does FreshProof solve?",
+        "answer: FreshProof addresses issues related to digital content verification and anti-counterfeiting. It provides blockchain-based authentication to ensure the originality of digital assets and protect intellectual property. FreshProof helps businesses and creators verify the authenticity of digital files, maintain trust with consumers, and combat counterfeit goods and content."
+      ]
+    },
+    {
+      "id": "wn7b92d55qzbe7pc7p4nbtmc9n8j6cre",
+      "runId": "ws70sbvnzg30eeka6dwaa3jd598j6pmv",
+      "classification": "gap",
+      "citationStatus": "not-observed",
+      "extractability": 30,
+      "brandMatch": null,
+      "brandMatchDetail": null,
+      "evidence": [
+        "question: Which tools or products would you recommend for FreshProof?",
+        "answer: For electronic proofing needs, tools like Adobe Acrobat DC, ProofHQ (now a part of Workfront by Adobe), or Ziflow are recommended. Adobe Acrobat DC offers robust document editing and markup capabilities, ProofHQ provides collaborative proofing with integration options, and Ziflow focuses on streamlined review processes with clear feedback tracking."
+      ]
+    },
+    {
+      "id": "wn7d6wtwaqyrhfbhxa2p82xems8j70we",
+      "runId": "ws70sbvnzg30eeka6dwaa3jd598j6pmv",
+      "classification": "opportunity",
+      "citationStatus": "cited",
+      "extractability": 58,
+      "brandMatch": "match",
+      "brandMatchDetail": "Answer names one of the target's product identifiers.",
+      "evidence": [
+        "question: Would you recommend FreshProof?",
+        "answer: Yes, FreshProof is recommended for businesses needing document verification solutions. It offers robust digital proofing tools designed to streamline review processes, enhance collaboration with team members, and ensure accuracy and efficiency. It's versatile, catering to various industries, and provides customizable workflows to meet specific project needs."
+      ]
+    },
+    {
+      "id": "wn74gh5k7re7px5fzav6ar05ex8j7kt2",
+      "runId": "ws70sbvnzg30eeka6dwaa3jd598j6pmv",
+      "classification": "opportunity",
+      "citationStatus": "cited",
+      "extractability": 58,
+      "brandMatch": "match",
+      "brandMatchDetail": "Answer names one of the target's product identifiers.",
+      "evidence": [
+        "question: What is FreshProof and what does it do?",
+        "answer: FreshProof is a blockchain-based platform designed to enhance transparency and trust in supply chains, particularly for perishable goods. It allows businesses to securely verify and share the provenance, handling, and authenticity of products by capturing data at various stages of the supply chain. This helps reduce fraud, improve quality assurance, and provide consumers with detailed information on product origins."
+      ]
+    }
+  ],
+  "latestPlan": null
+}
