@@ -442,6 +442,14 @@ export const saveStrategyPlan = mutation({
     brandId: brandIdValidator,
     status: v.union(v.literal("draft"), v.literal("reviewed")),
     reviewNotes: v.optional(v.string()),
+    /**
+     * Optimistic-concurrency guard: the plan version the caller loaded before
+     * editing. When supplied, a save against a superseded version is refused
+     * instead of silently clobbering the newer row — the same expectedVersion
+     * pattern the publishing surfaces use. Without it the save appends, which
+     * keeps historical internal callers working.
+     */
+    expectedVersion: v.optional(v.number()),
     plan: aeoPlanValidator,
   },
   returns: v.id("strategyPlans"),
@@ -450,6 +458,9 @@ export const saveStrategyPlan = mutation({
     await requireBrandAccess(ctx, userId, args.brandId);
     // Plans are append-only versions, mirroring the corpus-version precedent:
     // the newest row per brand is current, older versions stay as history.
+    // The append itself is transactional (single-document insert); the race
+    // this guards is read-modify-write across two concurrent saves, resolved
+    // by the caller-supplied expectedVersion below.
     const latest = await ctx.db
       .query("strategyPlans")
       .withIndex("by_user_and_brand", (q) =>
@@ -457,6 +468,11 @@ export const saveStrategyPlan = mutation({
       )
       .order("desc")
       .first();
+    if (args.expectedVersion !== undefined && (latest?.version ?? 0) !== args.expectedVersion) {
+      throw new Error(
+        `Strategy plan changed since it was loaded (current version ${latest?.version ?? 0}, expected ${args.expectedVersion}); reload the plan and save again.`
+      );
+    }
     const version = (latest?.version ?? 0) + 1;
     const planId = await ctx.db.insert("strategyPlans", {
       userId,

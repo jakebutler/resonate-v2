@@ -352,3 +352,70 @@ describe("aeo strategy plans", () => {
     expect(lowerDb).toBeNull();
   });
 });
+
+describe("aeo strategy plan version race", () => {
+  it("refuses a concurrent save against a superseded version and lets the winner append cleanly", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    await user.mutation(api.aeoIntel.saveStrategyPlan, {
+      brandId: "freshproof",
+      status: "draft",
+      plan: samplePlan(),
+    });
+    const latest = await user.query(api.aeoIntel.getLatestStrategyPlan, {
+      brandId: "freshproof",
+    });
+    expect(latest?.version).toBe(1);
+
+    // Two concurrent saves both read version 1 and both send it as their
+    // expected version — the clobber window the guard exists for.
+    const winner = user.mutation(api.aeoIntel.saveStrategyPlan, {
+      brandId: "freshproof",
+      status: "reviewed",
+      expectedVersion: 1,
+      plan: { ...samplePlan(), targetKeywords: ["winner keywords"] },
+    });
+    const loser = user.mutation(api.aeoIntel.saveStrategyPlan, {
+      brandId: "freshproof",
+      status: "draft",
+      expectedVersion: 1,
+      plan: { ...samplePlan(), targetKeywords: ["loser keywords"] },
+    });
+
+    await winner; // exactly one wins
+    await expect(loser).rejects.toThrow(/Strategy plan changed since it was loaded/);
+
+    const current = await user.query(api.aeoIntel.getLatestStrategyPlan, {
+      brandId: "freshproof",
+    });
+    expect(current?.version).toBe(2);
+    expect(current?.plan.targetKeywords).toEqual(["winner keywords"]);
+    // The refused save appended nothing: two rows total, not three.
+    const planRows = await t.run((ctx) => ctx.db.query("strategyPlans").collect());
+    expect(planRows).toHaveLength(2);
+  });
+
+  it("accepts a save whose expected version matches and refuses one against a deleted plan", async () => {
+    const { user } = await fixture("owner", ["freshproof"]);
+    await user.mutation(api.aeoIntel.saveStrategyPlan, {
+      brandId: "freshproof",
+      status: "draft",
+      expectedVersion: 0,
+      plan: samplePlan(),
+    });
+    const matching = await user.mutation(api.aeoIntel.saveStrategyPlan, {
+      brandId: "freshproof",
+      status: "reviewed",
+      expectedVersion: 1,
+      plan: samplePlan(),
+    });
+    expect(matching).toBeDefined();
+    await expect(
+      user.mutation(api.aeoIntel.saveStrategyPlan, {
+        brandId: "freshproof",
+        status: "draft",
+        expectedVersion: 1,
+        plan: samplePlan(),
+      })
+    ).rejects.toThrow(/current version 2, expected 1/);
+  });
+});

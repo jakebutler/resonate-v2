@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { internal } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import schema from "../schema";
 
 const modules = import.meta.glob("../**/*.ts");
@@ -76,12 +76,13 @@ describe("verification seed (V5)", () => {
     await expect(seed(t, { subject: "   " })).rejects.toThrow(/subject/i);
   });
 
-  it("runs with no authenticated identity and seeds brands, memberships, corpus, and budget", async () => {
+  it("runs with no authenticated identity and seeds brands, memberships, corpus, budget, and a strategy plan", async () => {
     const summary = await seed(t, { subject: "user_ci_verification" });
 
     expect(summary.seeded).toBe(true);
     expect(summary.corpusCreated).toBe(true);
     expect(summary.budgetCreated).toBe(true);
+    expect(summary.strategyPlanCreated).toBe(true);
     expect(summary.skipped).toBe(0);
 
     // Four hard-coded brands, channels, and an owner membership per brand.
@@ -121,6 +122,18 @@ describe("verification seed (V5)", () => {
     expect(budgets).toHaveLength(1);
     expect(budgets[0].limitMicros).toBe(5_000_000);
 
+    // A generated draft strategy plan: the /aeo/plan screen reads this row
+    // through getLatestStrategyPlan, so the plan step renders populated.
+    const plan = await t.withIdentity({ subject: "user_ci_verification" }).query(
+      api.aeoIntel.getLatestStrategyPlan,
+      { brandId: "freshproof" }
+    );
+    expect(plan).not.toBeNull();
+    expect(plan!.version).toBe(1);
+    expect(plan!.status).toBe("draft");
+    expect(plan!.plan.brief.goal).toContain("Verification seed fixture");
+    expect(plan!.plan.gaps.length + plan!.plan.opportunities.length).toBeGreaterThan(0);
+
     // Every mutation in the envelope leaves an audit trail.
     const auditEvents = await t.run(async (ctx) =>
       ctx.db.query("v2AuditEvents").collect()
@@ -137,10 +150,12 @@ describe("verification seed (V5)", () => {
 
     expect(second.corpusCreated).toBe(false);
     expect(second.budgetCreated).toBe(false);
-    expect(second.skipped).toBe(2);
+    expect(second.strategyPlanCreated).toBe(false);
+    expect(second.skipped).toBe(3);
 
     expect(await countRows(t, "corpora")).toBe(1);
     expect(await countRows(t, "v2VisualBudgets")).toBe(1);
+    expect(await countRows(t, "strategyPlans")).toBe(1);
     expect(await countRows(t, "v2Brands")).toBe(4);
     expect(await countRows(t, "v2BrandMemberships")).toBe(4);
   });
@@ -196,9 +211,11 @@ describe("verification seed (V5)", () => {
     expect(summary.dryRun).toBe(true);
     expect(summary.corpusCreated).toBe(true);
     expect(summary.budgetCreated).toBe(true);
+    expect(summary.strategyPlanCreated).toBe(true);
     expect(await countRows(t, "v2Brands")).toBe(0);
     expect(await countRows(t, "corpora")).toBe(0);
     expect(await countRows(t, "v2VisualBudgets")).toBe(0);
+    expect(await countRows(t, "strategyPlans")).toBe(0);
   });
 
   it("rejects a negative budget limit", async () => {

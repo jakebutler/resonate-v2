@@ -13,6 +13,7 @@ describe("discoveryRunLimits", () => {
       maxQueries: 4,
       runCeilingCents: 50,
       costPerQueryCents: 2,
+      staleRunMs: 30 * 60 * 1000,
     });
   });
 
@@ -20,6 +21,12 @@ describe("discoveryRunLimits", () => {
     expect(discoveryRunLimits({ AEO_DISCOVERY_MAX_QUERIES: "2" }).maxQueries).toBe(2);
     expect(discoveryRunLimits({ AEO_DISCOVERY_MAX_QUERIES: "-1" }).maxQueries).toBe(4);
     expect(discoveryRunLimits({ AEO_DISCOVERY_MAX_QUERIES: "nope" }).maxQueries).toBe(4);
+    expect(
+      discoveryRunLimits({ AEO_DISCOVERY_STALE_RUN_MS: "60000" }).staleRunMs
+    ).toBe(60000);
+    expect(discoveryRunLimits({ AEO_DISCOVERY_STALE_RUN_MS: "-5" }).staleRunMs).toBe(
+      30 * 60 * 1000
+    );
   });
 });
 

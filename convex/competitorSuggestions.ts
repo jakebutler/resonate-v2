@@ -222,6 +222,38 @@ export const finishDiscoveryRun = internalMutation({
   },
 });
 
+/**
+ * Stale-run recovery. A crashed discovery action leaves its intelRun row in
+ * "running" forever, and hasRunningDiscoveryRun would then refuse every
+ * future daily cycle. Runs of the discovery kind that have not reached a
+ * terminal state within `staleMs` are marked failed with an explicit audit
+ * event, so a crashed run cannot block the schedule; a fresh in-flight run
+ * (within the window) is untouched and still gates the next cycle.
+ */
+export const reapStaleDiscoveryRuns = internalMutation({
+  args: { staleMs: v.number() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const runs = await ctx.db.query("intelRuns").collect();
+    let reaped = 0;
+    for (const run of runs) {
+      if (run.kind !== "competitor-discovery" || run.status !== "running") continue;
+      if (now - run.startedAt <= args.staleMs) continue;
+      await ctx.db.patch(run._id, { status: "failed", finishedAt: now });
+      reaped += 1;
+      await audit(ctx, {
+        userId: run.userId,
+        brandId: run.brandId,
+        action: "aeo.discovery_run_recovered",
+        summary: `Recovered a discovery run stuck in "running" for over ${Math.round(args.staleMs / 60_000)} minute(s); marked it failed so scheduled cycles can start again.`,
+        metadata: { runId: String(run._id), startedAt: run.startedAt, staleMs: args.staleMs },
+      });
+    }
+    return reaped;
+  },
+});
+
 export type DiscoveryBatchOutcome = {
   started: number;
   completed: number;
@@ -289,6 +321,12 @@ export const runDiscoveryBatch = internalAction({
     }
     const limits = discoveryRunLimits(process.env);
     const adapterContext = discoveryAdapterContext();
+    // Stale-run recovery runs before target selection: a crashed run must
+    // never lock out the daily cycle, while a fresh in-flight run still gates
+    // its brand below (the reviewPinned gate in allTargets is unchanged).
+    await ctx.runMutation(internal.competitorSuggestions.reapStaleDiscoveryRuns, {
+      staleMs: limits.staleRunMs,
+    });
     const targets = await ctx.runQuery(internal.competitorSuggestions.allTargets, {});
     const outcome: DiscoveryBatchOutcome = {
       started: 0,

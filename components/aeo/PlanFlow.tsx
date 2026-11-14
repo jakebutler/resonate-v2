@@ -79,6 +79,9 @@ export function PlanFlow() {
           void saveStrategyPlan({
             brandId,
             status: "reviewed",
+            // Optimistic concurrency: refuse the save when another save
+            // appended a newer version since this row was loaded.
+            expectedVersion: planRow.version,
             plan: planRow.plan,
           }).then(() => undefined, () => undefined);
           void planId;
@@ -89,6 +92,7 @@ export function PlanFlow() {
             brandId,
             status: "draft",
             reviewNotes: note,
+            expectedVersion: planRow.version,
             plan: planRow.plan,
           }).then(() => undefined, () => undefined);
           void planId;
