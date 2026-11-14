@@ -23,6 +23,33 @@ function targetFixture(reviewPinned: boolean) {
   };
 }
 
+test("intel-citations: a suspect citation renders the mismatch warning and a qualified badge", async ({
+  page,
+}) => {
+  await mockConvexSync(page, {
+    value: (path) => {
+      if (path === "aeoIntel:getTarget") return targetFixture(true);
+      if (path === "aeoIntel:listCrawls") return [];
+      if (path === "aeoIntel:listRuns") return [runFixture];
+      if (path === "aeoIntel:listFindings") return [suspectFinding, matchFinding];
+      return null;
+    },
+  });
+
+  await page.goto("/aeo/intel");
+
+  // Run-level and per-finding warnings are visible.
+  await expect(page.getByText(/Brand mismatch suspected: 1 of 2/)).toBeVisible();
+  await expect(page.getByText("Mismatch suspected.")).toBeVisible();
+  // The suspect citation is always qualified, never a plain "cited".
+  await expect(
+    page.getByText("Cited: FreshProof (mismatch suspected)", { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText("Cited: FreshProof", { exact: true })
+  ).toBeVisible();
+});
+
 const planFixture = {
   _id: "plan-fixture",
   _creationTime: 1,
@@ -71,6 +98,56 @@ const suggestionFixture = {
   createdAt: 1,
   updatedAt: 1,
 };
+
+// One complete run whose "What is FreshProof" answer described a same-named
+// different product (the 2026-11-14 live-proof case): cited, but suspect.
+const runFixture = {
+  _id: "run-fixture",
+  _creationTime: 1,
+  userId: "fixture-user",
+  brandId: brand,
+  kind: "answer-engine",
+  status: "complete",
+  costCeilingCents: 50,
+  questionCount: 2,
+  startedAt: 1,
+  finishedAt: 2,
+  brandMismatchCount: 1,
+};
+
+function findingFixture(overrides: Record<string, unknown>) {
+  return {
+    _id: "finding-fixture",
+    _creationTime: 1,
+    userId: "fixture-user",
+    brandId: brand,
+    runId: "run-fixture",
+    classification: "opportunity",
+    citationStatus: "cited",
+    extractability: 0.5,
+    summary: "Would you recommend FreshProof?",
+    evidence: ["question: Would you recommend FreshProof?", "answer: Yes — FreshProof is..."],
+    reviewStatus: "unreviewed",
+    createdAt: 1,
+    ...overrides,
+  };
+}
+
+const suspectFinding = findingFixture({
+  _id: "finding-suspect",
+  summary: "What is FreshProof?",
+  evidence: ["question: What is FreshProof?", "answer: FreshProof is a blockchain supply-chain platform..."],
+  brandMatch: "suspect",
+  brandMatchDetail:
+    "Answer names the brand but shares almost none of its topic vocabulary with the target's crawled content (5% overlap).",
+});
+
+const matchFinding = findingFixture({
+  _id: "finding-match",
+  summary: "How does FreshProof compare to its alternatives?",
+  evidence: ["question: How does FreshProof compare to its alternatives?", "answer: FreshProof's proofing workflow..."],
+  brandMatch: "match",
+});
 
 test("connect-target: connect a site, then pin its review", async ({ page }) => {
   const mutations: Array<{ path: string; args: Record<string, unknown> }> = [];
