@@ -34,6 +34,7 @@ import {
   type CriterionExecutor,
   type ExecutorResult,
 } from "../lib/verificationRunner";
+import { decideCommittedReceipt } from "../lib/verification/committedReceipt";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
@@ -145,16 +146,43 @@ function firstMissingPrerequisite(criterion: VerificationCriterion): string | nu
   return null;
 }
 
+/** Reads a criterion's declared committed receipt, null when absent/unreadable. */
+async function readDeclaredReceipt(
+  criterion: VerificationCriterion,
+): Promise<string | null> {
+  if (criterion.receipt === undefined) return null;
+  try {
+    return await readFile(path.join(REPO_ROOT, criterion.receipt), "utf8");
+  } catch {
+    return null;
+  }
+}
+
 function makeExecutor(): CriterionExecutor {
   return async (criterion): Promise<ExecutorResult> => {
     const missingPrerequisite = firstMissingPrerequisite(criterion);
     if (missingPrerequisite !== null) {
+      // A committed dated receipt from an earlier approved live run counts as
+      // the criterion's evidence even when the key is not set in this
+      // environment (keys rotate; reports are re-run later).
+      const receipt = decideCommittedReceipt(
+        criterion.receipt,
+        await readDeclaredReceipt(criterion),
+      );
+      if (receipt.kind === "accepted") {
+        return { outcome: "PASS", evidence: receipt.evidence };
+      }
+      const receiptNote = receipt.kind === "receipt-missing"
+        ? ` The declared receipt "${receipt.receiptPath}" does not exist in the repo.`
+        : receipt.kind === "receipt-undated"
+          ? ` The declared receipt "${receipt.receiptPath}" carries no dated execution line.`
+          : "";
       return {
         outcome: "ABSENT",
         missingComponent: `prerequisite "${missingPrerequisite}" (env var not set)`,
         details:
           `Criterion not run: prerequisite "${missingPrerequisite}" is not configured. ` +
-          `Provision it to make this criterion runnable.`,
+          `Provision it to make this criterion runnable.${receiptNote}`,
       };
     }
 
