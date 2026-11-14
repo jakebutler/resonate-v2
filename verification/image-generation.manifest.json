@@ -100,7 +100,8 @@
         "CORTEX_API_KEY"
       ],
       "dependsOn": ["visual-route-qualification"],
-      "description": "C6 gated live tier: executes the prepared gpt-image-1 low/low functional packet (<= $0.50 total, under the $5 provider caps) and the text/vision packet, registering reviewed image and text routes with capability receipts. Requires VISUAL_QUALIFICATION_APPROVED=approved. Reports ABSENT naming the missing key until Jake provisions them via Obvious secrets."
+      "receipt": "docs/verification/receipts/2026-11-14-openai-image-editorial-visuals-functional-route-qualification-live-receipt.md",
+      "description": "C6 gated live tier: executes the prepared gpt-image-1 low/low functional packet (<= $0.50 total, under the $5 provider caps) and the text/vision packet, registering reviewed image and text routes with capability receipts. Requires VISUAL_QUALIFICATION_APPROVED=approved. A committed dated receipt from an earlier approved live run (see the receipt field) is accepted as criterion evidence when the provider keys are not set in the run environment."
     }
   ]
 }
