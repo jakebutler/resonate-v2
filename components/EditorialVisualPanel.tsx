@@ -5,207 +5,19 @@ import { isClientE2eAuthBypassRequested } from "@/lib/e2eAuthBypass";
 import { useEffect, useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { composeScenePrompt, stableInputSignature, type SceneConcept } from "@/lib/visualWorkflow";
-import { MAX_VISUAL_REFERENCE_BYTES, validateVisualProfileContent, type VisualGuidance } from "@/lib/visualProfile";
-import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { localFixtureTokenUrl } from "@/lib/localFixtureAuth";
+import { Field } from "@/components/editorialVisual/Field";
+import { StatusNote } from "@/components/editorialVisual/StatusNote";
+import { SceneEditor, sceneFields } from "@/components/editorialVisual/SceneEditor";
+import { HeroReview } from "@/components/editorialVisual/HeroReview";
+import { ProfileEditor, type ProfileSaveReceipt } from "@/components/editorialVisual/ProfileEditor";
+import { PostExceptionEditor, type ExceptionSaveReceipt } from "@/components/editorialVisual/PostExceptionEditor";
 
 export type EditorialVisualPanelProps = { postId: string; brandId: BrandId; savedContentChanged?: boolean; savedPostContext?: { title: string; blogSlug?: string; channelId: string } };
-const sceneFields: [keyof SceneConcept, string][] = [["subject", "Subject"], ["metaphor", "Core metaphor"], ["action", "Visible action"], ["reveal", "Reveal"], ["articleConnection", "Article connection"], ["articleAnchor", "Article passage"]];
 const usd = (micros: number) => (micros / 1_000_000).toLocaleString("en-US", { style: "currency", currency: "USD" });
-type Profile = FunctionReturnType<typeof api.visualProfiles.getProfile>;
-type ProfileSave = FunctionArgs<typeof api.visualProfiles.saveRevision>;
-type ProfileSaveReceipt = FunctionReturnType<typeof api.visualProfiles.saveRevision>;
-type ExceptionSaveReceipt = FunctionReturnType<typeof api.visualProfiles.setPostException>;
-type HeroCrop = NonNullable<FunctionArgs<typeof api.visualExports.prepareHero>["crop"]>;
-function Field({ label, value, onChange, multiline = false, numericBounds }: { label: string; value: string; onChange(value: string): void; multiline?: boolean; numericBounds?: { min: number; max: number } }) {
-  const props = { value, onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(event.target.value), className: "mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm font-normal text-gray-900", ...(numericBounds ? { type: "number", step: 1, ...numericBounds } : {}) };
-  return <label className="block text-xs font-semibold text-gray-600">{label}{multiline ? <textarea {...props} rows={3} /> : <input {...props} />}</label>;
-}
-function SceneEditor({ scene, disabled, generationDisabled, onSave, onGenerate }: { scene: SceneConcept; disabled: boolean; generationDisabled: boolean; onSave(scene: SceneConcept): void; onGenerate(): void }) {
-  const [draft, setDraft] = useState(scene);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(scene);
-  return <div className="space-y-3 rounded-lg border border-gray-200 p-3">
-    <h3 className="text-sm font-semibold">Selected concept: {scene.title}</h3>
-    <details><summary className="cursor-pointer text-sm font-semibold">Refine this scene</summary><div className="mt-3 space-y-2">
-      {([["title", "Title"], ...sceneFields] as [keyof SceneConcept, string][]).map(([key, label]) => <Field key={key} label={`Refine ${label.toLowerCase()}`} value={draft[key]} onChange={value => setDraft({ ...draft, [key]: value })} multiline />)}
-      <Button type="button" variant="outline" disabled={disabled || !dirty || Object.values(draft).some(value => !value.trim())} onClick={() => onSave(draft)}>Save scene refinement</Button>
-    </div></details>
-    {dirty && <p className="text-sm text-amber-700">Save the scene refinement before generation.</p>}
-    <Button type="button" disabled={disabled || generationDisabled || dirty} onClick={onGenerate}>Generate this concept</Button>
-  </div>;
-}
-function storedHeroCrop(version: Doc<"v2VisualVersions">): HeroCrop | null {
-  try {
-    const crop = JSON.parse(version.exportMetadata?.crop ?? "null")?.crop;
-    if (crop && [crop.left, crop.top, crop.width, crop.height].every(Number.isSafeInteger) && crop.left >= 0 && crop.top >= 0 && crop.width > 0 && crop.height > 0 && crop.left + crop.width <= version.width && crop.top + crop.height <= version.height) return { left: crop.left, top: crop.top, width: crop.width, height: crop.height };
-  } catch { /* Older presentation fixtures can have a plain descriptive crop string. */ }
-  return null;
-}
-function HeroReview({ version, disabled, onPrepare, onApprove }: { version: Doc<"v2VisualVersions"> & { exportUrl: string | null }; disabled: boolean; onPrepare(crop?: HeroCrop): void; onApprove(alt: string, hash: string): void }) {
-  const [loaded, setLoaded] = useState(false);
-  const [alt, setAlt] = useState("");
-  const [reviewed, setReviewed] = useState(false);
-  const storedCrop = storedHeroCrop(version);
-  const [cropMode, setCropMode] = useState(storedCrop ? "manual" : "center");
-  const [cropFields, setCropFields] = useState(() => ({ left: String(storedCrop?.left ?? 0), top: String(storedCrop?.top ?? 0), width: String(storedCrop?.width ?? version.width), height: String(storedCrop?.height ?? version.height) }));
-  const crop = { left: Number(cropFields.left), top: Number(cropFields.top), width: Number(cropFields.width), height: Number(cropFields.height) };
-  const cropValid = cropMode === "center" || Object.values(cropFields).every(value => /^\d+$/.test(value)) && Object.values(crop).every(Number.isSafeInteger) && crop.left >= 0 && crop.top >= 0 && crop.width > 0 && crop.height > 0 && crop.left + crop.width <= version.width && crop.top + crop.height <= version.height;
-  const cropMatchesExport = cropValid && stableInputSignature(cropMode === "center" ? null : crop) === stableInputSignature(storedCrop);
-  const exportAvailable = Boolean(version.exportHash && version.exportUrl && version.exportMetadata);
-  const metadata = version.exportMetadata;
-  const ready = exportAvailable && metadata?.width === 1600 && metadata.height === 900 && metadata.format === "webp" && Number.isSafeInteger(metadata.bytes) && metadata.bytes > 0 && metadata.bytes < 150000;
-  return <div className="space-y-3 rounded-lg border border-gray-200 p-3">
-    <h3 className="text-sm font-semibold">Final hero</h3>
-    <p className="text-xs text-gray-500">Prepare a proportional 16:9 crop as 1600 × 900 WebP under 150 KB, then review the stored export.</p>
-    <p className="text-xs text-gray-500">Source dimensions: {version.width} × {version.height} pixels</p>
-    <label className="block text-xs font-semibold text-gray-600">Crop mode <select className="rounded border border-gray-200 p-1" value={cropMode} disabled={disabled} onChange={event => setCropMode(event.target.value)}><option value="center">Centered 16:9 crop</option><option value="manual">Manual pixel rectangle</option></select></label>
-    {cropMode === "manual" && <div className="grid grid-cols-2 gap-2">{(["left", "top", "width", "height"] as const).map(key => <Field key={key} label={`Crop ${key}`} value={cropFields[key]} onChange={value => setCropFields({ ...cropFields, [key]: value })} numericBounds={{ min: key === "width" || key === "height" ? 1 : 0, max: key === "left" ? version.width - 1 : key === "top" ? version.height - 1 : key === "width" ? version.width : version.height }} />)}</div>}
-    {!cropValid && <p role="alert" className="text-sm text-amber-700">Use whole pixels inside the source image, with positive width and height.</p>}
-    {!cropMatchesExport && cropValid && <p className="text-sm text-amber-700">Prepare this crop, then review its saved export before approval.</p>}
-    <Button type="button" variant="outline" disabled={disabled || !cropValid} onClick={() => { if (cropValid) onPrepare(cropMode === "manual" ? crop : undefined); }}>Prepare final hero crop</Button>
-    {exportAvailable && <>
-      {/* Display the authorized stored export directly so review cannot see a second optimized rendition. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={version.exportUrl!} alt="Final hero crop preview" onLoad={() => setLoaded(true)} onError={() => setLoaded(false)} className="w-full rounded-lg border border-gray-200" />
-      <p className="text-xs text-gray-500">{version.exportMetadata!.width} × {version.exportMetadata!.height} · {version.exportMetadata!.bytes} bytes · {version.exportMetadata!.format.toUpperCase()}</p>
-      {!ready && <p role="alert" className="text-sm text-amber-700">This export does not meet the 1600 × 900 WebP and below 150,000-byte requirements. Prepare a compliant crop before approval.</p>}
-      <Field label="Descriptive hero alt text" value={alt} onChange={setAlt} multiline />
-      <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} />I reviewed this crop for identity, story and thumbnail readability.</label>
-      {version.approvedAt && version.approvedExportHash === version.exportHash && version.approvedExportMetadataSignature === stableInputSignature(version.exportMetadata) && <p className="text-sm text-green-700">Hero approval is saved.</p>}
-    </>}
-    <Button type="button" disabled={disabled || !cropMatchesExport || !ready || !loaded || !reviewed || alt.trim().length < 5 || alt.length > 1000} onClick={() => { if (cropMatchesExport && ready && loaded && reviewed && version.exportHash) onApprove(alt.trim(), version.exportHash); }}>Approve hero</Button>
-  </div>;
-}
-function ProfileEditor({ brandId, profile, disabled, onSave, onUpload }: { brandId: BrandId; profile: Profile; disabled: boolean; onSave(input: ProfileSave): Promise<ProfileSaveReceipt | null>; onUpload(file: File): Promise<Id<"v2VisualReferences"> | null> }) {
-  const [baseProfile, setBaseProfile] = useState(profile);
-  const [ownRevisionId, setOwnRevisionId] = useState<Id<"v2VisualProfileRevisions"> | null>(null);
-  const revision = baseProfile?.revision;
-  const conflict = (profile?.revision._id ?? null) !== (revision?._id ?? null) && profile?.revision._id !== ownRevisionId;
-  const waitingForSave = ownRevisionId !== null && profile?.revision._id !== ownRevisionId;
-  // Only a returned own-save receipt advances the draft base automatically.
-  if (ownRevisionId !== null && profile?.revision._id === ownRevisionId) { setBaseProfile(profile); setOwnRevisionId(null); }
-  const [guidance, setGuidance] = useState<VisualGuidance>(() => ({ artDirection: revision?.artDirection ?? "", palette: revision?.palette ?? [],
-    mascotGuidance: revision?.mascotGuidance ?? "", compositionGuidance: revision?.compositionGuidance ?? "", textPolicy: revision?.textPolicy ?? "", heroChartPolicy: revision?.heroChartPolicy ?? "" }));
-  const [paletteText, setPaletteText] = useState(revision?.palette.map(color => `${color.name} = ${color.color}`).join("\n") ?? "");
-  const [bindings, setBindings] = useState(revision?.referenceBindings ?? []);
-  const [provider, setProvider] = useState(revision?.defaultRoute?.provider ?? "");
-  const [model, setModel] = useState(revision?.defaultRoute?.model ?? "");
-  const [validationError, setValidationError] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [uploadRole, setUploadRole] = useState<"identity" | "style" | "composition">("identity");
-  const [uploadedNames, setUploadedNames] = useState<Record<string, string>>({});
-  function reload() {
-    const saved = profile?.revision;
-    setBaseProfile(profile); setOwnRevisionId(null);
-    setGuidance({ artDirection: saved?.artDirection ?? "", palette: saved?.palette ?? [], mascotGuidance: saved?.mascotGuidance ?? "", compositionGuidance: saved?.compositionGuidance ?? "", textPolicy: saved?.textPolicy ?? "", heroChartPolicy: saved?.heroChartPolicy ?? "" });
-    setPaletteText(saved?.palette.map(color => `${color.name} = ${color.color}`).join("\n") ?? "");
-    setBindings(saved?.referenceBindings ?? []); setProvider(saved?.defaultRoute?.provider ?? ""); setModel(saved?.defaultRoute?.model ?? "");
-    setUploadedNames({}); setFile(null); setValidationError("");
-  }
-  function moveReference(index: number, direction: -1 | 1) {
-    if (disabled) return;
-    setBindings(current => {
-      const destination = index + direction;
-      if (destination < 0 || destination >= current.length) return current;
-      const reordered = [...current];
-      [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
-      return reordered;
-    });
-  }
-  async function upload() {
-    if (!file || disabled) return;
-    if (!file.size || file.size > MAX_VISUAL_REFERENCE_BYTES || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      setValidationError("Choose a PNG, JPEG or WebP reference up to 5 MiB."); return;
-    }
-    setValidationError("");
-    const referenceId = await onUpload(file);
-    if (referenceId) {
-      setBindings(current => [...current, { referenceId, role: uploadRole }]);
-      setUploadedNames(current => ({ ...current, [referenceId]: file.name })); setFile(null);
-    }
-  }
-  async function save() {
-    if (disabled || conflict || waitingForSave) return;
-    try {
-      if (Boolean(provider.trim()) !== Boolean(model.trim())) throw new Error("Choose both a default provider and model, or leave both blank.");
-      const palette = paletteText.split("\n").filter(line => line.trim()).map(line => {
-        const match = line.match(/^(.+?)\s*=\s*(#[a-f\d]{6})\s*$/i);
-        if (!match) throw new Error("Palette entries must use Name = #RRGGBB, one per line.");
-        return { name: match[1].trim(), color: match[2] };
-      });
-      const routeChanged = provider.trim() !== (revision?.defaultRoute?.provider ?? "") || model.trim() !== (revision?.defaultRoute?.model ?? "");
-      const content = { guidance: { ...guidance, palette }, referenceBindings: bindings,
-        defaultRoute: routeChanged ? provider.trim() && model.trim() ? { provider: provider.trim(), model: model.trim(), qualification: "unqualified" as const } : null : revision?.defaultRoute ?? null };
-      validateVisualProfileContent(content); setValidationError("");
-      const receipt = await onSave({ brandId, expectedRevisionId: revision?._id ?? null, ...content });
-      if (receipt) setOwnRevisionId(receipt.profileRevisionId);
-    } catch (error) { setValidationError(error instanceof Error ? error.message : "Check the visual profile fields."); }
-  }
-  return <details open={!profile} className="rounded-lg border border-gray-200 p-3"><summary className="cursor-pointer text-sm font-semibold">Brand visual profile{revision ? ` · revision ${revision.revision}` : " · setup required"}</summary>
-    <div className="mt-3 space-y-3">
-      {conflict && <p role="alert" className="text-sm text-amber-700">Brand profile changed in another session. Your draft is preserved; reload the saved profile to continue.</p>}
-      {waitingForSave && <p role="status" className="text-sm text-gray-500">Waiting for the saved brand profile revision…</p>}
-      {(conflict || waitingForSave) && <Button type="button" variant="outline" disabled={disabled} onClick={reload}>Reload saved brand profile</Button>}
-      <fieldset disabled={disabled || conflict || waitingForSave} className="space-y-3">
-      <Field label="Art direction" value={guidance.artDirection} onChange={artDirection => setGuidance({ ...guidance, artDirection })} multiline />
-      <Field label="Palette (Name = #RRGGBB)" value={paletteText} onChange={setPaletteText} multiline />
-      {([["mascotGuidance", "Mascot guidance"], ["compositionGuidance", "Composition guidance"], ["textPolicy", "Text policy"], ["heroChartPolicy", "Hero chart policy"]] as const).map(([key, label]) => <Field key={key} label={label} value={guidance[key]} onChange={value => setGuidance({ ...guidance, [key]: value })} multiline />)}
-      <div className="space-y-2 text-sm">{bindings.map((binding, index) => <div key={binding.referenceId}>
-        <p>{index + 1}. {binding.role} · {uploadedNames[binding.referenceId] ?? baseProfile?.references.find(reference => reference._id === binding.referenceId)?.fileName ?? binding.referenceId}</p>
-        <label className="text-xs">Reference {index + 1} role <select disabled={disabled} value={binding.role} onChange={event => setBindings(bindings.map((value, i) => i === index ? { ...value, role: event.target.value as typeof binding.role } : value))} className="rounded border border-gray-200 p-1">{["identity", "style", "composition"].map(role => <option key={role}>{role}</option>)}</select></label>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" aria-label={`Move reference ${index + 1} up`} disabled={disabled || index === 0} onClick={() => moveReference(index, -1)}>Move up</Button>
-          <Button type="button" size="sm" variant="outline" aria-label={`Move reference ${index + 1} down`} disabled={disabled || index === bindings.length - 1} onClick={() => moveReference(index, 1)}>Move down</Button>
-          <Button type="button" size="sm" variant="outline" aria-label={`Remove reference ${index + 1}`} disabled={disabled} onClick={() => setBindings(bindings.filter((_, i) => i !== index))}>Remove binding</Button>
-        </div>
-      </div>)}</div>
-      <div className="space-y-2">
-        <label className="block text-xs font-semibold text-gray-600">Reference image<input type="file" accept="image/png,image/jpeg,image/webp" className="mt-1 block text-sm" disabled={disabled || bindings.length >= 8} onChange={event => setFile(event.target.files?.[0] ?? null)} /></label>
-        <label className="block text-xs font-semibold text-gray-600">New reference role <select value={uploadRole} onChange={event => setUploadRole(event.target.value as typeof uploadRole)} className="rounded border border-gray-200 p-1">{["identity", "style", "composition"].map(role => <option key={role}>{role}</option>)}</select></label>
-        <Button type="button" variant="outline" disabled={disabled || !file || bindings.length >= 8} onClick={() => void upload()}>Upload reference</Button>
-        <p className="text-xs text-gray-500">PNG, JPEG or WebP, up to 5 MiB. Save the profile to bind uploaded references in this order.</p>
-      </div>
-      <Field label="Default provider (brand owner)" value={provider} onChange={setProvider} />
-      <Field label="Default model (brand owner)" value={model} onChange={setModel} />
-      <p className="text-xs text-gray-500">Guidance-only saves preserve the stored route. A changed route starts unqualified; only the brand owner can change it.</p>
-      {validationError && <p role="alert" className="text-sm text-red-700">{validationError}</p>}
-      <Button type="button" variant="outline" disabled={disabled || !guidance.artDirection.trim() || !paletteText.trim()} onClick={() => void save()}>Save brand visual profile</Button>
-      </fieldset>
-    </div>
-  </details>;
-}
-
-function PostExceptionEditor({ context, exception, disabled, approvedSeedException, onApply, onSave }: { context: NonNullable<EditorialVisualPanelProps["savedPostContext"]>; exception: Doc<"v2VisualPostExceptions"> | null; disabled: boolean; approvedSeedException: boolean; onApply(expectedExceptionId: Id<"v2VisualPostExceptions"> | null): Promise<ExceptionSaveReceipt | null>; onSave(guidance: string, expectedExceptionId: Id<"v2VisualPostExceptions"> | null): Promise<ExceptionSaveReceipt | null> }) {
-  const [baseException, setBaseException] = useState(exception);
-  const [ownExceptionId, setOwnExceptionId] = useState<Id<"v2VisualPostExceptions"> | null>(null);
-  const [guidance, setGuidance] = useState(exception?.guidance ?? "");
-  const conflict = (exception?._id ?? null) !== (baseException?._id ?? null) && exception?._id !== ownExceptionId;
-  const waitingForSave = ownExceptionId !== null && exception?._id !== ownExceptionId;
-  if (ownExceptionId !== null && exception?._id === ownExceptionId) {
-    setGuidance(current => current.trim() === (baseException?.guidance ?? "") ? exception.guidance : current);
-    setBaseException(exception); setOwnExceptionId(null);
-  }
-  const dirty = guidance.trim() !== (baseException?.guidance ?? "");
-  async function apply() { if (disabled || conflict || waitingForSave || !approvedSeedException) return; const receipt = await onApply(baseException?._id ?? null); if (receipt) setOwnExceptionId(receipt.postExceptionId); }
-  async function save() { if (disabled || conflict || waitingForSave || !dirty || !guidance.trim() || guidance.trim().length > 4000) return; const receipt = await onSave(guidance.trim(), baseException?._id ?? null); if (receipt) setOwnExceptionId(receipt.postExceptionId); }
-  return <details className="rounded-lg border border-gray-200 p-3"><summary className="cursor-pointer text-sm font-semibold">Post visual exception{baseException ? ` · revision ${baseException.revision}` : " · none saved"}</summary><div className="mt-3 space-y-3">
-    {conflict && <p role="alert" className="text-sm text-amber-700">Post exception changed in another session. Your draft is preserved; reload the saved exception to continue.</p>}
-    {waitingForSave && <p role="status" className="text-sm text-gray-500">Waiting for the saved post exception revision…</p>}
-    {(conflict || waitingForSave) && <Button type="button" variant="outline" disabled={disabled} onClick={() => { setBaseException(exception); setGuidance(exception?.guidance ?? ""); setOwnExceptionId(null); }}>Reload saved post exception</Button>}
-    <fieldset disabled={disabled || conflict || waitingForSave} className="space-y-3">
-    <p className="text-sm font-semibold">{context.title}</p><p className="text-xs text-gray-500">{context.blogSlug} · {context.channelId}</p>
-    <p className="text-xs text-gray-500">Authored guidance applies only to this saved post, on top of the brand profile.</p>
-    {approvedSeedException && <><p className="text-xs text-gray-500">The approved photographic hand from the verified Corvo archive belongs to this saved article. Ordinary human elements use paper construction.</p>
-    <Button type="button" variant="outline" disabled={disabled} onClick={() => void apply()}>Apply approved article-7 hand exception</Button></>}
-    <Field label="Post exception guidance" value={guidance} onChange={setGuidance} multiline />
-    <Button type="button" variant="outline" disabled={disabled || !dirty || !guidance.trim() || guidance.trim().length > 4000} onClick={() => void save()}>Save post exception guidance</Button>
-    <p className="text-xs text-gray-500">Authored guidance creates a post-specific revision. Reload if the post association or exception changes during saving.</p>
-    </fieldset>
-  </div></details>;
-}
 
 export function EditorialVisualPanel(props: EditorialVisualPanelProps) {
   return <SavedPostVisualPanel key={`${props.brandId}:${props.postId}`} {...props} />;
@@ -299,11 +111,22 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
   const selectionPending = pendingVersionId !== null && pendingVersionId !== workflow?.state?.selectedVersionId;
   if (pendingVersionId !== null && !selectionPending) setPendingVersionId(null);
   const editSignature = JSON.stringify([postId, "edit", viewedScene, selectedVersion?._id, feedback, overrides, workflow?.attempts.filter(attempt => ["generation", "edit"].includes(attempt.stage)).map(attempt => [attempt._id, attempt.status])]);
+  // Persisted qualified routes become selectable choices; free-text stays available as an advanced fallback.
+  const routeChoices = Array.from(new Map(qualifiedRoutes.map(route => [`${route.provider}:${route.model}`, { provider: route.provider, model: route.model }])).values());
+  const routeKey = `${providerOverride.trim()}:${modelOverride.trim()}`;
+  const overrideActive = Boolean(providerOverride.trim() || modelOverride.trim());
+  const matchedRoute = routeChoices.find(route => `${route.provider}:${route.model}` === routeKey);
+  const customOverride = overrideActive && !matchedRoute;
+  function setRouteChoice(value: string) {
+    const separator = value.indexOf(":");
+    if (separator <= 0) { setProviderOverride(""); setModelOverride(""); return; }
+    setProviderOverride(value.slice(0, separator)); setModelOverride(value.slice(separator + 1));
+  }
   async function run(work: () => Promise<unknown>) {
     if (busyRef.current) return false;
     busyRef.current = true; setBusy(true); setError("");
     try { await work(); return true; }
-    catch { setError("This action could not be saved. Check the current saved state before retrying."); return false; }
+    catch (error) { setError(error instanceof Error ? error.message : "This action could not be saved. Check the current saved state before retrying."); return false; }
     finally { busyRef.current = false; setBusy(false); }
   }
   async function edit() {
@@ -368,26 +191,20 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
     </div></details>
     {brandRoute && <p className="text-sm text-gray-600">Brand default: {brandRoute.provider} · {brandRoute.model}.</p>}
     {generationRoute && !fixtureGeneration && <p className="text-sm text-gray-600">Generation route: {generationRoute.provider} · {generationRoute.apiModelId}.</p>}
-    {!canPlan && !canGenerate && !canEdit && <p className="text-sm text-amber-700">Qualification pending: new planning, generation and edit requests are disabled until provider evidence and a reliable cost bound are available.</p>}
-    {canFixturePlan && <p className="text-sm text-amber-700">Local offline rehearsal only. No provider qualification or paid call is implied.</p>}
-    {!canPlan && (canGenerate || canEdit) && <p className="text-sm text-amber-700">Scene planning is paused until an approved text route and cost bound are available.</p>}
-    {canPlan && (!canGenerate || selectedVersion && !canEdit) && <p className="text-sm text-amber-700">The selected image route or override is unqualified; its image request is disabled.</p>}
-    {profile === null && <p className="text-sm text-amber-700">Set up the brand visual profile before planning.</p>}
+    {!canPlan && !canGenerate && !canEdit && <StatusNote>Image actions are on hold: no provider route is qualified with a dependable cost bound yet. Once the brand owner qualifies a route, planning and generation become available here — nothing else to do in the meantime.</StatusNote>}
+    {canFixturePlan && <StatusNote>Local offline rehearsal only. No provider qualification or paid call is implied.</StatusNote>}
+    {!canPlan && (canGenerate || canEdit) && <StatusNote>Scene planning is paused until an approved text route and cost bound are available.</StatusNote>}
+    {canPlan && (!canGenerate || selectedVersion && !canEdit) && <StatusNote>The selected image route or override is unqualified; its image request is disabled.</StatusNote>}
+    {profile === null && <StatusNote>Set up the brand visual profile before planning.</StatusNote>}
     {profile !== undefined && <ProfileEditor brandId={brandId} profile={profile} disabled={busy} onSave={async input => { let receipt: ProfileSaveReceipt | null = null; const saved = await run(async () => { receipt = await saveRevision(input); }); return saved ? receipt : null; }}
       onUpload={async file => { let referenceId: Id<"v2VisualReferences"> | null = null; await run(async () => { const uploaded = await uploadReference({ brandId, fileName: file.name, contentType: file.type, bytes: await file.arrayBuffer() }); referenceId = uploaded.referenceId; }); return referenceId; }} />}
     {seed && <div className="space-y-2 text-xs text-gray-500"><p>Corvo archive: {seed.imported ? "imported" : "not imported"} · {seed.assets.filter(asset => asset.referenceId !== null).length} of {seed.assets.length} assets verified.</p><p>Historical model unknown; candidate prompts remain untested.</p>
-      <details><summary className="cursor-pointer font-semibold">Guarded archive import from local masters</summary><div className="mt-2 space-y-2">
-        <p>All approved PNG masters must match the fixed manifest hashes. Run from the project checkout, first verifying local bytes:</p>
-        <pre className="overflow-x-auto rounded bg-gray-50 p-2">node scripts/import-visual-seed.mjs --source-directory /path/to/approved-masters</pre>
-        <p>After inspecting the dry run and explicit destination, provide an authenticated application JWT through RESONATE_VISUAL_IMPORT_TOKEN in the command environment:</p>
-        <pre className="overflow-x-auto rounded bg-gray-50 p-2">{"node scripts/import-visual-seed.mjs --source-directory /path/to/approved-masters --apply --url <explicit-destination-url>"}</pre>
-        <p>Replace both path and destination placeholders. The command uploads the verified masters and imports the archive. Inspect saved status here before any retry.</p>
-      </div></details>
+      <p>Archive import from local masters is operator-run from the project checkout with an authenticated token — see <code>docs/editorial-visuals/seed-import.md</code> for the guarded commands.</p>
     </div>}
     {isCorvoBlogPost && savedPostContext && (postProfile ? <PostExceptionEditor context={savedPostContext} exception={postProfile.postException} approvedSeedException={postProfile.approvedSeedException} disabled={Boolean(busy || savedContentChanged)}
       onApply={async expectedExceptionId => { let receipt: ExceptionSaveReceipt | null = null; const saved = await run(async () => { receipt = await applyArticle7Exception({ postId: postId as Id<"v2Posts">, expectedExceptionId, expectedPostContext: savedPostContext }); }); return saved ? receipt : null; }}
       onSave={async (guidance, expectedExceptionId) => { let receipt: ExceptionSaveReceipt | null = null; const saved = await run(async () => { receipt = await setPostException({ postId: postId as Id<"v2Posts">, expectedExceptionId, expectedPostContext: savedPostContext, guidance }); }); return saved ? receipt : null; }} /> : <p className="text-xs text-gray-500">{profile ? "Loading post exception…" : "Set up the brand profile to configure post exception guidance."}</p>)}
-    {savedContentChanged && <p className="text-sm text-amber-700">Save article changes before requesting visuals.</p>}
+    {savedContentChanged && <StatusNote>Save article changes before requesting visuals.</StatusNote>}
     {error && <p role="alert">{error}</p>}
     <Button type="button" disabled={busy || !canPlan || pending || savedContentChanged || !profile || !workflow || operations.current.get(planSignature)?.accepted} onClick={() => void plan()}>Plan visuals</Button>
     {latestPlan && !completePlan && <div role="status" className="text-sm text-amber-700">Plan incomplete.{latestPlan.reasons.map(reason => <p key={reason}>{reason}</p>)}</div>}
@@ -402,9 +219,16 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
         {selectedScene && <><p className="text-xs font-semibold text-gray-500">Selected scene request</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-xs">{composeScenePrompt(selectedScene)}</pre>
         <Field label="Additional production instructions" value={instructions} onChange={setInstructions} multiline />
         <p className="text-xs text-gray-500">These instructions are appended to the saved scene and brand guidance.</p></>}
-        <Field label="Model override" value={modelOverride} onChange={setModelOverride} />
-        <Field label="Provider override" value={providerOverride} onChange={setProviderOverride} />
-        <p className="text-xs text-gray-500">Blank overrides use the configured brand route for generation and the selected parent route for edits.</p>
+        <label className="block text-xs font-semibold text-gray-600">Generation route <select className="mt-1 rounded border border-gray-200 p-1 text-sm" value={customOverride ? "custom" : matchedRoute ? `${matchedRoute.provider}:${matchedRoute.model}` : ""} onChange={event => setRouteChoice(event.target.value)}>
+          <option value="">Brand default{brandRoute ? ` (${brandRoute.provider} · ${brandRoute.model})` : ""}</option>
+          {routeChoices.map(route => <option key={`${route.provider}:${route.model}`} value={`${route.provider}:${route.model}`}>{route.provider} · {route.model}</option>)}
+          {customOverride && <option value="custom">Custom override (see advanced)</option>}
+        </select></label>
+        <p className="text-xs text-gray-500">Only qualified, persisted routes are listed. Blank keeps the configured brand route for generation and the selected parent route for edits.</p>
+        <details className="text-sm"><summary className="cursor-pointer text-xs font-semibold text-gray-500">Advanced: raw provider and model overrides</summary><div className="mt-2 space-y-2">
+          <Field label="Model override" value={modelOverride} onChange={setModelOverride} />
+          <Field label="Provider override" value={providerOverride} onChange={setProviderOverride} />
+        </div></details>
       </div></details>}
     {selectedScene && selectedPlan && selectedIndex !== undefined &&
       <SceneEditor key={JSON.stringify([selectedPlan._id, selectedIndex, selectedScene])} scene={selectedScene} disabled={Boolean(busy || pending || savedContentChanged || sceneSelectionPending)} generationDisabled={Boolean(!canGenerate || operations.current.get(generationSignature)?.accepted)}
@@ -437,7 +261,7 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
       </div>)}
       <p className="text-xs text-gray-500">Reflection is advisory and does not grant human approval. Candidate prompts have no one-shot validation. Review profile proposals before saving any guidance change.</p>
     </div></details>}
-    {Boolean(workflow?.attempts.length) && <div className="space-y-2" aria-label="Visual activity"><h3 className="text-sm font-semibold">Activity</h3>
+    {Boolean(workflow?.attempts.length) && <section aria-label="Visual activity" className="space-y-2"><h3 className="text-sm font-semibold">Activity</h3>
       {workflow?.attempts.map(attempt => <div key={attempt._id} className="rounded-lg bg-gray-50 p-3 text-sm">
         <p>{attempt.stage} · {attempt.status === "queued" ? attempt.pauseReason ? "Paused" : "Pending" : attempt.status[0].toUpperCase() + attempt.status.slice(1)}</p>
         {attempt.pauseReason && <p className="text-xs text-amber-700">{attempt.pauseReason === "planning-route-unqualified" ? "Planning route is unqualified." : attempt.pauseReason === "provider-route-unqualified" ? "Provider route is unqualified; no image call has been dispatched." : attempt.pauseReason}</p>}
@@ -445,6 +269,6 @@ function SavedPostVisualPanel({ postId, brandId, savedContentChanged, savedPostC
         {attempt.status === "uncertain" && <p className="text-xs text-amber-700">Reconciliation is required before another request. No automatic retry.</p>}
         {attempt.status === "queued" && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void run(() => cancelQueuedAttempt({ attemptId: attempt._id }))}>Cancel queued request</Button>}
       </div>)}
-    </div>}
+    </section>}
   </section>;
 }
