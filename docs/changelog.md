@@ -5515,3 +5515,29 @@ Legacy hero compatibility: accept only the exact dated or undated directory deri
 ### Branch
 
 - verify/aeo-live-proof
+
+## 11/14/2026 08:13:19 UTC
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	docs/verification/reports/evidence/aeo-live-proof/driver-crawl.mts
+- M	docs/verification/reports/evidence/aeo-live-proof/driver-query.mts
+- M	docs/verification/reports/evidence/aeo-live-proof/driver-runs.mts
+
+### Working Tree Snapshot
+
+-  M convex/_generated/api.d.ts
+-  M convex/_generated/server.d.ts
+-  M convex/_generated/server.js
+- M  docs/verification/reports/evidence/aeo-live-proof/driver-crawl.mts
+- M  docs/verification/reports/evidence/aeo-live-proof/driver-query.mts
+- M  docs/verification/reports/evidence/aeo-live-proof/driver-runs.mts
+- ?? .env.aeo-proof
+
+### Branch
+
+- verify/aeo-live-proof

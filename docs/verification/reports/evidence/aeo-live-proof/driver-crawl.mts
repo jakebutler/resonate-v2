@@ -13,7 +13,7 @@ import process from "node:process";
 
 const { ConvexHttpClient } = await import("convex/browser");
 const { api } = await import("../../../../../convex/_generated/api.js");
-const { firecrawlCrawl } = await import("../../../../../lib/providerAdapters.ts");
+const { firecrawlCrawl } = await import("../../../../../lib/providerAdapters.js");
 
 const CONVEX_URL = process.env.CONVEX_URL;
 const CONVEX_JWT = process.env.CONVEX_JWT;
@@ -22,7 +22,7 @@ const SITE_URL = process.env.CRAWL_SITE_URL ?? "https://freshproof.io";
 const BRAND = "freshproof";
 const CRAWL_LIMIT = Number(process.env.CRAWL_LIMIT ?? 5);
 
-function fail(reason) {
+function fail(reason: string): never {
   console.error(JSON.stringify({ ok: false, reason }, null, 2));
   process.exit(1);
 }
@@ -53,13 +53,13 @@ const pages = run.pages ?? [];
 if (pages.length === 0) fail("Firecrawl crawl completed with zero pages");
 
 // 5. Map sanitized pages into the immutable snapshot's page shape.
-function headingsFromMarkdown(markdown) {
+function headingsFromMarkdown(markdown: string | null | undefined): string[] {
   if (!markdown) return [];
   return markdown
     .split("\n")
-    .filter((line) => /^#{1,6}\s/.test(line))
-    .map((line) => line.replace(/^#{1,6}\s+/, "").trim())
-    .filter((h) => h.length > 0 && h.length <= 200)
+    .filter((line: string) => /^#{1,6}\s/.test(line))
+    .map((line: string) => line.replace(/^#{1,6}\s+/, "").trim())
+    .filter((h: string) => h.length > 0 && h.length <= 200)
     .slice(0, 20);
 }
 
