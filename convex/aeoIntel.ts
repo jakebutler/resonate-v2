@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, type QueryCtx, type MutationCtx } from "./_generated/server";
+import { BlockedUrlError, validatePublicHttpsUrl } from "../lib/urlGuard";
 import { audit, brandIdValidator, requireBrandAccess, requireUserId } from "./campaignAccess";
 import {
   aeoBrandTargetValidator,
@@ -155,6 +156,18 @@ export const connectTarget = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     await requireBrandAccess(ctx, userId, args.brandId);
+    // Entry validation for stored URLs: https-only and non-blocked hosts
+    // (resolution-time SSRF checks run in validateRemoteUrl before any fetch).
+    // Convex mutations cannot do DNS lookups, so this is the sync half of the
+    // guard — but it closes the http-scheme and literal-private-host holes.
+    try {
+      validatePublicHttpsUrl(args.siteUrl);
+      for (const url of args.competitorUrls) validatePublicHttpsUrl(url);
+    } catch (error) {
+      throw new Error(
+        error instanceof BlockedUrlError ? error.message : "Invalid site URL."
+      );
+    }
     const now = Date.now();
     const existing = await readTarget(ctx, userId, args.brandId);
     if (existing) {

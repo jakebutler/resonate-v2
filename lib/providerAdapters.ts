@@ -1,3 +1,4 @@
+import { type LookupFn, BlockedUrlError, validateRemoteUrl } from "./urlGuard";
 import {scheduleToUtcIso} from "./schedules";
 export {scheduleToUtcIso} from "./schedules";
 import { type BufferDestination, type BufferRequestBudget, BufferRequestBudgetError, observeBufferRateLimit, safeLinkedInUrl, destinationHold, destinationIdentity } from "./bufferContracts";
@@ -34,6 +35,13 @@ export type ProviderAdapterContext = {
   fetchImpl?: typeof fetch;
   requestBudget?: BufferRequestBudget;
   beforeCreate?: () => Promise<string | null>;
+  /**
+   * DNS resolver for the SSRF guard (`validateRemoteUrl`). Fetching callers
+   * (the crawl paths) must supply it — without DNS resolution a public
+   * hostname can still resolve to a private address, so no lookup means no
+   * fetch.
+   */
+  lookup?: LookupFn;
 };
 
 export type ProviderResult = {
@@ -1676,16 +1684,22 @@ export function isPrivateSiteHostname(hostname: string): boolean {
   return false;
 }
 
-function parsePublicHttpUrl(rawUrl: string): URL | null {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    return null;
+/**
+ * Drops pages whose URL was already collected — Firecrawl's poll endpoint
+ * re-serves every page seen so far on each status poll, so accumulating
+ * without dedupe persists the same page once per poll.
+ */
+export function dedupePagesByUrl(
+  pages: SanitizedFirecrawlPage[]
+): SanitizedFirecrawlPage[] {
+  const seen = new Set<string>();
+  const unique: SanitizedFirecrawlPage[] = [];
+  for (const page of pages) {
+    if (seen.has(page.sourceUrl)) continue;
+    seen.add(page.sourceUrl);
+    unique.push(page);
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-  if (isPrivateSiteHostname(url.hostname)) return null;
-  return url;
+  return unique;
 }
 
 function truncateSnapshot(text: string | undefined): string | undefined {
@@ -1860,10 +1874,24 @@ export async function firecrawlCrawl(
   const gate = firecrawlGate(context);
   if (!gate.ok) return { ...gate.refusal, sanitizedResponse: { ...gate.refusal.sanitizedResponse, action: "crawl" } };
 
-  const target = parsePublicHttpUrl(request.url);
-  if (!target) {
-    return firecrawlRefusal("crawl", "Crawl target must be a public http(s) URL.");
+  // SSRF guard: the crawl target — and the robots.txt pre-fetch against its
+  // origin below — must pass the repo's full remote-URL check (https only,
+  // non-blocked host, every DNS answer in public space). Without a resolver
+  // the check cannot run, so the crawl is refused, never guessed.
+  const lookup = context.lookup;
+  if (!lookup) {
+    return firecrawlRefusal("crawl", "Crawl refused: no DNS resolver configured for outbound URL validation.");
   }
+  let check: Awaited<ReturnType<typeof validateRemoteUrl>>;
+  try {
+    check = await validateRemoteUrl(request.url, lookup);
+  } catch (error) {
+    return firecrawlRefusal(
+      "crawl",
+      `Crawl target rejected by the SSRF guard: ${error instanceof BlockedUrlError ? error.message : "URL validation failed."}`
+    );
+  }
+  const target = new URL(check.url);
 
   const limits = firecrawlRunLimits(context);
   const limit = request.limit ?? limits.maxCrawlPages;
@@ -1919,6 +1947,7 @@ export async function firecrawlCrawl(
 
   const maxPolls = request.maxPolls ?? 30;
   const pages: SanitizedFirecrawlPage[] = [];
+  const seenPageUrls = new Set<string>();
   let pollPath: string | null = `/crawl/${encodeURIComponent(crawlId)}`;
   let completed = false;
   for (let poll = 0; poll < maxPolls && pollPath; poll++) {
@@ -1943,7 +1972,13 @@ export async function firecrawlCrawl(
       };
     }
     const crawlData = Array.isArray(pollData.data) ? (pollData.data as Array<Record<string, unknown>>) : [];
-    pages.push(...crawlData.map(sanitizeFirecrawlPage));
+    // Each poll re-serves every page collected so far — dedupe by URL across
+    // polls (and within a poll) so a snapshot never stores the same page twice.
+    const batch = dedupePagesByUrl(crawlData.map(sanitizeFirecrawlPage)).filter(
+      (page) => !seenPageUrls.has(page.sourceUrl)
+    );
+    for (const page of batch) seenPageUrls.add(page.sourceUrl);
+    pages.push(...batch);
     if (pollData.status === "failed" || pollData.status === "cancelled") {
       return {
         ok: false,

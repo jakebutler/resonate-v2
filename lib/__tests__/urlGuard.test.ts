@@ -6,6 +6,7 @@ import {
   isRedirectStatus,
   normalizeHostname,
   resolveRedirectLocation,
+  validatePublicHttpsUrl,
   validateRemoteUrl,
 } from "@/lib/urlGuard";
 
@@ -151,5 +152,34 @@ describe("redirect helpers", () => {
     expect(
       resolveRedirectLocation("ftp://other.example.com/", "https://example.com/")
     ).toBeNull();
+  });
+});
+
+describe("validatePublicHttpsUrl (stored-URL entry gate)", () => {
+  it("accepts public https URLs and returns the parsed URL", () => {
+    const parsed = validatePublicHttpsUrl("https://freshproof.example.com/");
+    expect(parsed.hostname).toBe("freshproof.example.com");
+  });
+
+  it("rejects non-https schemes and unparseable input", () => {
+    for (const url of [
+      "http://freshproof.example.com/",
+      "ftp://freshproof.example.com/file",
+      "not-a-url",
+    ]) {
+      expect(() => validatePublicHttpsUrl(url)).toThrow(BlockedUrlError);
+    }
+  });
+
+  it("rejects blocked hosts without needing DNS", () => {
+    for (const url of [
+      "https://localhost:3000/",
+      "https://site.localhost/",
+      "https://192.168.1.10/",
+      "https://127.0.0.1/",
+      "https://10.0.0.1/",
+    ]) {
+      expect(() => validatePublicHttpsUrl(url)).toThrow(BlockedUrlError);
+    }
   });
 });
