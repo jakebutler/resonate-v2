@@ -15,6 +15,7 @@ function validationDiagnostics() {
     approvalFlagConfigured: Boolean(process.env.LIVE_PROVIDER_VALIDATION_APPROVED?.trim()),
     bufferKeyConfigured: Boolean(process.env.BUFFER_API_KEY?.trim()),
     zernioKeyConfigured: Boolean(process.env.ZERNIO_API_KEY?.trim()),
+    firecrawlKeyConfigured: Boolean(process.env.FIRECRAWL_API_KEY?.trim()),
   };
 }
 
@@ -24,6 +25,7 @@ function validationContext() {
     env: {
       BUFFER_API_KEY: process.env.BUFFER_API_KEY,
       ZERNIO_API_KEY: process.env.ZERNIO_API_KEY,
+      FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
       LIVE_PROVIDER_VALIDATION_APPROVED: approvalFlag,
     },
     liveProviderValidationApproved: isLiveProviderValidationApproved(approvalFlag),
@@ -31,7 +33,7 @@ function validationContext() {
 }
 
 async function validateProvider(
-  providerId: "buffer" | "zernio"
+  providerId: "buffer" | "zernio" | "firecrawl"
 ): Promise<ProviderValidationResult> {
   const adapter = adapterForProvider(providerId);
   return adapter.validateConnection(validationContext());
@@ -46,9 +48,10 @@ export async function GET() {
   }
 
   const diagnostics = validationDiagnostics();
-  const [linkedin, reddit] = await Promise.all([
+  const [linkedin, reddit, firecrawl] = await Promise.all([
     validateProvider("buffer"),
     validateProvider("zernio"),
+    validateProvider("firecrawl"),
   ]);
 
   return NextResponse.json({
@@ -63,6 +66,11 @@ export async function GET() {
       {
         platform: "Reddit",
         ...reddit,
+        diagnostics,
+      },
+      {
+        platform: "Firecrawl (AEO site data)",
+        ...firecrawl,
         diagnostics,
       },
     ],

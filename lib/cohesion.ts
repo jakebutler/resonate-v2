@@ -238,6 +238,11 @@ const CLICHES = [
 /**
  * Placeholder SEO/AEO surface (D-14): answerable questions + extractable
  * answers per draft. The real extraction skill pack replaces this.
+ *
+ * Intended successor (spec A3): accepted answer-engine findings from the
+ * `intelFindings` artifact family (citation status + extractability per brand
+ * question). The placeholder stays until real findings data exists, then
+ * reads from it — behavior here is unchanged until that swap.
  */
 export function computeSeoAeo(
   drafts: CohesionDraftInput[]
