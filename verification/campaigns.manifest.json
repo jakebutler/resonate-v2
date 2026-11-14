@@ -84,7 +84,7 @@
       "fixtures": ["campaign-fixture-harness"],
       "prerequisites": [],
       "dependsOn": ["campaign-fixture-harness"],
-      "description": "The C2 bridge criterion: materialized campaign posts forming a reviewable series, batch approval via seriesReview, and queueRelease preparation for a campaign-driven set. The suite (and the bridge) is a pending build-list item on this branch — expect ABSENT until the bridge PR lands."
+      "description": "The C2 bridge criterion: materialized campaign posts forming a reviewable series, batch approval via seriesReview, and queueRelease preparation for a campaign-driven set. The bridge suite is merged and green on main (PRs #141-168, convex/__tests__/campaignSeriesBridge.test.ts) — expect PASS."
     }
   ]
 }
