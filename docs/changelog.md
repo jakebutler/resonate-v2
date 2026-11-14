@@ -5447,3 +5447,25 @@ Legacy hero compatibility: accept only the exact dated or undated directory deri
 ### Branch
 
 - verify/main-live-proof
+
+## 11/14/2026 07:56:41 UTC
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- A	docs/verification/reports/2026-11-14-aeo-live-proof.md
+
+### Working Tree Snapshot
+
+-  M convex/_generated/api.d.ts
+-  M convex/_generated/server.d.ts
+-  M convex/_generated/server.js
+- A  docs/verification/reports/2026-11-14-aeo-live-proof.md
+- ?? .env.aeo-proof
+
+### Branch
+
+- verify/aeo-live-proof
