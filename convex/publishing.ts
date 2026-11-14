@@ -1,4 +1,5 @@
 import {postScheduleVersion} from "../lib/socialPayload";
+import { isProductionConvexDeployment } from "../lib/convexDeployment";
 import {priorDispatchHold, priorBufferAttempts, dispatchCapacity, releasePin, allocateDispatch, reconcileAllocation, reviewReservationsHold} from "./queueDispatch";
 import {providerScheduleHold} from "./bufferAttempts";
 import {companionSubmissionHold,latestPublication} from "./articleDependencies";
@@ -369,8 +370,7 @@ export const seedPreviewWorkspace = mutation({
         "seedPreviewWorkspace is disabled. Set ALLOW_PREVIEW_SEED=1 on the Convex *dev* deployment only."
       );
     }
-    const cloudUrl = process.env.CONVEX_CLOUD_URL ?? "";
-    if (cloudUrl.includes("healthy-platypus-553")) {
+    if (isProductionConvexDeployment(process.env.CONVEX_CLOUD_URL)) {
       throw new Error(
         "seedPreviewWorkspace cannot run against the production Convex deployment."
       );

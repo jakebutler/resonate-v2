@@ -703,9 +703,11 @@ describe("publishing cross-brand authorization", () => {
 
 describe("seedPreviewWorkspace", () => {
   const originalAllow = process.env.ALLOW_PREVIEW_SEED;
+  const originalCloudUrl = process.env.CONVEX_CLOUD_URL;
 
   beforeEach(() => {
     process.env.ALLOW_PREVIEW_SEED = "1";
+    delete process.env.CONVEX_CLOUD_URL;
   });
 
   afterEach(() => {
@@ -713,6 +715,11 @@ describe("seedPreviewWorkspace", () => {
       delete process.env.ALLOW_PREVIEW_SEED;
     } else {
       process.env.ALLOW_PREVIEW_SEED = originalAllow;
+    }
+    if (originalCloudUrl === undefined) {
+      delete process.env.CONVEX_CLOUD_URL;
+    } else {
+      process.env.CONVEX_CLOUD_URL = originalCloudUrl;
     }
   });
 
@@ -728,5 +735,23 @@ describe("seedPreviewWorkspace", () => {
     expect(second.skipped).toBeGreaterThanOrEqual(4);
     expect(second.ideasCreated).toBe(0);
     expect(second.postsCreated).toBe(0);
+  });
+
+  it("refuses the production deployment outright", async () => {
+    const t = createTestHarness();
+    process.env.CONVEX_CLOUD_URL = "https://healthy-platypus-553.convex.cloud";
+    await expect(
+      t.run((ctx) => ctx.runMutation(api.publishing.seedPreviewWorkspace, {}))
+    ).rejects.toThrow(/production/i);
+  });
+
+  it("refuses the production deployment under a renamed host", async () => {
+    // Structural deployment-name compare: a Convex host-suffix rename must
+    // not silently disarm the refusal.
+    const t = createTestHarness();
+    process.env.CONVEX_CLOUD_URL = "https://healthy-platypus-553.convex.site";
+    await expect(
+      t.run((ctx) => ctx.runMutation(api.publishing.seedPreviewWorkspace, {}))
+    ).rejects.toThrow(/production/i);
   });
 });

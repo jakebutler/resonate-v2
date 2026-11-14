@@ -4,25 +4,31 @@
  * failsafe cannot drift away from a call site again (the gap PR #177 closed
  * for proxy.ts alone).
  */
-
-/**
- * Production Convex deployment host — kept in sync with the production
- * refusal in convex/verificationSeed.ts.
- */
-const PROD_CONVEX_DEPLOYMENT_HOST = "healthy-platypus-553";
+import { isProductionConvexDeployment } from "./convexDeployment";
 
 /**
  * Detect a production deployment. Deliberately does NOT consider NODE_ENV:
  * CI and local E2E legitimately run the auth bypass against production
  * builds, where NODE_ENV is "production". The authoritative signals are the
  * Vercel environment and the Convex deployment the server points at (the
- * same host check the verification seed uses to refuse production).
+ * same structural deployment-name compare the seed refusals use).
  */
 export function isProductionDeployment(): boolean {
   return (
     process.env.VERCEL_ENV === "production" ||
-    (process.env.CONVEX_CLOUD_URL ?? "").includes(PROD_CONVEX_DEPLOYMENT_HOST)
+    isProductionConvexDeployment(process.env.CONVEX_CLOUD_URL)
   );
+}
+
+/**
+ * Client-bundle read site for the bypass flag, for display gating only.
+ * Client components must not read the raw env: E2E_BYPASS_AUTH is a
+ * server-only spelling, and NEXT_PUBLIC_E2E_BYPASS_AUTH is what client
+ * bundles see inlined at build time. Returns exactly the raw read's value,
+ * so local-fixture display behavior is unchanged.
+ */
+export function isClientE2eAuthBypassRequested(): boolean {
+  return process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "1";
 }
 
 /**
