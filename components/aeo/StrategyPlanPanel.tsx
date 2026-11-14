@@ -42,6 +42,7 @@ export function StrategyPlanPanel({
   plan,
   gapTitles,
   gapWarnings,
+  intelCycle,
   reviewPending = false,
   onAccept,
   onRequestChanges,
@@ -50,11 +51,25 @@ export function StrategyPlanPanel({
   /** Gap id → human title from the same intel run; ids render when absent. */
   gapTitles?: Record<string, string>;
   /**
+  /**
    * Gap id → mismatch warning for findings a run flagged suspect. A cited
    * answer suspected of describing a different product carries the same
    * warning here that the intel screen shows.
    */
   gapWarnings?: Record<string, string>;
+  /**
+   * The cron schedule and last run behind this step: runs are cron-driven,
+   * with no user control, so the panel shows that reality instead of
+   * instructing the reader to "run an intel cycle" no control can run.
+   */
+  intelCycle?: {
+    schedule: string;
+    lastRun: {
+      startedAt: number;
+      finishedAt?: number;
+      status: "running" | "complete" | "failed";
+    } | null;
+  };
   /** True while the plan-review mutation is in flight; disables Accept. */
   reviewPending?: boolean;
   onAccept?: (planId: string) => void;
@@ -68,13 +83,16 @@ export function StrategyPlanPanel({
       title="Strategy plan"
       description="The reviewable plan built from the prioritized gaps."
     >
+      {intelCycle ? <IntelCycleStrip intelCycle={intelCycle} /> : null}
       {plan.status === "loading" ? (
         <PanelLoading label="Loading strategy plan" />
       ) : plan.status === "error" ? (
         <PanelError message={plan.message} onRetry={plan.onRetry} />
       ) : plan.data === null ? (
         <p className={cn("text-sm", tokens.textMuted)}>
-          No strategy plan yet — run an intel cycle and review its gaps first.
+          No strategy plan yet — the daily intel cycle collects findings on its
+          own cron schedule, and a plan drafted from them appears here for
+          review.
         </p>
       ) : (
         (() => {
@@ -165,5 +183,33 @@ export function StrategyPlanPanel({
         })()
       )}
     </AeoPanel>
+  );
+}
+
+/**
+ * The honest schedule/status line for the cron-driven intel cycles: when
+ * they run (from convex/crons.ts — there is no user-facing control to run
+ * one on demand) and what the last run actually did, straight from the run
+ * record.
+ */
+function IntelCycleStrip({
+  intelCycle,
+}: {
+  intelCycle: NonNullable<
+    React.ComponentProps<typeof StrategyPlanPanel>["intelCycle"]
+  >;
+}) {
+  const last = intelCycle.lastRun;
+  return (
+    <p className={cn("text-sm", tokens.textMuted)}>
+      Intel cycles run {intelCycle.schedule}
+      {last
+        ? ` · last run ${new Date(last.startedAt).toLocaleString()} — ${
+            last.status === "complete"
+              ? `completed${last.finishedAt ? ` ${new Date(last.finishedAt).toLocaleString()}` : ""}`
+              : last.status
+          }`
+        : " · no intel run recorded yet"}
+    </p>
   );
 }

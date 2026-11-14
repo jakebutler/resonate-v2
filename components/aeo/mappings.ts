@@ -80,13 +80,15 @@ export function crawlPageRowToCrawlPage(row: CrawlPageRow): CrawlPage {
 
 export function crawlRowToSnapshot(
   row: SiteCrawlRow,
-  pages: CrawlPageRow[]
+  pages: CrawlPageRow[],
+  options: { pagesLoading?: boolean } = {}
 ): CrawlSnapshot {
   return {
     id: row._id,
     version: row.version,
     crawledAt: row.createdAt,
     pages: pages.map(crawlPageRowToCrawlPage),
+    pagesLoading: options.pagesLoading,
   };
 }
 
@@ -183,14 +185,20 @@ export function buildCompetitorComparison(input: {
       domain: hostOf(input.siteUrl),
       pageCount: targetCrawl.pageCount,
       citationCount: targetCitationCount,
+      // The target row only exists when its latest complete crawl exists.
+      crawled: true,
     },
     competitors: input.competitorUrls.map((url) => {
       const domain = hostOf(url);
+      const crawl = latestCompleteCrawl(input.crawls, url);
       return {
         name: domain,
         domain,
-        pageCount: latestCompleteCrawl(input.crawls, url)?.pageCount ?? 0,
+        pageCount: crawl?.pageCount ?? 0,
         citationCount: 0,
+        // A confirmed-but-never-crawled competitor has no real numbers —
+        // the panel renders an explicit "not crawled yet" state instead.
+        crawled: crawl !== undefined,
       };
     }),
   };

@@ -5,6 +5,7 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { CitationResultsPanel } from "./CitationResultsPanel";
 import { CompetitorComparisonPanel } from "./CompetitorComparisonPanel";
+import { IntelRunHistoryStrip } from "./IntelRunHistoryStrip";
 import { SnapshotBrowserPanel } from "./SnapshotBrowserPanel";
 import {
   buildCompetitorComparison,
@@ -61,8 +62,16 @@ export function IntelFlow() {
     runRows === undefined ||
     findingRows === undefined;
 
-  const latestCompleteRun = runRows
-    ?.filter((run) => run.kind === "answer-engine" && run.status === "complete")
+  // List queries: `undefined` is pending (the gate above); `null` is the sync
+  // fixture convention for an empty result set — normalize it so derivations
+  // always see an array. Real Convex list queries never return null.
+  const crawlList = crawlRows ?? [];
+  const runList = runRows ?? [];
+  const findingList = findingRows ?? [];
+  const pageList = selectedPageRows ?? [];
+
+  const latestCompleteRun = runList
+    .filter((run) => run.kind === "answer-engine" && run.status === "complete")
     .sort((a, b) => b.startedAt - a.startedAt)[0];
 
   const run: Loadable<CitationRun | null> = loading
@@ -72,7 +81,7 @@ export function IntelFlow() {
           status: "ready",
           data: runRowsToCitationRun(
             latestCompleteRun,
-            findingRows.filter((finding) => finding.runId === latestCompleteRun._id),
+            findingList.filter((finding) => finding.runId === latestCompleteRun._id),
             brandName
           ),
         }
@@ -86,8 +95,8 @@ export function IntelFlow() {
           ? buildCompetitorComparison({
               brandName,
               siteUrl: targetRow.siteUrl,
-              crawls: crawlRows,
-              findings: findingRows,
+              crawls: crawlList,
+              findings: findingList,
               competitorUrls: targetRow.competitorUrls,
             })
           : null,
@@ -97,18 +106,32 @@ export function IntelFlow() {
     ? { status: "loading" }
     : {
         status: "ready",
-        data: crawlRows.map((crawl) =>
+        data: crawlList.map((crawl) =>
           crawlRowToSnapshot(
             crawl,
-            selectedPageRows !== undefined && activeCrawlId === crawl._id
-              ? selectedPageRows
-              : []
+            activeCrawlId === crawl._id ? pageList : [],
+            {
+              // The selected (or default-newest) snapshot renders a loading
+              // state while its pages query re-subscribes — never a false
+              // "0 pages crawled" flash on a version switch.
+              pagesLoading:
+                selectedPageRows === undefined && activeCrawlId === crawl._id,
+            }
           )
         ),
       };
 
   return (
     <>
+      <IntelRunHistoryStrip
+        runs={
+          loading
+            ? { status: "loading" }
+            : // `loading` already gates on runRows being loaded; the fallback
+              // only satisfies the typechecker.
+              { status: "ready", data: runList }
+        }
+      />
       <CitationResultsPanel run={run} />
       <CompetitorComparisonPanel comparison={comparison} />
       <SnapshotBrowserPanel

@@ -16,6 +16,30 @@ import type {
 
 export type ConnectionProvider = keyof BrandTarget["connections"];
 
+/** Same shape rule as the target URL: a scheme and a host with a dot. */
+export function isValidTargetUrl(url: string): boolean {
+  return /^https?:\/\/\S+\.\S+/.test(url);
+}
+
+/**
+ * Splits the free-text competitor field the way it will be submitted — on
+ * whitespace and commas — and separates full URLs from anything that would
+ * otherwise flow raw into a crawl run ("competitor-a").
+ */
+export function partitionCompetitorUrls(input: string): {
+  valid: string[];
+  invalid: string[];
+} {
+  const entries = input
+    .split(/[\s,]+/)
+    .map((url) => url.trim())
+    .filter(Boolean);
+  return {
+    valid: entries.filter(isValidTargetUrl),
+    invalid: entries.filter((url) => !isValidTargetUrl(url)),
+  };
+}
+
 const PROVIDER_LABEL: Record<ConnectionProvider, string> = {
   firecrawl: "Site crawl (Firecrawl)",
   answerEngine: "Answer-engine checks",
@@ -77,20 +101,21 @@ function ConnectForm({
 }) {
   const [siteUrl, setSiteUrl] = useState("");
   const [competitorUrls, setCompetitorUrls] = useState("");
-  const valid = /^https?:\/\/\S+\.\S+/.test(siteUrl.trim());
+  const siteValid = isValidTargetUrl(siteUrl.trim());
+  // Validated before submit: an invalid entry blocks submission with a
+  // visible alert rather than flowing into connect/crawl runs.
+  const competitors = partitionCompetitorUrls(competitorUrls);
+  const competitorsValid = competitors.invalid.length === 0;
   return (
     <form
       aria-label="Connect target form"
       className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!valid) return;
+        if (!siteValid || !competitorsValid) return;
         onSubmit?.({
           siteUrl: siteUrl.trim(),
-          competitorUrls: competitorUrls
-            .split(/[\s,]+/)
-            .map((url) => url.trim())
-            .filter(Boolean),
+          competitorUrls: competitors.valid,
         });
       }}
     >
@@ -117,12 +142,25 @@ function ConnectForm({
           aria-label="Competitor URLs"
         />
       </label>
-      {!valid && siteUrl.trim() !== "" ? (
+      {!siteValid && siteUrl.trim() !== "" ? (
         <p role="alert" className="text-sm">
           Enter a full URL starting with http:// or https://.
         </p>
       ) : null}
-      <Button type="submit" size="sm" disabled={!valid || !onSubmit || pending}>
+      {!competitorsValid ? (
+        <p role="alert" className="text-sm">
+          These competitor URLs are missing a scheme or host:{" "}
+          {competitors.invalid.join(", ")} — enter full URLs starting with
+          http:// or https://.
+        </p>
+      ) : null}
+      <Button
+        type="submit"
+        size="sm"
+        disabled={
+          !siteValid || !competitorsValid || !onSubmit || pending
+        }
+      >
         Connect target
       </Button>
     </form>

@@ -36,11 +36,18 @@ const KIND_BADGE: Record<Gap["kind"], { label: string; variant: "default" | "sec
 export function GapsPanel({
   gaps,
   seedPending = false,
+  seedSucceeded = false,
   onSeedIdea,
 }: {
   gaps: Loadable<Gap[]>;
   /** True while the seed-idea mutation is in flight; disables seed buttons. */
   seedPending?: boolean;
+  /**
+   * True after the seed-idea mutation succeeded: the idea is already in the
+   * inbox, so seeding again would create a duplicate row — buttons stay
+   * disabled until the feedback bar is reset.
+   */
+  seedSucceeded?: boolean;
   onSeedIdea?: (gap: Gap) => void;
 }) {
   return (
@@ -80,10 +87,12 @@ export function GapsPanel({
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={!onSeedIdea || seedPending}
+                    disabled={
+                      !onSeedIdea || seedPending || seedSucceeded
+                    }
                     onClick={() => onSeedIdea?.(gap)}
                   >
-                    Seed captured idea
+                    {seedSucceeded ? "Idea captured" : "Seed captured idea"}
                   </Button>
                 </div>
                 <p className="mt-1 text-sm font-medium">{gap.title}</p>

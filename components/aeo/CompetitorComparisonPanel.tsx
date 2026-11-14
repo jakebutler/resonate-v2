@@ -1,6 +1,8 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { tokens } from "@/components/shell/tokens";
+import { cn } from "@/lib/utils";
 import { AeoPanel, PanelEmpty, PanelError, PanelLoading } from "./PanelStates";
 import type { CompetitorComparison, Loadable } from "./types";
 
@@ -69,8 +71,20 @@ export function CompetitorComparisonPanel({
                     <td className="py-1 pr-3">
                       <span className="font-medium">{competitor.name}</span>
                     </td>
-                    <td className="py-1 pr-3">{competitor.pageCount}</td>
-                    <td className="py-1">{competitor.citationCount}</td>
+                    {/* A confirmed-but-never-crawled competitor has no real
+                        numbers: an explicit empty state, never zero rows. */}
+                    {competitor.crawled ? (
+                      <>
+                        <td className="py-1 pr-3">{competitor.pageCount}</td>
+                        <td className="py-1">{competitor.citationCount}</td>
+                      </>
+                    ) : (
+                      <td className="py-1 pr-3 text-right" colSpan={2}>
+                        <span className={cn("text-xs", tokens.textMuted)}>
+                          Not crawled yet
+                        </span>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

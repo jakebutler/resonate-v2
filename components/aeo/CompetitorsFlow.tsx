@@ -54,13 +54,15 @@ export function CompetitorsFlow() {
     applyReviewStateOptimistically
   );
 
+  // List query: undefined is pending; null is the sync fixture's empty-set
+  // convention — normalize so derivations always see an array.
   const sets: Loadable<CompetitorSets> =
     targetRow === undefined || suggestionRows === undefined
       ? { status: "loading" }
       : {
           status: "ready",
           data: suggestionRowsToSets(
-            suggestionRows,
+            suggestionRows ?? [],
             targetRow?.competitorUrls ?? []
           ),
         };

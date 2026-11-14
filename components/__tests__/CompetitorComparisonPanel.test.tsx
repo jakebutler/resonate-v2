@@ -9,6 +9,7 @@ const comparison: CompetitorComparison = {
     domain: "freshproof.example.com",
     pageCount: 42,
     citationCount: 7,
+    crawled: true,
   },
   competitors: [
     {
@@ -16,6 +17,7 @@ const comparison: CompetitorComparison = {
       domain: "trackglp.com",
       pageCount: 120,
       citationCount: 19,
+      crawled: true,
     },
   ],
 };

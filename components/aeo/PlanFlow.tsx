@@ -22,6 +22,13 @@ import type { Id } from "@/convex/_generated/dataModel";
 type CampaignOption = { _id: Id<"campaigns">; title: string };
 
 /**
+ * The answer-engine cron's schedule, from convex/crons.ts (`aeo-answer-engine-runs`,
+ * daily at 07:35 UTC). The cron config has no read API, so the label lives
+ * beside its definition and must be updated with it.
+ */
+const INTEL_CRON_LABEL = "daily at 07:35 UTC (cron)";
+
+/**
  * Plan step: review actions resolve the plan's review state; the only content
  * actions seed downstream drafts — captured ideas (from gaps) or campaign
  * brief fields. Nothing here approves or publishes anything (L8).
@@ -31,6 +38,7 @@ export function PlanFlow() {
   const planRow = useQuery(api.aeoIntel.getLatestStrategyPlan, { brandId });
   const findingRows = useQuery(api.aeoIntel.listFindings, { brandId });
   const campaignRows = useQuery(api.campaigns.listCampaigns, {});
+  const runRows = useQuery(api.aeoIntel.listRuns, { brandId });
   const savePlan = useAeoMutation(
     useMutation(api.aeoIntel.saveStrategyPlan)
   );
@@ -42,6 +50,17 @@ export function PlanFlow() {
   const seedBrief = useAeoMutation(useMutation(api.shapes.saveBrief));
 
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
+
+  // List query: undefined is pending; null is the sync fixture's empty-set
+  // convention — normalize so derivations always see an array.
+  const runList = runRows ?? [];
+  const intelCycle =
+    runRows === undefined
+      ? undefined
+      : {
+          schedule: INTEL_CRON_LABEL,
+          lastRun: [...runList].sort((a, b) => b.startedAt - a.startedAt)[0] ?? null,
+        };
 
   const plan: Loadable<StrategyPlan | null> =
     planRow === undefined
@@ -124,6 +143,7 @@ export function PlanFlow() {
         plan={plan}
         gapTitles={gapTitles}
         gapWarnings={gapWarnings}
+        intelCycle={intelCycle}
         reviewPending={savePlan.state.status === "pending"}
         onAccept={(planId) => {
           if (!planRow) return;
