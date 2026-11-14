@@ -282,6 +282,33 @@ describe("actual server image execution (SPECULATIVE offline contract doubles)",
     await user.mutation(api.visualWorkflow.cancelQueuedAttempt, { attemptId });
     expect(await t.run(ctx => ctx.db.query("v2VisualProviderAllowances").first())).toMatchObject({ reservedMicros: 0, spentMicros: 0 });
   });
+
+  it("refuses a dispatch quote whose reviewed route expired before the attempt is admitted", async () => {
+    const { t, attemptId } = await queued();
+    const routeId = await reviewedTestRoute(t);
+    const quoteId = await t.mutation(api.visualProviderConfig.registerImageDispatchQuote, { attemptId, routeId, requestSha256: "a".repeat(64) });
+    // The route expires between quote binding and admission.
+    await t.run(ctx => ctx.db.patch(routeId, { expiresAt: Date.now() - 1 }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(t.mutation(api.visualWorkflow.reserveAttempt, { attemptId, quoteId })).rejects.toThrow("No qualified live route and verified cost bound");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("cancels an already-reserved dispatch when its reviewed route expires mid-flight", async () => {
+    const { t, attemptId } = await queued();
+    const routeId = await reviewedTestRoute(t);
+    const quoteId = await t.mutation(api.visualProviderConfig.registerImageDispatchQuote, { attemptId, routeId, requestSha256: "a".repeat(64) });
+    await t.mutation(api.visualWorkflow.reserveAttempt, { attemptId, quoteId });
+    // The route expires mid-flight: quoted and reserved while live, dead before dispatch.
+    await t.run(ctx => ctx.db.patch(routeId, { expiresAt: Date.now() - 1 }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(t.mutation(api.visualWorkflow.reserveAttempt, { attemptId, quoteId })).resolves.toMatchObject({ admitted: false, reason: "Previously reserved quote is no longer qualified" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await t.run(ctx => ctx.db.get(attemptId))).toMatchObject({ status: "failed" });
+    expect(await t.run(ctx => ctx.db.query("v2VisualProviderAllowances").first())).toMatchObject({ reservedMicros: 0, spentMicros: 0 });
+  });
   it("keeps distinct qualified qualities available and never promotes probes", async () => {
     const { t, user, postId } = await queued(); const medium = await reviewedTestRoute(t);
     const route = await t.run(ctx => ctx.db.get(medium));
