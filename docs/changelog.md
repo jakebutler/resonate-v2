@@ -5585,3 +5585,45 @@ Legacy hero compatibility: accept only the exact dated or undated directory deri
 ### Branch
 
 - verify/main-live-proof
+
+## 11/14/2026 12:25:14 UTC
+
+### Summary
+
+- Updated repository documentation and handoff records.
+
+### Staged Changes
+
+- M	convex/_generated/api.d.ts
+- M	docs/editorial-visuals/providers/qualification-runs/2026-11-14-live.md
+- M	docs/verification/campaigns/2026-11-14.json
+- M	docs/verification/campaigns/2026-11-14.md
+- M	docs/verification/campaigns/latest.json
+- M	docs/verification/image-generation/2026-11-14.json
+- M	docs/verification/image-generation/2026-11-14.md
+- M	docs/verification/image-generation/latest.json
+- M	docs/verification/receipts/2026-11-14-openai-image-editorial-visuals-functional-route-qualification-live-receipt.md
+- M	docs/verification/smoke/2026-11-14.json
+- M	docs/verification/smoke/2026-11-14.md
+- M	docs/verification/smoke/latest.json
+- M	scripts/qualify-visual-routes.mjs
+
+### Working Tree Snapshot
+
+- M  convex/_generated/api.d.ts
+- M  docs/editorial-visuals/providers/qualification-runs/2026-11-14-live.md
+- M  docs/verification/campaigns/2026-11-14.json
+- M  docs/verification/campaigns/2026-11-14.md
+- M  docs/verification/campaigns/latest.json
+- M  docs/verification/image-generation/2026-11-14.json
+- M  docs/verification/image-generation/2026-11-14.md
+- M  docs/verification/image-generation/latest.json
+- M  docs/verification/receipts/2026-11-14-openai-image-editorial-visuals-functional-route-qualification-live-receipt.md
+- M  docs/verification/smoke/2026-11-14.json
+- M  docs/verification/smoke/2026-11-14.md
+- M  docs/verification/smoke/latest.json
+- M  scripts/qualify-visual-routes.mjs
+
+### Branch
+
+- verify/main-live-proof

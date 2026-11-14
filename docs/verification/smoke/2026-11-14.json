@@ -1,8 +1,8 @@
 {
   "run": {
     "featureId": "smoke",
-    "startedAt": "2026-11-14T10:16:51.373Z",
-    "finishedAt": "2026-11-14T10:16:52.943Z",
+    "startedAt": "2026-11-14T10:56:20.354Z",
+    "finishedAt": "2026-11-14T10:56:21.792Z",
     "results": [
       {
         "criterionId": "manifest-schema-validates",
@@ -10,7 +10,7 @@
         "runner": "vitest",
         "tier": "offline-fixture",
         "outcome": "PASS",
-        "evidence": "$ npx vitest run lib/__tests__/verificationManifest.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m lib/__tests__/verificationManifest.test.ts \u001b[2m(\u001b[22m\u001b[2m11 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 11\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m11 passed\u001b[39m\u001b[22m\u001b[90m (11)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:16:52\n\u001b[2m   Duration \u001b[22m 861ms\u001b[2m (transform 65ms, setup 88ms, import 47ms, tests 11ms, environment 566ms)\u001b[22m",
+        "evidence": "$ npx vitest run lib/__tests__/verificationManifest.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m lib/__tests__/verificationManifest.test.ts \u001b[2m(\u001b[22m\u001b[2m11 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 13\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m11 passed\u001b[39m\u001b[22m\u001b[90m (11)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:56:20\n\u001b[2m   Duration \u001b[22m 772ms\u001b[2m (transform 59ms, setup 74ms, import 44ms, tests 13ms, environment 499ms)\u001b[22m",
         "details": "Criterion passed."
       },
       {

@@ -163,7 +163,8 @@ async function main() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch(error => {
-    console.error(`qualification failed: ${error.message}`);
+    const cause = error?.cause;
+    console.error(`qualification failed: ${error.message}${cause ? ` (cause: ${String(cause)})` : ""}`);
     process.exitCode = 1;
   });
 }

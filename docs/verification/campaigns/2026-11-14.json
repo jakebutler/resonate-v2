@@ -1,8 +1,8 @@
 {
   "run": {
     "featureId": "campaigns",
-    "startedAt": "2026-11-14T10:17:17.176Z",
-    "finishedAt": "2026-11-14T10:17:37.593Z",
+    "startedAt": "2026-11-14T10:45:10.108Z",
+    "finishedAt": "2026-11-14T10:45:27.132Z",
     "results": [
       {
         "criterionId": "campaign-fixture-harness",
@@ -10,7 +10,7 @@
         "runner": "convex-test",
         "tier": "offline-fixture",
         "outcome": "PASS",
-        "evidence": "$ npx vitest run convex/__tests__/campaignVerification.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaignVerification.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 1531\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m✓\u001b[22m\u001b[39m seeds a gate-passed, materialized batch in one call \u001b[33m 1029\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m7 passed\u001b[39m\u001b[22m\u001b[90m (7)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:17:17\n\u001b[2m   Duration \u001b[22m 2.70s\u001b[2m (transform 1.03s, setup 95ms, import 266ms, tests 1.53s, environment 650ms)\u001b[22m",
+        "evidence": "$ npx vitest run convex/__tests__/campaignVerification.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaignVerification.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 1212\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m✓\u001b[22m\u001b[39m seeds a gate-passed, materialized batch in one call \u001b[33m 785\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m7 passed\u001b[39m\u001b[22m\u001b[90m (7)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:45:10\n\u001b[2m   Duration \u001b[22m 2.24s\u001b[2m (transform 863ms, setup 80ms, import 264ms, tests 1.21s, environment 544ms)\u001b[22m",
         "details": "Criterion passed."
       },
       {
@@ -19,7 +19,7 @@
         "runner": "convex-test",
         "tier": "offline-fixture",
         "outcome": "PASS",
-        "evidence": "$ npx vitest run convex/__tests__/campaigns.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaigns.test.ts \u001b[2m(\u001b[22m\u001b[2m17 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 234\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m17 passed\u001b[39m\u001b[22m\u001b[90m (17)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:17:21\n\u001b[2m   Duration \u001b[22m 1.27s\u001b[2m (transform 353ms, setup 82ms, import 300ms, tests 234ms, environment 503ms)\u001b[22m",
+        "evidence": "$ npx vitest run convex/__tests__/campaigns.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaigns.test.ts \u001b[2m(\u001b[22m\u001b[2m17 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 193\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m17 passed\u001b[39m\u001b[22m\u001b[90m (17)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:45:13\n\u001b[2m   Duration \u001b[22m 1.09s\u001b[2m (transform 280ms, setup 74ms, import 225ms, tests 193ms, environment 455ms)\u001b[22m",
         "details": "Criterion passed."
       },
       {
@@ -28,7 +28,7 @@
         "runner": "convex-test",
         "tier": "offline-fixture",
         "outcome": "PASS",
-        "evidence": "$ npx vitest run convex/__tests__/campaignSession.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaignSession.test.ts \u001b[2m(\u001b[22m\u001b[2m13 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 231\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m13 passed\u001b[39m\u001b[22m\u001b[90m (13)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:17:23\n\u001b[2m   Duration \u001b[22m 1.33s\u001b[2m (transform 312ms, setup 112ms, import 288ms, tests 231ms, environment 541ms)\u001b[22m",
+        "evidence": "$ npx vitest run convex/__tests__/campaignSession.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaignSession.test.ts \u001b[2m(\u001b[22m\u001b[2m13 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 192\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m13 passed\u001b[39m\u001b[22m\u001b[90m (13)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:45:15\n\u001b[2m   Duration \u001b[22m 1.09s\u001b[2m (transform 272ms, setup 76ms, import 241ms, tests 192ms, environment 446ms)\u001b[22m",
         "details": "Criterion passed."
       },
       {
@@ -37,7 +37,7 @@
         "runner": "convex-test",
         "tier": "offline-fixture",
         "outcome": "PASS",
-        "evidence": "$ npx vitest run convex/__tests__/campaignShape.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaignShape.test.ts \u001b[2m(\u001b[22m\u001b[2m9 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 249\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m9 passed\u001b[39m\u001b[22m\u001b[90m (9)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:17:25\n\u001b[2m   Duration \u001b[22m 1.41s\u001b[2m (transform 368ms, setup 93ms, import 367ms, tests 249ms, environment 555ms)\u001b[22m",
+        "evidence": "$ npx vitest run convex/__tests__/campaignShape.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaignShape.test.ts \u001b[2m(\u001b[22m\u001b[2m9 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 163\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m9 passed\u001b[39m\u001b[22m\u001b[90m (9)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:45:17\n\u001b[2m   Duration \u001b[22m 1.09s\u001b[2m (transform 253ms, setup 70ms, import 226ms, tests 163ms, environment 501ms)\u001b[22m",
         "details": "Criterion passed."
       },
       {
@@ -46,7 +46,7 @@
         "runner": "playwright",
         "tier": "offline-fixture",
         "outcome": "PASS",
-        "evidence": "$ npx playwright test e2e/campaign-loop.spec.ts\nexit code: 0\nRunning 6 tests using 1 worker\n\n  ✓  1 [chromium] › e2e/campaign-loop.spec.ts:7:7 › Campaign loop surfaces › nav exposes Campaigns and the campaigns home boots (349ms)\n  ✓  2 [chromium] › e2e/campaign-loop.spec.ts:15:7 › Campaign loop surfaces › campaign session route boots without crashing on an unknown id (305ms)\n  ✓  3 [chromium] › e2e/campaign-loop.spec.ts:24:7 › Campaign loop surfaces › shape route boots without crashing (275ms)\n  ✓  4 [chromium] › e2e/campaign-loop.spec.ts:29:7 › Campaign loop surfaces › draft set route boots without crashing (270ms)\n  ✓  5 [chromium] › e2e/campaign-loop.spec.ts:34:7 › Campaign loop surfaces › approval queue route boots without crashing (356ms)\n  ✓  6 [chromium] › e2e/campaign-loop.spec.ts:39:7 › Campaign loop surfaces › calendar surface still boots alongside campaigns (345ms)\n\n  6 passed (6.0s)\n\n[e2e-auth] Skipping authenticated session: E2E_CLERK_USER_ID is not set: provide the Clerk user id (user_…) of the e2e test user on the dev instance.",
+        "evidence": "$ npx playwright test e2e/campaign-loop.spec.ts\nexit code: 0\nRunning 6 tests using 1 worker\n\n  ✓  1 [chromium] › e2e/campaign-loop.spec.ts:7:7 › Campaign loop surfaces › nav exposes Campaigns and the campaigns home boots (436ms)\n  ✓  2 [chromium] › e2e/campaign-loop.spec.ts:15:7 › Campaign loop surfaces › campaign session route boots without crashing on an unknown id (223ms)\n  ✓  3 [chromium] › e2e/campaign-loop.spec.ts:24:7 › Campaign loop surfaces › shape route boots without crashing (249ms)\n  ✓  4 [chromium] › e2e/campaign-loop.spec.ts:29:7 › Campaign loop surfaces › draft set route boots without crashing (230ms)\n  ✓  5 [chromium] › e2e/campaign-loop.spec.ts:34:7 › Campaign loop surfaces › approval queue route boots without crashing (209ms)\n  ✓  6 [chromium] › e2e/campaign-loop.spec.ts:39:7 › Campaign loop surfaces › calendar surface still boots alongside campaigns (310ms)\n\n  6 passed (4.5s)\n\n[e2e-auth] Skipping authenticated session: E2E_CLERK_USER_ID is not set: provide the Clerk user id (user_…) of the e2e test user on the dev instance.",
         "details": "Criterion passed."
       },
       {
@@ -55,7 +55,7 @@
         "runner": "convex-test",
         "tier": "offline-fixture",
         "outcome": "PASS",
-        "evidence": "$ npx vitest run convex/__tests__/campaignSeriesBridge.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaignSeriesBridge.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 1214\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m✓\u001b[22m\u001b[39m links materialized campaign posts into a reviewable series at materialization, in slot order, with an audit event and untouched dispatch state \u001b[33m 862\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m7 passed\u001b[39m\u001b[22m\u001b[90m (7)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:17:35\n\u001b[2m   Duration \u001b[22m 2.35s\u001b[2m (transform 959ms, setup 101ms, import 331ms, tests 1.21s, environment 521ms)\u001b[22m",
+        "evidence": "$ npx vitest run convex/__tests__/campaignSeriesBridge.test.ts\nexit code: 0\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv4.0.18 \u001b[39m\u001b[90m/home/user/work/resonate-v2\u001b[39m\n\n \u001b[32m✓\u001b[39m convex/__tests__/campaignSeriesBridge.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 1097\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2m✓\u001b[22m\u001b[39m links materialized campaign posts into a reviewable series at materialization, in slot order, with an audit event and untouched dispatch state \u001b[33m 773\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m7 passed\u001b[39m\u001b[22m\u001b[90m (7)\u001b[39m\n\u001b[2m   Start at \u001b[22m 10:45:24\n\u001b[2m   Duration \u001b[22m 2.23s\u001b[2m (transform 898ms, setup 88ms, import 320ms, tests 1.10s, environment 547ms)\u001b[22m",
         "details": "Criterion passed."
       }
     ],

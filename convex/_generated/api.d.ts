@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as __tests___helpers_campaignFixture from "../__tests__/helpers/campaignFixture.js";
 import type * as __tests___helpers_mockMutationCtx from "../__tests__/helpers/mockMutationCtx.js";
 import type * as aeoCrawl from "../aeoCrawl.js";
 import type * as aeoIntel from "../aeoIntel.js";
@@ -25,6 +26,7 @@ import type * as bufferDestinations from "../bufferDestinations.js";
 import type * as bufferLive from "../bufferLive.js";
 import type * as bufferValidators from "../bufferValidators.js";
 import type * as campaignAccess from "../campaignAccess.js";
+import type * as campaignSeries from "../campaignSeries.js";
 import type * as campaigns from "../campaigns.js";
 import type * as cohesion from "../cohesion.js";
 import type * as competitorSuggestions from "../competitorSuggestions.js";
@@ -53,6 +55,7 @@ import type * as settings from "../settings.js";
 import type * as shapes from "../shapes.js";
 import type * as v2Migration from "../v2Migration.js";
 import type * as v2Storage from "../v2Storage.js";
+import type * as verificationSeed from "../verificationSeed.js";
 import type * as visualExports from "../visualExports.js";
 import type * as visualFigureTables from "../visualFigureTables.js";
 import type * as visualFigures from "../visualFigures.js";
@@ -62,6 +65,7 @@ import type * as visualProfiles from "../visualProfiles.js";
 import type * as visualProviderActions from "../visualProviderActions.js";
 import type * as visualProviderConfig from "../visualProviderConfig.js";
 import type * as visualPublication from "../visualPublication.js";
+import type * as visualQualification from "../visualQualification.js";
 import type * as visualRollout from "../visualRollout.js";
 import type * as visualStorageAccess from "../visualStorageAccess.js";
 import type * as visualStorageTables from "../visualStorageTables.js";
@@ -79,6 +83,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "__tests__/helpers/campaignFixture": typeof __tests___helpers_campaignFixture;
   "__tests__/helpers/mockMutationCtx": typeof __tests___helpers_mockMutationCtx;
   aeoCrawl: typeof aeoCrawl;
   aeoIntel: typeof aeoIntel;
@@ -96,6 +101,7 @@ declare const fullApi: ApiFromModules<{
   bufferLive: typeof bufferLive;
   bufferValidators: typeof bufferValidators;
   campaignAccess: typeof campaignAccess;
+  campaignSeries: typeof campaignSeries;
   campaigns: typeof campaigns;
   cohesion: typeof cohesion;
   competitorSuggestions: typeof competitorSuggestions;
@@ -124,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   shapes: typeof shapes;
   v2Migration: typeof v2Migration;
   v2Storage: typeof v2Storage;
+  verificationSeed: typeof verificationSeed;
   visualExports: typeof visualExports;
   visualFigureTables: typeof visualFigureTables;
   visualFigures: typeof visualFigures;
@@ -133,6 +140,7 @@ declare const fullApi: ApiFromModules<{
   visualProviderActions: typeof visualProviderActions;
   visualProviderConfig: typeof visualProviderConfig;
   visualPublication: typeof visualPublication;
+  visualQualification: typeof visualQualification;
   visualRollout: typeof visualRollout;
   visualStorageAccess: typeof visualStorageAccess;
   visualStorageTables: typeof visualStorageTables;
