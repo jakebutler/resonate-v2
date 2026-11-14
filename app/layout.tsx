@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Geist } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ConvexClientProvider } from "@/components/ConvexClientProvider";
+import { isE2eAuthBypassEnabled } from "@/lib/e2eAuthBypass";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +42,7 @@ const configuredConvexUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.trim() || undefi
 const convexUrl =
   configuredConvexUrl ??
   (isNonProductionRuntime ? CONVEX_BUILD_PLACEHOLDER_URL : undefined);
-const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
+const bypassAuthForE2E = isE2eAuthBypassEnabled();
 
 export default function RootLayout({
   children,

@@ -2,9 +2,12 @@ import { UserButton } from "@clerk/nextjs";
 import { AudioWaveform, Settings } from "lucide-react";
 import Link from "next/link";
 import { IdeasPage } from "@/components/IdeasPage/IdeasPage";
+import { isE2eAuthBypassEnabled } from "@/lib/e2eAuthBypass";
+
+const bypassAuthForE2E = isE2eAuthBypassEnabled();
 
 function HeaderUserControl() {
-  if (process.env.E2E_BYPASS_AUTH === "1") {
+  if (bypassAuthForE2E) {
     return (
       <div className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-500">
         Auth bypass
@@ -16,7 +19,7 @@ function HeaderUserControl() {
 }
 
 export default function IdeasRoute() {
-  if (process.env.E2E_BYPASS_AUTH === "1") {
+  if (bypassAuthForE2E) {
     return (
       <div className="min-h-screen bg-[#fafafa]">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-3">
