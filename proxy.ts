@@ -11,6 +11,26 @@ const isPublicRoute = createRouteMatcher([
 ]);
 const bypassAuthForE2E = process.env.E2E_BYPASS_AUTH === "1";
 
+/**
+ * Production Convex deployment host — kept in sync with the production
+ * refusal in convex/verificationSeed.ts.
+ */
+const PROD_CONVEX_DEPLOYMENT_HOST = "healthy-platypus-553";
+
+/**
+ * Detect a production deployment. Deliberately does NOT consider NODE_ENV:
+ * CI and local E2E legitimately run the auth bypass against production
+ * builds, where NODE_ENV is "production". The authoritative signals are the
+ * Vercel environment and the Convex deployment the server points at (the
+ * same host check the verification seed uses to refuse production).
+ */
+function isProductionDeployment(): boolean {
+  return (
+    process.env.VERCEL_ENV === "production" ||
+    (process.env.CONVEX_CLOUD_URL ?? "").includes(PROD_CONVEX_DEPLOYMENT_HOST)
+  );
+}
+
 function parseAllowedEmails(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
   return raw
@@ -177,11 +197,22 @@ const authProxy = clerkMiddleware(async (auth, req) => {
   return NextResponse.next();
 });
 
-export default bypassAuthForE2E
-  ? function proxy() {
-      return NextResponse.next();
-    }
-  : authProxy;
+/**
+ * Fail closed: if E2E_BYPASS_AUTH ever reaches a production deployment, deny
+ * every protected request instead of silently skipping auth. The loud log
+ * names the fix so the misconfiguration is discoverable from the response.
+ */
+function e2eBypassProxy(req: Request) {
+  if (isProductionDeployment()) {
+    console.error(
+      "[proxy] E2E_BYPASS_AUTH=1 is set on a production deployment. Denying the request (fail closed). Remove E2E_BYPASS_AUTH from the production environment."
+    );
+    return denyRequest(req, "Service unavailable: auth bypass is disabled in production.", 503);
+  }
+  return NextResponse.next();
+}
+
+export default bypassAuthForE2E ? e2eBypassProxy : authProxy;
 
 export const config = {
   matcher: [
