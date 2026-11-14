@@ -7,12 +7,17 @@ type Args = Record<string, unknown>;
  * sync channel. `value` answers every subscribed query; `mutation` and
  * `action` answer client mutations/actions with their return value sent
  * verbatim as the response result; `onQuery` observes each newly
- * subscribed query.
+ * subscribed query. A mutation/action handler may return a promise (the
+ * harness awaits it and answers only when it settles) or throw — a thrown
+ * error is answered as a failed response whose message the real Convex
+ * client surfaces as the rejection reason, so specs can exercise failure UI.
  */
 export type SyncHandlers = {
   value: (path: string, args: Args) => unknown;
   onQuery?: (path: string, args: Args) => void;
-  mutation?: (path: string, args: Args) => unknown;
+  mutation?:
+    | ((path: string, args: Args) => unknown)
+    | ((path: string, args: Args) => Promise<unknown>);
   action?: (path: string, args: Args) => unknown;
 };
 
@@ -47,7 +52,8 @@ export async function mockConvexSync(page: Page, handlers: SyncHandlers) {
       );
       version = endVersion;
     }
-    socket.onMessage((raw) => {
+    let tail: Promise<void> = Promise.resolve();
+    const handle = async (raw: unknown) => {
       const m = JSON.parse(String(raw));
       if (m.type === "Authenticate") {
         const startVersion = version;
@@ -73,17 +79,31 @@ export async function mockConvexSync(page: Page, handlers: SyncHandlers) {
       if (m.type === "Mutation") {
         if (!handlers.mutation)
           throw new Error(`Unexpected fixture mutation: ${m.udfPath}`);
-        const result = handlers.mutation(m.udfPath, m.args[0] ?? {});
-        socket.send(
-          JSON.stringify({
-            type: "MutationResponse",
-            requestId: m.requestId,
-            success: true,
-            result,
-            ts: version.ts,
-            logLines: [],
-          }),
-        );
+        try {
+          const result = await handlers.mutation(m.udfPath, m.args[0] ?? {});
+          socket.send(
+            JSON.stringify({
+              type: "MutationResponse",
+              requestId: m.requestId,
+              success: true,
+              result,
+              ts: version.ts,
+              logLines: [],
+            }),
+          );
+        } catch (e) {
+          // Real failure wire shape: the Convex client reads the rejection
+          // message from `result` when `success` is false.
+          socket.send(
+            JSON.stringify({
+              type: "MutationResponse",
+              requestId: m.requestId,
+              success: false,
+              result: e instanceof Error ? e.message : String(e),
+              logLines: [],
+            }),
+          );
+        }
         send();
       }
       if (m.type === "Action") {
@@ -103,6 +123,10 @@ export async function mockConvexSync(page: Page, handlers: SyncHandlers) {
         );
         send();
       }
+    };
+    // Handle messages strictly in arrival order even when a handler awaits.
+    socket.onMessage((raw) => {
+      tail = tail.then(() => handle(raw));
     });
   });
 }

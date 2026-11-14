@@ -3,7 +3,13 @@ import { registerSyncFixture, type SyncFixture } from "./registry";
 export type SeriesReviewFixture = {
   /** Every mutation udfPath, in wire order. */
   calls: string[];
+  /** Make the next approve mutation fail (throw) with this message; null clears. */
+  failNextApproveWith: (message: string | null) => void;
+  /** Delay the next approve response by this many ms; null clears. */
+  delayNextApproveMs: (ms: number | null) => void;
 };
+
+const CITATION = "corpus://corvo/corpus-fixture#excerpt-1";
 
 registerSyncFixture<SeriesReviewFixture>("series-review", () => {
   const calls: string[] = [];
@@ -12,6 +18,8 @@ registerSyncFixture<SeriesReviewFixture>("series-review", () => {
   let packetIds: string[] = [];
   let approved = false;
   let edited = false;
+  let failApproveWith: string | null = null;
+  let delayApproveMs: number | null = null;
   const posts = Array.from({ length: 3 }, (_, n) => ({
     _id: `post-${n}`,
     userId: "fixture-editor",
@@ -30,6 +38,10 @@ registerSyncFixture<SeriesReviewFixture>("series-review", () => {
     status: "draft",
     blogPublicationIntent: "draft",
     coverImageAlt: "Fixture hero alt",
+    blogAuthor: "Fixture Author",
+    blogExcerpt: "Fixture excerpt for readable review.",
+    sourceCampaignId: "campaign-fixture",
+    sourceIdeaId: "idea-fixture",
     createdAt: 1,
     updatedAt: 1,
   }));
@@ -43,7 +55,15 @@ registerSyncFixture<SeriesReviewFixture>("series-review", () => {
     };
   }
   return {
-    fixture: { calls },
+    fixture: {
+      calls,
+      failNextApproveWith: (message) => {
+        failApproveWith = message;
+      },
+      delayNextApproveMs: (ms) => {
+        delayApproveMs = ms;
+      },
+    },
     handlers: {
       value: (path) => {
         if (path === "series:list")
@@ -121,8 +141,22 @@ registerSyncFixture<SeriesReviewFixture>("series-review", () => {
                         : [],
                       approvalError: null,
                       warnings: ["Unvetted source warning remains visible."],
-                      citations: ["source-passage-42"],
+                      citations: [CITATION],
+                      sourceIdeaId: "idea-fixture",
+                      sourceCampaignId: "campaign-fixture",
                       sourceResearchBriefId: "brief-fixture",
+                    },
+                    display: {
+                      campaignTitle: "Freshproof launch campaign",
+                      ideaTitle: "Launch narrative idea",
+                      briefTopic: "Why verification receipts matter",
+                      citations: [
+                        {
+                          citation: CITATION,
+                          documentName: "Launch playbook",
+                          text: "One number or receipt only.",
+                        },
+                      ],
                     },
                     staleReason:
                       n === 1 && edited
@@ -155,7 +189,7 @@ registerSyncFixture<SeriesReviewFixture>("series-review", () => {
           return { enabled: false };
         return null;
       },
-      mutation: (path, args) => {
+      mutation: async (path, args) => {
         calls.push(path);
         let result: unknown = null;
         if (path === "seriesReview:select") {
@@ -168,6 +202,15 @@ registerSyncFixture<SeriesReviewFixture>("series-review", () => {
           result = "packet-fixture";
         }
         if (path === "seriesReview:approve") {
+          if (delayApproveMs) {
+            const ms = delayApproveMs;
+            await new Promise((resolve) => setTimeout(resolve, ms));
+          }
+          if (failApproveWith) {
+            const message = failApproveWith;
+            failApproveWith = null;
+            throw new Error(message);
+          }
           approved = true;
           result = { approved: true };
         }

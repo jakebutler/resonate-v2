@@ -22,6 +22,7 @@ import {
   postScheduleVersion,
 } from "../lib/socialPayload";
 import { scheduleToUtcIso } from "../lib/schedules";
+import { parseCorpusCitation } from "../lib/campaignGrounding";
 import {
   companionSubmissionHold,
   latestPublication,
@@ -222,6 +223,79 @@ export async function reviewRow(
   ]);
   return { snapshot, editorialVersion: editorialVersion(post), reviewVersion };
 }
+/**
+ * Human-readable labels for the review packet read path. Display-only:
+ * these labels never join the stored snapshot or the reviewVersion
+ * fingerprint, so resolving (or renaming) them cannot stale a packet.
+ */
+export type ReviewRowDisplay = {
+  campaignTitle: string | null;
+  ideaTitle: string | null;
+  briefTopic: string | null;
+  citations: {
+    citation: string;
+    documentName: string | null;
+    text: string | null;
+  }[];
+};
+export async function rowDisplay(
+  ctx: Ctx,
+  series: Doc<"postSeries">,
+  snapshot: Awaited<ReturnType<typeof reviewRow>>["snapshot"],
+): Promise<ReviewRowDisplay> {
+  const post = snapshot.post;
+  const campaign = post.sourceCampaignId
+    ? await ctx.db.get(post.sourceCampaignId)
+    : null;
+  const campaignTitle =
+    campaign &&
+    campaign.userId === post.userId &&
+    campaign.brandId === series.brandId
+      ? campaign.title
+      : null;
+  const ideaId = post.sourceIdeaId
+    ? ctx.db.normalizeId("ideas", post.sourceIdeaId)
+    : null;
+  const idea = ideaId ? await ctx.db.get(ideaId) : null;
+  const ideaTitle =
+    idea && idea.userId === post.userId
+      ? (idea.title ?? idea.text.slice(0, 80))
+      : null;
+  const briefId = post.sourceResearchBriefId
+    ? ctx.db.normalizeId("v2ResearchBriefs", post.sourceResearchBriefId)
+    : null;
+  const brief = briefId ? await ctx.db.get(briefId) : null;
+  const briefTopic =
+    brief && brief.userId === post.userId && brief.brandId === post.brandId
+      ? brief.topic
+      : null;
+  const citations: ReviewRowDisplay["citations"] = [];
+  for (const citation of snapshot.citations) {
+    let documentName: string | null = null;
+    let text: string | null = null;
+    const parsed = parseCorpusCitation(citation);
+    const corpusId = parsed
+      ? ctx.db.normalizeId("corpora", parsed.corpusId)
+      : null;
+    const corpus = corpusId ? await ctx.db.get(corpusId) : null;
+    if (parsed && corpus && corpus.brandId === series.brandId) {
+      const excerpt = await ctx.db
+        .query("corpusExcerpts")
+        .withIndex("by_corpus_and_seq", (q) =>
+          q.eq("corpusId", corpus._id).eq("seq", parsed.seq),
+        )
+        .first();
+      if (excerpt) {
+        text = excerpt.text;
+        const document = await ctx.db.get(excerpt.documentId);
+        documentName = document?.name ?? null;
+      }
+    }
+    citations.push({ citation, documentName, text });
+  }
+  return { campaignTitle, ideaTitle, briefTopic, citations };
+}
+
 export const selection = query({
   args: { seriesId: v.id("postSeries") },
   returns: v.any(),
@@ -369,6 +443,7 @@ export const packet = query({
           : row.snapshot.post.heroImageStorageId
             ? await ctx.storage.getUrl(row.snapshot.post.heroImageStorageId)
             : (row.snapshot.post.heroImageUrl ?? null),
+        display: await rowDisplay(ctx, series, row.snapshot),
       });
     }
     return { packet, rows: current, stale };

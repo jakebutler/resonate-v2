@@ -126,6 +126,94 @@ describe("selected immutable editorial approval", () => {
       "approved",
     );
   });
+  it("resolves source references and citations into readable display labels on the read path only", async () => {
+    const f = await fixture();
+    const ids = await f.t.run(async (ctx) => {
+      const campaignId = await ctx.db.insert("campaigns", {
+        userId: "editor",
+        brandId: "corvo",
+        title: "Freshproof launch campaign",
+        status: "active",
+        corpusIds: [],
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const ideaId = await ctx.db.insert("ideas", {
+        userId: "editor",
+        text: "Launch narrative idea",
+        status: "idea",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const briefId = await ctx.db.insert("v2ResearchBriefs", {
+        userId: "editor",
+        brandId: "corvo",
+        topic: "Why verification receipts matter",
+        audience: "Marketing team",
+        thesis: "Receipts build trust",
+        depth: "standard",
+        riskLevel: "low",
+        targetOutputs: ["post"],
+        status: "outline-ready",
+        provider: "fixture",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const corpusId = await ctx.db.insert("corpora", {
+        brandId: "corvo",
+        origin: "paste",
+        version: 7,
+        status: "active",
+        createdAt: 1,
+      });
+      const documentId = await ctx.db.insert("corpusDocuments", {
+        corpusId,
+        name: "Launch playbook",
+        kind: "md",
+      });
+      await ctx.db.insert("corpusExcerpts", {
+        corpusId,
+        documentId,
+        seq: 1,
+        text: "One number or receipt only.",
+        provenance: "fixture",
+        sensitivity: "public-safe",
+        reviewState: "accepted",
+      });
+      return { campaignId, ideaId, briefId, corpusId };
+    });
+    await f.t.run((ctx) =>
+      ctx.db.patch(f.one, {
+        sourceCampaignId: ids.campaignId,
+        sourceIdeaId: ids.ideaId,
+        sourceResearchBriefId: ids.briefId,
+        sourceExcerptIds: [`corpus://corvo/${ids.corpusId}#excerpt-1`],
+      }),
+    );
+    await packet(f, [f.one]);
+    const view = await f.user.query(api.seriesReview.packet, {
+      seriesId: f.seriesId,
+    });
+    const row = view.rows.find((r) => r.postId === f.one)!;
+    expect(row.display.campaignTitle).toBe("Freshproof launch campaign");
+    expect(row.display.ideaTitle).toBe("Launch narrative idea");
+    expect(row.display.briefTopic).toBe("Why verification receipts matter");
+    expect(row.display.citations).toEqual([
+      {
+        citation: `corpus://corvo/${ids.corpusId}#excerpt-1`,
+        documentName: "Launch playbook",
+        text: "One number or receipt only.",
+      },
+    ]);
+    // Display labels are read-path only: renaming them cannot stale a packet.
+    await f.t.run((ctx) => ctx.db.patch(ids.campaignId, { title: "Renamed" }));
+    const still = await f.user.query(api.seriesReview.packet, {
+      seriesId: f.seriesId,
+    });
+    const stillRow = still.rows.find((r) => r.postId === f.one)!;
+    expect(stillRow.staleReason).toBeNull();
+    expect(stillRow.display.campaignTitle).toBe("Renamed");
+  });
   it.each([
     "copy",
     "selection",
