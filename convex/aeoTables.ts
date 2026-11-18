@@ -319,6 +319,7 @@ export const aeoTables = {
   crawlPages: defineTable(crawlPageFields)
     .index("by_crawl", ["crawlId"]),
   intelRuns: defineTable(intelRunFields)
+    .index("by_user_brand_kind_status", ["userId", "brandId", "kind", "status"])
     .index("by_user_and_brand", ["userId", "brandId"])
     .index("by_brand", ["brandId"]),
   intelFindings: defineTable(intelFindingFields)

@@ -81,6 +81,22 @@ afterEach(() => {
 });
 
 describe("answer-engine run lifecycle", () => {
+  it("restricts both daily jobs to the selected pinned pilot target", async () => {
+    const { t, user } = await fixture("owner", ["freshproof", "corvo"]);
+    const pilot = await connectTarget(user);
+    await connectTarget(user, { brandId: "corvo" });
+    vi.stubEnv("AEO_SCHEDULED_TARGET_ID", pilot);
+    try {
+      expect((await t.query(internal.answerEngine.allTargets, {})).map((row) => row._id)).toEqual([pilot]);
+      expect((await t.query(internal.competitorSuggestions.allTargets, {})).map((row) => row._id)).toEqual([pilot]);
+      await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: false });
+      expect(await t.query(internal.answerEngine.allTargets, {})).toEqual([]);
+      expect(await t.query(internal.competitorSuggestions.allTargets, {})).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("refuses to run while the batch is disabled, with an explicit outcome", async () => {
     const { t } = await fixture("owner", ["freshproof"]);
     const outcome = await t.action(internal.answerEngine.runAnswerEngineBatch, {});

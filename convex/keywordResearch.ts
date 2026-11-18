@@ -1,8 +1,8 @@
 import { v } from "convex/values";
-import { action, internalMutation, internalQuery, query } from "./_generated/server";
+import { action, internalMutation, internalQuery, query, type QueryCtx } from "./_generated/server";
 import { internal, api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { audit, brandIdValidator, requireBrandAccess, requireUserId } from "./campaignAccess";
+import { audit, brandIdValidator, requireBrandAccess, requireUserId, type BrandId } from "./campaignAccess";
 import { aeoKeywordGapValidator } from "./aeoTables";
 import {
   deriveKeywordCandidates,
@@ -115,16 +115,18 @@ export const researchInput = internalQuery({
   },
 });
 
+async function hasActiveKeywordRun(ctx: QueryCtx, args: { userId: string; brandId: BrandId }) {
+  const running = await ctx.db.query("intelRuns")
+    .withIndex("by_user_brand_kind_status", (q) =>
+      q.eq("userId", args.userId).eq("brandId", args.brandId).eq("kind", "keyword-research").eq("status", "running")
+    ).first();
+  return running !== null;
+}
+
 export const hasRunningRun = internalQuery({
   args: { userId: v.string(), brandId: brandIdValidator },
   returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const runs = await ctx.db
-      .query("intelRuns")
-      .withIndex("by_user_and_brand", (q) => q.eq("userId", args.userId).eq("brandId", args.brandId))
-      .collect();
-    return runs.some((run) => run.kind === "keyword-research" && run.status === "running");
-  },
+  handler: hasActiveKeywordRun,
 });
 
 export const startRun = internalMutation({
@@ -138,6 +140,9 @@ export const startRun = internalMutation({
   returns: v.id("intelRuns"),
   handler: async (ctx, args) => {
     await requireBrandAccess(ctx, args.userId, args.brandId);
+    if (await hasActiveKeywordRun(ctx, args)) {
+      throw new Error("A keyword research run is already in progress for this brand.");
+    }
     const runId = await ctx.db.insert("intelRuns", {
       userId: args.userId,
       brandId: args.brandId,
@@ -347,10 +352,6 @@ export const runKeywordResearch = action({
 
     const limits = keywordRunLimits(process.env);
     await ctx.runMutation(internal.keywordResearch.reapStaleRuns, { staleMs: limits.staleRunMs });
-    if (await ctx.runQuery(internal.keywordResearch.hasRunningRun, { brandId: args.brandId, userId: target.userId })) {
-      throw new Error("A keyword research run is already in progress for this brand.");
-    }
-
     const input = await ctx.runQuery(internal.keywordResearch.researchInput, {
       userId: target.userId,
       brandId: args.brandId,
@@ -391,8 +392,7 @@ export const runKeywordResearch = action({
         return [];
       });
 
-    let failed = false;
-    let failureReason = "";
+    let status: "failed" | "complete" = "failed";
     const searched = keywordSearchOrder(candidates).slice(0, plan.searchQueryCount);
     const searchedKeywords = new Set(searched.map((candidate) => candidate.keyword.toLowerCase()));
 
@@ -416,9 +416,7 @@ export const runKeywordResearch = action({
             };
           }
           if (!search.ok) {
-            failed = true;
-            failureReason = search.reason ?? "Firecrawl search failed.";
-            break;
+            throw new Error(search.reason ?? "Firecrawl search failed.");
           }
           const status = keywordSearchPresence(candidate.keyword, search.results ?? [], input.siteUrl);
           await ctx.runMutation(internal.keywordResearch.recordKeywordGap, {
@@ -454,16 +452,16 @@ export const runKeywordResearch = action({
           });
         }
       }
+      status = "complete";
     } finally {
       await ctx.runMutation(internal.keywordResearch.finishRun, {
         runId,
         userId: target.userId,
         brandId: args.brandId,
-        status: failed ? "failed" : "complete",
+        status,
       });
     }
 
-    if (failed) throw new Error(failureReason);
     return { runId, candidateCount: plan.candidateCount, searchedCount: plan.searchQueryCount };
   },
 });

@@ -286,7 +286,7 @@ async function main(): Promise<number> {
   const reportDir = path.join(REPO_ROOT, "docs", "verification", manifest.featureId);
   const reportPath = path.join(reportDir, `${reportDate}.md`);
   await mkdir(reportDir, { recursive: true });
-  await writeFile(reportPath, `${report}\n`);
+  await writeFile(reportPath, report);
   console.log(`\nReport: ${path.relative(REPO_ROOT, reportPath)}`);
 
   // Structured sidecar of the same run, next to the markdown report, plus a
