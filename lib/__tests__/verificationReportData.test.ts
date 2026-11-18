@@ -180,8 +180,8 @@ describe("buildVerificationReportData", () => {
 });
 
 describe("featureStatusFromSummary", () => {
-  it("treats an explicit ABSENT as tolerated, FAIL and UNPROVEN as issues", () => {
-    expect(featureStatusFromSummary({ pass: 5, fail: 0, absent: 1, unproven: 0 })).toBe("verified");
+  it("shows incomplete verification for ABSENT and flags FAIL and UNPROVEN as issues", () => {
+    expect(featureStatusFromSummary({ pass: 5, fail: 0, absent: 1, unproven: 0 })).toBe("unverified");
     expect(featureStatusFromSummary({ pass: 5, fail: 1, absent: 0, unproven: 0 })).toBe("issues");
     expect(featureStatusFromSummary({ pass: 5, fail: 0, absent: 0, unproven: 1 })).toBe("issues");
     expect(featureStatusFromSummary(undefined)).toBe("unverified");

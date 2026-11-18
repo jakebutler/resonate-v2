@@ -20,6 +20,7 @@ export type CommittedReceiptDecision =
   | { kind: "no-receipt-declared" }
   | { kind: "receipt-missing"; receiptPath: string }
   | { kind: "receipt-undated"; receiptPath: string }
+  | { kind: "receipt-unqualified"; receiptPath: string }
   | { kind: "accepted"; receiptPath: string; evidence: string };
 
 export function decideCommittedReceipt(
@@ -30,6 +31,12 @@ export function decideCommittedReceipt(
   if (content === null) return { kind: "receipt-missing", receiptPath };
   if (!DATED_EXECUTION_LINE.test(content)) {
     return { kind: "receipt-undated", receiptPath };
+  }
+  const checksSection = content.split(/^## Checks[ \t]*\r?$/m)[1]?.split(/^## /m)[0];
+  const checks = checksSection?.trim().split(/\r?\n/).filter((line) => line.trim());
+  const live = /^- \*\*Qualification:\*\* live-receipt\r?$/m.test(content);
+  if (!live || !checks?.length || !checks.every((line) => /^- \[PASS\] \S/.test(line))) {
+    return { kind: "receipt-unqualified", receiptPath };
   }
   return {
     kind: "accepted",

@@ -172,7 +172,7 @@ export function featureStatusFromSummary(
 ): VerificationFeatureStatus {
   if (!summary) return "unverified";
   if (summary.fail > 0 || summary.unproven > 0) return "issues";
-  return "verified";
+  return summary.absent > 0 ? "unverified" : "verified";
 }
 
 export type BuildVerificationReportInput = {

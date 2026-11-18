@@ -329,6 +329,25 @@ describe("firecrawl crawl execution", () => {
     expect(result.reason).toContain("ended with status failed");
   });
 
+  it("waits between status requests when an in-app crawl is still scraping", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn()
+        .mockResolvedValueOnce(textResponse("User-agent: *\nAllow: /"))
+        .mockResolvedValueOnce(jsonResponse({ success: true, id: "crawl-123" }))
+        .mockResolvedValueOnce(jsonResponse({ status: "scraping", data: [] }))
+        .mockResolvedValueOnce(jsonResponse({ status: "completed", data: [] }));
+      const crawl = firecrawlCrawl(approvedContext(fetchImpl), { url: "https://freshproof.example.com/" });
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await crawl).ok).toBe(true);
+      expect(fetchImpl).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("gives up after the poll bound instead of polling forever", async () => {
     const fetchImpl = vi
       .fn()
@@ -340,6 +359,7 @@ describe("firecrawl crawl execution", () => {
     const result = await firecrawlCrawl(approvedContext(fetchImpl), {
       url: "https://freshproof.example.com/",
       maxPolls: 5,
+      pollDelayMs: 0,
     });
     expect(result.ok).toBe(false);
     expect(fetchImpl).toHaveBeenCalledTimes(2 + 5);

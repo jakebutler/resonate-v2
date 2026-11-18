@@ -27,6 +27,16 @@ describe("decideCommittedReceipt", () => {
     }
   });
 
+  it.each([
+    datedReceipt.replace("[PASS]", "[FAIL]"),
+    datedReceipt.replace("## Checks", "## Notes"),
+    datedReceipt.replace("[PASS]", "[SKIP]"),
+    datedReceipt.replace("Qualification:** live-receipt", "Qualification:** offline-contract"),
+    datedReceipt + "\n- [FAIL] Edit packet failed\n\n## Notes\n\n- [PASS] Earlier attempt",
+  ])("rejects a receipt without a complete set of passing live checks", (receipt) => {
+    expect(decideCommittedReceipt("receipt.md", receipt).kind).toBe("receipt-unqualified");
+  });
+
   it("reports no-receipt-declared when the criterion declares none", () => {
     expect(decideCommittedReceipt(undefined, datedReceipt)).toEqual({
       kind: "no-receipt-declared",

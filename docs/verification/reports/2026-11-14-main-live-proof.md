@@ -98,7 +98,7 @@ Recorded observations (receipt log `docs/editorial-visuals/providers/qualificati
 
 ## Smoke — live
 
-The smoke manifest passed 3/3 on the tested tree with `OPENAI_API_KEY` present, including the `composer-live-receipt` criterion (live OpenAI smoke checks). Dated evidence: `docs/verification/smoke/2026-11-14.md`.
+The smoke manifest reported 3/3 on the tested tree. The recorded command for `composer-live-receipt` was `echo live packet placeholder`. This run exercised the runner and recorded no OpenAI request. Dated evidence: `docs/verification/smoke/2026-11-14.md`.
 
 ## AEO/SEO (live) — consolidated from the merged PR #168 proof
 
