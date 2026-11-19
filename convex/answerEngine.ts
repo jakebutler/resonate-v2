@@ -281,7 +281,7 @@ export type AnswerEngineBatchOutcome = {
  * credential gate fail closed with explicit outcomes, never a silent skip.
  */
 export const runAnswerEngineBatch = internalAction({
-  args: {},
+  args: { trialTargetId: v.optional(v.id("brandTargets")) },
   returns: v.object({
     started: v.number(),
     completed: v.number(),
@@ -289,17 +289,26 @@ export const runAnswerEngineBatch = internalAction({
     skipped: v.array(v.object({ brandId: v.string(), reason: v.string() })),
     reason: v.optional(v.string()),
   }),
-  handler: async (ctx): Promise<AnswerEngineBatchOutcome> => {
-    if (process.env.AEO_ANSWER_ENGINE_ENABLED !== "1") {
+  handler: async (ctx, { trialTargetId }): Promise<AnswerEngineBatchOutcome> => {
+    // The cron supplies no target ID and must pass the weekly switch.
+    // An internal operator can explicitly select only the configured pilot.
+    const scheduled = trialTargetId === undefined;
+    const allowed = scheduled
+      ? process.env.AEO_ANSWER_ENGINE_ENABLED === "1"
+      : trialTargetId === process.env.AEO_SCHEDULED_TARGET_ID;
+    if (!allowed) {
       return {
         started: 0,
         completed: 0,
         failed: 0,
         skipped: [],
-        reason: "answer-engine-runs-disabled",
+        reason: scheduled ? "answer-engine-runs-disabled" : "trial-target-outside-configured-pilot",
       };
     }
     const useWebSearch = process.env.AEO_ANSWER_ENGINE_WEB_SEARCH === "1";
+    if (!scheduled && !useWebSearch) {
+      return { started: 0, completed: 0, failed: 0, skipped: [], reason: "trial-web-search-disabled" };
+    }
     const credential = useWebSearch ? process.env.OPENAI_API_KEY?.trim() : answerEngineCredential(process.env);
     if (!credential) {
       return {
@@ -314,7 +323,11 @@ export const runAnswerEngineBatch = internalAction({
     const targets = await ctx.runQuery(internal.answerEngine.allTargets, {});
     const outcome: AnswerEngineBatchOutcome = { started: 0, completed: 0, failed: 0, skipped: [] };
 
+    if (!scheduled && !targets.some((target) => target._id === trialTargetId)) {
+      return { ...outcome, reason: "trial-target-not-eligible" };
+    }
     for (const target of targets) {
+      if (trialTargetId !== undefined && target._id !== trialTargetId) continue;
       if (await ctx.runQuery(internal.answerEngine.hasRunningRun, { userId: target.userId, brandId: target.brandId })) {
         outcome.skipped.push({ brandId: target.brandId, reason: "run-already-running" });
         continue;
@@ -358,6 +371,7 @@ export const runAnswerEngineBatch = internalAction({
           ? await askWebSearchAnswer({ env: process.env }, question.question)
           : await askAnswerEngine({ env: process.env }, { question: question.question });
         if (!ask.ok) {
+          if (!scheduled) outcome.reason = ask.reason;
           failed = true;
           outcome.failed += 1;
           await ctx.runMutation(internal.answerEngine.finishRun, {

@@ -180,7 +180,7 @@ describe("answer-engine run lifecycle", () => {
     expect(String(url)).toContain("/v1/chat/completions");
   });
 
-  it("scores extractability against the target's latest crawl snapshot", async () => {
+  it("runs a scoped web-search trial against the latest crawl while the weekly job is disabled", async () => {
     const { t, user } = await fixture("owner", ["freshproof"]);
     const targetId = await connectTarget(user);
     await user.mutation(api.aeoIntel.recordCrawlSnapshot, {
@@ -200,7 +200,9 @@ describe("answer-engine run lifecycle", () => {
       ],
     });
     await enabledEnv();
+    vi.stubEnv("AEO_ANSWER_ENGINE_ENABLED", "0");
     vi.stubEnv("AEO_ANSWER_ENGINE_WEB_SEARCH", "1");
+    vi.stubEnv("AEO_SCHEDULED_TARGET_ID", "");
     vi.stubEnv("OPENAI_API_KEY", "test-openai");
     vi.stubEnv("AEO_ANSWER_ENGINE_MAX_QUESTIONS", "1");
     vi.mocked(fetch).mockImplementation(async (url, init) => {
@@ -227,7 +229,22 @@ describe("answer-engine run lifecycle", () => {
       });
     });
 
-    await t.action(internal.answerEngine.runAnswerEngineBatch, {});
+    expect(await t.action(internal.answerEngine.runAnswerEngineBatch, { trialTargetId: targetId }))
+      .toMatchObject({ started: 0, reason: "trial-target-outside-configured-pilot" });
+    vi.stubEnv("AEO_SCHEDULED_TARGET_ID", targetId);
+    vi.stubEnv("AEO_ANSWER_ENGINE_WEB_SEARCH", "0");
+    expect(await t.action(internal.answerEngine.runAnswerEngineBatch, { trialTargetId: targetId }))
+      .toMatchObject({ started: 0, reason: "trial-web-search-disabled" });
+    vi.stubEnv("AEO_ANSWER_ENGINE_WEB_SEARCH", "1");
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: false });
+    expect(await t.action(internal.answerEngine.runAnswerEngineBatch, { trialTargetId: targetId }))
+      .toMatchObject({ started: 0, reason: "trial-target-not-eligible" });
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: true });
+    expect(await t.action(internal.answerEngine.runAnswerEngineBatch, {}))
+      .toMatchObject({ started: 0, reason: "answer-engine-runs-disabled" });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await t.action(internal.answerEngine.runAnswerEngineBatch, { trialTargetId: targetId }))
+      .toMatchObject({ started: 1, completed: 1 });
     const stored = await t.run(async (ctx) => ctx.db.query("intelFindings").collect());
     const cited = stored.filter((row) => row.citationStatus === "cited");
     expect(cited).toHaveLength(1);

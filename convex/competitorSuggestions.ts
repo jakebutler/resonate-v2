@@ -237,29 +237,38 @@ export const finishDiscoveryRun = internalMutation({
 /**
  * Stale-run recovery. A crashed discovery action leaves its intelRun row in
  * "running" forever, and hasRunningDiscoveryRun would then refuse every
- * future daily cycle. Runs of the discovery kind that have not reached a
+ * future weekly cycle. Runs of the discovery kind that have not reached a
  * terminal state within `staleMs` are marked failed with an explicit audit
  * event, so a crashed run cannot block the schedule; a fresh in-flight run
  * (within the window) is untouched and still gates the next cycle.
  */
 export const reapStaleDiscoveryRuns = internalMutation({
-  args: { staleMs: v.number() },
+  args: {
+    staleMs: v.number(),
+    scope: v.optional(v.object({ userId: v.string(), brandId: brandIdValidator })),
+  },
   returns: v.number(),
-  handler: async (ctx, args) => {
+  handler: async (ctx, { staleMs, scope }) => {
     const now = Date.now();
-    const runs = await ctx.db.query("intelRuns").collect();
+    const runs = scope
+      ? await ctx.db.query("intelRuns")
+          .withIndex("by_user_brand_kind_status", (q) => q
+            .eq("userId", scope.userId).eq("brandId", scope.brandId)
+            .eq("kind", "competitor-discovery").eq("status", "running"))
+          .take(16)
+      : await ctx.db.query("intelRuns").collect();
     let reaped = 0;
     for (const run of runs) {
       if (run.kind !== "competitor-discovery" || run.status !== "running") continue;
-      if (now - run.startedAt <= args.staleMs) continue;
+      if (now - run.startedAt <= staleMs) continue;
       await ctx.db.patch(run._id, { status: "failed", finishedAt: now });
       reaped += 1;
       await audit(ctx, {
         userId: run.userId,
         brandId: run.brandId,
         action: "aeo.discovery_run_recovered",
-        summary: `Recovered a discovery run stuck in "running" for over ${Math.round(args.staleMs / 60_000)} minute(s); marked it failed so scheduled cycles can start again.`,
-        metadata: { runId: String(run._id), startedAt: run.startedAt, staleMs: args.staleMs },
+        summary: `Recovered a discovery run stuck in "running" for over ${Math.round(staleMs / 60_000)} minute(s); marked it failed so scheduled cycles can start again.`,
+        metadata: { runId: String(run._id), startedAt: run.startedAt, staleMs },
       });
     }
     return reaped;
@@ -291,7 +300,7 @@ function discoveryAdapterContext(): ProviderAdapterContext {
  * configured maximum and each search at the Firecrawl per-run result ceiling.
  */
 export const runDiscoveryBatch = internalAction({
-  args: {},
+  args: { trialTargetId: v.optional(v.id("brandTargets")) },
   returns: v.object({
     started: v.number(),
     completed: v.number(),
@@ -300,15 +309,21 @@ export const runDiscoveryBatch = internalAction({
     skipped: v.array(v.object({ brandId: v.string(), reason: v.string() })),
     reason: v.optional(v.string()),
   }),
-  handler: async (ctx): Promise<DiscoveryBatchOutcome> => {
-    if (process.env.AEO_DISCOVERY_ENABLED !== "1") {
+  handler: async (ctx, { trialTargetId }): Promise<DiscoveryBatchOutcome> => {
+    // The cron supplies no target ID and must pass the weekly switch.
+    // An internal operator can explicitly select only the configured pilot.
+    const scheduled = trialTargetId === undefined;
+    const allowed = scheduled
+      ? process.env.AEO_DISCOVERY_ENABLED === "1"
+      : trialTargetId === process.env.AEO_SCHEDULED_TARGET_ID;
+    if (!allowed) {
       return {
         started: 0,
         completed: 0,
         failed: 0,
         proposed: 0,
         skipped: [],
-        reason: "competitor-discovery-disabled",
+        reason: scheduled ? "competitor-discovery-disabled" : "trial-target-outside-configured-pilot",
       };
     }
     if (!process.env.FIRECRAWL_API_KEY?.trim()) {
@@ -333,12 +348,13 @@ export const runDiscoveryBatch = internalAction({
     }
     const limits = discoveryRunLimits(process.env);
     const adapterContext = discoveryAdapterContext();
-    // Stale-run recovery runs before target selection: a crashed run must
-    // never lock out the daily cycle, while a fresh in-flight run still gates
-    // its brand below (the reviewPinned gate in allTargets is unchanged).
-    await ctx.runMutation(internal.competitorSuggestions.reapStaleDiscoveryRuns, {
-      staleMs: limits.staleRunMs,
-    });
+    // Keep the one-off path scoped to its explicit target. Global stale-run
+    // recovery belongs to the scheduled batch.
+    if (scheduled) {
+      await ctx.runMutation(internal.competitorSuggestions.reapStaleDiscoveryRuns, {
+        staleMs: limits.staleRunMs,
+      });
+    }
     const targets = await ctx.runQuery(internal.competitorSuggestions.allTargets, {});
     const outcome: DiscoveryBatchOutcome = {
       started: 0,
@@ -348,7 +364,17 @@ export const runDiscoveryBatch = internalAction({
       skipped: [],
     };
 
+    if (!scheduled && !targets.some((target) => target._id === trialTargetId)) {
+      return { ...outcome, reason: "trial-target-not-eligible" };
+    }
     for (const target of targets) {
+      if (trialTargetId !== undefined && target._id !== trialTargetId) continue;
+      if (!scheduled) {
+        await ctx.runMutation(internal.competitorSuggestions.reapStaleDiscoveryRuns, {
+          staleMs: limits.staleRunMs,
+          scope: { userId: target.userId, brandId: target.brandId },
+        });
+      }
       if (
         await ctx.runQuery(internal.competitorSuggestions.hasRunningDiscoveryRun, {
           userId: target.userId,

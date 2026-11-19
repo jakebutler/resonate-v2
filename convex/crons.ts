@@ -16,7 +16,8 @@ crons.hourly(
 crons.weekly(
   "aeo-answer-engine-runs",
   { dayOfWeek: "monday", hourUTC: 17, minuteUTC: 35 },
-  internal.answerEngine.runAnswerEngineBatch
+  internal.answerEngine.runAnswerEngineBatch,
+  {}
 );
 
 // A5: weekly suggested-competitor discovery, alongside the answer-engine
@@ -26,7 +27,8 @@ crons.weekly(
 crons.weekly(
   "aeo-competitor-discovery",
   { dayOfWeek: "monday", hourUTC: 17, minuteUTC: 50 },
-  internal.competitorSuggestions.runDiscoveryBatch
+  internal.competitorSuggestions.runDiscoveryBatch,
+  {}
 );
 
 export default crons;
