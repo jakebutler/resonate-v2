@@ -35,7 +35,9 @@ describe("discoveryRunLimits", () => {
 
 describe("buildDiscoveryQueries", () => {
   it("pairs a targeted search with evidence-based screening in two queries", () => {
-    const queries = buildDiscoveryQueries(["fact-checking drafts before publication"]);
+    const queries = buildDiscoveryQueries([
+      "fact-checking drafts before publication", "  Fact-Checking Drafts Before Publication  ",
+    ]);
     expect(queries).toHaveLength(2);
     expect(queries[0]).toMatchObject({ channel: "search", requiresDraftEvidence: true });
     expect(queries[1]).toMatchObject({ channel: "answer-engine", requiresDraftEvidence: true });
@@ -47,6 +49,7 @@ describe("buildDiscoveryQueries", () => {
     expect(queries).toHaveLength(2);
     expect(queries[0].prompt).toBe("best tools for verifying statistics");
     expect(queries[1].prompt).toContain("Reply with a JSON array");
+    expect(queries.every((query) => query.requiresDraftEvidence === undefined)).toBe(true);
   });
 });
 
@@ -66,7 +69,8 @@ describe("draft workflow evidence", () => {
 
   it("keeps only valid evidence indices and refuses prose-supplied URLs", () => {
     const source = [{ url: "https://proof.example" }];
-    expect(selectDraftCompetitors('[0, 0, "0", 5]', source)).toEqual(source);
+    expect(selectDraftCompetitors("[0, 0]", source)).toEqual(source);
+    expect(selectDraftCompetitors('["0", 5]', source)).toEqual([]);
     expect(selectDraftCompetitors("Visit https://invented.example", source)).toEqual([]);
   });
 });

@@ -8,7 +8,7 @@
 // accepts, or adds anything automatically: candidates are evidence, the
 // review queue is the instruction path.
 
-import { competitorNameFromUrl } from "./answerEngine";
+import { competitorNameFromUrl, distinctProductIdentifiers } from "./answerEngine";
 
 // Per-run budget admission mirrors the answer-engine precedent: refuse before
 // any dispatch when the estimated cost exceeds the run ceiling.
@@ -86,8 +86,7 @@ export function stripResponseFormatInstruction(text: string): string {
 
 export function buildDiscoveryQueries(productIdentifiers: string[]): DiscoveryQuery[] {
   const queries: DiscoveryQuery[] = [];
-  const identifiers = [...new Set(productIdentifiers.map((identifier) => identifier.trim()).filter(Boolean))];
-  for (const identifier of identifiers) {
+  for (const identifier of distinctProductIdentifiers(productIdentifiers)) {
     if (identifier.toLowerCase() === "fact-checking drafts before publication") {
       const topic = "Draft fact-checking software that checks claims against sources";
       queries.push(
@@ -113,11 +112,13 @@ export type DiscoverySearchResult = { url: string; title?: string; description?:
 const DRAFT_WORKFLOW = /\b(?:paste|upload|submit|import|drop|check|verify|scan|review|fact[ -]?check|analy[sz]e)\b.{0,70}\b(?:drafts?|articles?|documents?|manuscripts?|text)\b/i;
 const SOURCED_CHECK = /\b(?:claims?|facts?|statements?|citations?)\b.{0,100}\b(?:sources?|evidence|references?)\b|\b(?:sources?|evidence|references?)\b.{0,100}\b(?:claims?|facts?|statements?|citations?)\b/i;
 
-/** Keep the actual provider excerpt so the operator can verify the workflow. */
+// The prompt and saved evidence use the same bounded provider excerpt, so
+// every qualifying phrase remains available to the reviewer.
+const MAX_DRAFT_EVIDENCE_EXCERPT = 1200;
 export function draftWorkflowEvidence(results: DiscoverySearchResult[]): DiscoverySearchResult[] {
   return results.flatMap((result) => {
     const url = httpUrl(result.url);
-    const description = result.description?.replace(/\s+/g, " ").trim().slice(0, 1200);
+    const description = result.description?.replace(/\s+/g, " ").trim().slice(0, MAX_DRAFT_EVIDENCE_EXCERPT);
     if (!url || url.username || url.password || !description) return [];
     const excerpt = `${result.title ?? ""} ${description}`;
     return DRAFT_WORKFLOW.test(excerpt) && SOURCED_CHECK.test(excerpt)

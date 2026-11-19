@@ -192,6 +192,7 @@ describe("discovery batch gates", () => {
       const question = JSON.parse(String(init?.body)).messages.at(-1).content;
       expect(question).toContain("Exclude guides");
       expect(question).toContain("https://proof.example/app");
+      expect(question).toContain("https://guide.example/article");
       expect(question).not.toContain("https://grammar.example");
       return Response.json({ choices: [{ message: { content: '[0, 0, 99]' } }] });
     });
