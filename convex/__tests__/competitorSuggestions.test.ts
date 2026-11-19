@@ -137,6 +137,24 @@ describe("discovery batch gates", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("runs a scoped discovery trial while the weekly job is disabled", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    const targetId = await connectTarget(user, { productIdentifiers: ["fact-checking drafts"] });
+    await enabledEnv();
+    vi.stubEnv("AEO_DISCOVERY_ENABLED", "0");
+    vi.stubEnv("AEO_SCHEDULED_TARGET_ID", "");
+    const fetchMock = mockProviders();
+    expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, { trialTargetId: targetId }))
+      .toMatchObject({ started: 0, reason: "trial-target-outside-configured-pilot" });
+    vi.stubEnv("AEO_SCHEDULED_TARGET_ID", targetId);
+    expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, {}))
+      .toMatchObject({ started: 0, reason: "competitor-discovery-disabled" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, { trialTargetId: targetId }))
+      .toMatchObject({ started: 1, completed: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("skips discovery without a product category before it makes any provider call", async () => {
     const { t, user } = await fixture("owner", ["freshproof"]);
     await connectTarget(user, { productIdentifiers: [] });

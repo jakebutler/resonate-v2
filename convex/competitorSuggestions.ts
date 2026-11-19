@@ -291,7 +291,7 @@ function discoveryAdapterContext(): ProviderAdapterContext {
  * configured maximum and each search at the Firecrawl per-run result ceiling.
  */
 export const runDiscoveryBatch = internalAction({
-  args: {},
+  args: { trialTargetId: v.optional(v.id("brandTargets")) },
   returns: v.object({
     started: v.number(),
     completed: v.number(),
@@ -300,15 +300,21 @@ export const runDiscoveryBatch = internalAction({
     skipped: v.array(v.object({ brandId: v.string(), reason: v.string() })),
     reason: v.optional(v.string()),
   }),
-  handler: async (ctx): Promise<DiscoveryBatchOutcome> => {
-    if (process.env.AEO_DISCOVERY_ENABLED !== "1") {
+  handler: async (ctx, { trialTargetId }): Promise<DiscoveryBatchOutcome> => {
+    // The cron supplies no target ID and must pass the weekly switch.
+    // An internal operator can explicitly select only the configured pilot.
+    const scheduled = trialTargetId === undefined;
+    const allowed = scheduled
+      ? process.env.AEO_DISCOVERY_ENABLED === "1"
+      : trialTargetId === process.env.AEO_SCHEDULED_TARGET_ID;
+    if (!allowed) {
       return {
         started: 0,
         completed: 0,
         failed: 0,
         proposed: 0,
         skipped: [],
-        reason: "competitor-discovery-disabled",
+        reason: scheduled ? "competitor-discovery-disabled" : "trial-target-outside-configured-pilot",
       };
     }
     if (!process.env.FIRECRAWL_API_KEY?.trim()) {
@@ -349,6 +355,7 @@ export const runDiscoveryBatch = internalAction({
     };
 
     for (const target of targets) {
+      if (trialTargetId !== undefined && target._id !== trialTargetId) continue;
       if (
         await ctx.runQuery(internal.competitorSuggestions.hasRunningDiscoveryRun, {
           userId: target.userId,
