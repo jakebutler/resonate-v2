@@ -81,6 +81,7 @@ export type CitationQuestionResult = {
   question: string;
   citedBrands: string[];
   citedCompetitors: string[];
+  citationUrls?: string[];
   /**
    * Stored extractability score against the connected target's content: an
    * integer 0–100 (the storage scale validateStoredExtractability bounds).

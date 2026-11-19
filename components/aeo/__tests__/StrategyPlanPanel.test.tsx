@@ -25,7 +25,7 @@ const acceptedPlan: Loadable<StrategyPlan | null> = {
 };
 
 const intelCycle = {
-  schedule: "daily at 07:35 UTC (cron)",
+  schedule: "Mondays at 17:35 UTC (cron)",
   lastRun: {
     startedAt: 1_700_000_000_000,
     finishedAt: 1_700_000_100_000,
@@ -38,7 +38,7 @@ describe("StrategyPlanPanel plan dead-end", () => {
     render(
       <StrategyPlanPanel plan={noPlan} intelCycle={intelCycle} />
     );
-    expect(screen.getByText(/Intel cycles run daily at 07:35 UTC \(cron\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Intel cycles run Mondays at 17:35 UTC \(cron\)/)).toBeInTheDocument();
     expect(screen.getByText(/last run .* — completed/)).toBeInTheDocument();
   });
 
@@ -46,7 +46,7 @@ describe("StrategyPlanPanel plan dead-end", () => {
     render(
       <StrategyPlanPanel
         plan={noPlan}
-        intelCycle={{ schedule: "daily at 07:35 UTC (cron)", lastRun: null }}
+        intelCycle={{ schedule: "Mondays at 17:35 UTC (cron)", lastRun: null }}
       />
     );
     expect(screen.getByText(/no intel run recorded yet/)).toBeInTheDocument();

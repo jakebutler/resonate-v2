@@ -39,6 +39,7 @@ type ResearchInput = {
     summary: string;
     citationStatus: "cited" | "uncited" | "not-observed";
     brandMatch?: "match" | "suspect" | "unknown";
+    citationUrls?: string[];
   }>;
   suggestions: Array<{ _id: Id<"competitorSuggestions">; phrasings: string[] }>;
   planKeywords: string[];
@@ -56,6 +57,7 @@ export const researchInput = internalQuery({
           _id: v.id("intelFindings"),
           summary: v.string(),
           citationStatus: v.union(v.literal("cited"), v.literal("uncited"), v.literal("not-observed")),
+          citationUrls: v.optional(v.array(v.string())),
           brandMatch: v.optional(v.union(v.literal("match"), v.literal("suspect"), v.literal("unknown"))),
         })
       ),
@@ -107,6 +109,7 @@ export const researchInput = internalQuery({
         _id: finding._id,
         summary: finding.summary,
         citationStatus: finding.citationStatus,
+        ...(finding.citationUrls ? { citationUrls: finding.citationUrls } : {}),
         ...(finding.brandMatch ? { brandMatch: finding.brandMatch } : {}),
       })),
       suggestions: suggestions.map((suggestion) => ({ _id: suggestion._id, phrasings: suggestion.phrasings })),
@@ -315,7 +318,7 @@ function derivedRecordingFor(candidate: KeywordCandidate, findings: CitationFind
     status,
     // Only a real answer-engine observation earns the answer-engine signal;
     // an unobserved candidate's "unproven" is a derived, non-evidence state.
-    signal: matched.length > 0 ? "answer-engine" : "derived",
+    signal: status === "unproven" ? "derived" : "answer-engine",
     sourceFindingIds: matched.map((finding) => finding._id),
     evidence: matched.map((finding) => finding.summary),
   };

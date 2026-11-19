@@ -359,6 +359,10 @@ export const runDiscoveryBatch = internalAction({
         outcome.skipped.push({ brandId: target.brandId, reason: "run-already-running" });
         continue;
       }
+      if (target.productIdentifiers.every((identifier) => !identifier.trim())) {
+        outcome.skipped.push({ brandId: target.brandId, reason: "product-identifiers-not-configured" });
+        continue;
+      }
       const queries = buildDiscoveryQueries({
         brandName: brandNameFor(target.brandId),
         productIdentifiers: target.productIdentifiers,

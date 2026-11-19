@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 11/14/2026 13:22:04 UTC
+Last updated: 11/18/2026 22:29:43 PST
 
 ## State
 
@@ -12,28 +12,44 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Updated repository documentation and handoff records.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- 6a01212 docs(verify): consolidated live-proof report — campaigns, images, smoke
+- 79cead9 Merge pull request #191 from jakebutler/codex/epic-97-research-verification-followup
 
 ## Recent Commits
 
-- 6a01212 docs(verify): consolidated live-proof report — campaigns, images, smoke
-- ae1819a chore(verify): interim evidence checkpoint with cause diagnostics
-- 4c025a2 docs(verify): interim evidence checkpoint (final7 campaigns pass)
-- b3c33ce docs(verify): interim dated evidence checkpoint
-- 842db98 docs(verify): date the main-bundle live evidence for campaigns, images, smoke
+- 79cead9 Merge pull request #191 from jakebutler/codex/epic-97-research-verification-followup
+- 51efc49 Scope scheduled pilot runs and admit keyword research atomically
+- 3219c50 Pace live crawl polling and require passing evidence for verification
+- 389ba5e docs(verify): live AI drafting + plan-loop proof for FreshProof (#190)
+- 29e5d9b fix(aeo-ui): brand persistence, honest schedule/zero states, spend strip, input validation (#189)
 
 ## Local Working Tree
 
-- M  docs/verification/reports/2026-11-14-main-live-proof.md
-- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaign-flow-recap.webm
-- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaign-session.png
-- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaigns-freshproof.png
-- A  docs/verification/reports/evidence/main-live-proof/tc-2-composer-visuals-recap.png
-- A  docs/verification/reports/evidence/main-live-proof/tc-3-series-batch-review-recap.png
+- M  components/__tests__/CitationResultsPanel.test.tsx
+- M  components/aeo/CitationResultsPanel.tsx
+- M  components/aeo/IntelRunHistoryStrip.tsx
+- M  components/aeo/PlanFlow.tsx
+- M  components/aeo/StrategyPlanPanel.tsx
+- M  components/aeo/__tests__/IntelFlow.test.tsx
+- M  components/aeo/__tests__/StrategyPlanPanel.test.tsx
+- M  components/aeo/mappings.ts
+- M  components/aeo/types.ts
+- M  convex/__tests__/answerEngine.test.ts
+- M  convex/__tests__/competitorSuggestions.test.ts
+- M  convex/aeoTables.ts
+- M  convex/answerEngine.ts
+- M  convex/competitorSuggestions.ts
+- M  convex/crons.ts
+- M  convex/keywordResearch.ts
+- M  lib/__tests__/answerEngine.test.ts
+- M  lib/__tests__/competitorDiscovery.test.ts
+- M  lib/__tests__/keywordResearch.test.ts
+- M  lib/answerEngine.ts
+- M  lib/competitorDiscovery.ts
+- M  lib/keywordResearch.ts
 
 ## Next Agent Pickup
 
@@ -42,4 +58,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- verify/main-live-proof
+- codex/freshproof-research-quality

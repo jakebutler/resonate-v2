@@ -168,6 +168,7 @@ describe("IntelFlow (the /aeo/intel surface)", () => {
           _id: "f-match" as Id<"intelFindings">,
           summary: "What is FreshProof and what does it do?",
           brandMatch: "match",
+          citationUrls: ["https://freshproof.io/"],
         }),
       ],
     });
@@ -181,7 +182,7 @@ describe("IntelFlow (the /aeo/intel surface)", () => {
     expect(screen.getByText(/Mismatch suspected\./)).toBeInTheDocument();
     // The suspect citation is always qualified; the matched one stays plain.
     expect(
-      screen.getByText("Cited: FreshProof (mismatch suspected)")
+      screen.getByText("Citation unverified")
     ).toBeInTheDocument();
     expect(screen.getByText("Cited: FreshProof")).toBeInTheDocument();
   });
@@ -189,7 +190,7 @@ describe("IntelFlow (the /aeo/intel surface)", () => {
   it("renders no warning when every citation matches the target", () => {
     mockQueries({
       runs: [runRow()],
-      findings: [findingRow({ brandMatch: "match" })],
+      findings: [findingRow({ brandMatch: "match", citationUrls: ["https://freshproof.io/"] })],
     });
 
     render(<IntelFlow />);
@@ -197,5 +198,6 @@ describe("IntelFlow (the /aeo/intel surface)", () => {
     expect(screen.queryAllByRole("alert")).toHaveLength(0);
     expect(screen.getByText("Cited: FreshProof")).toBeInTheDocument();
     expect(screen.queryByText(/mismatch suspected/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /freshproof.io/ })).toHaveAttribute("href", "https://freshproof.io/");
   });
 });

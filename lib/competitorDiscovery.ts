@@ -87,22 +87,18 @@ export function buildDiscoveryQueries(input: {
   brandName: string;
   productIdentifiers: string[];
 }): DiscoveryQuery[] {
-  const queries: DiscoveryQuery[] = [
-    {
-      channel: "search",
-      prompt: `best alternatives to ${input.brandName}`,
-      topic: `best alternatives to ${input.brandName}`,
-    },
-    answerEngineQuery(`instead of ${input.brandName}`),
-  ];
-  for (const identifier of input.productIdentifiers) {
-    queries.push({
-      channel: "search",
-      prompt: `best ${identifier} tools and alternatives`,
-      topic: `best ${identifier} tools and alternatives`,
-    });
+  const queries: DiscoveryQuery[] = [];
+  const identifiers = [...new Set(input.productIdentifiers.map((identifier) => identifier.trim()).filter(Boolean))];
+  for (const identifier of identifiers) {
+    const topic = `best tools for ${identifier}`;
+    queries.push({ channel: "search", prompt: topic, topic });
     queries.push(answerEngineQuery(`for ${identifier}`));
   }
+  const brandTopic = `best alternatives to ${input.brandName}`;
+  queries.push(
+    { channel: "search", prompt: brandTopic, topic: brandTopic },
+    answerEngineQuery(`instead of ${input.brandName}`)
+  );
   return queries;
 }
 

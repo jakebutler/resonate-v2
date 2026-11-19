@@ -124,6 +124,8 @@ export const intelFindingFields = {
     v.literal("uncited"),
     v.literal("not-observed")
   ),
+  // Only the web-grounded runner writes provider-annotated source URLs.
+  citationUrls: v.optional(v.array(v.string())),
   /** Stored scale: an integer 0–100 (validateStoredExtractability). */
   extractability: v.number(),
   summary: v.string(),

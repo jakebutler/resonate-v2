@@ -40,7 +40,7 @@ export function IntelRunHistoryStrip({
         </p>
       ) : runs.data.length === 0 ? (
         <p className={cn("text-sm", tokens.textMuted)}>
-          No intel runs yet — the daily cycle records one run per batch it
+          No intel runs yet — the weekly cycle records one run per batch it
           starts.
         </p>
       ) : (

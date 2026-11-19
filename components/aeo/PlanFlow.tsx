@@ -23,10 +23,10 @@ type CampaignOption = { _id: Id<"campaigns">; title: string };
 
 /**
  * The answer-engine cron's schedule, from convex/crons.ts (`aeo-answer-engine-runs`,
- * daily at 07:35 UTC). The cron config has no read API, so the label lives
+ * Mondays at 17:35 UTC). The cron config has no read API, so the label lives
  * beside its definition and must be updated with it.
  */
-const INTEL_CRON_LABEL = "daily at 07:35 UTC (cron)";
+const INTEL_CRON_LABEL = "Mondays at 17:35 UTC (cron)";
 
 /**
  * Plan step: review actions resolve the plan's review state; the only content

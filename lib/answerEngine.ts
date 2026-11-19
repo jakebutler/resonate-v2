@@ -196,7 +196,101 @@ const ANSWER_ENGINE_SYSTEM_PROMPT =
   "naming the specific products, tools, or companies you would recommend. Prefer a " +
   "short, quotable first sentence followed by brief supporting points.";
 
-export type AnswerEngineAskResult = { ok: true; answer: string } | { ok: false; reason: string };
+export type AnswerEngineAskResult =
+  | { ok: true; answer: string; citationUrls?: string[] }
+  | { ok: false; reason: string };
+
+const OPENAI_WEB_SEARCH_MODEL = "gpt-4.1-mini";
+
+function readCitationUrl(value: unknown): URL | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "https:" || url.protocol === "http:") && !url.username && !url.password
+      ? url
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A citation must resolve syntactically to the configured host (or its www alias). */
+export function citesTargetDomain(citationUrls: readonly string[], targetDomain: string): boolean {
+  return citationUrls.some((value) => {
+    const url = readCitationUrl(value);
+    return url !== null && url.hostname.replace(/^www\./, "") === targetDomain;
+  });
+}
+
+export function hasVerifiedTargetCitation(finding: {
+  citationStatus: string;
+  citationUrls?: readonly string[];
+  brandMatch?: BrandMatchVerdict;
+}): boolean {
+  return finding.citationStatus === "cited" &&
+    Boolean(finding.citationUrls?.length) && finding.brandMatch !== "suspect";
+}
+
+type WebSearchOutput = {
+  status?: string;
+  output?: Array<{
+    type?: string;
+    status?: string;
+    content?: Array<{
+      type?: string;
+      text?: string;
+      annotations?: Array<{ type?: string; url?: unknown }>;
+    }>;
+  }>;
+};
+
+/** Web-grounded path for visibility runs. Discovery still uses the chat adapter. */
+export async function askWebSearchAnswer(
+  context: AnswerEngineContext,
+  question: string
+): Promise<AnswerEngineAskResult> {
+  const apiKey = context.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return { ok: false, reason: "Web-grounded visibility requires OPENAI_API_KEY." };
+  try {
+    const response = await (context.fetchImpl ?? fetch)("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OPENAI_WEB_SEARCH_MODEL,
+        instructions: "Answer the question concisely using web search. Cite sources for product identities and recommendations.",
+        input: question,
+        tools: [{ type: "web_search", search_context_size: "low" }],
+        tool_choice: "required",
+        max_tool_calls: 1,
+        max_output_tokens: 500,
+        store: false,
+      }),
+      redirect: "error",
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) return { ok: false, reason: `Web search returned HTTP ${response.status}.` };
+    const body: WebSearchOutput = await response.json();
+    const output = body.output ?? [];
+    if (body.status !== "completed" ||
+        !output.some((item) => item.type === "web_search_call" && item.status === "completed")) {
+      return { ok: false, reason: "Web search did not complete." };
+    }
+    const text = output
+      .filter((item) => item.type === "message" && item.status === "completed")
+      .flatMap((item) => item.content ?? [])
+      .filter((part) => part.type === "output_text" && typeof part.text === "string");
+    const answer = text.map((part) => part.text).join("\n").trim();
+    if (!answer) return { ok: false, reason: "Web search returned no answer text." };
+    const urls = text.flatMap((part) => (part.annotations ?? []).flatMap((annotation) => {
+      if (annotation.type !== "url_citation") return [];
+      const url = readCitationUrl(annotation.url);
+      return url ? [url.href] : [];
+    }));
+    return { ok: true, answer, citationUrls: [...new Set(urls)] };
+  } catch {
+    return { ok: false, reason: "Web search request failed or returned an invalid response." };
+  }
+}
 
 /**
  * Ask one question through the Cortex/Pioneer gateway. The credential gate is
@@ -275,7 +369,7 @@ export type AnswerCitationAnalysis = {
   extractability: number;
   classification: "gap" | "opportunity" | "needs-review";
   /**
-   * Set only when the answer cites the brand: whether the cited content is
+   * Set when the answer mentions the brand: whether the answer is
    * actually about the connected target. A suspect citation must never be
    * displayed as a plain "cited" (the trust-blocker finding).
    */
@@ -317,7 +411,7 @@ function targetVocabulary(pages: AnswerTargetPage[]): Set<string> {
  * returns prose (no citation URLs), so the verdict is a heuristic over three
  * signals, strongest first:
  *
- * - the answer cites the target's own domain, or names one of the target's
+ * - the answer names the target's own domain, or names one of the target's
  *   product identifiers — treat as a match;
  * - otherwise, vocabulary overlap between the answer and the target's crawl:
  *   high overlap → match, near-zero overlap → suspect (a homonym brand),
@@ -332,7 +426,7 @@ export function assessAnswerBrandMatch(input: {
   const textLower = input.answer.toLowerCase();
   const domain = input.targetDomain.toLowerCase().trim();
   if (domain && hasWordMatch(textLower, domain)) {
-    return { verdict: "match", detail: `Answer cites the target's domain (${domain}).` };
+    return { verdict: "match", detail: `Answer names the target's domain (${domain}).` };
   }
   const identifiers = input.productIdentifiers.map((id) => id.toLowerCase().trim()).filter(Boolean);
   if (identifiers.length && mentionsAny(textLower, identifiers)) {
@@ -435,40 +529,33 @@ export function analyzeAnswerCitation(input: {
   question: string;
   brandName: string;
   productIdentifiers: string[];
-  competitorNames: string[];
   targetDomain: string;
   targetPages: AnswerTargetPage[];
+  citationUrls?: string[];
 }): AnswerCitationAnalysis {
   const textLower = input.answer.toLowerCase();
   const brandSubjects = [input.brandName, ...input.productIdentifiers];
-  const cited = mentionsAny(textLower, brandSubjects.map((name) => name.toLowerCase()));
-  const structure = answerStructureScore(input.answer, brandSubjects);
+  const mentionsBrand = mentionsAny(textLower, [input.brandName.toLowerCase()]);
   const coverage = contentCoverage(input.question, input.targetPages);
+  const citationUrls = input.citationUrls ?? [];
+  // A generic category phrase is a discovery prompt, never brand identity evidence.
+  const brandMatch = mentionsBrand
+    ? assessAnswerBrandMatch({ ...input, productIdentifiers: [] })
+    : undefined;
+  const cited = citesTargetDomain(citationUrls, input.targetDomain);
   if (cited) {
-    const brandMatch = assessAnswerBrandMatch({
-      answer: input.answer,
-      productIdentifiers: input.productIdentifiers,
-      targetDomain: input.targetDomain,
-      targetPages: input.targetPages,
-    });
     return {
       citationStatus: "cited",
-      // 70% quotability of the answer itself, 30% whether the target's
-      // content can back the citation.
-      extractability: round2(Math.min(1, 0.7 * structure + 0.3 * coverage)),
-      // A suspect citation is never an unflagged opportunity: it comes back
-      // "needs-review" so every consumer (gaps list, strategy plan) treats
-      // it as unverified until a human confirms which product was cited.
-      classification: brandMatch.verdict === "suspect" ? "needs-review" : "opportunity",
+      extractability: round2(0.7 * answerStructureScore(input.answer, brandSubjects) + 0.3 * coverage),
+      classification: brandMatch?.verdict === "suspect" ? "needs-review" : "opportunity",
       brandMatch,
     };
   }
   return {
-    citationStatus: mentionsAny(textLower, input.competitorNames.map((name) => name.toLowerCase()))
-      ? "uncited"
-      : "not-observed",
+    citationStatus: citationUrls.length > 0 ? "uncited" : "not-observed",
     extractability: round2(0.3 * coverage),
-    classification: "gap",
+    classification: mentionsBrand || citationUrls.length === 0 ? "needs-review" : "gap",
+    brandMatch,
   };
 }
 

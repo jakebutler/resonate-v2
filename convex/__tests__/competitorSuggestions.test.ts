@@ -137,6 +137,18 @@ describe("discovery batch gates", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("skips discovery without a product category before it makes any provider call", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    await connectTarget(user, { productIdentifiers: [] });
+    await enabledEnv();
+    const outcome = await t.action(internal.competitorSuggestions.runDiscoveryBatch, {});
+    expect(outcome).toMatchObject({
+      started: 0,
+      skipped: [{ brandId: "freshproof", reason: "product-identifiers-not-configured" }],
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("never reads a connected target whose review is not pinned", async () => {
     const { t, user } = await fixture("owner", ["freshproof"]);
     await connectTarget(user);

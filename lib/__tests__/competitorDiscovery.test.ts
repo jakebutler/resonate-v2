@@ -32,7 +32,7 @@ describe("discoveryRunLimits", () => {
 });
 
 describe("buildDiscoveryQueries", () => {
-  it("asks both channels for the brand and each identifier", () => {
+  it("puts both category queries inside the pilot budget", () => {
     const queries = buildDiscoveryQueries({
       brandName: "FreshProof",
       productIdentifiers: ["GLP-1 tracking"],
@@ -40,16 +40,16 @@ describe("buildDiscoveryQueries", () => {
     expect(queries).toHaveLength(4);
     expect(queries[0]).toMatchObject({
       channel: "search",
-      prompt: "best alternatives to FreshProof",
-      topic: "best alternatives to FreshProof",
+      prompt: "best tools for GLP-1 tracking",
+      topic: "best tools for GLP-1 tracking",
     });
-    expect(queries[1]!.channel).toBe("answer-engine");
+    expect(queries[1]).toMatchObject({ channel: "answer-engine", topic: "Which tools or products would you recommend for GLP-1 tracking?" });
     // The user-facing topic never carries the response-format instruction.
     expect(queries[1]!.topic).not.toContain("Reply with a JSON array");
     expect(queries[1]!.prompt).toContain("Reply with a JSON array");
     expect(queries[2]).toMatchObject({
       channel: "search",
-      prompt: "best GLP-1 tracking tools and alternatives",
+      prompt: "best alternatives to FreshProof",
     });
     expect(queries[3]!.channel).toBe("answer-engine");
     expect(queries[3]!.topic).not.toContain("Reply with a JSON array");
@@ -57,7 +57,7 @@ describe("buildDiscoveryQueries", () => {
 });
 
 describe("planDiscoveryRun", () => {
-  const limits = { maxQueries: 4, runCeilingCents: 10, costPerQueryCents: 2 };
+  const limits = { maxQueries: 4, runCeilingCents: 10, costPerQueryCents: 2, staleRunMs: 30_000 };
 
   it("admits a run whose estimate fits the ceiling", () => {
     expect(planDiscoveryRun({ queryCount: 4, limits })).toEqual({
