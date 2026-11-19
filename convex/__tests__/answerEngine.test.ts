@@ -205,7 +205,12 @@ describe("answer-engine run lifecycle", () => {
     vi.stubEnv("AEO_ANSWER_ENGINE_MAX_QUESTIONS", "1");
     vi.mocked(fetch).mockImplementation(async (url, init) => {
       expect(String(url)).toBe("https://api.openai.com/v1/responses");
-      expect(JSON.parse(String(init?.body))).toMatchObject({ max_tool_calls: 1, tool_choice: "required" });
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        model: "gpt-6-luna",
+        reasoning: { effort: "low" },
+        max_tool_calls: 1,
+        tool_choice: "required",
+      });
       return Response.json({
         status: "completed",
         output: [

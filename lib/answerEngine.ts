@@ -200,7 +200,7 @@ export type AnswerEngineAskResult =
   | { ok: true; answer: string; citationUrls?: string[] }
   | { ok: false; reason: string };
 
-const OPENAI_WEB_SEARCH_MODEL = "gpt-4.1-mini";
+const OPENAI_WEB_SEARCH_MODEL = "gpt-6-luna";
 
 function readCitationUrl(value: unknown): URL | null {
   if (typeof value !== "string" || value.length > 2048) return null;
@@ -259,10 +259,11 @@ export async function askWebSearchAnswer(
         model: OPENAI_WEB_SEARCH_MODEL,
         instructions: "Answer the question concisely using web search. Cite sources for product identities and recommendations.",
         input: question,
+        reasoning: { effort: "low" },
         tools: [{ type: "web_search", search_context_size: "low" }],
         tool_choice: "required",
         max_tool_calls: 1,
-        max_output_tokens: 500,
+        max_output_tokens: 900,
         store: false,
       }),
       redirect: "error",
