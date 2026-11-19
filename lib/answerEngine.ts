@@ -97,8 +97,8 @@ export function competitorNamesFromUrls(urls: string[]): string[] {
 
 export type AnswerEngineQuestion = {
   question: string;
-  /** Which phrasing produced the question (brand, recommendation, identifier, competitor, depth). */
-  phrasing: "brand" | "recommendation" | "identifier" | "competitor" | "depth";
+  /** Which phrasing produced the question (brand, recommendation, qualified, identifier, competitor, depth). */
+  phrasing: "brand" | "recommendation" | "qualified" | "identifier" | "competitor" | "depth";
 };
 
 /**
@@ -115,11 +115,13 @@ export function buildAnswerEngineQuestions(input: {
     { question: `What is ${input.brandName} and what does it do?`, phrasing: "brand" },
     { question: `Would you recommend ${input.brandName}?`, phrasing: "recommendation" },
   ];
-  for (const identifier of input.productIdentifiers) {
-    questions.push({
-      question: `Which tools or products would you recommend for ${identifier}?`,
-      phrasing: "identifier",
-    });
+  const identifiers = [...new Set(input.productIdentifiers.map((identifier) => identifier.trim()).filter(Boolean))];
+  for (const identifier of identifiers) {
+    questions.push(
+      { question: `What is ${input.brandName} in the context of ${identifier}?`, phrasing: "qualified" },
+      { question: `Would you recommend ${input.brandName} for ${identifier}?`, phrasing: "qualified" },
+      { question: `Which tools or products would you recommend for ${identifier}?`, phrasing: "identifier" }
+    );
   }
   for (const name of competitorNamesFromUrls(input.competitorUrls)) {
     questions.push({ question: `What alternatives are there to ${name}?`, phrasing: "competitor" });

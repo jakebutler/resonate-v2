@@ -12,6 +12,11 @@ import {
 import {
   buildDiscoveryQueries,
   discoveryEvidenceLabel,
+  draftCompetitorPrompt,
+  draftWorkflowEvidence,
+  selectDraftCompetitors,
+  type DiscoveryQuery,
+  type DiscoverySearchResult,
   discoveryRunLimits,
   parseDiscoveryAnswer,
   planDiscoveryRun,
@@ -411,8 +416,10 @@ export const runDiscoveryBatch = internalAction({
       outcome.started += 1;
 
       let failed = false;
+      let draftSearch: { query: DiscoveryQuery; evidence: DiscoverySearchResult[] } | undefined;
       for (const query of queries) {
-        let surfaced: Array<{ url: string; title?: string; description?: string }> = [];
+        let surfaced: DiscoverySearchResult[] = [];
+        let evidenceQuery = query;
         if (query.channel === "search") {
           // The adapter returns ok:false for provider-reported failures but
           // throws on transport errors; both are the same outcome here — the
@@ -435,8 +442,18 @@ export const runDiscoveryBatch = internalAction({
             break;
           }
           surfaced = search.results ?? [];
+          if (query.requiresDraftEvidence) {
+            draftSearch = { query, evidence: draftWorkflowEvidence(surfaced) };
+            continue;
+          }
         } else {
-          const ask = await askAnswerEngine({ env: process.env }, { question: query.prompt });
+          const evidence = query.requiresDraftEvidence ? draftSearch : undefined;
+          if (query.requiresDraftEvidence && !evidence?.evidence.length) {
+            if (!scheduled) outcome.reason = "no-draft-workflow-evidence-in-search";
+            continue;
+          }
+          const question = evidence ? draftCompetitorPrompt(evidence.evidence) : query.prompt;
+          const ask = await askAnswerEngine({ env: process.env }, { question });
           if (!ask.ok) {
             failed = true;
             outcome.failed += 1;
@@ -448,10 +465,15 @@ export const runDiscoveryBatch = internalAction({
             });
             break;
           }
-          surfaced = parseDiscoveryAnswer(ask.answer).map((candidate) => ({
-            url: candidate.url,
-            description: candidate.name,
-          }));
+          if (evidence) {
+            surfaced = selectDraftCompetitors(ask.answer, evidence.evidence);
+            evidenceQuery = evidence.query;
+          } else {
+            surfaced = parseDiscoveryAnswer(ask.answer).map((candidate) => ({
+              url: candidate.url,
+              description: candidate.name,
+            }));
+          }
         }
         for (const result of surfaced) {
           const suggestionId = await ctx.runMutation(internal.competitorSuggestions.proposeSuggestion, {
@@ -460,7 +482,7 @@ export const runDiscoveryBatch = internalAction({
             brandId: target.brandId,
             name: competitorNameFromUrl(result.url),
             url: result.url,
-            evidence: discoveryEvidenceLabel(query, result),
+            evidence: discoveryEvidenceLabel(evidenceQuery, result),
             // The user-facing topic, not the wire prompt: answer-engine
             // prompts carry response-format instructions that must never
             // surface in the review queue.

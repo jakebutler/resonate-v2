@@ -170,6 +170,57 @@ describe("discovery batch gates", () => {
     expect((await t.run((ctx) => ctx.db.get(unrelatedRun)))?.status).toBe("running");
   });
 
+  it("queues only a screened product source with draft and citation evidence", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    const targetId = await connectTarget(user, {
+      productIdentifiers: ["fact-checking drafts before publication"],
+    });
+    await enabledEnv();
+    vi.stubEnv("AEO_DISCOVERY_ENABLED", "0");
+    vi.stubEnv("AEO_SCHEDULED_TARGET_ID", targetId);
+    const fetchMock = vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (String(url).includes("/search")) {
+        return Response.json({ success: true, data: [
+          { url: "https://proof.example/app", title: "Draft Fact Checker",
+            description: "Paste a draft. We verify its factual claims against primary sources." },
+          { url: "https://guide.example/article", title: "Fact-checking guide",
+            description: "Check your draft for factual claims using reliable sources." },
+          { url: "https://grammar.example", title: "Grammar checker",
+            description: "Upload a draft to check punctuation." },
+        ] });
+      }
+      const question = JSON.parse(String(init?.body)).messages.at(-1).content;
+      expect(question).toContain("Exclude guides");
+      expect(question).toContain("https://proof.example/app");
+      expect(question).not.toContain("https://grammar.example");
+      return Response.json({ choices: [{ message: { content: '[0, 0, 99]' } }] });
+    });
+
+    expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, { trialTargetId: targetId }))
+      .toMatchObject({ completed: 1, proposed: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const rows = await storedSuggestions(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].url).toBe("https://proof.example/app");
+    expect(rows[0].evidence[0]).toContain("verify its factual claims against primary sources");
+  });
+
+  it("spends no screening call when the search has no draft workflow evidence", async () => {
+    const { t, user } = await fixture("owner", ["freshproof"]);
+    const targetId = await connectTarget(user, {
+      productIdentifiers: ["fact-checking drafts before publication"],
+    });
+    await enabledEnv();
+    vi.stubEnv("AEO_DISCOVERY_ENABLED", "0");
+    vi.stubEnv("AEO_SCHEDULED_TARGET_ID", targetId);
+    const fetchMock = mockProviders();
+
+    expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, { trialTargetId: targetId }))
+      .toMatchObject({ completed: 1, proposed: 0, reason: "no-draft-workflow-evidence-in-search" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(await storedSuggestions(t)).toEqual([]);
+  });
+
   it("skips discovery without a product category before it makes any provider call", async () => {
     const { t, user } = await fixture("owner", ["freshproof"]);
     await connectTarget(user, { productIdentifiers: [] });

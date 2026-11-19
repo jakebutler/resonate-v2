@@ -70,24 +70,40 @@ describe("answerEngineCredential", () => {
 });
 
 describe("buildAnswerEngineQuestions", () => {
-  it("asks brand, recommendation, identifier, and competitor phrasings in order", () => {
+  it("keeps bare-name questions first and prioritizes category-qualified questions", () => {
     const questions = buildAnswerEngineQuestions({
       brandName: "FreshProof",
       productIdentifiers: ["FreshProof band"],
       competitorUrls: ["https://www.competitor.example/path", "https://other.example"],
     });
-    expect(questions.map((q) => q.phrasing).slice(0, 5)).toEqual([
+    expect(questions.map((q) => q.phrasing).slice(0, 7)).toEqual([
       "brand",
       "recommendation",
+      "qualified",
+      "qualified",
       "identifier",
       "competitor",
       "competitor",
     ]);
     expect(questions[0].question).toBe("What is FreshProof and what does it do?");
-    expect(questions[2].question).toBe(
+    expect(questions[2].question).toBe("What is FreshProof in the context of FreshProof band?");
+    expect(questions[3].question).toBe("Would you recommend FreshProof for FreshProof band?");
+    expect(questions[4].question).toBe(
       "Which tools or products would you recommend for FreshProof band?"
     );
-    expect(questions[3].question).toBe("What alternatives are there to competitor.example?");
+    expect(questions[5].question).toBe("What alternatives are there to competitor.example?");
+  });
+
+  it("keeps both FreshProof groups and the unbranded question in the 12-question pilot", () => {
+    const questions = buildAnswerEngineQuestions({
+      brandName: "FreshProof",
+      productIdentifiers: ["fact-checking drafts before publication"],
+      competitorUrls: [],
+    }).slice(0, 12);
+    expect(questions.filter((question) => question.phrasing === "qualified")).toHaveLength(2);
+    expect(questions.filter((question) => question.phrasing === "identifier")).toHaveLength(1);
+    expect(questions.filter((question) => !["qualified", "identifier"].includes(question.phrasing)))
+      .toHaveLength(9);
   });
 
   it("fills the depth bound with generic brand phrasings so depth is reachable", () => {
