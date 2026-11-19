@@ -95,10 +95,20 @@ export function competitorNamesFromUrls(urls: string[]): string[] {
   return [...new Set(urls.map(competitorNameFromUrl).filter(Boolean))];
 }
 
+export function distinctProductIdentifiers(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values.map((value) => value.trim()).filter((value) => {
+    const key = value.toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export type AnswerEngineQuestion = {
   question: string;
-  /** Which phrasing produced the question (brand, recommendation, identifier, competitor, depth). */
-  phrasing: "brand" | "recommendation" | "identifier" | "competitor" | "depth";
+  /** Which phrasing produced the question (brand, recommendation, qualified, identifier, competitor, depth). */
+  phrasing: "brand" | "recommendation" | "qualified" | "identifier" | "competitor" | "depth";
 };
 
 /**
@@ -115,11 +125,12 @@ export function buildAnswerEngineQuestions(input: {
     { question: `What is ${input.brandName} and what does it do?`, phrasing: "brand" },
     { question: `Would you recommend ${input.brandName}?`, phrasing: "recommendation" },
   ];
-  for (const identifier of input.productIdentifiers) {
-    questions.push({
-      question: `Which tools or products would you recommend for ${identifier}?`,
-      phrasing: "identifier",
-    });
+  for (const identifier of distinctProductIdentifiers(input.productIdentifiers)) {
+    questions.push(
+      { question: `What is ${input.brandName} in the context of ${identifier}?`, phrasing: "qualified" },
+      { question: `Would you recommend ${input.brandName} for ${identifier}?`, phrasing: "qualified" },
+      { question: `Which tools or products would you recommend for ${identifier}?`, phrasing: "identifier" }
+    );
   }
   for (const name of competitorNamesFromUrls(input.competitorUrls)) {
     questions.push({ question: `What alternatives are there to ${name}?`, phrasing: "competitor" });

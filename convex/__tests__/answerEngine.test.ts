@@ -138,8 +138,7 @@ describe("answer-engine run lifecycle", () => {
 
     const outcome = await t.action(internal.answerEngine.runAnswerEngineBatch, {});
     expect(outcome).toMatchObject({ started: 1, completed: 1, failed: 0 });
-    // Default depth (12): 2 brand + 1 identifier + 1 competitor + 8 depth
-    // phrasings, one gateway call per question.
+    // The default limit caps the mixed question set at 12 provider calls.
     expect(fetchMock).toHaveBeenCalledTimes(12);
 
     const stored = await t.run(async (ctx) => {
@@ -173,9 +172,8 @@ describe("answer-engine run lifecycle", () => {
     const fetchMock = mockGateway();
 
     await t.action(internal.answerEngine.runAnswerEngineBatch, {});
-    // 2 brand questions + 1 identifier question + 8 depth questions = 11
-    // gateway calls, no network beyond the mocked fetch boundary.
-    expect(fetchMock).toHaveBeenCalledTimes(11);
+    // The category and bare-name questions share the existing 12-call cap.
+    expect(fetchMock).toHaveBeenCalledTimes(12);
     const [url] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/v1/chat/completions");
   });
