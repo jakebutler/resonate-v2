@@ -77,14 +77,25 @@ describe("loadVerificationReportData", () => {
     expect(smoke?.results).toHaveLength(3);
   });
 
-  it("includes the curated AEO/SEO live-proof entry with receipts", async () => {
+  it("includes production AEO receipts and the failed visibility and competitor checks", async () => {
     const data = await loadVerificationReportData(fileSystemWith({}));
     const aeo = data.features.find((feature) => feature.featureId === "aeo-seo");
 
     expect(aeo).toEqual(aeoSeoFeatureReport());
-    expect(aeo?.receipts.some((receipt) => receipt.runId === "ms73vpw9sgj9w061qz8h2f04558j6rhd"))
+    expect(aeo?.receipts.some((receipt) => receipt.runId === "wh7dkbp73s2td73731156kk2718jh6kn"))
       .toBe(true);
-    expect(aeo?.receipts.some((receipt) => receipt.spendCents != null)).toBe(true);
+    expect(aeo?.receipts).toContainEqual({
+      label: "Visibility after the Sessionize update",
+      runId: "wh71w1dnbs5zmvjhyj4v8vrqkh8jge1g",
+      spendCents: 24,
+      ceilingCents: 24,
+      status: "Complete · 12 answers, zero freshproof.io citations",
+    });
+    expect(aeo?.status).toBe("issues");
+    expect(aeo?.results.find(({ criterionId }) => criterionId === "aeo-post-bio-visibility")?.outcome)
+      .toBe("FAIL");
+    expect(aeo?.results.find(({ criterionId }) => criterionId === "aeo-competitor-positive-control")?.outcome)
+      .toBe("FAIL");
   });
 
   it("reports a feature as unverified — without a load error — when no run is on file", async () => {
@@ -170,12 +181,12 @@ describe("buildVerificationReportData", () => {
 
     expect(data.features.map((feature) => feature.featureId)).toEqual([
       "campaigns",
-      "smoke",
       "aeo-seo",
+      "smoke",
     ]);
     expect(data.features[0].status).toBe("issues");
-    expect(data.features[1].status).toBe("unverified");
-    expect(data.features[2].status).toBe("verified");
+    expect(data.features[1].status).toBe("issues");
+    expect(data.features[2].status).toBe("unverified");
   });
 });
 

@@ -1,57 +1,68 @@
-import type { CriterionResult, CriterionOutcome } from "./verificationRunner";
+import type { CriterionOutcome, CriterionResult } from "./verificationRunner";
 import type { VerificationFeatureReport, VerificationReceipt } from "./verificationReportData";
 
-/**
- * Curated AEO/SEO live-proof entry for the /verification report.
- *
- * AEO/SEO has no verification manifest: its proof is the committed live run
- * report `docs/verification/reports/2026-11-14-aeo-live-proof.md`, which
- * records a Firecrawl crawl, an answer-engine visibility run, and a
- * competitor-discovery cycle against a real dev deployment. This entry
- * transcribes that report's structured facts verbatim — run ids, spend,
- * timestamps — so the buyer surface can show them without scraping GitHub.
- * Re-run the live proof and update this file alongside the new report.
- */
-
-const SOURCE_DOC = "docs/verification/reports/2026-11-14-aeo-live-proof.md";
-const RUN_DATE = "2026-11-14";
-const EVIDENCE_DIR = "docs/verification/reports/evidence/aeo-live-proof";
+/** Production evidence for the curated AEO/SEO card on /verification. */
+const SOURCE_DOC = "docs/verification/reports/2026-11-19-freshproof-production-research.md";
+const CRAWL_ID = "wn7bx9mbdr2w55dy8gn1fcmg9d8jed2r";
+const KEYWORD_RUN_ID = "wh71487stn7h0yhjte49669wcn8jeqdp";
+const BASELINE_VISIBILITY_RUN_ID = "wh7dkbp73s2td73731156kk2718jh6kn";
+const POST_BIO_VISIBILITY_RUN_ID = "wh71w1dnbs5zmvjhyj4v8vrqkh8jge1g";
+const DISCOVERY_RUN_ID = "wh72c0pms1gfddxw6zz87qws6d8jh6s6";
 
 function criterion(
   id: string,
   name: string,
   details: string,
   evidence: string,
+  outcome: CriterionOutcome = "PASS",
 ): CriterionResult {
   return {
     criterionId: id,
     name,
     runner: "contract",
     tier: "live-receipt",
-    outcome: "PASS" satisfies CriterionOutcome,
-    evidence,
-    details,
+    outcome,
+    ...(outcome === "PASS" ? { evidence, details } : { evidence: "", details: `${details} ${evidence}` }),
   };
 }
 
 const receipts: VerificationReceipt[] = [
   {
-    label: "Answer-engine visibility run",
-    runId: "ms73vpw9sgj9w061qz8h2f04558j6rhd",
-    spendCents: 4,
-    ceilingCents: 50,
-    status: "complete",
+    label: "FreshProof crawl",
+    runId: CRAWL_ID,
+    status: "Complete · five pages",
   },
   {
-    label: "Competitor discovery cycle",
-    runId: "ms71w1hpmtvw00xkb04q7sdw1n8j65xs",
-    spendCents: 4,
-    ceilingCents: 50,
-    status: "complete",
+    label: "SEO keyword research",
+    runId: KEYWORD_RUN_ID,
+    spendCents: 10,
+    ceilingCents: 10,
+    status: "Complete · five search checks",
   },
   {
-    label: "Firecrawl crawl of the pilot target",
-    status: "complete (free-tier crawl)",
+    label: "Visibility before the Sessionize update",
+    runId: BASELINE_VISIBILITY_RUN_ID,
+    spendCents: 24,
+    ceilingCents: 24,
+    status: "Complete · 12 answers",
+  },
+  {
+    label: "Visibility after the Sessionize update",
+    runId: POST_BIO_VISIBILITY_RUN_ID,
+    spendCents: 24,
+    ceilingCents: 24,
+    status: "Complete · 12 answers, zero freshproof.io citations",
+  },
+  {
+    label: "Production competitor discovery",
+    runId: DISCOVERY_RUN_ID,
+    spendCents: 2,
+    ceilingCents: 8,
+    status: "Complete · one search, zero eligible excerpts",
+  },
+  {
+    label: "ProofMyText positive control",
+    status: "Failed · rejected on both live screening calls",
   },
 ];
 
@@ -60,41 +71,57 @@ export function aeoSeoFeatureReport(): VerificationFeatureReport {
     kind: "curated",
     featureId: "aeo-seo",
     name: "AEO / SEO intelligence",
-    description:
-      "Live proof from a real dev deployment: the pilot site was connected, crawled with Firecrawl, " +
-      "measured for AI answer-engine visibility, and compared against discovered competitors.",
+    description: "Production crawl, SEO keyword research, web-grounded visibility, and competitor discovery evidence for FreshProof.",
     buyerSummary:
-      "You can connect your site, see whether AI answer engines cite your brand, discover and " +
-      "review competitors, and plan strategy from real data. A live run on a real deployment " +
-      "(2026-11-14) proved the whole chain with a real crawl of the pilot site and real AI answers " +
-      "— total spend about 8 cents, every run id and receipt recorded below.",
-    status: "verified",
-    startedAt: `${RUN_DATE}T07:55:00.000Z`,
-    finishedAt: `${RUN_DATE}T07:55:00.000Z`,
+      "Production completed the crawl, keyword research, and both 12-question visibility runs. Neither run cited freshproof.io. " +
+      "The competitor screener rejected a qualifying product in two live controls. The weekly jobs are paused.",
+    status: "issues",
+    startedAt: "2026-11-19T19:12:50.742Z",
+    finishedAt: "2026-11-19T19:17:35.235Z",
     results: [
       criterion(
-        "aeo-connect-target",
-        "Connect the pilot target and pin its review",
-        "The FreshProof pilot target was connected to https://freshproof.io through a real Clerk dev sign-in as the e2e user, and its review was pinned.",
-        `Screenshots: ${EVIDENCE_DIR}/tc-1-home-signed-in.png, ${EVIDENCE_DIR}/tc-2-aeo-connect-connected.png, ${EVIDENCE_DIR}/tc-3-aeo-review-pinned.png`,
+        "aeo-firecrawl-crawl",
+        "Production crawl saved five FreshProof pages",
+        "The completed Firecrawl snapshot contains the homepage and four article pages.",
+        `Production crawl snapshot ${CRAWL_ID}, version 1.`,
       ),
       criterion(
-        "aeo-firecrawl-crawl",
-        "Live Firecrawl crawl with an immutable snapshot",
-        `Real crawl of https://freshproof.io (limit 5, 2 s poll interval); snapshot qh73md07v596xk3f2qzdxw1sa18j6c81 v1 recorded via recordCrawlSnapshot, status complete. Pages captured: /, /blog, /pricing, /terms, /sitemap.xml.`,
-        `Driver: ${EVIDENCE_DIR}/driver-crawl.mts`,
+        "aeo-keyword-research",
+        "Production keyword research records search coverage",
+        "Five searched queries did not surface freshproof.io. Twenty candidates remain unproven.",
+        `Production run ${KEYWORD_RUN_ID}. See /aeo/gaps?brand=freshproof.`,
       ),
       criterion(
         "aeo-answer-engine-visibility",
-        "Answer-engine visibility run cites the brand",
-        "Run ms73vpw9sgj9w061qz8h2f04558j6rhd (status complete, ceiling 50¢): both questions cited FreshProof, classification opportunity, extractability 0.79 and 0.58.",
-        `Visible on /aeo/intel with quoted answers; screenshots ${EVIDENCE_DIR}/tc-7-intel.png, ${EVIDENCE_DIR}/tc-7-gaps.png, ${EVIDENCE_DIR}/tc-7-plan.png`,
+        "Production visibility captures sources for the original comparison",
+        "The 12-question run saved all 12 answers. All nine bare-name questions cited the UK delivery service. Zero answers cited freshproof.io.",
+        `Production run ${BASELINE_VISIBILITY_RUN_ID}. See /aeo/intel?brand=freshproof.`,
+      ),
+      criterion(
+        "aeo-sessionize-retrieval",
+        "The answer engine can retrieve the updated Sessionize profile",
+        "The first probe retrieved the earlier bio. The second probe read the current pre-publication description and identified the FreshProof link.",
+        "One grounded response on each probe, using the production adapter and model. The second response cited https://sessionize.com/jakebutler/.",
+      ),
+      criterion(
+        "aeo-post-bio-visibility",
+        "The repeated questions surface freshproof.io",
+        "All 12 questions were repeated in order after the retrieval check passed. Zero answers cited freshproof.io. The category-qualified definition still described post-publication monitoring, and 10 answers cited the UK delivery service.",
+        `Production run ${POST_BIO_VISIBILITY_RUN_ID}. The baseline had zero freshproof.io citations and nine UK delivery citations.`,
+        "FAIL",
       ),
       criterion(
         "aeo-competitor-discovery",
-        "Competitor discovery proposes and human review decides",
-        "Run ms71w1hpmtvw00xkb04q7sdw1n8j65xs (status complete) proposed 15 deduplicated suggestions; the review UI accepted slickwrite.com and gingersoftware.com and recorded a reasoned rejection for prowritingaid.com.",
-        `Screenshots: ${EVIDENCE_DIR}/tc-4-competitors-review-queue.png, ${EVIDENCE_DIR}/tc-5-competitors-after-review.png, ${EVIDENCE_DIR}/tc-6-competitors-reject-recorded.png`,
+        "Discovery skips screening when search has no qualifying evidence",
+        "The strict production trial completed after one search and queued zero suggestions.",
+        `Production run ${DISCOVERY_RUN_ID}. The model screening call was skipped.`,
+      ),
+      criterion(
+        "aeo-competitor-positive-control",
+        "Discovery can queue a real qualifying product",
+        "Firecrawl found ProofMyText and the excerpt filter admitted it. The production screening model returned an empty list twice, including with explicit draft-intake evidence. The review queue stayed empty in the isolated test.",
+        "See the positive and negative controls in the evidence report. No candidates were written to the production queue during the controls.",
+        "FAIL",
       ),
     ],
     reportPath: SOURCE_DOC,
