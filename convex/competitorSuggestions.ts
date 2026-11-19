@@ -339,12 +339,13 @@ export const runDiscoveryBatch = internalAction({
     }
     const limits = discoveryRunLimits(process.env);
     const adapterContext = discoveryAdapterContext();
-    // Stale-run recovery runs before target selection: a crashed run must
-    // never lock out the daily cycle, while a fresh in-flight run still gates
-    // its brand below (the reviewPinned gate in allTargets is unchanged).
-    await ctx.runMutation(internal.competitorSuggestions.reapStaleDiscoveryRuns, {
-      staleMs: limits.staleRunMs,
-    });
+    // Keep the one-off path scoped to its explicit target. Global stale-run
+    // recovery belongs to the scheduled batch.
+    if (scheduled) {
+      await ctx.runMutation(internal.competitorSuggestions.reapStaleDiscoveryRuns, {
+        staleMs: limits.staleRunMs,
+      });
+    }
     const targets = await ctx.runQuery(internal.competitorSuggestions.allTargets, {});
     const outcome: DiscoveryBatchOutcome = {
       started: 0,

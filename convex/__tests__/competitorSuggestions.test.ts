@@ -138,8 +138,12 @@ describe("discovery batch gates", () => {
   });
 
   it("runs a scoped discovery trial while the weekly job is disabled", async () => {
-    const { t, user } = await fixture("owner", ["freshproof"]);
+    const { t, user } = await fixture("owner", ["freshproof", "corvo"]);
     const targetId = await connectTarget(user, { productIdentifiers: ["fact-checking drafts"] });
+    const unrelatedRun = await t.run((ctx) => ctx.db.insert("intelRuns", {
+      userId: "owner", brandId: "corvo", kind: "competitor-discovery", status: "running",
+      costCeilingCents: 8, questionCount: 2, startedAt: Date.now() - 60 * 60 * 1000,
+    }));
     await enabledEnv();
     vi.stubEnv("AEO_DISCOVERY_ENABLED", "0");
     vi.stubEnv("AEO_SCHEDULED_TARGET_ID", "");
@@ -153,6 +157,7 @@ describe("discovery batch gates", () => {
     expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, { trialTargetId: targetId }))
       .toMatchObject({ started: 1, completed: 1 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((await t.run((ctx) => ctx.db.get(unrelatedRun)))?.status).toBe("running");
   });
 
   it("skips discovery without a product category before it makes any provider call", async () => {
