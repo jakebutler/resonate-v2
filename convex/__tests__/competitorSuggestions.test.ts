@@ -140,17 +140,22 @@ describe("discovery batch gates", () => {
   it("runs a scoped discovery trial while the weekly job is disabled", async () => {
     const { t, user } = await fixture("owner", ["freshproof", "corvo"]);
     const targetId = await connectTarget(user, { productIdentifiers: ["fact-checking drafts"] });
+    const otherTargetId = await connectTarget(user, { brandId: "corvo" });
     const unrelatedRun = await t.run((ctx) => ctx.db.insert("intelRuns", {
       userId: "owner", brandId: "corvo", kind: "competitor-discovery", status: "running",
       costCeilingCents: 8, questionCount: 2, startedAt: Date.now() - 60 * 60 * 1000,
     }));
     await enabledEnv();
     vi.stubEnv("AEO_DISCOVERY_ENABLED", "0");
-    vi.stubEnv("AEO_SCHEDULED_TARGET_ID", "");
+    vi.stubEnv("AEO_SCHEDULED_TARGET_ID", otherTargetId);
     const fetchMock = mockProviders();
     expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, { trialTargetId: targetId }))
       .toMatchObject({ started: 0, reason: "trial-target-outside-configured-pilot" });
     vi.stubEnv("AEO_SCHEDULED_TARGET_ID", targetId);
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: false });
+    expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, { trialTargetId: targetId }))
+      .toMatchObject({ started: 0, reason: "trial-target-not-eligible" });
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: true });
     expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, {}))
       .toMatchObject({ started: 0, reason: "competitor-discovery-disabled" });
     expect(fetchMock).not.toHaveBeenCalled();

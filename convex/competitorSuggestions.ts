@@ -355,6 +355,9 @@ export const runDiscoveryBatch = internalAction({
       skipped: [],
     };
 
+    if (!scheduled && !targets.some((target) => target._id === trialTargetId)) {
+      return { ...outcome, reason: "trial-target-not-eligible" };
+    }
     for (const target of targets) {
       if (trialTargetId !== undefined && target._id !== trialTargetId) continue;
       if (

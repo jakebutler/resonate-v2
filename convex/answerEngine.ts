@@ -323,6 +323,9 @@ export const runAnswerEngineBatch = internalAction({
     const targets = await ctx.runQuery(internal.answerEngine.allTargets, {});
     const outcome: AnswerEngineBatchOutcome = { started: 0, completed: 0, failed: 0, skipped: [] };
 
+    if (!scheduled && !targets.some((target) => target._id === trialTargetId)) {
+      return { ...outcome, reason: "trial-target-not-eligible" };
+    }
     for (const target of targets) {
       if (trialTargetId !== undefined && target._id !== trialTargetId) continue;
       if (await ctx.runQuery(internal.answerEngine.hasRunningRun, { userId: target.userId, brandId: target.brandId })) {

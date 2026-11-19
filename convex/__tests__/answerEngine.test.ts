@@ -232,6 +232,14 @@ describe("answer-engine run lifecycle", () => {
     expect(await t.action(internal.answerEngine.runAnswerEngineBatch, { trialTargetId: targetId }))
       .toMatchObject({ started: 0, reason: "trial-target-outside-configured-pilot" });
     vi.stubEnv("AEO_SCHEDULED_TARGET_ID", targetId);
+    vi.stubEnv("AEO_ANSWER_ENGINE_WEB_SEARCH", "0");
+    expect(await t.action(internal.answerEngine.runAnswerEngineBatch, { trialTargetId: targetId }))
+      .toMatchObject({ started: 0, reason: "trial-web-search-disabled" });
+    vi.stubEnv("AEO_ANSWER_ENGINE_WEB_SEARCH", "1");
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: false });
+    expect(await t.action(internal.answerEngine.runAnswerEngineBatch, { trialTargetId: targetId }))
+      .toMatchObject({ started: 0, reason: "trial-target-not-eligible" });
+    await user.mutation(api.aeoIntel.pinTargetReview, { brandId: "freshproof", pinned: true });
     expect(await t.action(internal.answerEngine.runAnswerEngineBatch, {}))
       .toMatchObject({ started: 0, reason: "answer-engine-runs-disabled" });
     expect(fetch).not.toHaveBeenCalled();
