@@ -45,7 +45,7 @@ describe("CitationResultsPanel", () => {
     expect(screen.getByLabelText("Cited: FreshProof")).toBeInTheDocument();
     expect(screen.getByLabelText("Competitor cited: TrackGLP")).toBeInTheDocument();
     expect(screen.getByText(/Extractability 62%/)).toBeInTheDocument();
-    expect(screen.getByLabelText("No citation for this brand")).toBeInTheDocument();
+    expect(screen.getByText("Citation unverified")).toBeInTheDocument();
     expect(screen.getByText(/FreshProof tracks doses/)).toBeInTheDocument();
   });
 });

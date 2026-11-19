@@ -81,7 +81,7 @@ afterEach(() => {
 });
 
 describe("answer-engine run lifecycle", () => {
-  it("restricts both daily jobs to the selected pinned pilot target", async () => {
+  it("restricts both scheduled jobs to the selected pinned pilot target", async () => {
     const { t, user } = await fixture("owner", ["freshproof", "corvo"]);
     const pilot = await connectTarget(user);
     await connectTarget(user, { brandId: "corvo" });
@@ -156,19 +156,10 @@ describe("answer-engine run lifecycle", () => {
     });
     expect(stored.runs[0].finishedAt).toBeDefined();
     expect(stored.rows).toHaveLength(12);
-    // Brand-phrased answers cite the brand; the recommendation answer names
-    // only the competitor; the two alternatives-phrasings name the competitor
-    // too. Without a crawl snapshot every cited row's brand match is unknown.
-    const citationStatuses = stored.rows.map((row) => row.citationStatus).sort();
-    expect(citationStatuses).toEqual([
-      ...Array(9).fill("cited"),
-      ...Array(3).fill("uncited"),
-    ]);
-    for (const row of stored.rows.filter((row) => row.citationStatus === "cited")) {
-      expect(row.brandMatch).toBe("unknown");
+    for (const row of stored.rows) {
+      expect(row).toMatchObject({ citationStatus: "not-observed", classification: "needs-review" });
+      expect(row.citationUrls).toBeUndefined();
     }
-    const classifications = new Set(stored.rows.map((row) => row.classification));
-    expect(classifications).toEqual(new Set(["gap", "opportunity"]));
     for (const row of stored.rows) {
       expect(row.reviewStatus).toBe("unreviewed");
       expect(row.evidence.length).toBeGreaterThan(0);
@@ -209,12 +200,38 @@ describe("answer-engine run lifecycle", () => {
       ],
     });
     await enabledEnv();
-    mockGateway();
+    vi.stubEnv("AEO_ANSWER_ENGINE_WEB_SEARCH", "1");
+    vi.stubEnv("OPENAI_API_KEY", "test-openai");
+    vi.stubEnv("AEO_ANSWER_ENGINE_MAX_QUESTIONS", "1");
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      expect(String(url)).toBe("https://api.openai.com/v1/responses");
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        model: "gpt-6-luna",
+        reasoning: { effort: "low" },
+        max_tool_calls: 1,
+        tool_choice: "required",
+      });
+      return Response.json({
+        status: "completed",
+        output: [
+          { type: "web_search_call", status: "completed" },
+          { type: "message", status: "completed", content: [{
+            type: "output_text",
+            text: "FreshProof validates evidence for editors at freshproof.example.",
+            annotations: [
+              { type: "url_citation", url: "https://www.freshproof.example/" },
+              { type: "url_citation", url: "javascript:void(0)" },
+            ],
+          }] },
+        ],
+      });
+    });
 
     await t.action(internal.answerEngine.runAnswerEngineBatch, {});
     const stored = await t.run(async (ctx) => ctx.db.query("intelFindings").collect());
     const cited = stored.filter((row) => row.citationStatus === "cited");
-    expect(cited.length).toBeGreaterThan(0);
+    expect(cited).toHaveLength(1);
+    expect(cited[0]?.citationUrls).toEqual(["https://www.freshproof.example/"]);
     for (const row of cited) {
       // Stored scale: an integer 0–100.
       expect(Number.isInteger(row.extractability)).toBe(true);
@@ -391,7 +408,7 @@ describe("answer-engine brand-mismatch detection", () => {
     },
   ];
 
-  it("records a suspect classification and flags the run when a cited answer describes a different product", async () => {
+  it("records a suspect classification and flags the run when an answer describes a different product", async () => {
     const { t, user } = await fixture("owner", ["freshproof"]);
     const targetId = await connectTarget(user, { competitorUrls: [], productIdentifiers: [] });
     await user.mutation(api.aeoIntel.recordCrawlSnapshot, {
@@ -428,17 +445,17 @@ describe("answer-engine brand-mismatch detection", () => {
     }));
     const homonym = stored.rows.find((row) => row.summary.startsWith("What is FreshProof"));
     expect(homonym).toBeDefined();
-    expect(homonym).toMatchObject({ citationStatus: "cited", brandMatch: "suspect" });
+    expect(homonym).toMatchObject({ citationStatus: "not-observed", brandMatch: "suspect" });
     expect(homonym?.brandMatchDetail).toContain("different product");
     // A suspect citation is never an unflagged opportunity: the finding row
     // carries the explicit needs-review classification downstream consumers
     // (gaps list, strategy plan) render.
     expect(homonym?.classification).toBe("needs-review");
-    // Matching answers still cite cleanly (and classify as opportunities).
+    // Even an on-topic answer needs provider citation evidence.
     for (const row of stored.rows.filter((row) => !row.summary.startsWith("What is FreshProof"))) {
-      expect(row.citationStatus).toBe("cited");
+      expect(row.citationStatus).toBe("not-observed");
       expect(row.brandMatch).toBe("match");
-      expect(row.classification).toBe("opportunity");
+      expect(row.classification).toBe("needs-review");
     }
     // The run record itself carries the mismatch classification.
     expect(stored.runs[0]).toMatchObject({ status: "complete", brandMismatchCount: 1 });

@@ -9,7 +9,7 @@
 // results do not surface the target's domain. Every pure function here is
 // fixture-testable and shared by the run action and the UI mapping.
 
-import { competitorNameFromUrl } from "./answerEngine";
+import { competitorNameFromUrl, hasVerifiedTargetCitation } from "./answerEngine";
 import { stripResponseFormatInstruction } from "./competitorDiscovery";
 
 export type KeywordPresence = "present" | "absent" | "unproven";
@@ -27,6 +27,7 @@ export type KeywordCandidate = {
   keyword: string;
   origin: "crawl" | "question" | "competitor" | "plan";
   sources: KeywordSource[];
+  pageHeadline?: boolean;
 };
 
 export type KeywordResearchRunLimits = {
@@ -63,10 +64,15 @@ export function normalizeKeyword(text: string): string {
   return text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
 }
 
-/** Derivable phrases only: too-short fragments and nav-scale strings are not phrases. */
+const NON_TOPICAL_HEADINGS = new Set([
+  "assessment", "conclusion", "editorial recommendation", "faq", "frequently asked questions",
+  "introduction", "key takeaways", "summary", "table of contents",
+]);
+
+/** Derivable phrases only: omit boilerplate shared by unrelated pages. */
 function isDerivablePhrase(text: string): boolean {
   const normalized = normalizeKeyword(text);
-  return normalized.length >= 3 && normalized.length <= 120;
+  return normalized.length >= 3 && normalized.length <= 120 && !NON_TOPICAL_HEADINGS.has(normalized);
 }
 
 export type KeywordResearchInput = {
@@ -90,17 +96,24 @@ export function deriveKeywordCandidates(
 ): KeywordCandidate[] {
   const byKeyword = new Map<string, KeywordCandidate>();
 
-  function add(keyword: string, origin: KeywordCandidate["origin"], source: KeywordSource): void {
+  function add(keyword: string, origin: KeywordCandidate["origin"], source: KeywordSource, pageHeadline = false): void {
     const normalized = normalizeKeyword(keyword);
     if (!isDerivablePhrase(keyword) || byKeyword.has(normalized)) return;
-    byKeyword.set(normalized, { keyword: keyword.trim(), origin, sources: [source] });
+    byKeyword.set(normalized, {
+      keyword: keyword.trim(), origin, sources: [source], ...(pageHeadline ? { pageHeadline } : {}),
+    });
   }
 
+  for (const keyword of input.planKeywords) add(keyword, "plan", { kind: "plan-keyword" });
   for (const page of input.pages) {
-    if (page.title) add(page.title, "crawl", { kind: "crawl-page", pageUrl: page.url });
-    for (const heading of page.headings) {
-      add(heading, "crawl", { kind: "crawl-page", pageUrl: page.url });
-    }
+    const source = { kind: "crawl-page" as const, pageUrl: page.url };
+    const primary = page.title ?? page.headings[0];
+    // The first heading on a homepage can be a marketing slogan. A title
+    // or an article page's first heading is a better search candidate.
+    const isHomepage = /^https?:\/\/[^/?#]+\/?(?:[?#]|$)/i.test(page.url);
+    const hasPageTopic = Boolean(page.title) || !isHomepage;
+    if (primary) add(primary, "crawl", source, hasPageTopic);
+    for (const heading of page.headings) add(heading, "crawl", source);
   }
   for (const finding of input.findings) {
     add(finding.summary, "question", { kind: "question", findingId: finding._id });
@@ -114,10 +127,7 @@ export function deriveKeywordCandidates(
       if (cleaned) add(cleaned, "competitor", { kind: "competitor-topic", suggestionId: suggestion._id });
     }
   }
-  for (const keyword of input.planKeywords) {
-    add(keyword, "plan", { kind: "plan-keyword" });
-  }
-  return [...byKeyword.values()].slice(0, maxCandidates);
+  return keywordSearchOrder([...byKeyword.values()]).slice(0, maxCandidates);
 }
 
 export type CitationFinding = {
@@ -125,6 +135,7 @@ export type CitationFinding = {
   summary: string;
   citationStatus: "cited" | "uncited" | "not-observed";
   brandMatch?: "match" | "suspect" | "unknown";
+  citationUrls?: string[];
 };
 
 function keywordMatchesFinding(keyword: string, question: string): boolean {
@@ -133,20 +144,13 @@ function keywordMatchesFinding(keyword: string, question: string): boolean {
   return normalizedQuestion.includes(normalizedKeyword) || normalizedKeyword.includes(normalizedQuestion);
 }
 
-/**
- * Absence-of-citation from real answer-engine runs. "present" only when a run
- * observed the keyword and cited the brand (a suspect citation describes
- * possibly another product, so it never counts as presence); observed but
- * uncited is "absent"; no run ever asked about it is "unproven" — never
- * "absent", because absence without observation is not evidence.
- */
+/** Score only observations with web citation evidence. Historical mentions stay unproven. */
 export function keywordCitationStatus(keyword: string, findings: CitationFinding[]): KeywordPresence {
   const observed = findings.filter((finding) => keywordMatchesFinding(keyword, finding.summary));
-  if (observed.length === 0) return "unproven";
-  const cited = observed.some(
-    (finding) => finding.citationStatus === "cited" && finding.brandMatch !== "suspect"
-  );
-  return cited ? "present" : "absent";
+  if (observed.some(hasVerifiedTargetCitation)) return "present";
+  return observed.some((finding) => finding.citationStatus === "uncited" && finding.citationUrls?.length)
+    ? "absent"
+    : "unproven";
 }
 
 /**
@@ -206,19 +210,17 @@ export function planKeywordResearchRun(input: {
   return { ok: true, candidateCount, searchQueryCount, estimatedCostCents, ceilingCents: limits.runCeilingCents };
 }
 
-/**
- * Search order for the budgeted leg: the observed gaps first — absent and
- * unproven candidates are exactly what the marketer is missing — then the
- * rest in derivation order.
- */
+/** Spend the search budget on planned phrases and page topics before raw subheadings. */
 export function keywordSearchOrder(candidates: KeywordCandidate[]): KeywordCandidate[] {
-  const absentFirst = new Map<KeywordCandidate["origin"], number>([
-    ["question", 0],
-    ["plan", 1],
-    ["competitor", 2],
-    ["crawl", 3],
-  ]);
-  return [...candidates].sort((a, b) => (absentFirst.get(a.origin) ?? 9) - (absentFirst.get(b.origin) ?? 9));
+  const rank = (candidate: KeywordCandidate): number => {
+    if (candidate.origin === "plan") return 0;
+    if (candidate.pageHeadline && normalizeKeyword(candidate.keyword).split(" ").length >= 4) {
+      return /^(how|what|why|when|can|is|are|should|which)\b/i.test(candidate.keyword) ? 1 : 2;
+    }
+    if (candidate.origin === "question" || candidate.origin === "competitor") return 3;
+    return 4;
+  };
+  return [...candidates].sort((a, b) => rank(a) - rank(b));
 }
 
 /**

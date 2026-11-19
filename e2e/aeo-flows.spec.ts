@@ -23,7 +23,7 @@ function targetFixture(reviewPinned: boolean) {
   };
 }
 
-test("intel-citations: a suspect citation renders the mismatch warning and a qualified badge", async ({
+test("intel-citations: a suspect mention stays unverified while a sourced answer earns citation credit", async ({
   page,
 }) => {
   await mockConvexSync(page, {
@@ -41,13 +41,12 @@ test("intel-citations: a suspect citation renders the mismatch warning and a qua
   // Run-level and per-finding warnings are visible.
   await expect(page.getByText(/Brand mismatch suspected: 1 of 2/)).toBeVisible();
   await expect(page.getByText("Mismatch suspected.")).toBeVisible();
-  // The suspect citation is always qualified, never a plain "cited".
-  await expect(
-    page.getByText("Cited: Corvo Labs (mismatch suspected)", { exact: true })
-  ).toBeVisible();
+  await expect(page.getByText("Citation unverified", { exact: true })).toBeVisible();
   await expect(
     page.getByText("Cited: Corvo Labs", { exact: true })
   ).toBeVisible();
+  await expect(page.getByRole("link", { name: /freshproof.example.com/ }))
+    .toHaveAttribute("href", "https://freshproof.example.com/");
 });
 
 const planFixture = {
@@ -100,7 +99,7 @@ const suggestionFixture = {
 };
 
 // One complete run whose "What is FreshProof" answer described a same-named
-// different product (the 2026-11-14 live-proof case): cited, but suspect.
+// different product (the 2026-11-14 live-proof case).
 const runFixture = {
   _id: "run-fixture",
   _creationTime: 1,
@@ -147,6 +146,7 @@ const matchFinding = findingFixture({
   summary: "How does FreshProof compare to its alternatives?",
   evidence: ["question: How does FreshProof compare to its alternatives?", "answer: FreshProof's proofing workflow..."],
   brandMatch: "match",
+  citationUrls: ["https://freshproof.example.com/"],
 });
 
 test("connect-target: connect a site, then pin its review", async ({ page }) => {

@@ -90,7 +90,7 @@ export function StrategyPlanPanel({
         <PanelError message={plan.message} onRetry={plan.onRetry} />
       ) : plan.data === null ? (
         <p className={cn("text-sm", tokens.textMuted)}>
-          No strategy plan yet — the daily intel cycle collects findings on its
+          No strategy plan yet — the weekly intel cycle collects findings on its
           own cron schedule, and a plan drafted from them appears here for
           review.
         </p>

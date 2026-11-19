@@ -83,24 +83,12 @@ export function stripResponseFormatInstruction(text: string): string {
   return text.split(ANSWER_ENGINE_FORMAT_INSTRUCTION).join("").trim();
 }
 
-export function buildDiscoveryQueries(input: {
-  brandName: string;
-  productIdentifiers: string[];
-}): DiscoveryQuery[] {
-  const queries: DiscoveryQuery[] = [
-    {
-      channel: "search",
-      prompt: `best alternatives to ${input.brandName}`,
-      topic: `best alternatives to ${input.brandName}`,
-    },
-    answerEngineQuery(`instead of ${input.brandName}`),
-  ];
-  for (const identifier of input.productIdentifiers) {
-    queries.push({
-      channel: "search",
-      prompt: `best ${identifier} tools and alternatives`,
-      topic: `best ${identifier} tools and alternatives`,
-    });
+export function buildDiscoveryQueries(productIdentifiers: string[]): DiscoveryQuery[] {
+  const queries: DiscoveryQuery[] = [];
+  const identifiers = [...new Set(productIdentifiers.map((identifier) => identifier.trim()).filter(Boolean))];
+  for (const identifier of identifiers) {
+    const topic = `best tools for ${identifier}`;
+    queries.push({ channel: "search", prompt: topic, topic });
     queries.push(answerEngineQuery(`for ${identifier}`));
   }
   return queries;

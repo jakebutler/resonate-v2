@@ -9,8 +9,8 @@ import {
   brandNameFor,
   buildAnswerEngineQuestions,
   askAnswerEngine,
+  askWebSearchAnswer,
   competitorNameFromUrl,
-  competitorNamesFromUrls,
   extractabilityToStorage,
   planAnswerEngineRun,
   truncateAnswerExcerpt,
@@ -139,6 +139,7 @@ export const recordFinding = internalMutation({
     question: v.string(),
     classification: v.union(v.literal("gap"), v.literal("opportunity"), v.literal("needs-review")),
     citationStatus: v.union(v.literal("cited"), v.literal("uncited"), v.literal("not-observed")),
+    citationUrls: v.optional(v.array(v.string())),
     extractability: v.number(),
     evidence: v.array(v.string()),
     brandMatch: v.optional(
@@ -160,6 +161,7 @@ export const recordFinding = internalMutation({
       runId: run._id,
       classification: args.classification,
       citationStatus: args.citationStatus,
+      citationUrls: args.citationUrls,
       // Runner rows are bounded to the stored 0–100 integer scale at the
       // write boundary, same as manual rows.
       extractability: validateStoredExtractability(args.extractability),
@@ -225,7 +227,7 @@ export const finishRun = internalMutation({
       action: "aeo.answer_engine_run_finished",
       summary:
         brandMismatchCount > 0
-          ? `Answer-engine run finished as ${args.status} — ${brandMismatchCount} cited answer(s) suspected of a brand mismatch.`
+          ? `Answer-engine run finished as ${args.status} — ${brandMismatchCount} answer(s) suspected of a brand mismatch.`
           : `Answer-engine run finished as ${args.status}.`,
       metadata: { runId: String(run._id), status: args.status, brandMismatchCount },
     });
@@ -297,7 +299,9 @@ export const runAnswerEngineBatch = internalAction({
         reason: "answer-engine-runs-disabled",
       };
     }
-    if (!answerEngineCredential(process.env)) {
+    const useWebSearch = process.env.AEO_ANSWER_ENGINE_WEB_SEARCH === "1";
+    const credential = useWebSearch ? process.env.OPENAI_API_KEY?.trim() : answerEngineCredential(process.env);
+    if (!credential) {
       return {
         started: 0,
         completed: 0,
@@ -347,11 +351,12 @@ export const runAnswerEngineBatch = internalAction({
       }
       outcome.started += 1;
 
-      const competitorNames = competitorNamesFromUrls(target.competitorUrls);
       const targetDomain = competitorNameFromUrl(target.siteUrl);
       let failed = false;
       for (const question of questions) {
-        const ask = await askAnswerEngine({ env: process.env }, { question: question.question });
+        const ask = useWebSearch
+          ? await askWebSearchAnswer({ env: process.env }, question.question)
+          : await askAnswerEngine({ env: process.env }, { question: question.question });
         if (!ask.ok) {
           failed = true;
           outcome.failed += 1;
@@ -368,9 +373,9 @@ export const runAnswerEngineBatch = internalAction({
           question: question.question,
           brandName: brandNameFor(target.brandId),
           productIdentifiers: target.productIdentifiers,
-          competitorNames,
           targetDomain,
           targetPages,
+          citationUrls: ask.citationUrls,
         });
         await ctx.runMutation(internal.answerEngine.recordFinding, {
           runId,
@@ -379,6 +384,7 @@ export const runAnswerEngineBatch = internalAction({
           question: question.question,
           classification: analysis.classification,
           citationStatus: analysis.citationStatus,
+          ...(ask.citationUrls !== undefined ? { citationUrls: ask.citationUrls } : {}),
           // Stored scale is an integer 0–100; the heuristic scores 0–1.
           extractability: extractabilityToStorage(analysis.extractability),
           evidence: [

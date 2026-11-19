@@ -91,6 +91,27 @@ describe("deriveKeywordCandidates", () => {
     expect(candidates).toHaveLength(4);
   });
 
+  it("keeps each article topic ahead of the first page's table of contents", () => {
+    const candidates = deriveKeywordCandidates({
+      pages: [
+        {
+          url: "https://freshproof.io/blog/statistics",
+          headings: ["How to Verify a Statistic Before Publishing", "Key Takeaways",
+            "Trace the statistic to the source that produced it", "Conclusion"],
+        },
+        {
+          url: "https://freshproof.io/blog/citations",
+          headings: ["How to Spot Fake Citations and Invented Studies", "Frequently Asked Questions"],
+        },
+      ],
+      findings: [], suggestions: [], planKeywords: [],
+    }, 2);
+    expect(candidates.map((candidate) => candidate.keyword)).toEqual([
+      "How to Verify a Statistic Before Publishing",
+      "How to Spot Fake Citations and Invented Studies",
+    ]);
+  });
+
   it("does not derive candidates from an empty corpus", () => {
     const candidates = deriveKeywordCandidates(
       { pages: [], findings: [], suggestions: [], planKeywords: [] },
@@ -102,8 +123,8 @@ describe("deriveKeywordCandidates", () => {
 
 describe("keywordCitationStatus (absence-of-citation)", () => {
   const findings: CitationFinding[] = [
-    { _id: "f1", summary: "How claim validation works", citationStatus: "cited", brandMatch: "match" },
-    { _id: "f2", summary: "Is FreshProof cheaper than manual review?", citationStatus: "uncited", brandMatch: "match" },
+    { _id: "f1", summary: "How claim validation works", citationStatus: "cited", brandMatch: "match", citationUrls: ["https://freshproof.io/"] },
+    { _id: "f2", summary: "Is FreshProof cheaper than manual review?", citationStatus: "uncited", brandMatch: "match", citationUrls: ["https://other.example/"] },
   ];
 
   it("returns present when an observed run cited the brand", () => {
@@ -118,7 +139,7 @@ describe("keywordCitationStatus (absence-of-citation)", () => {
     const suspect: CitationFinding[] = [
       { _id: "f3", summary: "How claim validation works", citationStatus: "cited", brandMatch: "suspect" },
     ];
-    expect(keywordCitationStatus("How claim validation works", suspect)).toBe("absent");
+    expect(keywordCitationStatus("How claim validation works", suspect)).toBe("unproven");
   });
 
   it("returns unproven — never absent — when no run ever asked about the keyword", () => {
@@ -176,13 +197,13 @@ describe("planKeywordResearchRun (budget admission)", () => {
 });
 
 describe("keywordSearchOrder", () => {
-  it("orders question-origin candidates first for the budgeted leg", () => {
+  it("orders planned phrases before questions and raw crawl headings", () => {
     const ordered = keywordSearchOrder([
       { keyword: "Crawl phrase", origin: "crawl", sources: [] },
       { keyword: "Question phrase", origin: "question", sources: [] },
       { keyword: "Plan phrase", origin: "plan", sources: [] },
     ]);
-    expect(ordered.map((c) => c.origin)).toEqual(["question", "plan", "crawl"]);
+    expect(ordered.map((c) => c.origin)).toEqual(["plan", "question", "crawl"]);
   });
 });
 

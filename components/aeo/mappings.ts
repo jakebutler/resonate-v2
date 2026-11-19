@@ -1,3 +1,4 @@
+import { hasVerifiedTargetCitation } from "@/lib/answerEngine";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { stripResponseFormatInstruction } from "@/lib/competitorDiscovery";
 import type {
@@ -98,7 +99,7 @@ export function crawlRowToSnapshot(
  * extractability is an integer 0–100.
  */
 export function gapPriorityForFinding(row: IntelFindingRow): GapPriority {
-  if (row.citationStatus !== "cited" && row.extractability >= 70) {
+  if (row.classification === "gap" && row.extractability >= 70) {
     return "high";
   }
   if (row.extractability >= 40) return "medium";
@@ -108,7 +109,9 @@ export function gapPriorityForFinding(row: IntelFindingRow): GapPriority {
 export function findingRowToGap(row: IntelFindingRow): Gap {
   return {
     id: row._id,
-    kind: row.classification,
+    kind: row.classification === "opportunity" && !hasVerifiedTargetCitation(row)
+      ? "needs-review"
+      : row.classification,
     priority: gapPriorityForFinding(row),
     title: row.summary,
     detail: row.evidence.join(" · "),
@@ -138,7 +141,8 @@ export function runRowsToCitationRun(
     brandMismatchCount: run.brandMismatchCount,
     results: findings.map((finding) => ({
       question: finding.summary,
-      citedBrands: finding.citationStatus === "cited" ? [brandName] : [],
+      citedBrands: hasVerifiedTargetCitation(finding) ? [brandName] : [],
+      citationUrls: finding.citationUrls,
       citedCompetitors: [],
       extractabilityScore: finding.extractability,
       brandMatch: finding.brandMatch,
@@ -176,9 +180,7 @@ export function buildCompetitorComparison(input: {
   if (!targetCrawl) return null;
   // A citation suspected of describing a different product is not a citation
   // of this brand — it must not inflate the target's citation count.
-  const targetCitationCount = input.findings.filter(
-    (finding) => finding.citationStatus === "cited" && finding.brandMatch !== "suspect"
-  ).length;
+  const targetCitationCount = input.findings.filter(hasVerifiedTargetCitation).length;
   return {
     target: {
       name: input.brandName,

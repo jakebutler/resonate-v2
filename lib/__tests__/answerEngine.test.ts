@@ -9,7 +9,6 @@ import {
   assessAnswerBrandMatch,
   brandNameFor,
   buildAnswerEngineQuestions,
-  competitorNamesFromUrls,
   contentCoverage,
   extractabilityToStorage,
   planAnswerEngineRun,
@@ -220,14 +219,14 @@ describe("analyzeAnswerCitation", () => {
     question: "Would you recommend FreshProof?",
     brandName: "FreshProof",
     productIdentifiers: ["FreshProof band"],
-    competitorNames: competitorNamesFromUrls(["https://competitor.example"]),
     targetDomain: "freshproof.example",
   };
 
-  it("marks a brand mention as cited and an opportunity", () => {
+  it("credits a provider citation to the target domain", () => {
     const analysis = analyzeAnswerCitation({
       ...base,
       answer: "FreshProof is a solid choice for claim validation.",
+      citationUrls: ["https://www.freshproof.example/claim-validation"],
       targetPages: [],
     });
     expect(analysis).toMatchObject({
@@ -241,6 +240,7 @@ describe("analyzeAnswerCitation", () => {
     const analysis = analyzeAnswerCitation({
       ...base,
       answer: "I would recommend competitor.example for this.",
+      citationUrls: ["https://competitor.example/"],
       targetPages: [],
     });
     expect(analysis).toMatchObject({
@@ -249,13 +249,13 @@ describe("analyzeAnswerCitation", () => {
     });
   });
 
-  it("marks an answer naming neither as not-observed and a gap", () => {
+  it("keeps a response without source URLs unverified", () => {
     const analysis = analyzeAnswerCitation({
       ...base,
       answer: "There are many options on the market today.",
       targetPages: [],
     });
-    expect(analysis).toMatchObject({ citationStatus: "not-observed", classification: "gap" });
+    expect(analysis).toMatchObject({ citationStatus: "not-observed", classification: "needs-review" });
   });
 
   it("scores extractability against the connected target's crawled content", () => {
@@ -304,20 +304,21 @@ describe("analyzeAnswerCitation", () => {
         },
       ],
     });
-    expect(analysis.citationStatus).toBe("cited");
+    expect(analysis.citationStatus).toBe("not-observed");
     expect(analysis.brandMatch).toMatchObject({ verdict: "suspect" });
     // A suspect answer is never an unflagged opportunity: it classifies as
     // needs-review so every downstream surface treats it as unverified.
     expect(analysis.classification).toBe("needs-review");
   });
 
-  it("keeps a cited answer with an unknown verdict an opportunity", () => {
+  it("does not credit a brand mention or a lookalike URL", () => {
     const analysis = analyzeAnswerCitation({
       ...base,
-      answer: "FreshProof is a solid choice for claim validation.",
+      answer: "FreshProof is a solid choice for claim validation. See https://freshproof.example/.",
+      citationUrls: ["https://freshproof.example.other.example/"],
       targetPages: [],
     });
-    expect(analysis.classification).toBe("opportunity");
+    expect(analysis).toMatchObject({ citationStatus: "uncited", classification: "needs-review" });
   });
 });
 

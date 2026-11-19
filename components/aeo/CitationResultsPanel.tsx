@@ -43,7 +43,7 @@ export function CitationResultsPanel({
               </p>
               {mismatchCount > 0 ? (
                 <div role="alert" className={tokens.noticeWarning}>
-                  Brand mismatch suspected: {mismatchCount} of {data.results.length} cited
+                  Brand mismatch suspected: {mismatchCount} of {data.results.length}
                   {data.results.length === 1 ? " answer" : " answers"} may describe a different
                   product with this brand&apos;s name. Review the excerpts before acting on them.
                 </div>
@@ -56,29 +56,15 @@ export function CitationResultsPanel({
                   >
                     <p className="text-sm font-medium">{result.question}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
-                      {result.citedBrands.length > 0 ? (
-                        result.citedBrands.map((brand) => (
-                          <Badge
-                            key={brand}
-                            aria-label={
-                              result.brandMatch === "suspect"
-                                ? `Cited with suspected brand mismatch: ${brand}`
-                                : `Cited: ${brand}`
-                            }
-                          >
-                            {result.brandMatch === "suspect"
-                              ? `Cited: ${brand} (mismatch suspected)`
-                              : `Cited: ${brand}`}
+                      {result.citedBrands.length > 0
+                        ? result.citedBrands.map((brand) => <Badge key={brand} aria-label={`Cited: ${brand}`}>Cited: {brand}</Badge>)
+                        : (
+                          <Badge variant="outline">
+                            {result.citationUrls?.length && result.brandMatch !== "suspect"
+                              ? "No target citation"
+                              : "Citation unverified"}
                           </Badge>
-                        ))
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          aria-label="No citation for this brand"
-                        >
-                          Not cited
-                        </Badge>
-                      )}
+                        )}
                       {result.citedCompetitors.map((competitor) => (
                         <Badge
                           key={competitor}
@@ -101,6 +87,17 @@ export function CitationResultsPanel({
                         {result.brandMatchDetail ??
                           "The cited answer may describe a different product with the same name."}
                       </div>
+                    ) : null}
+                    {result.citationUrls?.length ? (
+                      <ul aria-label="Answer sources" className="mt-1 flex flex-wrap gap-2 text-xs">
+                        {result.citationUrls.map((url, index) => (
+                          <li key={url}>
+                            <a className="underline" href={url} target="_blank" rel="noreferrer">
+                              [{index + 1}] {new URL(url).hostname}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                     {result.answerExcerpt ? (
                       <p className={cn("mt-1 text-sm", tokens.textMuted)}>
