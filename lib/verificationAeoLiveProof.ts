@@ -16,7 +16,14 @@ function criterion(
   evidence: string,
   outcome: CriterionOutcome = "PASS",
 ): CriterionResult {
-  return { criterionId: id, name, runner: "contract", tier: "live-receipt", outcome, evidence, details };
+  return {
+    criterionId: id,
+    name,
+    runner: "contract",
+    tier: "live-receipt",
+    outcome,
+    ...(outcome === "PASS" ? { evidence, details } : { evidence: "", details: `${details} ${evidence}` }),
+  };
 }
 
 const receipts: VerificationReceipt[] = [

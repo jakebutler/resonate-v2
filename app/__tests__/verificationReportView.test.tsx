@@ -97,7 +97,7 @@ describe("VerificationReportView — evidence and receipts", () => {
     expect(featureCard.textContent).toContain("$ npx vitest run convex/__tests__/campaignVerification.test.ts");
   });
 
-  it("renders production AEO receipts, estimated spend, and open evidence", () => {
+  it("renders production AEO receipts, estimated spend, and evidence disclosures", () => {
     render(withShell(<VerificationReportView data={buildVerificationReportData({
       manifests: [],
       runsByFeatureId: {},
@@ -113,6 +113,9 @@ describe("VerificationReportView — evidence and receipts", () => {
     expect(within(aeoCard).getByText("Needs attention")).toBeInTheDocument();
     expect(within(aeoCard).getByText("wh71w1dnbs5zmvjhyj4v8vrqkh8jge1g")).toBeInTheDocument();
     expect(within(aeoCard).getAllByText("FAIL")).toHaveLength(2);
+    expect(within(aeoCard).getAllByText("Show evidence")).toHaveLength(5);
+    expect(within(aeoCard).getByText(/The review queue stayed empty in the isolated test/))
+      .toBeInTheDocument();
     expect(aeoCard.textContent).toContain("last run 2026-11-19");
   });
 
