@@ -237,29 +237,38 @@ export const finishDiscoveryRun = internalMutation({
 /**
  * Stale-run recovery. A crashed discovery action leaves its intelRun row in
  * "running" forever, and hasRunningDiscoveryRun would then refuse every
- * future daily cycle. Runs of the discovery kind that have not reached a
+ * future weekly cycle. Runs of the discovery kind that have not reached a
  * terminal state within `staleMs` are marked failed with an explicit audit
  * event, so a crashed run cannot block the schedule; a fresh in-flight run
  * (within the window) is untouched and still gates the next cycle.
  */
 export const reapStaleDiscoveryRuns = internalMutation({
-  args: { staleMs: v.number() },
+  args: {
+    staleMs: v.number(),
+    scope: v.optional(v.object({ userId: v.string(), brandId: brandIdValidator })),
+  },
   returns: v.number(),
-  handler: async (ctx, args) => {
+  handler: async (ctx, { staleMs, scope }) => {
     const now = Date.now();
-    const runs = await ctx.db.query("intelRuns").collect();
+    const runs = scope
+      ? await ctx.db.query("intelRuns")
+          .withIndex("by_user_brand_kind_status", (q) => q
+            .eq("userId", scope.userId).eq("brandId", scope.brandId)
+            .eq("kind", "competitor-discovery").eq("status", "running"))
+          .take(16)
+      : await ctx.db.query("intelRuns").collect();
     let reaped = 0;
     for (const run of runs) {
       if (run.kind !== "competitor-discovery" || run.status !== "running") continue;
-      if (now - run.startedAt <= args.staleMs) continue;
+      if (now - run.startedAt <= staleMs) continue;
       await ctx.db.patch(run._id, { status: "failed", finishedAt: now });
       reaped += 1;
       await audit(ctx, {
         userId: run.userId,
         brandId: run.brandId,
         action: "aeo.discovery_run_recovered",
-        summary: `Recovered a discovery run stuck in "running" for over ${Math.round(args.staleMs / 60_000)} minute(s); marked it failed so scheduled cycles can start again.`,
-        metadata: { runId: String(run._id), startedAt: run.startedAt, staleMs: args.staleMs },
+        summary: `Recovered a discovery run stuck in "running" for over ${Math.round(staleMs / 60_000)} minute(s); marked it failed so scheduled cycles can start again.`,
+        metadata: { runId: String(run._id), startedAt: run.startedAt, staleMs },
       });
     }
     return reaped;
@@ -360,6 +369,12 @@ export const runDiscoveryBatch = internalAction({
     }
     for (const target of targets) {
       if (trialTargetId !== undefined && target._id !== trialTargetId) continue;
+      if (!scheduled) {
+        await ctx.runMutation(internal.competitorSuggestions.reapStaleDiscoveryRuns, {
+          staleMs: limits.staleRunMs,
+          scope: { userId: target.userId, brandId: target.brandId },
+        });
+      }
       if (
         await ctx.runQuery(internal.competitorSuggestions.hasRunningDiscoveryRun, {
           userId: target.userId,

@@ -145,6 +145,10 @@ describe("discovery batch gates", () => {
       userId: "owner", brandId: "corvo", kind: "competitor-discovery", status: "running",
       costCeilingCents: 8, questionCount: 2, startedAt: Date.now() - 60 * 60 * 1000,
     }));
+    const staleTrial = await t.run((ctx) => ctx.db.insert("intelRuns", {
+      userId: "owner", brandId: "freshproof", kind: "competitor-discovery", status: "running",
+      costCeilingCents: 8, questionCount: 2, startedAt: Date.now() - 60 * 60 * 1000,
+    }));
     await enabledEnv();
     vi.stubEnv("AEO_DISCOVERY_ENABLED", "0");
     vi.stubEnv("AEO_SCHEDULED_TARGET_ID", otherTargetId);
@@ -162,6 +166,7 @@ describe("discovery batch gates", () => {
     expect(await t.action(internal.competitorSuggestions.runDiscoveryBatch, { trialTargetId: targetId }))
       .toMatchObject({ started: 1, completed: 1 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((await t.run((ctx) => ctx.db.get(staleTrial)))?.status).toBe("failed");
     expect((await t.run((ctx) => ctx.db.get(unrelatedRun)))?.status).toBe("running");
   });
 
