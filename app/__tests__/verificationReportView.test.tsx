@@ -97,7 +97,7 @@ describe("VerificationReportView — evidence and receipts", () => {
     expect(featureCard.textContent).toContain("$ npx vitest run convex/__tests__/campaignVerification.test.ts");
   });
 
-  it("renders the AEO/SEO receipts table with run ids and spend", () => {
+  it("renders production AEO receipts, estimated spend, and open evidence", () => {
     render(withShell(<VerificationReportView data={buildVerificationReportData({
       manifests: [],
       runsByFeatureId: {},
@@ -106,11 +106,14 @@ describe("VerificationReportView — evidence and receipts", () => {
     })} />));
 
     const aeoCard = screen.getByTestId("feature-aeo-seo");
-    expect(within(aeoCard).getByText("Answer-engine visibility run")).toBeInTheDocument();
-    expect(within(aeoCard).getByText("ms73vpw9sgj9w061qz8h2f04558j6rhd")).toBeInTheDocument();
-    // Both the visibility run and the discovery cycle spent 4¢ of a 50¢ cap.
-    expect(within(aeoCard).getAllByText("4¢ of 50¢ cap").length).toBeGreaterThan(0);
-    expect(aeoCard.textContent).toContain("last run 2026-11-14");
+    expect(within(aeoCard).getByText("Visibility before the Sessionize update")).toBeInTheDocument();
+    expect(within(aeoCard).getByText("wh7dkbp73s2td73731156kk2718jh6kn")).toBeInTheDocument();
+    expect(within(aeoCard).getByText("Estimated spend")).toBeInTheDocument();
+    expect(within(aeoCard).getByText("2¢ of 8¢ cap")).toBeInTheDocument();
+    expect(within(aeoCard).getByText("Needs attention")).toBeInTheDocument();
+    expect(within(aeoCard).getByText("wh71w1dnbs5zmvjhyj4v8vrqkh8jge1g")).toBeInTheDocument();
+    expect(within(aeoCard).getAllByText("FAIL")).toHaveLength(2);
+    expect(aeoCard.textContent).toContain("last run 2026-11-19");
   });
 
   it("shows an evidence-free PASS as UNPROVEN and judges the feature honestly", async () => {

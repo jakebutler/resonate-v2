@@ -144,7 +144,7 @@ function ReceiptTable({ feature }: { feature: VerificationFeatureReport }) {
           <tr className={cn("border-b text-xs uppercase tracking-wide", tokens.textSubtle)}>
             <th className="py-1 pr-3 font-medium">Run</th>
             <th className="py-1 pr-3 font-medium">Run id</th>
-            <th className="py-1 pr-3 font-medium">Spend</th>
+            <th className="py-1 pr-3 font-medium">Estimated spend</th>
             <th className="py-1 font-medium">Status</th>
           </tr>
         </thead>
