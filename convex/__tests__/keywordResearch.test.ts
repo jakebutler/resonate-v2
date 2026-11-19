@@ -163,13 +163,15 @@ describe("run lifecycle and stale-run recovery", () => {
     const { t, user } = await fixture("owner", ["freshproof"]);
     await connectFixtureTarget(user);
 
-    const runId = await t.mutation(internal.keywordResearch.startRun, {
+    const args = {
       userId: "owner",
-      brandId: "freshproof",
+      brandId: "freshproof" as const,
       candidateCount: 3,
       estimatedCostCents: 6,
       costCeilingCents: 50,
-    });
+    };
+    const runId = await t.mutation(internal.keywordResearch.startRun, args);
+    await expect(t.mutation(internal.keywordResearch.startRun, args)).rejects.toThrow(/already in progress/);
     expect(
       await user.query(internal.keywordResearch.hasRunningRun, {
         brandId: "freshproof",

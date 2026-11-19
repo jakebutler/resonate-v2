@@ -32,6 +32,9 @@ on:
     paths:
       # Feature manifests and the code paths that execute them.
       - "verification/**"
+      - "lib/verification/**"
+      - "scripts/run-visual-live-qualification.mjs"
+      - "docs/verification/receipts/**"
       - "lib/verificationManifest.ts"
       - "lib/verificationRunner.ts"
       - "lib/__tests__/verificationManifest.test.ts"
@@ -124,6 +127,7 @@ jobs:
 
       - name: Run feature verification
         env:
+          FEATURE_ID: ${{ inputs.feature }}
           # Placeholder env values for the vitest rungs of the ladder (same
           # policy as the Tests workflow: no real secrets in offline checks).
           GITHUB_TOKEN: test_token
@@ -144,9 +148,8 @@ jobs:
           NEXT_PUBLIC_E2E_BYPASS_AUTH: "1"
           NEXT_PUBLIC_EDITORIAL_VISUALS_ENABLED: "1"
         run: |
-          feature="${{ github.event.inputs.feature }}"
-          if [ -n "$feature" ]; then
-            npm run verify:feature -- "$feature"
+          if [ -n "$FEATURE_ID" ]; then
+            npm run verify:feature -- "$FEATURE_ID"
           else
             failed=0
             for manifest in verification/*.manifest.json; do

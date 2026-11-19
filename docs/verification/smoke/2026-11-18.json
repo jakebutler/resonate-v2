@@ -1,0 +1,43 @@
+{
+  "run": {
+    "featureId": "smoke",
+    "startedAt": "2026-11-18T02:47:37.429Z",
+    "finishedAt": "2026-11-18T02:47:39.407Z",
+    "results": [
+      {
+        "criterionId": "manifest-schema-validates",
+        "name": "Manifest schema suite passes",
+        "runner": "vitest",
+        "tier": "offline-fixture",
+        "outcome": "PASS",
+        "evidence": "$ npx vitest run lib/__tests__/verificationManifest.test.ts\nexit code: 0\nRUN  v4.0.18 /Volumes/rexy/GitHub/resonate-v2\n\n ✓ lib/__tests__/verificationManifest.test.ts (14 tests) 7ms\n\n Test Files  1 passed (1)\n      Tests  14 passed (14)\n   Start at  18:47:37\n   Duration  602ms (transform 44ms, setup 80ms, import 40ms, tests 7ms, environment 389ms)",
+        "details": "Criterion passed."
+      },
+      {
+        "criterionId": "runner-core-contract",
+        "name": "Runner core contract",
+        "runner": "contract",
+        "tier": "offline-contract",
+        "outcome": "PASS",
+        "evidence": "$ node --version\nexit code: 0\nv22.23.5",
+        "details": "Criterion passed."
+      },
+      {
+        "criterionId": "committed-receipt-validation",
+        "name": "Live receipt acceptance rules",
+        "runner": "vitest",
+        "tier": "offline-fixture",
+        "outcome": "PASS",
+        "evidence": "$ npx vitest run lib/verification/__tests__/committedReceipt.test.ts\nexit code: 0\nRUN  v4.0.18 /Volumes/rexy/GitHub/resonate-v2\n\n ✓ lib/verification/__tests__/committedReceipt.test.ts (9 tests) 3ms\n\n Test Files  1 passed (1)\n      Tests  9 passed (9)\n   Start at  18:47:38\n   Duration  411ms (transform 24ms, setup 43ms, import 12ms, tests 3ms, environment 271ms)",
+        "details": "Criterion passed."
+      }
+    ],
+    "summary": {
+      "pass": 3,
+      "fail": 0,
+      "absent": 0,
+      "unproven": 0
+    }
+  },
+  "reportPath": "docs/verification/smoke/2026-11-18.md"
+}

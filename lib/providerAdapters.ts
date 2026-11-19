@@ -1946,13 +1946,14 @@ export async function firecrawlCrawl(
   }
 
   const maxPolls = request.maxPolls ?? 30;
+  const pollDelayMs = request.pollDelayMs ?? 2_000;
   const pages: SanitizedFirecrawlPage[] = [];
   const seenPageUrls = new Set<string>();
   let pollPath: string | null = `/crawl/${encodeURIComponent(crawlId)}`;
   let completed = false;
   for (let poll = 0; poll < maxPolls && pollPath; poll++) {
-    if (request.pollDelayMs) {
-      await new Promise((resolve) => setTimeout(resolve, request.pollDelayMs));
+    if (poll > 0 && pollDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
     }
     const pollResponse = await fetchImpl(`${FIRECRAWL_BASE_URL}${pollPath}`, {
       headers,

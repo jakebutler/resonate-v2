@@ -141,7 +141,7 @@ function evidenceFor(command: string[], result: SpawnResult): string {
 /** The prerequisite semantics: every prerequisite names an env var that must be set. */
 function firstMissingPrerequisite(criterion: VerificationCriterion): string | null {
   for (const prerequisite of criterion.prerequisites) {
-    if (process.env[prerequisite] === undefined) return prerequisite;
+    if (!process.env[prerequisite]?.trim()) return prerequisite;
   }
   return null;
 }
@@ -176,7 +176,9 @@ function makeExecutor(): CriterionExecutor {
         ? ` The declared receipt "${receipt.receiptPath}" does not exist in the repo.`
         : receipt.kind === "receipt-undated"
           ? ` The declared receipt "${receipt.receiptPath}" carries no dated execution line.`
-          : "";
+          : receipt.kind === "receipt-unqualified"
+            ? ` The declared receipt "${receipt.receiptPath}" does not document a passing live run.`
+            : "";
       return {
         outcome: "ABSENT",
         missingComponent: `prerequisite "${missingPrerequisite}" (env var not set)`,
@@ -284,7 +286,7 @@ async function main(): Promise<number> {
   const reportDir = path.join(REPO_ROOT, "docs", "verification", manifest.featureId);
   const reportPath = path.join(reportDir, `${reportDate}.md`);
   await mkdir(reportDir, { recursive: true });
-  await writeFile(reportPath, `${report}\n`);
+  await writeFile(reportPath, report);
   console.log(`\nReport: ${path.relative(REPO_ROOT, reportPath)}`);
 
   // Structured sidecar of the same run, next to the markdown report, plus a

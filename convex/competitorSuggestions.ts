@@ -51,8 +51,9 @@ export const allTargets = internalQuery({
     const targets = await ctx.db.query("brandTargets").collect();
     // The review pin is the human gate: an unpinned target is never read, so
     // discovery never proposes competitors for it.
+    const pilotTargetId = process.env.AEO_SCHEDULED_TARGET_ID;
     return targets
-      .filter((target) => target.reviewPinned === true)
+      .filter((target) => target.reviewPinned === true && (pilotTargetId === undefined || target._id === pilotTargetId))
       .map((target) => ({
         _id: target._id,
         userId: target.userId,

@@ -34,16 +34,15 @@
       "description": "Cheap contract rung proving a command criterion executes and records its evidence."
     },
     {
-      "id": "composer-live-receipt",
-      "name": "Live image-provider receipt (illustrative gated criterion)",
-      "runner": "contract",
-      "tier": "live-receipt",
-      "target": "echo live packet placeholder",
-      "command": "echo live packet placeholder",
+      "id": "committed-receipt-validation",
+      "name": "Live receipt acceptance rules",
+      "runner": "vitest",
+      "tier": "offline-fixture",
+      "target": "lib/verification/__tests__/committedReceipt.test.ts",
       "fixtures": [],
-      "prerequisites": ["OPENAI_API_KEY"],
+      "prerequisites": [],
       "dependsOn": [],
-      "description": "Demonstrates ABSENT-when-unkeyed behavior: reports an explicit ABSENT naming the missing prerequisite instead of failing or silently skipping."
+      "description": "Tests the runner's acceptance of successful live evidence and rejection of failed or incomplete receipts."
     }
   ]
 }

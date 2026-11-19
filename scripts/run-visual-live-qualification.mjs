@@ -35,10 +35,14 @@ import { writeLiveReceipt } from "../lib/verification/liveReceipt.ts";
  */
 
 function parseArgs(argv) {
-  const options = { deploymentUrl: null, referenceDir: null, registrationJson: null };
+  const options = { deploymentUrl: null, referenceDir: null, registrationJson: null, requireLive: false };
   for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--require-live") {
+      options.requireLive = true;
+      continue;
+    }
     const valued = { "--deployment-url": "deploymentUrl", "--reference-dir": "referenceDir", "--registration-json": "registrationJson" };
-    if (!valued[argv[i]] || !argv[i + 1]) throw new Error(`usage: node scripts/run-visual-live-qualification.mjs --deployment-url <dev-url> --reference-dir <dir> [--registration-json <file>]`);
+    if (!valued[argv[i]] || !argv[i + 1]) throw new Error(`usage: node scripts/run-visual-live-qualification.mjs [--require-live] --deployment-url <dev-url> --reference-dir <dir> [--registration-json <file>]`);
     options[valued[argv[i++]]] = argv[i];
   }
   return options;
@@ -63,6 +67,10 @@ function main() {
 
   if (decision.outcome === "unapproved") {
     emitOutcome(decision);
+    if (args.requireLive) {
+      console.error("The manifest requires an approved live execution.");
+      process.exit(2);
+    }
     console.log(`Live qualification skipped — ${decision.reason} This is the expected dry-run outcome; re-run with visual_live_submission=approved to execute the packet.`);
     process.exit(0);
   }
