@@ -31,7 +31,7 @@ async function connectTarget(
   const targetId = await user.mutation(api.aeoIntel.connectTarget, {
     brandId,
     siteUrl: "https://www.freshproof.example",
-    productIdentifiers: ["FreshProof band"],
+    productIdentifiers: ["fact-checking drafts", "verifying statistics before publication"],
     competitorUrls: [],
     ...overrides,
   });

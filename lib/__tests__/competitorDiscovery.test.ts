@@ -33,26 +33,18 @@ describe("discoveryRunLimits", () => {
 
 describe("buildDiscoveryQueries", () => {
   it("puts both category queries inside the pilot budget", () => {
-    const queries = buildDiscoveryQueries({
-      brandName: "FreshProof",
-      productIdentifiers: ["GLP-1 tracking"],
-    });
-    expect(queries).toHaveLength(4);
+    const queries = buildDiscoveryQueries(["fact-checking drafts before publication"]);
+    expect(queries).toHaveLength(2);
     expect(queries[0]).toMatchObject({
       channel: "search",
-      prompt: "best tools for GLP-1 tracking",
-      topic: "best tools for GLP-1 tracking",
+      prompt: "best tools for fact-checking drafts before publication",
     });
-    expect(queries[1]).toMatchObject({ channel: "answer-engine", topic: "Which tools or products would you recommend for GLP-1 tracking?" });
-    // The user-facing topic never carries the response-format instruction.
+    expect(queries[1]).toMatchObject({
+      channel: "answer-engine",
+      topic: "Which tools or products would you recommend for fact-checking drafts before publication?",
+    });
     expect(queries[1]!.topic).not.toContain("Reply with a JSON array");
     expect(queries[1]!.prompt).toContain("Reply with a JSON array");
-    expect(queries[2]).toMatchObject({
-      channel: "search",
-      prompt: "best alternatives to FreshProof",
-    });
-    expect(queries[3]!.channel).toBe("answer-engine");
-    expect(queries[3]!.topic).not.toContain("Reply with a JSON array");
   });
 });
 

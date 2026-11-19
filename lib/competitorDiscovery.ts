@@ -83,22 +83,14 @@ export function stripResponseFormatInstruction(text: string): string {
   return text.split(ANSWER_ENGINE_FORMAT_INSTRUCTION).join("").trim();
 }
 
-export function buildDiscoveryQueries(input: {
-  brandName: string;
-  productIdentifiers: string[];
-}): DiscoveryQuery[] {
+export function buildDiscoveryQueries(productIdentifiers: string[]): DiscoveryQuery[] {
   const queries: DiscoveryQuery[] = [];
-  const identifiers = [...new Set(input.productIdentifiers.map((identifier) => identifier.trim()).filter(Boolean))];
+  const identifiers = [...new Set(productIdentifiers.map((identifier) => identifier.trim()).filter(Boolean))];
   for (const identifier of identifiers) {
     const topic = `best tools for ${identifier}`;
     queries.push({ channel: "search", prompt: topic, topic });
     queries.push(answerEngineQuery(`for ${identifier}`));
   }
-  const brandTopic = `best alternatives to ${input.brandName}`;
-  queries.push(
-    { channel: "search", prompt: brandTopic, topic: brandTopic },
-    answerEngineQuery(`instead of ${input.brandName}`)
-  );
   return queries;
 }
 

@@ -6,7 +6,6 @@ import { aeoCompetitorSuggestionValidator, aeoReviewStateValidator } from "./aeo
 import {
   answerEngineCredential,
   askAnswerEngine,
-  brandNameFor,
   competitorNameFromUrl,
   competitorNamesFromUrls,
 } from "../lib/answerEngine";
@@ -359,14 +358,11 @@ export const runDiscoveryBatch = internalAction({
         outcome.skipped.push({ brandId: target.brandId, reason: "run-already-running" });
         continue;
       }
-      if (target.productIdentifiers.every((identifier) => !identifier.trim())) {
+      const queries = buildDiscoveryQueries(target.productIdentifiers).slice(0, limits.maxQueries);
+      if (queries.length === 0) {
         outcome.skipped.push({ brandId: target.brandId, reason: "product-identifiers-not-configured" });
         continue;
       }
-      const queries = buildDiscoveryQueries({
-        brandName: brandNameFor(target.brandId),
-        productIdentifiers: target.productIdentifiers,
-      }).slice(0, limits.maxQueries);
       const plan = planDiscoveryRun({ queryCount: queries.length, limits });
       if (!plan.ok) {
         outcome.skipped.push({ brandId: target.brandId, reason: `budget-refused:${plan.reason}` });
