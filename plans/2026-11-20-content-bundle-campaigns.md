@@ -557,7 +557,7 @@ A value-list entry (channel, format, status) is added only by the issue that fir
 
 ## 7. Proposed issues
 
-Full contracts are in the GitHub issues: epic [#196](https://github.com/jakebutler/resonate-v2/issues/196). CB-01 … CB-36 are #197 … #232 in order; CB-00 #233, CB-37 #239, CB-38 #240, CB-39 #241, CB-40 #234, CB-41 #235, CB-42 #236, CB-43 #238, CB-44 #237, CB-45 {{CB-45}}, CB-46 {{CB-46}}, CB-47 {{CB-47}}, CB-48 {{CB-48}}, CB-49 {{CB-49}}. The epic's issue list is the authoritative mapping. **Rigor**: *high* = auth, publishing gate or approval surface; *standard*; *light*. **+Fable** = Fable reviews in addition to Opus 5.5.
+Full contracts are in the GitHub issues: epic [#196](https://github.com/jakebutler/resonate-v2/issues/196). CB-01 … CB-36 are #197 … #232 in order; CB-00 #233, CB-37 #239, CB-38 #240, CB-39 #241, CB-40 #234, CB-41 #235, CB-42 #236, CB-43 #238, CB-44 #237, CB-45 #243, CB-46 #242, CB-47 #244, CB-48 #245, CB-49 #246. The epic's issue list is the authoritative mapping. **Rigor**: *high* = auth, publishing gate or approval surface; *standard*; *light*. **+Fable** = Fable reviews in addition to Opus 5.5.
 
 | ID | Title | Depends on | Rigor | Review |
 |---|---|---|---|---|

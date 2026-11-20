@@ -5741,3 +5741,21 @@ Legacy hero compatibility: accept only the exact dated or undated directory deri
 ### Branch
 
 - plan/content-bundle-campaigns
+
+## 11/20/2026 11:28:48 PST
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- M	plans/2026-11-20-content-bundle-campaigns.md
+
+### Working Tree Snapshot
+
+- M  plans/2026-11-20-content-bundle-campaigns.md
+
+### Branch
+
+- plan/content-bundle-campaigns
