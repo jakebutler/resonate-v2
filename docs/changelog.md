@@ -5687,3 +5687,25 @@ Legacy hero compatibility: accept only the exact dated or undated directory deri
 ### Branch
 
 - verify/main-live-proof
+
+## 11/20/2026 10:53:47 PST
+
+### Summary
+
+- Refreshed documentation for the current repository state.
+
+### Staged Changes
+
+- A	plans/2026-11-20-content-bundle-campaigns.md
+- A	plans/2026-11-20-content-bundle-campaigns.sol-review-1.md
+- A	plans/2026-11-20-content-bundle-campaigns.sol-review-2.md
+
+### Working Tree Snapshot
+
+- A  plans/2026-11-20-content-bundle-campaigns.md
+- A  plans/2026-11-20-content-bundle-campaigns.sol-review-1.md
+- A  plans/2026-11-20-content-bundle-campaigns.sol-review-2.md
+
+### Branch
+
+- plan/content-bundle-campaigns

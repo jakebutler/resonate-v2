@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 11/14/2026 13:22:04 UTC
+Last updated: 11/20/2026 10:53:47 PST
 
 ## State
 
@@ -12,28 +12,25 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Session Focus
 
-- Updated repository documentation and handoff records.
+- Refreshed documentation for the current repository state.
 
 ## Last Completed Task
 
-- 6a01212 docs(verify): consolidated live-proof report — campaigns, images, smoke
+- 5a5f016 Merge pull request #195 from jakebutler/codex/freshproof-production-verification
 
 ## Recent Commits
 
-- 6a01212 docs(verify): consolidated live-proof report — campaigns, images, smoke
-- ae1819a chore(verify): interim evidence checkpoint with cause diagnostics
-- 4c025a2 docs(verify): interim evidence checkpoint (final7 campaigns pass)
-- b3c33ce docs(verify): interim dated evidence checkpoint
-- 842db98 docs(verify): date the main-bundle live evidence for campaigns, images, smoke
+- 5a5f016 Merge pull request #195 from jakebutler/codex/freshproof-production-verification
+- 88fc0c8 Keep failed check context visible in verification
+- fba8362 Record FreshProof production research verification
+- 62963fb Merge pull request #194 from jakebutler/codex/grounded-competitor-evidence
+- 83a902e Deduplicate category queries and strengthen screening tests
 
 ## Local Working Tree
 
-- M  docs/verification/reports/2026-11-14-main-live-proof.md
-- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaign-flow-recap.webm
-- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaign-session.png
-- A  docs/verification/reports/evidence/main-live-proof/tc-1-campaigns-freshproof.png
-- A  docs/verification/reports/evidence/main-live-proof/tc-2-composer-visuals-recap.png
-- A  docs/verification/reports/evidence/main-live-proof/tc-3-series-batch-review-recap.png
+- A  plans/2026-11-20-content-bundle-campaigns.md
+- A  plans/2026-11-20-content-bundle-campaigns.sol-review-1.md
+- A  plans/2026-11-20-content-bundle-campaigns.sol-review-2.md
 
 ## Next Agent Pickup
 
@@ -42,4 +39,4 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Branch
 
-- verify/main-live-proof
+- plan/content-bundle-campaigns
