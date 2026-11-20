@@ -1,0 +1,4 @@
+vendor,within_25m_pct,correct_count,cost_per_1000_usd,median_latency_ms
+Northwind Geo,91.7,220,4.00,180
+Lumen Maps,86.3,207,1.50,240
+Tessel,78.8,189,0.50,95

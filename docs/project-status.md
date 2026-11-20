@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 11/20/2026 10:53:47 PST
+Last updated: 11/20/2026 11:28:35 PST
 
 ## State
 
@@ -16,21 +16,26 @@ Maintain the living documentation and preserve a handoff-quality snapshot of the
 
 ## Last Completed Task
 
-- 5a5f016 Merge pull request #195 from jakebutler/codex/freshproof-production-verification
+- 2a407cd docs(plan): content bundles to cross-brand campaigns (rev 4)
 
 ## Recent Commits
 
+- 2a407cd docs(plan): content bundles to cross-brand campaigns (rev 4)
 - 5a5f016 Merge pull request #195 from jakebutler/codex/freshproof-production-verification
 - 88fc0c8 Keep failed check context visible in verification
 - fba8362 Record FreshProof production research verification
 - 62963fb Merge pull request #194 from jakebutler/codex/grounded-competitor-evidence
-- 83a902e Deduplicate category queries and strengthen screening tests
 
 ## Local Working Tree
 
-- A  plans/2026-11-20-content-bundle-campaigns.md
-- A  plans/2026-11-20-content-bundle-campaigns.sol-review-1.md
-- A  plans/2026-11-20-content-bundle-campaigns.sol-review-2.md
+- M  plans/2026-11-20-content-bundle-campaigns.md
+- A  plans/2026-11-20-content-bundle-campaigns.sol-review-3.md
+- A  tests/fixtures/content-bundles/tracer/EXPECTED.json
+- A  tests/fixtures/content-bundles/tracer/README.md
+- A  tests/fixtures/content-bundles/tracer/bundle.json
+- A  tests/fixtures/content-bundles/tracer/data/results.csv
+- A  tests/fixtures/content-bundles/tracer/sources/lab-notebook.md
+- A  tests/fixtures/content-bundles/tracer/sources/session-account.md
 
 ## Next Agent Pickup
 

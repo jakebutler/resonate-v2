@@ -1,0 +1,9 @@
+{
+  "files": {
+    "sources/lab-notebook.md": "446519d8bc06e4cccdf062372b612efded4a46f61dbf71e2d302f97dbcb45996",
+    "sources/session-account.md": "fc40e5d621897a3f50e1470acc6a184c3a2c4a17f4b6866665531486eb197a61",
+    "data/results.csv": "f01a39106dae547ef8c3e9c17e75d1d990d61f9d122bcabd9aecdd22e2ca1817"
+  },
+  "fingerprint": "sha256:8a296e92376be427538afc1081de098903d61748dfb26b2b76b533e3bd51b569",
+  "fingerprintOf": "bundle.json serialised per RFC 8785 (sorted keys, no insignificant whitespace, UTF-8)"
+}

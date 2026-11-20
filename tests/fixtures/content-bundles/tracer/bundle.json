@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "bundleKey": "geo-eval/cheap-geocoder",
+  "title": "Is a cheap geocoder good enough for delivery addresses?",
+  "origin": {
+    "repoRemote": "github.com/example/geo-eval",
+    "branch": "exp/geocoder-comparison",
+    "commitSha": "0a1b2c3d",
+    "dirty": false,
+    "agent": "claude-code"
+  },
+  "sources": [
+    {
+      "key": "notebook",
+      "role": "notebook",
+      "path": "sources/lab-notebook.md",
+      "sha256": "446519d8bc06e4cccdf062372b612efded4a46f61dbf71e2d302f97dbcb45996",
+      "title": "Lab notebook",
+      "visibility": "publishable",
+      "internalHeadings": [
+        "For the essay",
+        "Data appendix"
+      ]
+    },
+    {
+      "key": "session",
+      "role": "session-account",
+      "path": "sources/session-account.md",
+      "sha256": "fc40e5d621897a3f50e1470acc6a184c3a2c4a17f4b6866665531486eb197a61",
+      "title": "Session account",
+      "visibility": "publishable"
+    },
+    {
+      "key": "results",
+      "role": "data",
+      "path": "data/results.csv",
+      "sha256": "f01a39106dae547ef8c3e9c17e75d1d990d61f9d122bcabd9aecdd22e2ca1817",
+      "title": "Results by vendor",
+      "visibility": "publishable",
+      "table": {
+        "rowKey": "vendor",
+        "columns": [
+          {
+            "name": "vendor",
+            "type": "string"
+          },
+          {
+            "name": "within_25m_pct",
+            "type": "number",
+            "unit": "%",
+            "measure": "share of test addresses geocoded within 25 m of the surveyed point",
+            "population": "240 delivery addresses"
+          },
+          {
+            "name": "correct_count",
+            "type": "number",
+            "unit": "addresses",
+            "measure": "test addresses geocoded within 25 m of the surveyed point",
+            "population": "240 delivery addresses"
+          },
+          {
+            "name": "cost_per_1000_usd",
+            "type": "number",
+            "unit": "USD",
+            "measure": "list price per 1,000 lookups"
+          },
+          {
+            "name": "median_latency_ms",
+            "type": "number",
+            "unit": "ms",
+            "measure": "median response time",
+            "population": "240 lookups"
+          }
+        ]
+      },
+      "lineage": {
+        "script": "analyze.py",
+        "scriptSha256": "c5bcd5f69e5b8929c0c18575a4c6fbb8376ccb485835ee872a60e29eae1c06e8",
+        "invocation": "python analyze.py --runs runs/clean --out data/results.csv",
+        "inputs": [
+          {
+            "path": "runs/clean/northwind.json",
+            "sha256": "f303cda5dd077ef11a30cc36965c00306e9ddeecad5ee57820c53b177dab84ba"
+          },
+          {
+            "path": "runs/clean/lumen.json",
+            "sha256": "f1a16e17005e5148c7b5e7cd0dffe81543d993db0c69747228a0f6ce0a2e1af5"
+          },
+          {
+            "path": "runs/clean/tessel.json",
+            "sha256": "52ab5b3dd78b0ef1e1c9e4111bf9f9ff3535e6556a26d3ebed7380d5ad5c644f"
+          }
+        ]
+      }
+    }
+  ],
+  "decisions": [
+    {
+      "key": "name-vendors",
+      "question": "Name the three geocoding vendors?",
+      "options": [
+        {
+          "key": "yes",
+          "label": "Name all three",
+          "rule": "Vendors may be named."
+        },
+        {
+          "key": "no",
+          "label": "Do not name them",
+          "rule": "Refer to the vendors as the incumbent, the mid-priced option and the cheapest option.",
+          "bannedTerms": [
+            "Northwind Geo",
+            "Lumen Maps",
+            "Tessel"
+          ]
+        }
+      ],
+      "recommended": "yes"
+    }
+  ],
+  "plan": {
+    "leadBrand": "corvo",
+    "goal": "Show how to test a cheaper vendor before switching, using the geocoder comparison.",
+    "audience": "Engineering leads who buy infrastructure services.",
+    "brands": [
+      {
+        "brand": "corvo",
+        "angle": "How to run a fair vendor comparison in an afternoon, and what the misses tell you."
+      },
+      {
+        "brand": "freshproof",
+        "angle": "A claim about accuracy is only as good as the test set behind it."
+      }
+    ],
+    "pieces": [
+      {
+        "key": "corvo-article",
+        "brand": "corvo",
+        "format": "article",
+        "role": "pillar",
+        "order": 1,
+        "title": "We tested two cheaper geocoders. The misses mattered more than the price.",
+        "angle": "The comparison, the apartment finding, and how to decide.",
+        "sourceKeys": [
+          "notebook",
+          "session",
+          "results"
+        ],
+        "treatment": "generate",
+        "deliveries": [
+          {
+            "key": "blog",
+            "channel": "corvo-blog",
+            "primary": true
+          },
+          {
+            "key": "li-article",
+            "channel": "linkedin",
+            "as": "article",
+            "account": "linkedin:personal",
+            "mirrorOf": "blog"
+          }
+        ]
+      },
+      {
+        "key": "corvo-post-1",
+        "brand": "corvo",
+        "format": "post",
+        "role": "cta",
+        "order": 2,
+        "title": "Read the comparison",
+        "angle": "One finding from the comparison, then the ask to read the article.",
+        "sourceKeys": [
+          "notebook"
+        ],
+        "treatment": "generate",
+        "linksTo": "corvo-article",
+        "deliveries": [
+          {
+            "key": "li",
+            "channel": "linkedin",
+            "primary": true
+          }
+        ]
+      },
+      {
+        "key": "fp-post-1",
+        "brand": "freshproof",
+        "format": "post",
+        "role": "satellite",
+        "order": 3,
+        "title": "What the test set decides",
+        "angle": "Why the choice of 240 addresses shaped the answer.",
+        "sourceKeys": [
+          "notebook"
+        ],
+        "treatment": "generate",
+        "linksTo": "corvo-article",
+        "deliveries": [
+          {
+            "key": "li",
+            "channel": "linkedin",
+            "primary": true
+          }
+        ]
+      }
+    ]
+  }
+}
